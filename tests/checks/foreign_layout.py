@@ -170,7 +170,10 @@ def main():
     found = failures = checked = skipped = 0
 
     for source in sorted(ROOT.rglob("*.pas")):
-        if "build" in source.parts:
+        # `.claude/worktrees` is a background agent's own git worktree, which
+        # this harness puts inside the checkout: walking it would compile a
+        # second copy of every annotated record and report each finding twice.
+        if "build" in source.parts or ".claude" in source.parts:
             continue
         text = source.read_text(encoding="utf-8", errors="replace")
         if "@cstruct:" not in text:

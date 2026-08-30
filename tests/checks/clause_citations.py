@@ -63,6 +63,11 @@ CATALOGUE = "tests/checks/nonexistent_clauses.txt"
 SKIP = {
     ".git",             # not text
     "__pycache__",
+    ".claude/worktrees",  # a background agent gets its own git worktree, and
+                        # this harness puts it *inside* the checkout -- so a walk
+                        # of the tree reads a whole second copy of every source,
+                        # at paths no catalogue here is keyed on. Every gate that
+                        # walks rather than asking `git ls-files` has to skip it.
     "doc/vendor",       # the standards themselves. No text of either is in
                         # this repository and none may be; they are read
                         # locally and never redistributed. Scanning them would

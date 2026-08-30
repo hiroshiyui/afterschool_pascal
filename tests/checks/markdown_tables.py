@@ -52,7 +52,10 @@ from pathlib import Path
 
 # `doc/vendor/` is the two standards, which are not ours to reformat and are
 # gitignored anyway; `build/` is generated.
-SKIP = ("build", "doc/vendor")
+# `.claude/worktrees` is a background agent's own git worktree, which this
+# harness puts inside the checkout -- a walk of the tree would read a whole
+# second copy of every document.
+SKIP = ("build", "doc/vendor", ".claude/worktrees")
 
 SEPARATOR = re.compile(r"\s*\|?[\s:|-]+\|[\s:|-]*")
 
