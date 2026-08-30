@@ -325,6 +325,117 @@ and both now the shape of a decision rather than an omission:
 
 ---
 
+## What would make this easier to work on
+
+The chapter above is about what a *program* written in this language cannot
+reach for. This one is about what someone *working on the compiler* does not
+have, and it is separate because the two have never competed for the same
+hours: every gate, oracle and sweep in this tree serves correctness, and
+almost nothing serves the loop a person actually sits in.
+
+Five items, in the order I would take them. Each says what is measured and
+what is guessed, because two of them rest on timings taken incidentally while
+building the language server rather than on a profile anybody ran.
+
+- **There is no formatter, and it is the largest gap by developer-time.**
+  `tools/` holds `pascalcc` and nothing else; `.clang-format` covers the C,
+  which is three files, and nothing covers the 36 000 lines of Pascal that are
+  the compiler, the twenty-five library modules or the ~950 corpus sources.
+  Hand-alignment drift is already recorded as a *reason a whole-tree
+  clang-format is refused* for the C, and the Pascal has no equivalent claim
+  either way.
+
+  **The language server did the hard half without meaning to.** ADR-0258 makes
+  the parser report where every statement begins and ends, and ADR-0253 does
+  the same for every declaration — so the structure a printer needs is
+  already emitted. What is missing is *trivia*: the lexer consumes a comment
+  and never makes it a token, which is why three separate records here say "a
+  comment is not a token". A formatter needs the tokens **and** the comments
+  between them, and that is the whole of the work.
+
+  It would pay three times over: `textDocument/formatting` and
+  `rangeFormatting` in the server, a `style:` gate for the Pascal of the kind
+  `git clang-format` gives the C, and the prerequisite for any later
+  refactoring tool. The cost to watch is ADR-0126's: trivia goes in the one
+  array whose headroom is measured, and `--dump-limits` says ApFront is at
+  535 309 of 1 000 000 pool characters and 125 917 of 300 000 tokens today.
+  Measure before believing an estimate.
+
+- **Nothing has ever profiled the compiler.** `performance-profile` is a skill
+  and there is no evidence in the tree that it has been run. What numbers
+  exist arrived sideways: a full compile of `selfhost/apfront.pas` (22 900
+  lines) is about 340 ms, and `--dump-uses` over it is about 180 ms.
+
+  One of those is worth acting on before any profile. **A hover costs
+  1 555 350 bytes and 37 521 lines of dump to answer one question**, which the
+  server then scans linearly. Nobody chose that; it is what "dump everything"
+  costs when the caller wants one line. `--dump-uses --at line:col` would make
+  it a lookup, and the same question is now open for `--dump-stmts`.
+
+  What is missing first, though, is a *baseline*: the self-hosting build is
+  the natural benchmark and no committed number says how long it takes, so
+  there is nothing for a regression to fail against.
+
+- **Every diagnostic is an error.** 450 `ErrorAt` sites in ApFront and no
+  other severity anywhere: `lib/dialect/paslspdiag.pas` writes
+  `'severity', 1` as a constant, so LSP's severity 2 is unused and the
+  compiler has no category for *this compiles and is probably wrong*. An
+  unused variable, an unused import, a `var` parameter never written through,
+  a function whose result is assigned on one path and not another, a statement
+  after an unconditional `goto` or `exit` — none of them is sayable.
+
+  The insertion point is clean, `Diagnostics` already accumulating rather than
+  stopping. The cost is that `diagnostic-coverage` requires a golden to name
+  every message, so each warning buys a case — which is the gate working
+  rather than an obstacle, and is the reason to add them in small batches.
+
+- **Three blind spots the gates cannot see, and all three are closable.**
+  `doc/sop.md` §7 records the first two and they are worth doing rather than
+  keeping:
+
+  *A branch is invisible.* `line-coverage` counts a **statement**, so
+  `if c then a else b` on one line is covered when either arm runs. The
+  ratchet stands at 446 uncovered of 18 131 — a statement denominator, and
+  nobody knows the branch one. `pascalc --coverage` already emits a counter
+  per statement; a counter per arm is the same mechanism.
+
+  *A dump's exit status is read by nothing.* The coverage sweep drives
+  `--dump-all` over every source and reads the lines reached, never the
+  child's status — which is how `--dump-sema` crashed on every program
+  declaring a fallible-type for three days and 714 green cases. The fix is a
+  few lines and is named in the row.
+
+  *And a third that §7 does not record: nothing fuzzes, and nothing runs the
+  runtime under a sanitizer.* `-fsanitize-coverage` appears only as the
+  coverage instrumentation; AddressSanitizer appears only in ADR-0019 as a
+  one-off run in 2024, and the seven CI jobs are `test`,
+  `unicode-conformance`, `fpc-differential`, `seed-is-current`, `unoptimised`,
+  `second-backend` and `model-drift` — not one of them is a memory checker.
+  A hand-written lexer and parser over **fixed buffers** (ADR-0012) is the
+  canonical fuzzing target, and `selfhost/torture.pas` and `selfhost/badparse/`
+  are hand-written corpora — which is exactly ADR-0067's sentence, *a claim no
+  test names is a claim nothing checks*, applied to crash-resistance instead
+  of to conformance. The runtime is the only C here and it does the
+  allocation, the handles and the string arena; it is the obvious thing to run
+  under ASan and UBSan over the whole corpus, and that is a CI job rather than
+  a research project.
+
+- **The suite is 85 seconds and one case is 57 of them.** `selfhost-codegen`
+  — the stage-2-equals-stage-3 fixed point — dominates, and it is not
+  obviously parallelisable, being a fixed point by construction. Worth
+  measuring where the rest goes before acting, and worth saying plainly that
+  this is the item on the list I am least sure repays the effort: 85 seconds
+  is not the reason anything here is slow to work on.
+
+**What the list is not.** None of these is a language feature and none of them
+changes what the compiler accepts, which is why they sit apart from every
+other chapter on this page. They are also the first items here proposed
+without a client demanding them — ADR-0116's test is a demand, and the demand
+in each case is a person rather than a program. That is a weaker warrant than
+this page usually requires, and it is stated rather than hidden.
+
+---
+
 ## The program that would judge the language
 
 **A Language Server Protocol implementation, written in Afterschool Pascal and
