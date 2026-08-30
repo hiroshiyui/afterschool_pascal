@@ -368,9 +368,9 @@ on it, and re-reading it is cheaper than trusting it.
   every message, so each warning buys a case — which is the gate working
   rather than an obstacle, and is the reason to add them in small batches.
 
-- **Two blind spots the gates cannot see, and a third that closed.**
-  `doc/sop.md` §7 records both of the ones that remain, and both are worth
-  doing rather than keeping:
+- **Two blind spots the gates cannot see, and two that closed.** What is
+  left is a branch and a fuzzer; `doc/sop.md` §7 records the first, and the
+  second is not a row there because nothing has ever claimed it:
 
   *A branch is invisible.* `line-coverage` counts a **statement**, so
   `if c then a else b` on one line is covered when either arm runs. The
@@ -378,12 +378,16 @@ on it, and re-reading it is cheaper than trusting it.
   nobody knows the branch one. `pascalc --coverage` already emits a counter
   per statement; a counter per arm is the same mechanism.
 
-  *A dump's exit status is read by nothing.* The coverage sweep drives
-  `--dump-all` over every source and reads the lines reached, never the
-  child's status — `sweep()` in `tests/checks/coverage.py` calls
-  `subprocess.run` and discards what it returns — which is how `--dump-sema`
-  crashed on every program declaring a fallible-type for three days and 714
-  green cases. The fix is a few lines and is named in the row.
+  *A dump's exit status was read by nothing, and ADR-0269 closed it.* The
+  coverage sweep drove `--dump-all` over every source and read the lines
+  reached, never the child's status, which is how `--dump-sema` crashed on
+  every program declaring a fallible-type for three days and 714 green cases.
+  `sweep()` now reports every invocation the compiler did not survive — a
+  signal, or `runtime error:` on standard error, which is what separates a
+  trap from the exit 1 a third of this corpus is written to produce — and
+  mutating `Tokenize` to store 3 into a `1..2` names 1426 of 1435 invocations
+  where the whole suite was green before. The row had named its own fix and
+  sat for five records.
 
   *The third was that nothing runs the runtime under a sanitizer, and
   ADR-0261 closed it.* `sanitizers` is a ctest case and a CI job: the corpus

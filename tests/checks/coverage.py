@@ -383,11 +383,41 @@ def symbols(exe):
     return syms
 
 
-def sweep(exe, jobs, work):
+def sweep(exe, jobs, work, crashes=None):
     """Run the corpus, and return every address reached.
 
     Compile failures are expected and ignored: a third of the corpus exists to
-    be rejected, and those runs reach error paths nothing else does."""
+    be rejected, and those runs reach error paths nothing else does.
+
+    **A crash is not a compile failure, and until this the two were the same
+    thing here.** doc/sop.md §7 carried the row: the sweep read the lines
+    reached and nothing read what the child did, so a compiler that *stopped*
+    while dumping wrote a short dump, was counted as having run, and said
+    nothing. `--dump-sema` crashed on every program declaring a fallible-type
+    for three days and 714 green cases, and it surfaced only because a new
+    branch in the same walker went unreached and `line-coverage` asked why.
+
+    Two signals separate a crash from a rejection, and neither is the exit
+    status on its own -- `pas_runtime_error` exits 1 and so does a program the
+    compiler refuses:
+
+      * a negative return code, which is a signal: SIGSEGV, SIGABRT, the
+        assertion in the runtime, a stack exhausted by ADR-0020's depth bound
+        being wrong;
+      * `runtime error:` at the start of a line of **standard error**, which
+        is the runtime's own wording on the runtime's own stream. Matching it
+        anywhere would match a dump of the compiler's own source, whose
+        emitter carries that literal and prints it to standard *output* --
+        variant_check.sh met exactly this on its first run.
+
+    A timeout stays a warning rather than a crash. It is the one signal a
+    loaded machine can produce by itself, and 300 seconds on a corpus source
+    is already far outside anything this compiler does.
+
+    `crashes` is an optional list the caller passes to be told; without it
+    this behaves as it always did, which is what line_coverage.py's own sweep
+    wants -- it runs the same corpus once per instrumented component, so
+    checking here reports each source once instead of three times."""
     def one(idx_job):
         idx, (src, flags, extra) = idx_job
         out = work / f"hit{idx}.txt"
@@ -400,15 +430,26 @@ def sweep(exe, jobs, work):
         argv = [str(exe), *flags]
         if src is not None:
             argv += [str(src), "-o", str(work / f"o{idx}.ll")]
+        why = None
         try:
-            subprocess.run(argv, capture_output=True, timeout=300, env=env)
+            r = subprocess.run(argv, capture_output=True, timeout=300, env=env)
+            if r.returncode < 0:
+                why = f"killed by signal {-r.returncode}"
+            else:
+                trap = next((ln for ln in r.stderr.decode(
+                                 "utf-8", "replace").splitlines()
+                             if ln.startswith("runtime error:")), None)
+                if trap is not None:
+                    why = trap
         except subprocess.TimeoutExpired:
             print(f"coverage: {src} timed out", file=sys.stderr)
-        return out
+        return out, (argv[1:], why)
 
     hits = set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as ex:
-        for out in ex.map(one, enumerate(jobs)):
+        for out, (argv, why) in ex.map(one, enumerate(jobs)):
+            if why is not None and crashes is not None:
+                crashes.append((argv, why))
             if out.exists():
                 hits.update(int(x, 16) for x in out.read_text().split())
     return hits
@@ -455,12 +496,31 @@ def main():
             return 1
 
         addrs = [a for a, _ in syms]
-        hits = sweep(exe, corpus(root), work)
+        crashes = []
+        hits = sweep(exe, corpus(root), work, crashes)
         entered = set()
         for pc in hits:
             i = bisect.bisect_right(addrs, pc) - 1
             if i >= 0:
                 entered.add(syms[i][1])
+
+    # doc/sop.md §7's row, closed. This runs before the coverage arithmetic
+    # and before --report, because a compiler that stopped part-way through
+    # the corpus reached fewer statements than it should have and every number
+    # below it is then measured against a run that did not finish.
+    #
+    # The subject is the *instrumented* compiler, which is the same program
+    # with a counter per statement -- so a trap here is a trap in the compiler
+    # and not an artefact, and the one thing it could not see is a defect the
+    # instrumentation itself repairs.
+    if crashes:
+        for argv, why in sorted(crashes)[:20]:
+            print(f"the compiler did not survive this invocation ({why}): "
+                  + " ".join(argv), file=sys.stderr)
+        print(f"\ncoverage: {len(crashes)} of {len(corpus(root))} invocations "
+              "stopped the compiler -- a rejection is an exit status and a "
+              "diagnostic, and neither of these was that", file=sys.stderr)
+        return 1
 
     total = len(syms)
     covered = len(entered)

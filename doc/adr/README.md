@@ -277,3 +277,4 @@ the alternatives that were rejected and why.
 | [0266](0266-a-type-parameter-may-say-what-it-needs.md) | A type parameter may say what it needs | Accepted |
 | [0267](0267-a-handle-moves.md) | A handle moves | Accepted |
 | [0268](0268-two-threads-of-control.md) | Two threads of control | Accepted |
+| [0269](0269-a-dump-that-stopped-the-compiler-was-a-pass.md) | A dump that stopped the compiler was a pass | Accepted |
