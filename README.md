@@ -117,6 +117,21 @@ tools/pascalcc prog.pas -o prog             # ...or wherever the library went
 tools/pascalcc --import-path ./mine prog.pas -o prog   # ...or just this once
 ```
 
+**A program that binds a foreign library says so at the link.** An `external`
+declaration names a symbol and nothing here decides where that symbol comes
+from, so a program using `PasTls` — or any module binding a library beyond the
+C library and this compiler's runtime — passes the flag itself:
+
+```sh
+AFTERSCHOOL_PASCAL_LDFLAGS='-lssl -lcrypto' tools/pascalcc client.pas -o client
+```
+
+`AFTERSCHOOL_PASCAL_LDFLAGS` reaches the final link alone, after the runtime,
+which is where a library belongs. Its blunter sibling
+`AFTERSCHOOL_PASCAL_CFLAGS` reaches every `clang` invocation — that is what a
+sanitizer needs, and what makes `-lssl` an input clang complains about once per
+translation.
+
 The file is named after the **interface**, folded as §6.1.2 folds every
 identifier — `import PasError` finds `paserror.pas`. A module exporting an
 interface under a different name is reachable by `--import` and not by the
@@ -1117,8 +1132,9 @@ records is which modules a reader can port to another Pascal.
 | `lib/dialect/paslist.pas` | `List`, a chain of `string(255)` the declaring block owns — `ListPush`, `ListPop`, `ListPeek`, `ListEmpty`, `ListLen`, `ListAppend`, `ListGet`, `ListDrop`, `ListClear`, `ListReverse`. **The only container here with no `Free`**, because the head is an `owned ^` and the block disposes the chain (ADR-0181, ADR-0182). O(1) at the front; the rest is O(n) and recursive, an owned pointer admitting no cursor — a program wanting an index wants `PasStrVec` |
 | `lib/dialect/pastime.pas` | **Arithmetic on a date** over §6.7.6.9's `TimeStamp` — `DayNumberOf` and `StampOfDayNumber` turn a civil date into a serial day count and back, and `AddDays`, `DaysBetween`, `DayOfWeek`, `DayOfYear` follow from it. `FormatStamp` writes `YYYY-MM-DDThh:mm:ss` and `ParseStamp` reads it, a date alone or a time alone, telling a malformed one (`errSyntax`) from an impossible one (`errRange`). `Shift` moves an instant to another UTC offset, which is the whole of the zone handling: **a zone beyond one stated offset is a database of transitions no module can carry**, and a local zone needs `struct tm`, which ADR-0185 refuses a library. `TimeStamp` stays the currency, so a program that asked the clock converts nothing |
 | `lib/dialect/pasterm.pas` | **The terminal** — `IsTerminal`, `TermSize`, `EnterRaw`, `LeaveRaw`, `RawActive`, `ReadKey`, and `CursorTo`, `ClearScreen`, `ClearLine`, `HideCursor`, `ShowCursor` as strings the caller writes where it likes. The saved settings live in the runtime, because a program cannot hold a `struct termios` at all, and in **one slot**: a second `EnterRaw` is refused rather than counted, since saving the raw settings as the original would leave a shell with no echo. Restored at exit too — raw mode is a property of the terminal and not of the process |
-| `lib/dialect/pashttp.pas` | **An HTTP/1.1 client** over `PasNet` — `NewRequest`, `AddHeader`, `SetBody`, `Send`, `Receive`, `Exchange`, and `Header`/`HeaderOr` looking a field up case-insensitively as RFC 9110 requires. `Content-Length` and chunked framing both, every overflow reported as `errFull` and never truncated, and a request refused before a byte is written if it has no `Host`. A 404 is `errNone`: the status code is the server's answer and the `ErrorCode` is the module's. **Redirects are not followed** — the hop count and whether `Authorization` survives a cross-origin hop are policy a module cannot be right about — and there is **no TLS**, which would mean linking a third-party C library and nothing here links anything |
+| `lib/dialect/pashttp.pas` | **An HTTP/1.1 client** over `PasNet` — `NewRequest`, `AddHeader`, `SetBody`, `Send`, `Receive`, `Exchange`, and `Header`/`HeaderOr` looking a field up case-insensitively as RFC 9110 requires. `Content-Length` and chunked framing both, every overflow reported as `errFull` and never truncated, and a request refused before a byte is written if it has no `Host`. A 404 is `errNone`: the status code is the server's answer and the `ErrorCode` is the module's. **Redirects are not followed** — the hop count and whether `Authorization` survives a cross-origin hop are policy a module cannot be right about. It writes to a `PasNet.Socket`, so it speaks **plain HTTP only**: `PasTls` is a transport of its own and importing it here would make every program using HTTP link OpenSSL, so HTTPS waits on this module's grammar being split from its transport |
 | `lib/dialect/pasregex.pas` | **Regular expressions with a bound** — `RegexCompile`, `RegexMatches`, `RegexSearch`, `RegexSearchFrom`, and `RegexGroupStart`/`RegexGroupStop`/`RegexGroupInto` for captures. A Thompson NFA simulated by a Pike VM, so matching takes at most `2 × program × (subject + 2)` steps for **every** pattern and subject — `RegexSteps` and `RegexLength` are exported so you can check that rather than trust it. A backtracking matcher would be smaller and would have no such bound; this language traps rather than degrades, and a matcher that runs forever on `a?a?a?a?aaaa` is a failure no oracle here could see. Back-references are refused outright, not being a regular language |
+| `lib/dialect/pastls.pas` | **A verified TLS connection** over OpenSSL — `Connect`, `ConnectTrusting`, `WriteText`, `WriteLine`, `ReadLine`, `Close`, with `c.reason` and `c.protocol` for a caller to read. **Verification cannot be turned off**: there is no flag, no mode and no second entry point that skips it, and every connection checks the chain to an anchor, checks it is valid now, and checks the certificate is for the host that was asked for, with TLS 1.2 as the floor. What a caller chooses is *which* anchors — the system's, or one PEM file — and since a self-signed certificate is its own anchor, a test server is reached by naming it rather than by switching checking off. The socket, the context and the session are three handles in one record, so the block that declared it releases all three. No server side, no client certificate, and **no revocation checking**. A program using it links `-lssl -lcrypto`; nothing else here links anything |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
