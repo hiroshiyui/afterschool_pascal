@@ -64,7 +64,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
           # Cross compilers, for `target-sizes` and nothing else. They build no
           # artefact this repository ships: what they answer is whether
           # PAS_FILE_SIZE and PAS_JUMP_SIZE are large enough somewhere other
@@ -159,7 +159,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3 curl
+            ca-certificates cmake make clang libclang-rt-dev git python3 curl
 
       - uses: actions/checkout@v4
 
@@ -218,7 +218,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
           apt-get install -y --no-install-recommends fpc
 
       - uses: actions/checkout@v4
@@ -261,7 +261,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
 
       - uses: actions/checkout@v4
 
@@ -297,7 +297,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3 binutils
+            ca-certificates cmake make clang libclang-rt-dev git python3 binutils
       - uses: actions/checkout@v4
       - name: Configure and build
         run: |
@@ -341,7 +341,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
 
       - uses: actions/checkout@v4
 
@@ -402,7 +402,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
           # Cross compilers for `target-sizes`, mirrored: the host is aarch64
           # here, so the target it cannot ask about itself is x86-64. Same
           # packaging trap as the other direction -- the driver and its C
@@ -480,7 +480,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
+            ca-certificates cmake make clang libclang-rt-dev git python3
           # The one package no other job here may have. Deliberately *not*
           # pinned to a version: it comes from the same distro package set as
           # this container's clang, so both are 19.1.7 and the check compares

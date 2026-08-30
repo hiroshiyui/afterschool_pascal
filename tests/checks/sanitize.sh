@@ -71,7 +71,7 @@ while read -r name n; do
   [[ ${n:-0} -gt 0 ]] && outstanding[$name]=$n
 done <"$root/tests/checks/heap_balance.txt"
 
-clean=0; skipped=0; failed=0; known=0
+clean=0; skipped=0; failed=0; known=0; reported=0
 for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
            "$root"/tests/dialect/*.pas; do
   [[ -f $src ]] || continue
@@ -95,6 +95,22 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
        PASCALC="$pascalc" \
        "$pascalcc" "$opt" "${argv[@]+"${argv[@]}"}" "$src" \
        -o "$work/prog" >"$work/build.txt" 2>&1; then
+    # **Say why, once.** A program that will not build is counted as a skip,
+    # and the tally at the end refuses a run that reached nothing -- which is
+    # the guard working. But "0 clean, 516 skipped" does not say *what* went
+    # wrong, and the first time that happened the cause took a container to
+    # find: debian:trixie's `clang` package does not carry compiler-rt, so
+    # every `-fsanitize=address` link failed with a missing
+    # `libclang_rt.asan.a` and this harness reported none of it.
+    #
+    # One program's output is enough -- when they all fail they fail for one
+    # reason -- and printing every one would bury the tally under 516 copies.
+    if [[ $reported -eq 0 ]]; then
+      reported=1
+      echo "sanitize: $name did not build under $san, and here is why:" >&2
+      head -10 "$work/build.txt" >&2
+      echo "sanitize: (further build failures are counted, not printed)" >&2
+    fi
     skipped=$((skipped + 1)); continue
   fi
 
