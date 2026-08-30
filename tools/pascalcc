@@ -47,6 +47,9 @@
 #                     output and nothing is assembled or linked
 #     -h, --help      write this list and stop
 #     <file>.o        an object to link, from a component compiled with -c
+#
+#   AFTERSCHOOL_PASCAL_CFLAGS adds flags to every `clang` below, which is
+#   how a sanitizer reaches the link as well as the translations.
 # <<< usage
 #
 # `pascalc` writes LLVM IR and stops there, permanently: neither ISO 7185 nor
@@ -85,6 +88,19 @@ if [[ -z $pascalc ]]; then
   else pascalc=$root/build/bin/pascalc
   fi
 fi
+# Extra flags for every `clang` this script runs, word-split from
+# AFTERSCHOOL_PASCAL_CFLAGS. Empty and absent are the same thing, which is why
+# the array is expanded with the `${a[@]+...}` guard the other lists here use:
+# an unset array under `set -u` is an error and an empty one must add no
+# argument at all.
+#
+# It exists for `tests/checks/sanitize.sh` (ADR-0259) and is deliberately a
+# blunt instrument: a sanitizer has to reach the *link* as well as every
+# translation, because that is where its runtime is pulled in, and there was no
+# seam for that. It is not a general "pass anything to the compiler" door --
+# `pascalc` takes its own flags and this reaches only the assembler and linker
+# half, which is the half this script owns.
+read -r -a extra_cflags <<<"${AFTERSCHOOL_PASCAL_CFLAGS:-}"
 runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-}
 if [[ -z $runtime ]]; then
   if [[ -f $root/lib/libpasrt.a ]]; then runtime=$root/lib
@@ -240,7 +256,7 @@ for c in "${resolved[@]+"${resolved[@]}"}"; do
     die "component '$c' did not translate"
   fi
   cat "$work/c$n.txt" >&2
-  clang ${target:+"$target"} -Wno-override-module "$opt" -fPIC -c \
+  clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c \
     "$work/c$n.ll" -o "$work/c$n.o" || die "component '$c' did not assemble"
   objects+=("$work/c$n.o")
 done
@@ -268,7 +284,7 @@ fi
 # -Wno-override-module: the IR names its own target triple, which clang would
 # otherwise warn about when it agrees with its own.
 if [[ $mode == object ]]; then
-  exec clang ${target:+"$target"} -Wno-override-module "$opt" -fPIC -c "$ir" \
+  exec clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c "$ir" \
        -o "${out:-$base.o}"
 fi
 
@@ -289,7 +305,7 @@ fi
 # first, and the exit status is still a failure. A driver that turned a link
 # error into something else would be the silent-ignoring this script's header
 # refuses.
-if clang ${target:+"$target"} -Wno-override-module "$opt" "$ir" \
+if clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
      "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
      -o "${out:-$base}" 2>"$work/link.txt"; then
   exit 0

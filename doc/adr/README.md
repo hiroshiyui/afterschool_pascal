@@ -267,4 +267,5 @@ the alternatives that were rejected and why.
 | [0256](0256-a-fallible-value-may-be-owned.md) | A fallible value may be owned, and then the arms are laid apart | Accepted |
 | [0257](0257-a-change-nobody-will-see-is-not-compiled.md) | A change nobody will see the answer to is not compiled | Accepted |
 | [0258](0258-a-statement-has-an-extent.md) | A statement has an extent | Accepted |
+| [0259](0259-the-runtimes-own-storage-had-no-oracle.md) | The runtime's own storage had no oracle | Accepted |
 | [0259](0259-an-instantiation-says-which-activation-asked-for-it.md) | An instantiation says which activation asked for it | Accepted |

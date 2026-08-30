@@ -1,0 +1,31 @@
+# What `tests/checks/sanitize.sh` finds and this tree has argued for
+# (ADR-0259). One case per line, then the argument.
+#
+# It fails in both directions, as every catalogue here does: a case that
+# starts reporting is as loud as one that stops. An entry is a claim about
+# the *finding*, not permission to ignore the file it is in -- write the
+# defect down where it lives as well.
+#
+# A leak on a case `heap_balance.txt` already records as ending with
+# something outstanding needs no entry: that file is read directly and is
+# the suppression list for those, which is what keeps the two from drifting
+# apart.
+
+# ---------------------------------------------------------------------------
+# `bind` leaks the name it was given, and the block's exit does not free it.
+#
+# `pas_bind` mallocs a copy of the external name and frees the *previous* one;
+# `pas_file_done` does not free it at all, so a bound file variable going out
+# of scope loses its name. Seven bytes for the case below, and unbounded in a
+# program that binds repeatedly -- `lsp/pasls.pas` binds once per document
+# write, which is once per keystroke in an editor.
+#
+# It is here rather than fixed because this catalogue arrived with the gate
+# that found it, and a runtime change wants `heap-balance` regenerated and the
+# whole suite re-run behind it. **The fix is one `free` in `pas_file_done`**,
+# beside the `fclose`, and the case below is what proves it.
+#
+# heap-balance cannot see this and never could: it tallies `pas_new` against
+# `pas_dispose` and the runtime has more allocators than one, which ADR-0183's
+# own record says in the sentence "It counts no files and no handles".
+defer  a bound file variable's name is not freed when the block ends

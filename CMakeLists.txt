@@ -564,6 +564,24 @@ set_tests_properties(runtime-isoc PROPERTIES
                      TIMEOUT 600
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
+# LeakSanitizer (ADR-0259). It is the only oracle here that watches the
+# runtime's own *storage*: every other gate compares what a program printed,
+# and `heap-balance` -- the closest -- counts `pas_new` against `pas_dispose`,
+# which is calls rather than memory and misses every other allocator the
+# runtime has. It found one on its first run.
+#
+# Slow, because it builds a second runtime and links every case against it, so
+# a generous timeout. Skips with 77 where clang or ar is missing, as the two
+# checks above do.
+add_test(NAME sanitizers
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(sanitizers PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 2400
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # runtime/pasrt_unicode.c against Unicode's own conformance files -- 20 034
 # normalisation cases, 766 segmentation cases and a sweep of every code point
 # the first does not list. This is the one oracle in this repository, beside the

@@ -280,6 +280,42 @@ jobs:
         # steps look like they are written in is not what runs them.
         run: tests/checks/seed_current.sh
 
+  # The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
+  # LeakSanitizer (ADR-0259). It is a `ctest` case and so runs in the job above
+  # too; it is here as well for the reason `unicode-conformance` is -- a gate
+  # that can skip needs one place that refuses to let it, and this one skips
+  # with 77 when clang or ar is missing.
+  #
+  # `SANITIZE_REQUIRE` is that refusal. A green run of this job means the
+  # sanitizers actually ran, not that they were absent.
+  sanitizers:
+    name: the corpus under ASan, UBSan and LeakSanitizer
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3 binutils
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+      - name: Run the sanitizer sweep
+        run: |
+          set -o pipefail
+          tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc \
+            2>&1 | tee sanitize.log
+          status=$?
+          if grep -q 'sanitize: no ' sanitize.log; then
+            echo "the sanitizer sweep skipped, and this job exists to refuse" \
+                 "a skip" >&2
+            exit 1
+          fi
+          exit $status
+
   unoptimised:
     # The corpus compiles at -O2, which is pascalcc's default and what a user
     # gets. That left `-O0` almost unexercised, and a codegen defect visible
