@@ -1,0 +1,113 @@
+--- leap years
+1900: FALSE   2000: TRUE
+2023: FALSE   2024: TRUE
+1: FALSE   4: TRUE
+--- days in a month
+February 2024: 29  February 1900: 28  February 2000: 29
+April: 30  December: 31  January: 31
+month 0: 0  month 13: 0
+--- what is a date, and what is a time
+2024-02-29: TRUE   2023-02-29: FALSE
+0000-01-01: FALSE   10000-01-01: FALSE
+2024-13-01: FALSE   2024-04-31: FALSE
+23:59:59: TRUE   24:00:00: FALSE   00:00:60: FALSE
+--- a stamp from six numbers
+2024-02-29 13:05:09: 2024-02-29 13:05:09  DateValid TRUE TimeValid TRUE
+2023-02-29 00:00:00: failed, outside the representable range
+2024-01-01 24:00:00: failed, outside the representable range
+--- the day count, and its two ends
+0001-01-01: 1
+1970-01-01: 719163
+2000-01-01: 730120
+2000-03-01: 730180
+9999-12-31: 3652059
+MinDayNumber is 0001-01-01: TRUE
+MaxDayNumber is 9999-12-31: TRUE
+--- and back again
+day 1: 0001-01-01 00:00:00  DateValid TRUE TimeValid FALSE
+day 719163: 1970-01-01 00:00:00  DateValid TRUE TimeValid FALSE
+day 730180: 2000-03-01 00:00:00  DateValid TRUE TimeValid FALSE
+day 3652059: 9999-12-31 00:00:00  DateValid TRUE TimeValid FALSE
+day 0: failed, outside the representable range
+day 3652060: failed, outside the representable range
+--- every day of a leap February round-trips
+1 February plus 28: 2024-02-29 00:00:00  DateValid TRUE TimeValid FALSE
+--- adding and subtracting days
+2024-02-28 + 1: 2024-02-29 12:00:00  DateValid TRUE TimeValid TRUE
+2023-02-28 + 1: 2023-03-01 12:00:00  DateValid TRUE TimeValid TRUE
+1900-02-28 + 1: 1900-03-01 12:00:00  DateValid TRUE TimeValid TRUE
+2000-02-28 + 1: 2000-02-29 12:00:00  DateValid TRUE TimeValid TRUE
+2024-12-31 + 1: 2025-01-01 23:59:59  DateValid TRUE TimeValid TRUE
+2000-03-01 - 1: 2000-02-29 00:00:00  DateValid TRUE TimeValid TRUE
+2024-01-01 + 366: 2025-01-01 00:00:00  DateValid TRUE TimeValid TRUE
+9999-12-31 + 1: failed, outside the representable range
+0001-01-01 - 1: failed, outside the representable range
+0001-01-01 - maxint: failed, outside the representable range
+--- the difference between two dates
+1970-01-01 to 2000-01-01: 10957
+2000-01-01 to 1970-01-01: -10957
+2024-01-01 to 2025-01-01: 366
+2023-01-01 to 2024-01-01: 365
+a day is a day whatever the hour: 1
+--- which day of the week
+day 1 (0001-01-01): Monday
+day 719163 (1970-01-01): Thursday
+day 730120 (2000-01-01): Saturday
+day 730180 (2000-03-01): Wednesday
+day 3652059 (9999-12-31): Friday
+a week from day 1: Monday Tuesday Wednesday Thursday Friday Saturday Sunday
+day 0: Sunday   day -6: Monday
+--- which day of the year
+2024-03-01: 61
+2023-03-01: 60
+2024-01-01: 1
+2024-12-31: 366
+2023-12-31: 365
+--- writing one, and reading it back
+2024-02-29 13:05:09: [2024-02-29T13:05:09]
+0001-01-01 00:00:00: [0001-01-01T00:00:00]
+parse 2024-02-29T13:05:09: 2024-02-29 13:05:09  DateValid TRUE TimeValid TRUE
+parse with a space: 2024-02-29 13:05:09  DateValid TRUE TimeValid TRUE
+parse a date alone: 2024-02-29 00:00:00  DateValid TRUE TimeValid FALSE
+parse a time alone: 0001-01-01 13:05:09  DateValid FALSE TimeValid TRUE
+round trip: [2024-02-29T13:05:09]
+the round trip is exact: TRUE
+--- what a parse refuses, and with which code
+2023-02-29: failed, outside the representable range
+2024-13-01: failed, outside the representable range
+2024-02-29T25:00:00: failed, outside the representable range
+13:05:60: failed, outside the representable range
+2024/02/29: failed, not of the expected form
+20xx-02-29: failed, not of the expected form
+2024-02-29X13:05:09: failed, not of the expected form
+a leading space: failed, not of the expected form
+the empty string: failed, not of the expected form
+a zone designator: failed, not of the expected form
+--- an offset, which is all a zone is here
+13:05 at -60: 2024-02-29 12:05:09  DateValid TRUE TimeValid TRUE
+00:30 at -60: 2024-02-28 23:30:00  DateValid TRUE TimeValid TRUE
+23:30 at +60: 2024-03-01 00:30:00  DateValid TRUE TimeValid TRUE
+00:00 at +330: 2024-03-01 05:30:00  DateValid TRUE TimeValid TRUE
+back again: 2024-02-29 00:00:00  DateValid TRUE TimeValid TRUE
+at +0: 2024-02-29 13:05:09  DateValid TRUE TimeValid TRUE
+at +1440: failed, outside the representable range
+at -1440: failed, outside the representable range
+past the last day: failed, outside the representable range
+--- a stamp that says its date means nothing
+day number of a time: failed, not present
+a day added to a time: failed, not present
+a time formatted whole: failed, not present
+a time shifted: failed, not present
+a date formatted whole: failed, not present
+a date shifted: failed, not present
+a time to a date: failed, not present
+a date to a time: failed, not present
+--- fields that are in their subranges and are still not a date
+day number: failed, outside the representable range
+formatted: failed, outside the representable range
+a day added: failed, outside the representable range
+day of the year: failed, outside the representable range
+shifted: failed, outside the representable range
+a year with no representation: failed, outside the representable range
+--- the clock, which is the one thing that cannot be printed
+the clock is a day this module can count: TRUE
