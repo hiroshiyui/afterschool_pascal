@@ -280,100 +280,21 @@ no, expect the ownership rule the five easy ones did not need.
 
 ## What a daily program still cannot reach for
 
-The chapter above is about what the *language* blocks. This one is about what
-is simply not written yet, and it is here because a survey of it was asked for
-and the answer turned out to be short and specific rather than vague. Nothing
-in it needs a language feature; each is a module somebody has to write, which
-is the cheap kind of gap and the kind this page should name rather than imply.
+**Nothing this page has thought of.** The chapter that stood here listed six
+library gaps and two absences in the language itself, and version 3.2.0 struck
+the last of them; it is in
+[`doc/history.md`](history.md#what-a-daily-program-could-not-reach-for-and-now-can)
+now, because a list with nothing open in it is a record rather than a queue.
 
-**All six are now written, and the survey's own claim held for every one of
-them**: not one needed a language feature, TLS included — it binds through the
-FFI that already existed, and the whole of what the compiler had to gain was
-ADR-0263, a defect the probe walked into rather than a feature it needed. So
-the chapter's opening claim held for all six, and **two of its stated reasons
-did not**: the hash row named a constraint the dialect lacks and needed none
-(ADR-0260), and the TLS row named ADR-0185 and a runtime dependency and needed
-neither (ADR-0263, ADR-0264). Each probe took under half an hour against an
-estimate that had stood for months. The lesson is not that the estimates were
-careless — they were written by someone holding the same evidence — but that
-**a row saying a feature is blocked is a row nobody has tried**, and trying is
-cheap.
-
-**The table below is now struck through end to end and nothing replaced it.**
-The last thing it named — that `PasHttp` wrote to a socket and so spoke plain
-HTTP only — is done too (ADR-0265): the grammar is exported, each transport is
-a caller of it, and `lib/dialect/pashttps.pas` is the second caller. So this
-section is a record rather than a queue, and what it records about the estimates
-in it is the part worth keeping.
+That is not the same as *nothing*. It means the next entry will come from
+somebody writing a program and finding it hard, rather than from somebody
+reading this list — which is how every entry that closed well got here. Two of
+the eight rows said why they were blocked and both reasons turned out to be
+wrong, and the two most carefully argued entries each hid something a probe
+found in an afternoon. A row here should be a report, not an estimate.
 
 **Thirty-one modules exist** — eight conforming and twenty-three dialect,
-listed by name in `README.md`'s module table. What a program written today reaches for
-and does not find:
-
-| Missing | What exists instead | Why it is not built |
-| --- | --- | --- |
-| ~~**JSON**~~ | **Done** — `lib/dialect/pasjson.pas` parses, navigates, builds and renders, and `tests/dialect/lib_json.pas` runs all four | It was the one gap here with a named client and it needed no language feature, as this row said. Two things it guessed wrong. A value is a variant record over the seven kinds — right — but a string is **bytes**, not AP 6.4.15's `utf8`: assignment to a text establishes normal form C, so round-tripping somebody's source file through it would edit their document, and `utf8` stops the program on ill-formed bytes where a parser must report. And the tree is plain pointers with `JsonFree`, not owned ones: AP 6.4.14.3 gives an owned pointer no copy, so `JsonMember(doc, 'params')` could not exist and navigation is the whole job. What it *did* need was ADR-0216 — it is the first module in the library to instantiate a generic imported from another, and until that fix the component linked to nothing |
-| ~~**date and time**~~ | **Done** — `lib/dialect/pastime.pas`, and `tests/dialect/lib_time.pas` runs it | A serial day count both ways, signed arithmetic on it, day-of-week, an ISO 8601 form written and parsed, and a UTC offset shift. `TimeStamp` stays the currency, as this row expected: a second date type would mean a conversion at every call from a program that had asked the clock. **No C**, and the reason is the useful part — a local zone needs `struct tm`, which ADR-0185 refuses a library, and a `pasx_` route was declined twice over: the answer would be one no oracle here could contradict (a test could print it only by asking the same routine), and `GetTimeStamp` already samples the clock *in local time* on this processor. What a program lacked was arithmetic, not a wall clock. A zone beyond one stated offset is a transition database no module can carry |
-| ~~**terminal control**~~ | **Done** — five `pasx_` routines and `lib/dialect/pasterm.pas` (ADR-0262) | Its shape was decided and held: a binding in `runtime/pasrt_posix.c` bounded by its headers, `<termios.h>` and `<sys/ioctl.h>` joining ADR-0186's catalogue. What the shape did not say is **where the saved settings live**, and that is the record: in the runtime, because a caller cannot hold a `struct termios` at all — which is the whole reason C is involved — and in *one slot* rather than a table, because a second `EnterRaw` would save the raw settings as the original and leave the user a shell with no echo. Restoring at exit is the runtime's for the same reason: raw mode is a property of the terminal, not of the process. Cursor and clearing stayed out of C, being escape sequences rather than syscalls. **What no test can assert** is raw mode itself — ctest has no terminal — so the case asserts the negative path and `doc/sop.md` §7 carries the rest |
-| ~~**regular expressions**~~ | **Done** — `lib/dialect/pasregex.pas`, a Thompson NFA simulated by a Pike VM | This row said it was "the only one where the right answer is not obvious — a backtracking matcher and a DFA are different programs with different failure modes", and the answer turned out to follow from something this page already believes. **This project traps rather than degrades**: a subscript out of range, integer overflow and a `case` with no matching label all *stop the program*, and each is a bound. A backtracking matcher has no bound of that shape — against `a?a?a?a?aaaa` and its longer kin it does not fail, does not report and does not return — and **no oracle here can see that**, every gate comparing what a program printed and a program that has not finished having printed nothing. A failure mode this tree is structurally blind to is one it must not acquire. The bound is stated and asserted rather than believed: steps ≤ 2 × program × (subject + 2), with `RegexSteps` and `RegexLength` exported so a caller can check it. Back-references are refused outright, not being a regular language. A DFA is named in the module as what to reach for if this is ever measured and found wanting; its worst case moves into *space*, and it cannot report where a submatch began |
-| ~~**HTTP**~~, and ~~**TLS is a module somebody has to write**~~ | **Both done** — `lib/dialect/pashttp.pas` over `PasNet`, and `lib/dialect/pastls.pas` over OpenSSL (ADR-0264) | HTTP was "a module over what exists", and is: request forming with validation, status line and field parsing, case-insensitive lookup, `Content-Length` and chunked, every overflow `errFull` and never a truncation. Two limits it *states* — a body is lines, `PasNet.ReadLine` being the only reader the library has; and chunked over CRLF data is `errSyntax` rather than a wrong body. Redirects are not followed, the hop count and whether `Authorization` survives a cross-origin hop being policy a module cannot be right about. **And TLS is where this row was wrong twice.** It said TLS "means binding a C library, which puts the *whole* of that library's surface behind ADR-0185's rule that a library may not declare a foreign struct", and a later revision added that the runtime would have to link it. Both were asserted without a probe and both are wrong: OpenSSL's API is opaque pointers throughout, which is AP 6.4.12's handle exactly, and the **program** links, not the runtime. What the module needed from the compiler was nothing; what the probe *found* was ADR-0263. **What it needed instead was a decision and a gate.** The decision: verification cannot be turned off — no flag, no mode, no second entry point — because the commonest way a TLS client comes to accept anything is a flag somebody set while debugging, and a self-signed certificate is its own trust anchor, so `ConnectTrusting` reaches a test server without a hole in the rule. The gate: six of the values handed to OpenSSL are **transcribed from headers**, each being a macro this language cannot reach, and `SSL_VERIFY_PEER` written as 0 would leave verification off with every case still green — so `tests/checks/tls.sh` compiles a C program against the real headers and diffs them, which is `foreign-layout`'s shape applied to numbers. **And the refactor this row named is done** (ADR-0265): `PasHttp`'s grammar is exported and has no transport under it, `Send` and `Receive` over a socket are twelve lines over it, and `lib/dialect/pashttps.pas` is twelve more over a TLS connection. The reason it is a second module and not a branch is the one this row gave — a module choosing between transports imports `PasTls`, and then every program using plain HTTP links OpenSSL. Nothing is left of this row |
-| ~~**a hash of anything but a string**~~ | **Done** (ADR-0260) — `PasContainer`'s `Map` takes its key type as a schema argument | **And the reason this row gave was wrong.** It said a generic map waits on "a way to say that a key can be hashed and compared — the second being a constraint, and the dialect has none". It needs no constraint: §6.7.3.4 has admitted a procedural parameter since ISO 7185, `PasSort` has used exactly this shape since it was written *precisely so it never sees an element*, and a formal procedural parameter may be handed on as another generic routine's actual — which is the whole of what a hash table's internals need. A constraint would buy the two arguments per call, not the capability. Two features that landed for other reasons make even those cheap: the key's type is `type of m^.slots[1].key` (ADR-0215), read off the map rather than named again, and AP 6.7.3.10.4 infers the rest (ADR-0254). **It also uncovered a compiler defect** — `ForgetResolved` walked past a procedural parameter's own formal list, so a second instantiation read the first's types — which nothing could have found before, the omission being invisible unless a procedural parameter's type depends on the tuple. Found by writing the client, which is ADR-0116's whole argument |
-
-**And two absences in the language rather than the library**, both deliberate
-and both now the shape of a decision rather than an omission:
-
-- ~~**Concurrency.**~~ **Built** (ADR-0268), and built as ADR-0201 designed it
-  four increments earlier: `task`, `spawn`, `channel [n] of T`, `send` and
-  `receive`, share-nothing, with no word-symbol reserved and every spelling in
-  one of the three free positions that record itself listed. **ADR-0116's bar
-  was not met and is not claimed to be** — nothing in this tree wants it, and
-  the four times something looked as though it did, something cheaper answered
-  and is recorded above. What the four-increment delay bought is that the
-  design was settled before a line was written, and the two things that had to
-  be discovered were discovered by probes rather than by argument: the formals
-  rule is **not** the whole of share-nothing, because Pascal's scope rules let
-  a nested block name an enclosing one's variables and four tasks incrementing
-  one global printed the right answer three times out of three (AP 6.7.8.2);
-  and the runtime's per-activation bookkeeping had to become thread-local,
-  which **ThreadSanitizer** found on the first run of the first two-task
-  program and which no golden could ever have held. That second one forced the
-  first reseed outside a release, the arena's cursor being a name the emitted
-  module carries. What is still not here: a task cannot be *given* a handle
-  (AP 6.4.12.7's move exists and the argument block does not use it), there is
-  no way to wait for one task, no select over several channels, and no
-  timeout. See the concurrency row in
-  [where the ideas come from](#where-the-ideas-come-from).
-- ~~**Generics have no constraints**~~ — **done** (ADR-0266,
-  AP 6.7.3.10.5), and the row is worth reading for how much smaller it got
-  before it closed. The generic map was filed behind constraints and needed
-  none (ADR-0260): a key's hash and equality are procedural parameters, which
-  every Pascal has had. What was left was the *diagnostic* — a body that adds
-  its `T` values was refused at the instantiation, in the generic's own
-  source, three lines of it, and ADR-0259 had made the last of those three
-  name the activation. So what landed is one line at the call instead:
-  `function Sum(Elem: numeric type; a, b: Elem): Elem` refuses
-  `Sum(Point, p, p)` where it stands, saying that `numeric` admits integer,
-  int64, real, complex or a subrange of one. Four categories, `numeric`,
-  `ordinal`, `ordered` and `equatable`, each a group of operators the language
-  already defines; spelled between a parameter's colon and the word `type`,
-  which reserves nothing (ADR-0140), so a program may still declare a variable
-  called `ordered`. **It does not make a generic separately type-checked**:
-  AP 6.7.3.10.2 still reads the block once per tuple, and a body that misuses
-  a type its category admits is caught exactly where it was. Inference is
-  **done** too (ADR-0254,
-  AP 6.7.3.10.4): `Swap(i, j)` reads as well as `Swap(integer, i, j)` and
-  means the same activation. The question this row carried — *what happens
-  when two arguments imply different types* — turned out to dissolve rather
-  than need an answer: the first determining position binds the parameter and
-  every later actual is an ordinary actual of a formal that now has a type, so
-  §6.4.6 judges it where it judges every other one and **no new diagnostic was
-  needed for the conflict case at all**. `ValueOr(st, 'none')` is the case
-  that decides it, `'none'` being assignment-compatible with the `string(8)`
-  the first argument implied rather than a second opinion about it. What a
-  category still cannot be is a program's own predicate, and nothing has asked
-  for one.
-
----
+listed by name in `README.md`'s module table.
 
 ## What would make this easier to work on
 

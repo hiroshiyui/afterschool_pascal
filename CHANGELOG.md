@@ -13,6 +13,16 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-08-30
+
+The release that closed `doc/roadmap.md`'s *What a daily program still cannot
+reach for*. Every row of that chapter is struck through — six library gaps and
+the two absences in the language itself — and nothing replaced any of it.
+
+Two of the six rows had said *why* they were blocked and both reasons were
+wrong, which is the lesson the chapter now records: a row saying a feature is
+blocked is a row nobody has tried.
+
 ### Added
 
 - **A type parameter may say what it needs** (ADR-0266, AP 6.7.3.10.5).

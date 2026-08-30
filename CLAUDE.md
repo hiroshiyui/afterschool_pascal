@@ -14,8 +14,13 @@ settles the order.
 governs this language — but *does a program someone would actually write today
 need it*. ADR-0109 names the areas: networking, internationalisation,
 concurrency, and memory safety as a property of the language rather than a
-convention. `doc/roadmap.md`'s "What a daily program still cannot reach for" is
-the running inventory of what is missing.
+convention. `doc/roadmap.md`'s "What a daily program still cannot reach for"
+was the running inventory of what is missing, and **as of v3.2.0 it is empty**:
+all six library gaps and both language absences were built, and the chapter
+moved to `doc/history.md`. What the roadmap keeps in its place is the lesson,
+which is worth more than the list was — two of the eight rows said why they
+were blocked and both reasons were wrong, so a row there should be a report
+and not an estimate.
 
 It is a Pascal compiler **written in Pascal** and compiled by itself. The
 compiler is **three ISO/IEC 10206:1991 §6.13 program-components** and no other
