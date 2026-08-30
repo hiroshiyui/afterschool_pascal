@@ -32,6 +32,12 @@ appears below in the release where it still existed.
   neither `name.out` nor `name.err` can hold that. A case without one must
   produce no warning.
 
+- **The language server reports a warning as one.** `PasLspDiag` recognises
+  ` warning: ` beside ` error: ` and `Diagnostic` carries a `DiagSeverity`, so
+  an editor gets LSP's DiagnosticSeverity 2 where the compiler wrote a warning
+  and 1 where it wrote an error. It had recognised only errors, and would have
+  silently dropped every warning.
+
 ### Changed
 
 - **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing

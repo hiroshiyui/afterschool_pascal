@@ -870,7 +870,7 @@ begin
 end;
 
 function ParseValue;
-var c: char; p: JsonPtr; t: JsonChars;
+var c: char; p: JsonPtr;
 begin
   ParseValue := nil;
   SkipWhite(b, i);

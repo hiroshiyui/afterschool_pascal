@@ -3507,6 +3507,17 @@ lose is the one below.
   including the ones that are nearly right — a zero line number, a missing
   column, a non-numeric position — because a parser that accepts those reports
   a position no editor can show.
+- **Two severities, and the second arrived after the first was written off**
+  (ADR-0272). `DiagJson` wrote `severity` as the constant 1 and the comment
+  beside it said why: *the compiler emits no warning and no note, so a second
+  severity would be a branch no input reaches.* That was true, and it is the
+  shape of comment a new feature has to come back and delete — as is
+  `tests/dialect/lsp_diag.pas`'s own `hello.pas:12:7: warning: this compiler
+  emits none`, which stood among the lines a sweep must *skip*. `DiagSeverity`
+  is now a field of `Diagnostic`, set by the severity word and read in exactly
+  one place, so the protocol's numbers arrive at `DiagJson` and are carried
+  nowhere as 1 and 2. There is still no note and no hint, for the reason the
+  old comment gave.
 - **The zero-based conversion is in `DiagJson` and nowhere else** (ADR-0234's
   neighbour in time, not in subject). LSP counts lines and characters from
   zero; `ErrorAt` counts from one. A `Diagnostic` therefore holds *what the

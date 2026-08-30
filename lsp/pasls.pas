@@ -116,9 +116,6 @@ const
     in UTF-16 code units, and this server has no view in those. }
   SyncFull = 1;
 
-  { LSP's DiagnosticSeverity. This compiler emits errors and nothing else. }
-  SeverityError = 1;
-
   { JSON-RPC's own codes, from the specification's table. }
   MethodNotFound = -32601;
   InvalidParams = -32602;
@@ -1385,13 +1382,12 @@ end;
   answers with the document's own URI for that case, which is the common one. }
 function FindUse(uri: DocUri; line, col: integer;
                  var hit: UseHit; var path: PathName): boolean;
-var at, i, ul, uc, un, want: integer;
+var at, i, ul, uc, un: integer;
     d: Document;
     lines: StrVecPtr;
     cmd, words: CommandLine;
     r: RunResult;
     text: StrItem;
-    source: DiagLine;
     found: boolean;
 begin
   hit.found := false;

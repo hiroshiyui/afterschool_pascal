@@ -1,6 +1,7 @@
 what DiagParse makes of a compilation's output:
-  line 12 col 7 ['x' is not declared]
-  line 1 col 1 [a program must have a program-heading]
+  line 12 col 7 error ['x' is not declared]
+  line 1 col 1 error [a program must have a program-heading]
+  line 12 col 7 warning ['b' is declared here and never used]
   not a diagnostic: not of the expected form
   not a diagnostic: not of the expected form
   not a diagnostic: not of the expected form
@@ -11,6 +12,7 @@ what DiagParse makes of a compilation's output:
 
 one diagnostic as the protocol writes it:
   {"range":{"start":{"line":11,"character":6},"end":{"line":11,"character":6}},"severity":1,"source":"pascalc","message":"'x' is not declared"}
+  {"range":{"start":{"line":2,"character":4},"end":{"line":2,"character":4}},"severity":2,"source":"pascalc","message":"'b' is declared here and never used"}
 
 a byte column, as a UTF-16 code unit column:
   e-acute before the error    byte 22 -> utf-16 21
@@ -27,4 +29,4 @@ and the same diagnostic under each encoding:
   utf-8  (negotiated)   {"range":{"start":{"line":2,"character":21},"end":{"line":2,"character":21}},"severity":1,"source":"pascalc","message":"undeclared identifier 'zz'"}
 
 and the notification that carries them:
-  {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/hello.pas","diagnostics":[{"range":{"start":{"line":11,"character":6},"end":{"line":11,"character":6}},"severity":1,"source":"pascalc","message":"'x' is not declared"},{"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":0}},"severity":1,"source":"pascalc","message":"a second one"}]}}
+  {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/hello.pas","diagnostics":[{"range":{"start":{"line":11,"character":6},"end":{"line":11,"character":6}},"severity":1,"source":"pascalc","message":"'x' is not declared"},{"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":0}},"severity":2,"source":"pascalc","message":"a second one"}]}}

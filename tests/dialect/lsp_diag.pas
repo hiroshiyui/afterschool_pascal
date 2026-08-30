@@ -32,16 +32,24 @@ var r: DiagResult;
     out: JsonChars;
     s: string(1024);
     e: ErrorCode;
-    arr, note, one: JsonPtr;
+    arr, note, one, two: JsonPtr;
     d: Diagnostic;
 
 procedure Show(what: DiagText);
 var got: DiagResult;
 begin
   got := DiagParse(what);
-  if got.ok then
-    writeln('  line ', got.val.line:1, ' col ', got.val.col:1,
-            ' [', got.val.message, ']')
+  if got.ok then begin
+    write('  line ', got.val.line:1, ' col ', got.val.col:1, ' ');
+    { The severity word is printed, not the number: what this case is about is
+      the compiler's own wording reaching the protocol, and a 1 or a 2 here
+      would be the same golden for both until DiagJson is reached below. }
+    case got.val.severity of
+      dsError:   write('error');
+      dsWarning: write('warning')
+    end;
+    writeln(' [', got.val.message, ']')
+  end
   else
     writeln('  not a diagnostic: ', ErrorText(got.cause))
 end;
@@ -74,11 +82,18 @@ begin
   writeln('what DiagParse makes of a compilation''s output:');
   Show('hello.pas:12:7: error: ''x'' is not declared');
   Show('hello.pas:1:1: error: a program must have a program-heading');
+  { The second severity (ADR-0272). This line stood among the ones a sweep
+    must *skip*, with the message `this compiler emits none` -- which was true
+    when it was written and is exactly the kind of case a new severity has to
+    come back and move. }
+  Show('hello.pas:12:7: warning: ''b'' is declared here and never used');
 
-  { The lines a sweep meets and must skip. }
+  { The lines a sweep meets and must skip. Every one of them is malformed:
+    the severity word is no longer what separates a diagnostic from a line of
+    ordinary output. }
   Show('');
   Show('no colons here at all');
-  Show('hello.pas:12:7: warning: this compiler emits none');
+  Show('hello.pas:12:7: note: no third severity, so this is not one');
   Show(':12:7: error: an empty path');
   Show('hello.pas:x:7: error: a line that is not a number');
   Show('hello.pas:12: error: a column that is not there');
@@ -97,6 +112,23 @@ begin
   e := JsonCharsInto(out, s);
   writeln('  ', s);
   JsonCharsFree(out);
+
+  { ...and the same object for the other severity, which is the whole of what
+    3.17's DiagnosticSeverity 2 changes: one number, and every other field
+    the same. Printed rather than asserted about, because a severity that
+    reached `Diagnostic` and not the JSON would look right everywhere else.
+
+    A second variable, because `one` is appended to the notification below and
+    is owned by it from then on -- overwriting it here would leak the object
+    and `heap-balance` would say so. }
+  r := DiagParse('hello.pas:3:5: warning: ''b'' is declared here and never used');
+  JsonCharsNew(out);
+  two := DiagJson(r.val, '', peUtf16);
+  JsonRender(two, out);
+  e := JsonCharsInto(out, s);
+  writeln('  ', s);
+  JsonCharsFree(out);
+  JsonFree(two);
 
   writeln;
   writeln('a byte column, as a UTF-16 code unit column:');
@@ -128,6 +160,9 @@ begin
   writeln('and the same diagnostic under each encoding:');
   d.line := 3;
   d.col := 22;
+  { Every field, including the one ADR-0272 added: a `Diagnostic` built here
+    rather than parsed has no severity until this says so. }
+  d.severity := dsError;
   d.message := 'undeclared identifier ''zz''';
   Render('utf-16 (the default)', d,
          '  writeln(''héllo''); zz := 1', peUtf16);
@@ -140,6 +175,7 @@ begin
   JsonAppend(arr, one);
   d.line := 3;
   d.col := 1;
+  d.severity := dsWarning;
   d.message := 'a second one';
   JsonAppend(arr, DiagJson(d, '', peUtf16));
   note := DiagPublish('file:///tmp/hello.pas', arr);

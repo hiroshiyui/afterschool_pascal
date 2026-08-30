@@ -62,6 +62,7 @@ export PasLspDiag = (DiagMax, DiagText, DiagLineMax, DiagLine,
                      { 6.11.2: an enumerated type's values are constants of
                        their own and are exported one by one. }
                      PosEncoding, peUtf8, peUtf16,
+                     DiagSeverity, dsError, dsWarning,
                      Diagnostic, DiagResult,
                      DiagParse, Utf16Column, DiagJson, DiagPublish);
 
@@ -90,10 +91,21 @@ type
     `utf-32` here because nothing in the tree counts in it either. }
   PosEncoding = (peUtf8, peUtf16);
 
+  { 3.17's DiagnosticSeverity, as far as this compiler can go: it writes an
+    error and, since ADR-0272, a warning. There is no note and no hint,
+    because nothing produces one -- a constant for a value no input can
+    reach is the branch doc/sop.md refuses.
+
+    The compiler's own word is what selects it, so this enumeration is the
+    protocol's numbers arriving at exactly one place (`DiagJson`) rather than
+    being carried around as 1 and 2. }
+  DiagSeverity = (dsError, dsWarning);
+
   { What the compiler said, in the compiler's own numbering. }
   Diagnostic = record
     line: integer;
     col: integer;
+    severity: DiagSeverity;
     message: DiagText
   end;
 
@@ -102,9 +114,11 @@ type
     writes is not one. }
   DiagResult = Diagnostic ! ErrorCode;
 
-{ Read one line of `pascalc` output. A line that is not `file:line:col: error:`
-  answers `errSyntax`, and a caller sweeping a compilation's output is expected
-  to meet many of those and skip them. }
+{ Read one line of `pascalc` output. A line that is neither
+  `file:line:col: error:` nor `file:line:col: warning:` answers `errSyntax`,
+  and a caller sweeping a compilation's output is expected to meet many of
+  those and skip them. The severity word is the only difference between the
+  two and it reaches `Diagnostic.severity`. }
 function DiagParse(s: DiagText) = r: DiagResult;
 
 { The compiler's 1-based **byte** column on `line`, as a 1-based **UTF-16 code
@@ -128,7 +142,8 @@ function DiagParse(s: DiagText) = r: DiagResult;
 function Utf16Column(line: DiagLine; col: integer): integer;
 
 { One `Diagnostic` as the protocol's own object: a zero-width range at the
-  position, severity 1 (Error), and `pascalc` as the source. The caller owns
+  position, the severity the compiler's own word gave, and `pascalc` as the
+  source. The caller owns
   what comes back and frees it with `JsonFree`, or appends it to something it
   frees.
 
@@ -197,14 +212,25 @@ begin
       bad := true
   end;
 
-  { `: error: ` is the whole of what this recognises. The compiler emits no
-    warning and no note, so a second severity would be a branch no input
-    reaches -- and `doc/sop.md` is clear about what an unreachable branch is
-    worth here. }
+  { The severity word, which is the whole of what separates the two shapes
+    the compiler writes. It emitted only errors until ADR-0272, and this said
+    so -- *a second severity would be a branch no input reaches* -- which was
+    true when it was written and is the comment a new severity has to come
+    back and delete. There is still no note and no hint, for that same
+    reason. }
   if not bad then begin
     start := i + 1;
     if (start + 7 <= length(s)) and (s[start .. start + 7] = ' error: ') then
-      i := start + 8
+      begin
+        d.severity := dsError;
+        i := start + 8
+      end
+    else if (start + 9 <= length(s)) and
+            (s[start .. start + 9] = ' warning: ') then
+      begin
+        d.severity := dsWarning;
+        i := start + 10
+      end
     else
       bad := true
   end;
@@ -250,7 +276,7 @@ end;
 
 function DiagJson;
 var pos, range, obj: JsonPtr;
-    character: integer;
+    character, sev: integer;
 
   { The protocol's Position, 0-based where the compiler is 1-based. }
   function At: JsonPtr;
@@ -273,9 +299,17 @@ begin
     it would be inventing a claim about the source. An editor shows a caret. }
   JsonPut(range, 'end', At);
 
+  { 3.17's DiagnosticSeverity: 1 is Error and 2 is Warning. A case and not an
+    `if`, so that a severity added to the enumeration is a translation error
+    here rather than an arm quietly taking the other's number. }
+  case d.severity of
+    dsError:   sev := 1;
+    dsWarning: sev := 2
+  end;
+
   obj := JsonNewObject;
   JsonPut(obj, 'range', range);
-  JsonPut(obj, 'severity', JsonNewInteger(1));
+  JsonPut(obj, 'severity', JsonNewInteger(sev));
   JsonPut(obj, 'source', JsonNewText('pascalc'));
   JsonPut(obj, 'message', JsonNewText(d.message));
   pos := obj;
