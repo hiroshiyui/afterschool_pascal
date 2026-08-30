@@ -1,11 +1,11 @@
 <source>:10:22: error: neither side of '!' may itself be fallible: one tag answers for one outcome, and two answer for each other
-<source>:12:16: error: neither side of '!' may contain a file or a handle: a result is a value, and neither of those is one
-<source>:13:15: error: neither side of '!' may contain a file or a handle: a result is a value, and neither of those is one
-<source>:15:22: error: neither side of '!' may contain a file or a handle: a result is a value, and neither of those is one
-<source>:17:9: error: an optional cannot hold a fallible type: one of them already answers whether there is a value, and says why when there is not
-<source>:29:3: error: cannot assign real to a variable of type intresult
-<source>:32:3: error: cannot assign intresult to a variable of type real
-<source>:34:4: error: the tag of a fallible type says which outcome was written, so it cannot be assigned to
-<source>:35:9: error: the tag of a fallible type says which outcome was written, so it cannot be read into
-<source>:37:3: error: both sides of both admit this value, so the assignment does not say which outcome it means; assign to .val or to .cause
-<source>:39:3: error: cannot assign packed array [1..4] of char to a variable of type integer ! code
+<source>:22:24: error: the cause side of '!' may not contain a file or a handle: a cause is carried out of the function by 'try', and neither of those has a copy
+<source>:25:9: error: an optional cannot hold a fallible type: one of them already answers whether there is a value, and says why when there is not
+<source>:39:3: error: cannot assign real to a variable of type intresult
+<source>:42:3: error: cannot assign intresult to a variable of type real
+<source>:44:4: error: the tag of a fallible type says which outcome was written, so it cannot be assigned to
+<source>:45:9: error: the tag of a fallible type says which outcome was written, so it cannot be read into
+<source>:47:3: error: both sides of both admit this value, so the assignment does not say which outcome it means; assign to .val or to .cause
+<source>:49:3: error: cannot assign packed array [1..4] of char to a variable of type integer ! code
+<source>:53:3: error: a handleresult may be assigned only the result of a function of its own type: its value side is owned, and there is no copy
+<source>:56:12: error: 'try' cannot yield the value of handleresult: its value side is owned and has no copy, so there is nothing for this expression to denote -- test .ok instead

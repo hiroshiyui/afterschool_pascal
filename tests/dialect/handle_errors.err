@@ -2,19 +2,19 @@
 <source>:10:9: error: the foreign name 'pas_handle_done' is one this compiler emits for something of its own; it cannot release a handle
 <source>:11:11: error: an optional cannot hold dir: a handle is never a value, and an empty one is its own nil
 <source>:18:1: error: parameter 1 of 'extrewinddir' is a var parameter of a handle type; a handle is lent by value, and a routine given the variable could replace what this program owns without releasing it
-<source>:19:1: error: a function cannot return dir: a result may not be, or contain, a handle -- only an 'external' function answers one, and only to a handle variable
-<source>:20:15: error: 'extopendir' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
-<source>:20:7: error: cannot assign dir to a result of type integer
-<source>:21:19: error: a handle parameter of a Pascal routine must be a var parameter: a handle has no copy, and only an 'external' routine is lent one by value
-<source>:26:3: error: a handle may be assigned only the result of an 'external' function of its own type: it is owned, and there is no copy
-<source>:27:3: error: a handle may be assigned only the result of an 'external' function of its own type: it is owned, and there is no copy
-<source>:28:3: error: a handle may be assigned only the result of an 'external' function of its own type: it is owned, and there is no copy
-<source>:29:19: error: 'extopendir' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
-<source>:29:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
-<source>:31:8: error: a handle can only be compared with 'nil': it asks whether the handle is empty, and two handles have no equality of their own
-<source>:32:8: error: a handle can only be compared with = and <>, not with '<'
-<source>:34:11: error: argument 1 of 'byvalue' is dir, but the value is dir
-<source>:35:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
-<source>:40:19: error: 'extopencwd' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
-<source>:40:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
-<source>:41:6: error: 'extopencwd' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:28:1: error: a function cannot return boxed: a result may not be, or contain, a handle -- a handle result has one destination and a structure holding one has none this compiler can hand over
+<source>:36:7: error: a handle result may be assigned only nil or the result of a function of its own type: it is owned, and there is no copy
+<source>:37:19: error: a handle parameter of a Pascal routine must be a var parameter: a handle has no copy, and only an 'external' routine is lent one by value
+<source>:42:3: error: a handle may be assigned only nil or the result of a function of its own type: it is owned, and there is no copy
+<source>:43:3: error: a handle may be assigned only nil or the result of a function of its own type: it is owned, and there is no copy
+<source>:44:3: error: a handle may be assigned only nil or the result of a function of its own type: it is owned, and there is no copy
+<source>:45:19: error: 'extopendir' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:45:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
+<source>:47:8: error: a handle can only be compared with 'nil': it asks whether the handle is empty, and two handles have no equality of their own
+<source>:48:8: error: a handle can only be compared with = and <>, not with '<'
+<source>:50:11: error: argument 1 of 'byvalue' is dir, but the value is dir
+<source>:51:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
+<source>:54:3: error: cannot assign boxed: it contains a handle, and a handle has no copy
+<source>:59:19: error: 'extopencwd' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:59:19: error: argument 1 of 'extreaddir' lends a handle, so it must be a variable of type dir
+<source>:60:6: error: 'extopencwd' answers a handle, which may stand only as the whole right side of an assignment to a handle variable

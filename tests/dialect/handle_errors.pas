@@ -16,11 +16,27 @@ function ExtOpendir(path: string): Dir; external 'opendir';
 function ExtOpencwd: Dir; external 'opendir_probe';
 function ExtReaddir(d: Dir): int64; external 'readdir';
 function ExtRewinddir(var d: Dir): integer; external 'rewinddir';
+{ AP 6.4.12.6 (ADR-0255) admits this and it is here to produce *no*
+  diagnostic: a function of this program may answer a handle, which until that
+  clause only an `external` one could. What it may not answer is a structure
+  holding one -- a handle result has exactly one destination and the address
+  can be handed to the callee, and a record has none this compiler can hand
+  over. }
 function Mine(path: string): Dir;
 begin Mine := ExtOpendir(path) end;
+type Boxed = record h: Dir end;
+function InARecord: Boxed;
+begin end;
+{ And 6.4.12.6's own refusal, which is 6.4.12.2's read through 6.8.2.2's other
+  spelling: a factory may assign its result nil or a call of its own type, and
+  a handle *variable* is neither -- it is owned, and a second name for it would
+  release one resource twice. }
+function FromAVariable: Dir;
+var z: Dir;
+begin FromAVariable := z end;
 procedure ByValue(d: Dir);
 begin end;
-var d, e: Dir; o: Other; n: int64; k: integer;
+var d, e: Dir; o: Other; n: int64; k: integer; boxA, boxB: Boxed;
 begin
   d := ExtOpendir('.');
   e := d;
@@ -33,6 +49,9 @@ begin
   if d = nil then writeln('empty');
   ByValue(d);
   n := ExtReaddir(o);
+  { A structure holding a handle has the affine type's refusals, and is told
+    which kind it holds rather than being told about a file it has not got. }
+  boxA := boxB;
   { the bare spelling of a handle-valued external, in the one position it may
     stand and then in two it may not. The first line is legal and is here so
     that the two are compared rather than only the refusals tested. }

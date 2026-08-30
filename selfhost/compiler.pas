@@ -730,7 +730,16 @@ begin
 end;
 
 { The shared storage every arm at `path` is laid over: big enough for the
-  largest and aligned for the strictest. }
+  largest and aligned for the strictest.
+
+  AP 6.4.13.5 (ADR-0256) is the one type where they are not laid over one
+  another at all. `rec^.armsApart` says so, and then this answers the storage
+  every arm needs *side by side*, each rounded to its own alignment -- so the
+  handle in one arm and the cause in the other occupy different bytes and the
+  prologue's `pas_handle_init` cannot be half-overwritten by a cause. The
+  arms are still arms: the tag still selects, EmitVariantGuard still traps a
+  read of the inactive one, and 6.4.3.4's requirement is inherited unchanged.
+  Only where they sit has moved. }
 procedure VariantStorageAt;
 var v: variantPtr; s, a, i: integer; sub: numPtr;
 begin
@@ -741,12 +750,33 @@ begin
   while v <> nil do begin
     sub := PathAppend(path, i);
     ArmLayoutAt(rec, sub, s, a);
-    if s > size then size := s;
+    if rec^.armsApart then size := RoundUp(size, a) + s
+    else if s > size then size := s;
     if a > align then align := a;
     i := i + 1;
     v := v^.next
   end;
   if size = 0 then align := 1 else size := RoundUp(size, align)
+end;
+
+{ The bytes one arm of a side-by-side variant part occupies. Only ever asked
+  of an armsApart record; the overlaid form has one block and no arm of its
+  own to measure. Where the arm *starts* is not asked and is not computed: the
+  arm is a member of the struct, so LLVM places it, which is the whole reason
+  this shape needs no offset arithmetic anywhere. }
+procedure ArmSlotAt(rec: typePtr; path: numPtr; arm: integer;
+                    var size, align: integer);
+var v: variantPtr; i: integer;
+begin
+  size := 0;
+  align := 1;
+  v := ArmsAt(rec, path);
+  i := 0;
+  while v <> nil do begin
+    if i = arm then ArmLayoutAt(rec, PathAppend(path, i), size, align);
+    i := i + 1;
+    v := v^.next
+  end
 end;
 
 procedure RecordLayout(t: typePtr; var size, align: integer);
@@ -761,9 +791,14 @@ end;
 function SelectedSize(rec: typePtr; path, selection: numPtr): integer;
 var f: fieldPtr; size, align, a, ssize, salign: integer;
 begin
-  if (selection = nil) or (ArmsAt(rec, path) = nil) then begin
-    { nothing left to select, or nothing to select from: the whole struct,
-      shared storage and all }
+  if (selection = nil) or (ArmsAt(rec, path) = nil) or rec^.armsApart then
+  begin
+    { Nothing left to select, or nothing to select from: the whole struct,
+      shared storage and all. AP 6.4.13.5's arms are the third case and give
+      the same answer for a different reason -- laid apart, every arm has
+      bytes of its own and there is no tail that only the unselected ones
+      would have needed, so a selection saves nothing and trimming would take
+      away storage a later assignment to the other arm still uses. }
     ArmLayoutAt(rec, path, size, align);
     SelectedSize := size
   end
@@ -895,8 +930,19 @@ begin
     write(ircode, '[', size div align:1, ' x i', align * 8:1, ']')
 end;
 
+{ One arm's own block, for AP 6.4.13.5's side-by-side form. No empty case
+  where PutStorageTypeAt has one: that covers a program-written variant part
+  whose arm holds no field, and the only arms ever laid apart are a
+  fallible-type's, each of which holds exactly one. }
+procedure PutArmTypeAt(rec: typePtr; path: numPtr; arm: integer);
+var size, align: integer;
+begin
+  ArmSlotAt(rec, path, arm, size, align);
+  write(ircode, '[', size div align:1, ' x i', align * 8:1, ']')
+end;
+
 procedure PutStructAt;
-var f: fieldPtr; first: boolean;
+var f: fieldPtr; first: boolean; v: variantPtr; i: integer;
 begin
   write(ircode, '{ ');
   first := true;
@@ -907,10 +953,25 @@ begin
     first := false;
     f := f^.next
   end;
-  if ArmsAt(rec, path) <> nil then begin
-    if not first then write(ircode, ', ');
-    PutStorageTypeAt(rec, path)
-  end;
+  if ArmsAt(rec, path) <> nil then
+    { AP 6.4.13.5 (ADR-0256): one block per arm where they are laid apart, and
+      one shared block where they are laid over -- which is every variant part
+      a program can write. }
+    if rec^.armsApart then begin
+      v := ArmsAt(rec, path);
+      i := 0;
+      while v <> nil do begin
+        if not first then write(ircode, ', ');
+        PutArmTypeAt(rec, path, i);
+        first := false;
+        i := i + 1;
+        v := v^.next
+      end
+    end
+    else begin
+      if not first then write(ircode, ', ');
+      PutStorageTypeAt(rec, path)
+    end;
   write(ircode, ' }')
 end;
 
@@ -2166,7 +2227,14 @@ begin
     PutStructAt(t, prefix);
     write(ircode, ', ptr ');
     PutOp(cur);
-    writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(t, prefix)):1);
+    { AP 6.4.13.5: an arm laid apart is its own member, so the index is the
+      fixed fields plus which arm; an overlaid one is the single block that
+      follows them. }
+    if t^.armsApart then
+      writeln(ircode, ', i32 0, i32 ',
+              FieldCount(FieldsAt(t, prefix)) + step^.value_:1)
+    else
+      writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(t, prefix)):1);
     cur := p;
     prefix := PathAppend(prefix, step^.value_);
     step := step^.next
@@ -2181,11 +2249,40 @@ end;
 
 { ---------------------------------------------------------- file variables }
 
-{ Whether a value of this type holds a file anywhere inside it. A variant part
-  cannot -- Sema refuses a file in one, because the arms share storage and a
-  file's storage is its own -- so this walks the fixed part only, which is also
-  what makes the walk below able to reach every file exactly once. }
-function HoldsFile(t: typePtr): boolean;
+{ Whether a value of this type holds a file anywhere inside it.
+
+  A variant part whose arms are laid **over** one another cannot -- Sema
+  refuses a file in one, because the arms share storage and a file's storage
+  is its own -- so for those this walks the fixed part alone, which is what
+  makes the walk below reach every file exactly once.
+
+  AP 6.4.13.5's side-by-side arms (ADR-0256) are the exception and the reason
+  the flag exists: their arms do not share storage, so each is walked, and
+  each affine slot is still reached exactly once because each has bytes of its
+  own. A fallible-type has one affine arm at most -- 6.4.13.5 admits an affine
+  value-type and refuses an affine cause-type -- so in practice one slot is
+  registered and the other arm contributes nothing. }
+function HoldsFile(t: typePtr): boolean; forward;
+
+{ The arms of a side-by-side variant part (AP 6.4.13.5), asked the same
+  question. Mutually recursive with HoldsFile, which is what the forward
+  above is for. }
+function ArmsHoldFile(v: variantPtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  while (v <> nil) and not found do begin
+    f := v^.fields;
+    while (f <> nil) and not found do begin
+      if HoldsFile(f^.ftype) then found := true;
+      f := f^.next
+    end;
+    v := v^.next
+  end;
+  ArmsHoldFile := found
+end;
+
+function HoldsFile;
 var found: boolean; f: fieldPtr;
 begin
   found := false;
@@ -2197,7 +2294,8 @@ begin
       while (f <> nil) and not found do begin
         if HoldsFile(f^.ftype) then found := true;
         f := f^.next
-      end
+      end;
+      if t^.armsApart and not found then found := ArmsHoldFile(t^.variants)
     end;
   HoldsFile := found
 end;
@@ -2238,6 +2336,7 @@ procedure WalkFiles(addr: str; t: typePtr; init: boolean;
                     binding, arg, name: integer);
 var comp, istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     f: fieldPtr;
+    v: variantPtr;
     nohdr, count, iv, i, more, elem, next, zero, one, held: str;
 begin
   { AP 6.4.12 (ADR-0174): a handle is set up empty with its closer and torn
@@ -2331,6 +2430,28 @@ begin
         WalkFiles(elem, f^.ftype, init, 0, 0, name)
       end;
       f := f^.next
+    end;
+    { AP 6.4.13.5 (ADR-0256): an arm laid beside the others has bytes of its
+      own, so the affine slot in it is set up and torn down like any field --
+      once, at an address nothing else uses. `vgNone` is right and is not an
+      omission: the walk reaches every arm on purpose, where a *program*
+      reading the inactive one is what EmitVariantGuard traps.
+
+      An overlaid variant part is not walked and cannot be: Sema refuses an
+      affine field in one, which is the invariant HoldsFile states. }
+    if t^.armsApart then begin
+      v := t^.variants;
+      while v <> nil do begin
+        f := v^.fields;
+        while f <> nil do begin
+          if HoldsFile(f^.ftype) then begin
+            FieldAddress(addr, t, f, elem, vgNone);
+            WalkFiles(elem, f^.ftype, init, 0, 0, name)
+          end;
+          f := f^.next
+        end;
+        v := v^.next
+      end
     end
   end
   else if IsArray(t) then begin
@@ -2795,6 +2916,21 @@ end;
   already been passed. }
 var
   breakBlock, contBlock: integer;
+
+  { AP 6.4.12.6 (ADR-0255): where the next call is to build its handle
+    result, or nil.
+
+    Deliberately the shape Sema's `handleBirth` has, and about the same
+    statement seen from the other end of the pipeline: a handle-valued call
+    may stand in exactly one position, so the *statement* knows the
+    destination and the call does not. Set by EmitAssign immediately before
+    the value is emitted, read and cleared by EmitUserCall, and cleared again
+    by EmitAssign afterwards so a foreign call -- which never reads it, its
+    answer arriving in a register -- leaves nothing armed. Threading it as a
+    parameter instead would mean a second reader of "which node kind holds a
+    call", which EmitExpr already dispatches three ways, and that is the
+    drift ADR-0230 is about. }
+  factoryInto: nodePtr;
 
 procedure EmitStmt(s: nodePtr); forward;
 { AP 6.8.9's try assigns a result the way exit(e) does, and through the same
@@ -3844,7 +3980,17 @@ begin
     the call, by the four lines at the end of this procedure. }
   foreignPtr := byAddr and (callee^.linkKind = lnkForeign);
   if foreignPtr then byAddr := false;
-  if byAddr then AddressOfSym(slotSym, resAddr);
+  if byAddr then
+    { AP 6.4.12.6 (ADR-0255): a factory writes into the variable that will own
+      the handle, and there is no slot to write into instead -- NewResultSlot
+      makes none for a handle, a slot here being a second handle the prologue
+      would register and the epilogue release. `factoryInto` is where the
+      assignment said to build it, read and cleared here. }
+    if factoryInto <> nil then begin
+      EmitAddress(factoryInto, resAddr);
+      factoryInto := nil
+    end
+    else AddressOfSym(slotSym, resAddr);
   if (result <> nil) and not byAddr then begin
     Def(v);
     write(ircode, 'call ')
@@ -6799,15 +6945,55 @@ begin
   end
   { AP 6.4.12.2 (ADR-0174): the variable takes ownership of what the external
     call answered, and the runtime releases what it held first. The call is
-    evaluated before the address is taken, as any right side is. }
+    evaluated before the address is taken, as any right side is.
+
+    AP 6.4.12.6 (ADR-0255) is the other half and is not a second lowering of
+    the same thing. A factory -- a function of this program -- answers a type
+    that IsMemory, so it was already taking the address of the variable its
+    result is to live in; what it is given here is the address of *this*
+    target, and its own `Open := ExtFopen(...)` is this same assignment one
+    frame in, storing through it. So the handle is born in the variable that
+    will own it and is never held anywhere else, and a factory over a factory
+    passes the address on with no intermediate handle at all.
+
+    Nothing is stored here in that case, and that is the correctness crux
+    rather than an optimisation: a `pas_handle_set` after the call would
+    release what the callee had just written into this very slot. }
   else if IsHandle(s^.asTarget^.ntype) then begin
+    if s^.asFactory then factoryInto := s^.asTarget;
     EmitExpr(s^.asValue, src);
-    EmitAddress(s^.asTarget, dst);
-    write(ircode, '  call void @pas_handle_set(ptr ');
-    PutOp(dst);
-    write(ircode, ', ptr ');
-    PutOp(src);
-    writeln(ircode, ')')
+    factoryInto := nil;
+    if not s^.asFactory then begin
+      { ADR-0118, as the ordinary assignment path does it: this is the one
+        designator whose variant a write *activates*. It did not matter until
+        AP 6.4.13.5 (ADR-0256) put a handle inside a variant part -- until
+        then no handle could be one, so this arm never addressed an arm and
+        the omission was invisible. Without it `res.val := ExtFopen(...)` is
+        guarded as a read and traps against whichever arm was last active. }
+      designatorGuard := vgWrite;
+      EmitAddress(s^.asTarget, dst);
+      designatorGuard := vgRead;
+      write(ircode, '  call void @pas_handle_set(ptr ');
+      PutOp(dst);
+      write(ircode, ', ptr ');
+      PutOp(src);
+      writeln(ircode, ')')
+    end
+  end
+  { AP 6.4.13.5 (ADR-0256): the fallible form of the arm above, and the same
+    lowering read one level out. The record contains something affine, so it
+    has no copy and there is nothing to memcpy: the callee is handed this
+    target's address and builds its answer there -- the tag and whichever arm
+    it activated. A memcpy would be ADR-0150's double free with a handle in
+    place of a file, two records each holding a slot the runtime is tracking.
+
+    Nothing else in EmitAssign reaches this: Sema admits exactly one value
+    here, a call of a function of this very type, and `asFactory` is what says
+    the callee is one of this program's. }
+  else if s^.asFactory and IsFallible(s^.asTarget^.ntype) then begin
+    factoryInto := s^.asTarget;
+    EmitExpr(s^.asValue, src);
+    factoryInto := nil
   end
   { AP 6.4.14.6 (ADR-0182): the move. Four instructions and no runtime call --
     read what the source holds, empty it, release what the target held, store.
@@ -10366,6 +10552,7 @@ begin
     rather than a branch into another loop's blocks. }
   breakBlock := 0;
   contBlock := 0;
+  factoryInto := nil;
   BindTo(ircode, outName);
   rewrite(ircode);
   { The layout LlSize and LlAlign model, stated so the assembler uses the same
@@ -11041,6 +11228,7 @@ begin
   Row('IsStringRep     ', IsStringRep);
   Row('IsOptional      ', IsOptional);
   Row('IsFallible      ', IsFallible);
+  Row('IsHandleBirth   ', IsHandleBirth);
   Row('IsSlice         ', IsSlice);
   Row('IsNumeric       ', IsNumeric);
   Row('IsArith         ', IsArith);

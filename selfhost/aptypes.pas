@@ -128,7 +128,8 @@ export ApTypes = (
   InternResultName, InternBindingName, InternCallResultName,
   InternTryName, InternWithName, InternBoundsName, InternForName, NewType,
   Base, IsInteger, IsReal, IsInt64, IsComplex, IsVarString, IsText,
-  IsStringRep, IsOptional, IsFallible, IsSlice, SliceOf, IsNumeric,
+  IsStringRep, IsOptional, IsFallible, IsHandleBirth,
+  IsSlice, SliceOf, IsNumeric,
   IsArith, IsBoolean, IsChar, IsEnum, IsArray, IsRecord, IsPointer,
   IsFile, IsHandle, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
   IsSet, IsProcType, IsEmptySet, IsRestricted, Underlying, IsStructured,
@@ -906,6 +907,23 @@ type
       re-implemented. }
     isFallible: boolean;
     falVal, falCause: typePtr;
+    { AP 6.4.13.5 (ADR-0256): this record's variant arms are laid **beside**
+      one another rather than over one another, because one of them holds
+      something affine -- a handle, a file, an owned pointer.
+
+      The overlay is what a variant part normally is and what 6.4.3.4's own
+      refusal of a file in one is about: the arms share storage, and a file's
+      storage is its own. The prologue registers the affine slot with the
+      runtime and the epilogue releases it, so a *cause* written into the same
+      bytes would overwrite half of a `struct pas_handle` and the block would
+      then release whatever was left there.
+
+      Set only by ResolveFallible and only where a side is affine, so every
+      fallible-type a program has written until now keeps the layout it had
+      and no golden, no gate and no offset moves. It is per type rather than
+      per language because an unconditional change would grow every fallible
+      in the corpus for a reader that does not exist. }
+    armsApart: boolean;
     tagField: integer;
     { 6.4.3.4 spells a variant-selector `[tag-field ':'] tag-type |
       discriminant-identifier`, and this says it was the third form. The
@@ -1707,7 +1725,20 @@ type
                      clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr;
                      clOk, clFail, clVal: nodePtr);
       nkEmpty:      ();
-      nkAssign:     (asTarget, asValue: nodePtr);
+      { asFactory: AP 6.4.12.6 (ADR-0255). The value is a call of a function
+        of *this program* answering a handle, so the target's address is what
+        the callee is handed and the callee stores through it -- the value is
+        born in the variable that will own it and is never held anywhere
+        else. Nothing may store it again here: the callee's own
+        `Open := ExtFopen(...)` already did, through this same address, and a
+        second `pas_handle_set` would release what it just wrote.
+
+        Sema's to decide and CodeGen's to obey, which is the contract: the
+        answer is "was the callee an external declaration", and CodeGen never
+        asks a question about a symbol's linkage that Sema could have
+        answered. False for an external call, whose answer arrives in a
+        register and is stored here as it always was. }
+      nkAssign:     (asTarget, asValue: nodePtr; asFactory: boolean);
       { wrStr is 6.7.5.5's writestr: the string-variable written to. Non-nil
         makes this a writestr rather than a write, and then wrFile stays nil --
         the file is the auxiliary text variable the clause defines the
@@ -2377,6 +2408,15 @@ function IsOptional(t: typePtr): boolean;
   the layout and ADR-0118's trap free -- so this asks the flag rather than the
   kind. It is what the two assignment rules and the tag refusal key on. }
 function IsFallible(t: typePtr): boolean;
+
+{ AP 6.4.12.2's position, asked of an assignment's *target* rather than of its
+  value. A handle variable is one, and since AP 6.4.13.5 (ADR-0256) so is a
+  fallible variable whose value side is a handle: `res := ExtFopen(...)` is
+  6.4.13.3's shorthand for `res.val := ExtFopen(...)`, and the permission has
+  to be granted before the value is checked while the rewrite happens after --
+  so the question is asked of what the target *is* and not of what the
+  statement will become. }
+function IsHandleBirth(t: typePtr): boolean;
 
 { ADR-0125's slice. Like tyProc, this is the type of a formal parameter and of
   nothing else -- so most of the compiler meets one only through the parameter
@@ -3156,6 +3196,7 @@ begin
   t^.variantTail := nil;
   t^.discSelector := false;
   t^.isFallible := false;
+  t^.armsApart := false;
   t^.falVal := nil;
   t^.falCause := nil;
   t^.tagField := -1;
@@ -3252,6 +3293,12 @@ begin IsOptional := (t <> nil) and (t^.kind = tyOptional) end;
   kind. It is what the two assignment rules and the tag refusal key on. }
 function IsFallible;
 begin IsFallible := (t <> nil) and (t^.kind = tyRecord) and t^.isFallible end;
+
+function IsHandleBirth;
+begin
+  IsHandleBirth := IsHandle(t) or
+                         (IsFallible(t) and IsHandle(t^.falVal))
+end;
 
 { ADR-0125's slice. Like tyProc, this is the type of a formal parameter and of
   nothing else -- so most of the compiler meets one only through the parameter

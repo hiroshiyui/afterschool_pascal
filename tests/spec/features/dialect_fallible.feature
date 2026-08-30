@@ -22,12 +22,12 @@ Feature: Fallible-types
       """
 
   @afterschool:6.4.13.1
-  Scenario: neither side may contain a file
+  Scenario: the cause side may not contain a file
     Given the Afterschool Pascal program
       """
       program p(output);
-      type c = (e1, e2);
-           r = text ! c;
+      type c = text;
+           r = integer ! c;
       var q: r;
       begin writeln(q.ok) end.
       """
@@ -35,7 +35,7 @@ Feature: Fallible-types
     Then it is rejected
      And the diagnostic includes
       """
-      neither side of '!' may contain a file or a handle
+      the cause side of '!' may not contain a file or a handle
       """
 
   @afterschool:6.4.13.2
@@ -164,4 +164,100 @@ Feature: Fallible-types
      And the diagnostic includes
       """
       the tag of a fallible type says which outcome was written
+      """
+
+  # AP 6.4.13.5 (ADR-0256). The value side may be affine -- a handle, a file, an
+  # owned pointer -- and the two arms are then laid beside one another rather
+  # than over one another, so there is no shared storage for a cause to
+  # overwrite. That is what makes `function Open(p): Stream ! ErrorCode`
+  # writable, which is the shape every producer in this language's library
+  # wants and the one that was refused.
+  @afterschool:6.4.13.5
+  Scenario: a factory may answer a handle or a reason
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type s = handle external 'fclose';
+           c = (nopath, refused);
+           r = s ! c;
+      function ExtFopen(path, mode: string): s; external 'fopen';
+      function Open(path: string): r;
+      begin
+        if path = '' then Open := nopath else Open := ExtFopen(path, 'r')
+      end;
+      var q: r;
+      begin
+        q := Open('');
+        writeln(q.ok, ' ', q.cause = nopath);
+        q := Open('/etc/hostname');
+        writeln(q.ok)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      FALSE TRUE
+      TRUE
+      """
+
+  # The record contains something with no copy, so it has none: the one
+  # assignment admitted is a call of a function of its own type, whose result is
+  # established in this very variable.
+  @afterschool:6.4.13.5
+  Scenario: such a record has no copy
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type s = handle external 'fclose';
+           c = (nopath);
+           r = s ! c;
+      var a, b: r;
+      begin a := b end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      may be assigned only the result of a function of its own type
+      """
+
+  # And `try` cannot yield it: 6.8.9.4 makes the expression denote the value,
+  # and denoting an owned value would be copying it.
+  @afterschool:6.4.13.5
+  Scenario: try cannot yield an owned value
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type s = handle external 'fclose';
+           c = (nopath);
+           r = s ! c;
+      function f(var q: r): integer;
+      begin f := try(q) end;
+      var q: r;
+      begin writeln(f(q)) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      its value side is owned and has no copy
+      """
+
+  # The cause side is refused for the reason the value side is admitted: a cause
+  # is carried out of a function by `try`, which is a copy.
+  @afterschool:6.4.13.5
+  Scenario: the cause side may not be affine
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type s = handle external 'fclose';
+           r = integer ! s;
+      var q: r;
+      begin writeln(q.ok) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      the cause side of '!' may not contain a file or a handle
       """

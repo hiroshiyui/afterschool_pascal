@@ -105,7 +105,7 @@ Feature: Handle-types
     Then it is rejected
      And the diagnostic includes
       """
-      a handle may be assigned only the result of an 'external' function
+      a handle may be assigned only nil or the result of a function
       """
 
   # 6.4.12.2's second form (ADR-0202). `nil` is not a value of the type -- it is
@@ -151,7 +151,7 @@ Feature: Handle-types
     Then it is rejected
      And the diagnostic includes
       """
-      a handle may be assigned only the result of an 'external' function
+      a handle may be assigned only nil or the result of a function
       """
 
   # 6.4.12.5 (ADR-0206). Every other release throws the closer's result away
@@ -238,4 +238,104 @@ Feature: Handle-types
      And the diagnostic includes
       """
       nothing else has a closer to answer for it
+      """
+
+  # AP 6.4.12.6 (ADR-0255): a function of this program may answer a handle, so
+  # a library can hand a caller an open stream instead of making the caller
+  # declare a variable and pass it as a `var` parameter. The value is born in
+  # the variable that will own it -- the callee is handed that variable's
+  # address, and its own assignment through it *is* 6.4.12.2's -- so there is
+  # no moment at which the handle is held anywhere else.
+  @afterschool:6.4.12.6
+  Scenario: a function of the program may answer a handle
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      function Open(path: string): f;
+      begin Open := ExtFopen(path, 'r') end;
+      var h: f;
+      begin
+        h := Open('/etc/hostname');
+        if h = nil then writeln('empty') else writeln('open')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      open
+      """
+
+  # A factory over a factory passes the destination on, so no intermediate
+  # handle exists at any depth.
+  @afterschool:6.4.12.6
+  Scenario: a factory may answer what another factory answered
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      function Inner(path: string): f;
+      begin Inner := ExtFopen(path, 'r') end;
+      function Outer(path: string): f;
+      begin Outer := Inner(path) end;
+      var h: f;
+      begin
+        h := Outer('/etc/hostname');
+        if h = nil then writeln('empty') else writeln('open')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      open
+      """
+
+  # A factory may answer nothing, which is 6.4.12.2's second form written as a
+  # result. That is what makes the bare form usable at all: a producer that
+  # cannot report failure would be a regression on a `var` parameter and a
+  # status code.
+  @afterschool:6.4.12.6
+  Scenario: a factory may answer nil
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      function Open(path: string): f;
+      begin
+        if path = '' then Open := nil else Open := ExtFopen(path, 'r')
+      end;
+      var h: f;
+      begin
+        h := Open('');
+        if h = nil then writeln('empty') else writeln('open')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      empty
+      """
+
+  # What is still refused is a *structure* holding one: a handle result has one
+  # destination and the address can be handed to the callee, and a record has
+  # none this compiler can hand over.
+  @afterschool:6.4.12.6
+  Scenario: a function may not answer a record holding a handle
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+           box = record h: f end;
+      function Make: box;
+      begin end;
+      begin writeln('unreached') end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a result may not be, or contain, a handle
       """

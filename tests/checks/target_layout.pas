@@ -21,8 +21,18 @@ type
   { AP 6.4.12's handle slot, four words: in a record beside a set, and bare }
   hnd  = handle external 'fclose';
   hrec = record h: hnd; s: cs; k: integer end;
+{ AP 6.4.13.5 (ADR-0256): the one record in this language whose variant arms
+  are laid *beside* one another rather than over one another. Nothing else
+  here has that shape, and without it this gate compares no side-by-side arm
+  on any target -- an alignment rule that put the second arm in the wrong
+  place would be invisible. The value side is a handle and the cause an
+  enumeration, so the two arms differ in both size and alignment, which is
+  what makes a mistake in either visible as a moved offset. }
+type ecode = (bad, worse);
+     opened = hnd ! ecode;
 var r: rec; a: arr; s1: cs; c: complex; f: file of rec; t: text;
     st: string(100); op: ?cs; i64v: int64; h1: hnd; hr: hrec;
+    ores: opened;
 
 { A conformant array schema and a schematic formal, so that the two parameter
   shapes carrying bounds beside an address are frames here too. }
@@ -44,4 +54,4 @@ begin
   k := 0
 end;
 
-begin defers; writeln('x') end.
+begin defers; writeln(ores.ok) end.

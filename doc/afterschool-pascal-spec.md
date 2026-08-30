@@ -887,6 +887,43 @@ integer may be written.
 
 NOTE 3 — The variable being empty afterwards is what keeps 6.4.12.3's "at most
 once" without anyone counting: the block's own release finds nothing to do.
+
+**6.4.12.6 The factory [added].** A handle-type shall be the result type of a
+function-declaration that is not an external-declaration.
+
+A function-block of such a function shall contain no assignment to the
+function-identifier or to its result-variable other than the two 6.4.12.2
+admits: `nil`, or a function-designator of a function whose result type is the
+same handle-type.
+
+For each activation of such a function, the variable to which the
+function-designator's value is assigned shall be the variable that the
+assignments within its function-block establish; and 6.4.12.2's requirement
+that the value be released before it is stored shall be met by that variable.
+
+NOTE 1 — The value is therefore never held anywhere but in the variable that
+will own it. A function answering a handle already receives the address of the
+variable its result is to occupy, that type being one whose values do not
+travel in a register, and the assignment inside the function-block is
+6.4.12.2's assignment made through that address. There is no temporary to
+release and no moment at which two names identify one resource, which is what
+the last sentence of 6.4.12.2 exists to prevent.
+
+NOTE 2 — And a function whose block assigns its result from another such
+function passes the address on unchanged, so the property holds at any depth.
+
+NOTE 3 — The result type shall be a handle-type and not a type having a
+component of one, which 6.7.2's own restriction continues to refuse: a handle
+result has exactly one destination and its address can be given to the
+function, and a structured result has no such destination for each of its
+components.
+
+NOTE 4 — Answering `nil` is what makes the construct usable rather than a
+regression. A producer that could not report a failure would be worse than the
+`var` parameter and status code it replaces, and 6.4.12.2's second form is
+already the empty state written as a value. Where a reason for the failure is
+wanted as well, 6.4.13's fallible-type is the shape — and 6.4.13.1 does not
+admit a handle as its value-type, so that remains unavailable.
 Before this clause a program wanting a closer's result had to call the closer
 itself through 6.4.12.4's lend, which leaves the variable owning an address
 already released and the block closing it a second time.
@@ -966,6 +1003,61 @@ NOTE 4 — Propagation is 6.8.9's try-expression, which takes the value of a
 fallible-type and leaves the enclosing function where it is a cause. It needed
 an early exit, which neither standard has, and so arrived after 6.7.5.9
 (ADR-0176, ADR-0177, ADR-0178).
+
+**6.4.13.5 An affine value-type [added].** The value-type of a fallible-type
+may be a type that is or contains a file-type (§6.4.3.5), a handle-type
+(6.4.12) or an owned-pointer-type (6.4.14). The cause-type shall not be.
+
+For a fallible-type whose value-type is such a type, the storage of the two
+variants shall not overlap; and for every other fallible-type, and for every
+other record-type, 6.4.3.4's storage requirements apply unchanged.
+
+A variable of such a fallible-type shall be assigned only:
+
+  a) a value of its value-type, in the form 6.4.13.3 admits, where 6.4.12.2 or
+     6.4.14.6 admits that value in an assignment to a variable of the
+     value-type; or
+
+  b) a value of its cause-type, in the form 6.4.13.3 admits; or
+
+  c) the value of a function-designator of a function whose result type is
+     that same fallible-type.
+
+For the last of these, the value shall be established in the variable assigned
+to, and no other variable of that type shall be established by that
+activation.
+
+It shall be an error for the operand of a try-expression (6.8.9) to possess
+such a type.
+
+NOTE 1 — This is what makes `function Open(p: Path): Stream ! ErrorCode`
+writable, which is the shape every producer in a library of this language
+wants and the one that was refused. A factory answering only 6.4.12.2's `nil`
+would say that something went wrong and never what, which is worse than the
+variable-and-status-code it replaces.
+
+NOTE 2 — The arms of a variant-part share storage, and that is why 6.4.3.4
+refuses a file in one: the storage of a file is its own, and a value written
+into the other variant would overwrite part of it while the activation still
+holds it. Laying the two variants of *this* record beside one another removes
+the sharing and with it the reason for the refusal. Nothing else about the
+type changes — the tag is still authoritative, 6.4.3.4.2's detection of a read
+of an inactive variant applies unchanged, and every fallible-type whose
+value-type is not affine has exactly the representation it had.
+
+NOTE 3 — The cause-type is refused for the reason the value-type is admitted.
+A cause is carried out of a function by 6.8.9's try-expression, which is a
+copy, and an affine value has none. The same sentence is why a
+try-expression's operand may not possess this type: 6.8.9.4 makes the
+expression denote the *value*, and denoting an owned value would be copying
+it. A program tests `ok` instead, which is what it would do with the handle in
+any case.
+
+NOTE 4 — c) is 6.4.12.6's factory one clause out, and requires the same thing
+of the processor: the function is given the address of the variable its result
+is to occupy, and what its own block establishes is established there. There
+is no copy at the assignment and no moment at which two variables identify one
+resource.
 
 #### 6.4.14 Owned-pointer-types [added]
 

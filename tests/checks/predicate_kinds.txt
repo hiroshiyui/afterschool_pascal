@@ -30,6 +30,7 @@ IsText 1 of 21: tyText
 IsStringRep 2 of 21: tyString tyText
 IsOptional 1 of 21: tyOptional
 IsFallible 0 of 21:
+IsHandleBirth 1 of 21: tyHandle
 IsSlice 1 of 21: tySlice
 IsNumeric 3 of 21: tyInteger tyReal tyInt64
 IsArith 4 of 21: tyInteger tyReal tyComplex tyInt64

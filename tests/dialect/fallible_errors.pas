@@ -8,11 +8,19 @@ type
   H = handle external 'fclose';
   { neither side may itself be fallible: one tag answers for one outcome }
   Nested = IntResult ! Code;
-  { nor hold a file or a handle, which have no value to be an outcome }
+  { AP 6.4.13.5 (ADR-0256) admits these three: the *value* side may be affine,
+    and the two arms are then laid beside one another rather than over one
+    another, so there is no shared storage for a cause to overwrite. They are
+    here to produce no diagnostic. What is refused is the **cause** side,
+    below: a cause is carried out of a function by `try`, which is a copy, and
+    an affine value has none. }
   Filed = text ! Code;
   Handled = H ! Code;
   FileRec = record n: integer; f: text end;
   RecFiled = FileRec ! Code;
+  { and the cause side, for the reason the value side is admitted }
+  CauseFiled = integer ! H;
+  HandleResult = H ! Code;
   { an optional already answers whether there is a value }
   Opt = ?IntResult;
   { a type whose sides overlap is legal -- what it cannot take is the
@@ -23,6 +31,8 @@ type
     than name it }
 var r: IntResult; b: Both; x: real; ok2: boolean;
     anon: integer ! Code;
+    { AP 6.4.13.5's own two refusals. }
+    h1, h2: HandleResult; n: integer;
 
 begin
   { a value of neither side }
@@ -38,5 +48,11 @@ begin
   { the type has no name, so the message must write `integer ! code` out }
   anon := 'text';
   ok2 := r.ok;
-  writeln(ok2)
+  { AP 6.4.13.5: the value side is owned, so the record has no copy and the
+    one assignment admitted is a call of a function of its own type. }
+  h1 := h2;
+  { and `try` cannot yield it: 6.8.9.4 makes the expression denote the value,
+    and denoting an owned value would be copying it. }
+  n := try(h1);
+  writeln(ok2, n:1)
 end.

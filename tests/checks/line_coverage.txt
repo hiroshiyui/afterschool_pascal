@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 445
-instrumented 17989
+instrumented 18091
 
 accept 0/4
 accumulate 0/84
@@ -51,9 +51,11 @@ armlayoutat 0/13
 armsat 0/4
 armscontainfile 0/10
 armscontainrestricted 0/10
+armsholdfile 0/8
+armslotat 0/8
 arraycomponentof 0/13
 arrayelement 0/6
-asfalliblearm 0/27
+asfalliblearm 0/29
 assignable 1/47
 at 0/1
 ateof 0/1
@@ -99,7 +101,7 @@ checkedforsetbase 0/29
 checkedforstore 0/2
 checkedforsubrange 0/52
 checkedfptoint 0/23
-checkedresulttype 0/19
+checkedresulttype 0/21
 checkedwidth 0/14
 checkexports 0/28
 checkexpr 12/263
@@ -121,7 +123,7 @@ checkprocbody 0/45
 checkread 3/71
 checkrecordvalue 0/92
 checkrelease 0/14
-checkresultassign 4/28
+checkresultassign 4/37
 checkschemaarms 0/8
 checkschemabodynames 0/37
 checkschemadomain 0/51
@@ -129,7 +131,7 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkstdproc 19/347
-checkstmt 2/226
+checkstmt 2/237
 checkstringargs 0/13
 checkstructvalue 0/39
 checktake 2/20
@@ -162,6 +164,7 @@ conststrlen 0/4
 conststrlt 0/4
 containerof 1/8
 containsfile 0/11
+containshandle 0/10
 containsownedpointer 0/10
 containsrestricted 0/12
 convertfor 0/3
@@ -233,7 +236,7 @@ dynsize 0/47
 earlier 0/1
 emitaddress 3/191
 emitarrayvalue 0/24
-emitassign 0/65
+emitassign 0/74
 emitbinary 4/204
 emitcall 8/522
 emitcase 0/83
@@ -307,7 +310,7 @@ emittraprange 0/13
 emittry 0/18
 emittuplecheck 0/25
 emitunary 2/21
-emitusercall 0/141
+emitusercall 0/145
 emitwhile 0/21
 emitwith 6/55
 emitwrite 0/48
@@ -337,7 +340,7 @@ expect 0/12
 exporthas 0/6
 exprend 0/4
 extendeddigit 1/7
-fieldaddress 0/20
+fieldaddress 0/22
 fieldcount 0/5
 fieldnameindenoter 0/5
 fieldofopenrecord 0/7
@@ -383,7 +386,7 @@ headersize 0/9
 headingdigest 0/10
 heapfromschema 1/35
 heapheader 0/16
-holdsfile 0/10
+holdsfile 0/11
 imof 0/4
 importedsymbol 5/14
 importindex 0/4
@@ -432,6 +435,7 @@ isfile 0/1
 isfileenquiry 0/1
 isgeneric 0/1
 ishandle 0/1
+ishandlebirth 0/1
 ishandlecloser 0/6
 isint64 0/1
 isinteger 0/2
@@ -510,10 +514,10 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/81
+newnode 0/82
 newresultslot 0/7
 newsymbol 0/93
-newtype 0/40
+newtype 0/41
 nextformal 0/4
 nonvarying 3/42
 notbindable 3/29
@@ -613,6 +617,7 @@ protectable 1/14
 pushseq 0/3
 pushstmt 0/6
 put 0/1
+putarmtypeat 0/2
 putdefername 0/1
 putdescparamtypes 0/10
 putdesctype 0/7
@@ -631,7 +636,7 @@ putparamtypes 0/26
 putprocsignature 0/9
 putslottype 0/4
 putstoragetypeat 1/4
-putstructat 0/12
+putstructat 0/21
 putsymkindword 0/13
 putusenumbers 0/1
 reaches 0/6
@@ -676,8 +681,8 @@ resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
 roundup 0/1
-row 0/53
-runcodegen 0/90
+row 0/54
+runcodegen 0/91
 rundefersreversed 0/4
 runsema 2/81
 samelink 0/1
@@ -685,7 +690,7 @@ sametuple 0/7
 schemahastypedisc 0/6
 schemaisbusy 0/6
 schematicformal 0/3
-sel 0/45
+sel 0/51
 selectedsize 0/14
 setindex 0/47
 setuniverse 0/21
@@ -714,7 +719,7 @@ suppliersof 0/23
 symhead 0/1
 symtail 0/1
 symtailto 0/3
-tag 0/28
+tag 0/29
 tagfieldat 0/4
 tagtypeat 0/4
 targetindex 0/4
@@ -734,9 +739,9 @@ underlying 0/1
 usage 0/49
 variantfieldname 1/8
 variantselector 0/8
-variantstorageat 0/12
+variantstorageat 0/13
 version 0/1
-walkfiles 0/105
+walkfiles 0/115
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
@@ -746,7 +751,7 @@ writedistincttypenote 0/37
 writekeyword 0/2
 writekwword 0/3
 writelabelwhat 1/5
-writenocopyreason 0/3
+writenocopyreason 0/5
 writeoperator 1/16
 writeopname 5/21
 writeordinalname 1/25

@@ -1449,6 +1449,10 @@ begin
       n^.caElem := nil;
       n^.caPacked := false
     end;
+    { AP 6.4.12.6 (ADR-0255): Sema's, so it is cleared here -- the target and
+      the value are the parser's and are assigned at each of the four
+      construction sites. }
+    nkAssign: n^.asFactory := false;
     nkWrite: begin n^.wrFile := nil; n^.wrStr := nil; n^.wrCall := nil end;
     nkRead: begin n^.rdFile := nil; n^.rdStr := nil; n^.rdCall := nil end;
     nkProcCall: begin
@@ -1521,7 +1525,7 @@ begin
     nkFallible: begin n^.faVal := nil; n^.faCause := nil end;
     nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
-    nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
+    nkEmpty, nkCompound, nkIf, nkWhile, nkRepeat,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted,
     nkConstDecl, nkTypeDecl, nkLabelDecl,
@@ -8240,15 +8244,41 @@ begin
   ContainsOwnedPointer := found
 end;
 
+{ AP 6.4.12, the shape ContainsOwnedPointer has. It became worth asking when
+  6.4.12.6 admitted a bare handle as a result (ADR-0255): what is refused
+  there is now a *structure* holding one, and the reader has to be told which
+  of the three affine kinds it holds rather than being told about a file it
+  has not got. No variant arm, because a variant part cannot hold one -- the
+  arms share storage and a handle's closer is its own. }
+function ContainsHandle(t: typePtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  if t <> nil then
+    if IsHandle(t) then found := true
+    else if IsArray(t) then found := ContainsHandle(t^.elem)
+    else if IsRecord(t) then begin
+      f := t^.fields;
+      while (f <> nil) and not found do begin
+        if ContainsHandle(f^.ftype) then found := true;
+        f := f^.next
+      end
+    end;
+  ContainsHandle := found
+end;
+
 { Why an affine type has no copy, in the words of whichever kind is in it. The
   file's words are unchanged and so are the goldens holding them; what this
   adds is that an owned pointer is not told it contains a file it has not got
-  (AP 6.4.14.3). Asked only where ContainsFile has already said no. }
+  (AP 6.4.14.3), and that since ADR-0255 a handle is not either. Asked only
+  where ContainsFile has already said no. }
 procedure WriteNoCopyReason(t: typePtr);
 begin
   if ContainsOwnedPointer(t) then
     writeln(': it contains an owned pointer, and a second name for one would ',
             'dispose one variable twice')
+  else if ContainsHandle(t) then
+    writeln(': it contains a handle, and a handle has no copy')
   else
     writeln(': it contains a file, and a file has no copy')
 end;
@@ -9029,7 +9059,7 @@ end;
   from the record machinery rather than written a second time. `isFallible` is
   what the two assignment rules and the tag refusal key on. }
 function ResolveFallible(d: nodePtr): typePtr;
-var t: typePtr; vt, ct: typePtr;
+var t: typePtr; vt, ct: typePtr; apart: boolean;
 
   { One arm: its label, and the single field it holds. `index` is the arm's
     position, which is also the path a field of it carries (ADR-0027). }
@@ -9091,15 +9121,31 @@ begin
     if IsFallible(vt) then vt := intType;
     if IsFallible(ct) then ct := intType
   end;
-  { §6.4.6 a) again: a side holding a file or a handle would make the whole
-    record unassignable, and a result nobody can assign is not a result. }
-  if ContainsFile(vt) or ContainsFile(ct) then begin
+  { AP 6.4.13.5 (ADR-0256): the **value** side may be affine, and then the two
+    arms are laid beside one another rather than over one another.
+
+    This clause is the whole of `function Open(p: Path): Stream ! ErrorCode`,
+    which the roadmap carried as the one item with a named cost. Refusing it
+    was not an oversight: the arms of a variant part share storage, so a
+    handle in one would have half of its `struct pas_handle` overwritten by a
+    cause written into the other, and the block would then release whatever
+    was left there. Laying the arms apart removes the sharing and with it the
+    reason.
+
+    The **cause** side may not be, and that asymmetry is the clause rather
+    than an economy. A cause travels: AP 6.8.9's `try` yields the value and
+    leaves the enclosing function with the cause, which is a copy, and an
+    affine value has none. A value-type that is affine is not copied by
+    anything -- 6.4.13.5 admits exactly one assignment for such a record, and
+    `try` is refused on it. }
+  if ContainsFile(ct) then begin
     ErrorAt(d^.line, d^.col);
-    write('neither side of ''!'' may contain a file or a handle: ');
-    writeln('a result is a value, and neither of those is one');
-    if ContainsFile(vt) then vt := intType;
-    if ContainsFile(ct) then ct := intType
+    write('the cause side of ''!'' may not contain a file or a handle: ');
+    writeln('a cause is carried out of the function by ''try'', and neither ',
+            'of those has a copy');
+    ct := intType
   end;
+  apart := ContainsFile(vt);
   { Two sides that accept the same value are *not* refused here. What such a
     type cannot do is take the shorthand -- `r := 3` where both sides admit a
     3 -- and that is refused where it is written, by AsFallibleArm. Declaring
@@ -9113,6 +9159,7 @@ begin
     construction is the thing that cannot work. }
   t := NewType(tyRecord);
   t^.isFallible := true;
+  t^.armsApart := apart;
   t^.falVal := vt;
   t^.falCause := ct;
   Tag;
@@ -13084,6 +13131,20 @@ begin
       WriteTypeName(t);
       writeln
     end
+    { AP 6.4.13.5 (ADR-0256): and not one whose value side is affine. What
+      `try` yields is the value -- 6.8.9.4 makes the whole expression denote
+      it -- and yielding an owned thing means copying it, which is the one
+      operation such a value does not have. This is the cost of admitting an
+      affine value side, and it is stated rather than worked around: a factory
+      answering a stream is opened, tested and used, and it does not
+      propagate. What propagates is the caller's own decision. }
+    else if (t <> nil) and t^.armsApart then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      write('''try'' cannot yield the value of ');
+      WriteTypeName(t);
+      write(': its value side is owned and has no copy, so there is nothing ');
+      writeln('for this expression to denote -- test .ok instead')
+    end
     { AP 6.9.3.11.3's fifth item, and the exit-statement's reason rather than
       a new one: the armed statements are emitted in the block's runner as
       well, and the runner is not the activation a try would leave. Asked of
@@ -16343,6 +16404,16 @@ begin
   t := s^.asTarget^.ntype;
   toVal := Assignable(t^.falVal, s^.asValue^.ntype);
   toCause := Assignable(t^.falCause, s^.asValue^.ntype);
+  { AP 6.4.13.5 (ADR-0256): Assignable refuses a handle from a handle -- and
+    that refusal is exactly what stops the value being copied anywhere, so it
+    cannot be relaxed -- which means 6.4.12.2's own two assignments have to be
+    named here, or the shorthand could not reach an affine value side at all.
+    The permission is CheckHandleBirth's, arriving one clause later: the
+    statement was admitted because its target is a fallible whose value side
+    is a handle, and this is where that target becomes `res.val`. }
+  if IsHandle(t^.falVal) and
+     ((s^.asValue^.ntype = t^.falVal) or IsNil(s^.asValue^.ntype)) then
+    toVal := true;
   wrap := false;
   w := 'val      ';
   { A value both sides admit -- `r := 3` where the type is `integer ! 1..5`
@@ -16445,6 +16516,38 @@ begin
     WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
     writeln(''' is not a function with a result')
   end
+  { AP 6.4.12.6 (ADR-0255): a factory's own result assignment, which is
+    6.4.12.2's assignment read through 6.8.2.2's other spelling. Assignable
+    refuses a handle from a handle -- it is asked by the relational operators
+    and by every parameter position too, and that refusal is what keeps the
+    value from being copied anywhere else -- so the permission is written out
+    here as it is on the statement path, and the two arms are one rule. }
+  else if IsHandle(s^.asTarget^.ntype) and
+          IsCallValue(s^.asValue) and
+          (CalledSym(s^.asValue) <> nil) and
+          (s^.asValue^.ntype = s^.asTarget^.ntype) then
+    { admitted: the result variable takes what the call answered. A factory
+      over a factory is this arm, and what it lowers to is the outer result
+      address passed straight through with no intermediate handle. }
+    s^.asFactory := CalledSym(s^.asValue)^.linkKind <> lnkForeign
+  else if IsHandle(s^.asTarget^.ntype) and IsNil(s^.asValue^.ntype) then
+    { admitted: 6.4.12.2's second form, a factory that answers nothing }
+  { AP 6.4.13.5 (ADR-0256): the same, one level out -- a fallible whose value
+    side is affine, assigned the result of a function of its own type. The
+    arms of the shorthand (`res := someStream`, `res := failed`) reached
+    AsFallibleArm above and became field assignments, so what is left here is
+    a whole-record value, and the only one admitted is a call. }
+  else if IsFallible(s^.asTarget^.ntype) and
+          s^.asTarget^.ntype^.armsApart and
+          IsCallValue(s^.asValue) and
+          (CalledSym(s^.asValue) <> nil) and
+          (s^.asValue^.ntype = s^.asTarget^.ntype) then
+    s^.asFactory := CalledSym(s^.asValue)^.linkKind <> lnkForeign
+  else if IsHandle(s^.asTarget^.ntype) then begin
+    ErrorAt(s^.line, s^.col);
+    write('a handle result may be assigned only nil or the result of a ');
+    writeln('function of its own type: it is owned, and there is no copy')
+  end
   else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then begin
     ErrorAt(s^.line, s^.col);
     write('cannot assign ');
@@ -16525,7 +16628,17 @@ begin
           end
         end;
         if named <> nil then begin
+          { AP 6.4.12.6 (ADR-0255): a factory assigns its own result, and
+            6.8.2.2's function-identifier path never reaches the permission
+            the ordinary assignment path sets a few lines below. The same
+            syntactic test for the same reason -- nothing has resolved the
+            value yet -- and asked of the function's own result type, the
+            target's not being set until CheckResultAssign runs. }
+          handleBirth := IsHandleBirth(named^.stype) and
+                         ((s^.asValue^.kind = nkCall) or
+                          (s^.asValue^.kind = nkVar));
           CheckExpr(s^.asValue);
+          handleBirth := false;
           CheckResultAssign(s, named, true)
         end
         else begin
@@ -16542,7 +16655,7 @@ begin
             turns out to be a handle-valued call consumes it. Where the value
             is not one, nothing reads the flag and the line below clears it
             (ADR-0180). }
-          handleBirth := IsHandle(s^.asTarget^.ntype) and
+          handleBirth := IsHandleBirth(s^.asTarget^.ntype) and
                          ((s^.asValue^.kind = nkCall) or
                           (s^.asValue^.kind = nkVar));
           { AP 6.4.14.6 (ADR-0182), the same permission for the same reason.
@@ -16604,9 +16717,13 @@ begin
           else if IsHandle(s^.asTarget^.ntype) and
                   IsCallValue(s^.asValue) and
                   (CalledSym(s^.asValue) <> nil) and
-                  (CalledSym(s^.asValue)^.linkKind = lnkForeign) and
                   (s^.asValue^.ntype = s^.asTarget^.ntype) then
-            { admitted: the variable takes what the call answered }
+            { admitted: the variable takes what the call answered. The callee
+              was an `external` one until AP 6.4.12.6 admitted a factory
+              (ADR-0255); the position is the same one and so is the reason
+              for it -- there is exactly one variable that can own what the
+              call answered, and this statement names it. }
+            s^.asFactory := CalledSym(s^.asValue)^.linkKind <> lnkForeign
           { AP 6.4.12.2's second form (ADR-0202): `h := nil` releases what the
             variable holds and leaves it empty. Nothing else about the type
             changes -- it is still the case that no *value* of a handle-type
@@ -16623,9 +16740,34 @@ begin
             { admitted: the variable releases what it holds and is empty }
           else if IsHandle(s^.asTarget^.ntype) then begin
             ErrorAt(s^.line, s^.col);
-            write('a handle may be assigned only the result of an ');
-            write('''external'' function of its own type: it is owned, ');
+            write('a handle may be assigned only nil or the result of a ');
+            write('function of its own type: it is owned, ');
             writeln('and there is no copy')
+          end
+          { AP 6.4.13.5 (ADR-0256): a fallible-type whose value side is
+            affine has exactly one assignment, and it is 6.4.12.2's read one
+            level out. The record contains something that has no copy, so
+            Assignable goes on refusing it everywhere -- the relational
+            operators, every parameter position, the whole-record copy -- and
+            the one thing admitted is a call of a function answering this very
+            type, whose result is built *in this variable* rather than copied
+            into it. A memcpy here would be ADR-0150's double free with a
+            handle in place of a file: two records, each with a slot the
+            runtime is holding, each released at the end of its block. }
+          else if IsFallible(s^.asTarget^.ntype) and
+                  s^.asTarget^.ntype^.armsApart and
+                  IsCallValue(s^.asValue) and
+                  (CalledSym(s^.asValue) <> nil) and
+                  (s^.asValue^.ntype = s^.asTarget^.ntype) then
+            s^.asFactory := CalledSym(s^.asValue)^.linkKind <> lnkForeign
+          else if IsFallible(s^.asTarget^.ntype) and
+                  s^.asTarget^.ntype^.armsApart and
+                  (s^.asValue^.ntype = s^.asTarget^.ntype) then begin
+            ErrorAt(s^.line, s^.col);
+            write('a ');
+            WriteTypeName(s^.asTarget^.ntype);
+            write(' may be assigned only the result of a function of its own ');
+            writeln('type: its value side is owned, and there is no copy')
           end
           { AP 6.4.14.6 (ADR-0182): the one assignment an owned pointer has,
             and the handle's arm above read from the other end. `take` is the
@@ -17383,14 +17525,41 @@ end;
 function CheckedResultType;
 begin
   CheckedResultType := t;
-  if IsFile(t) or ContainsFile(t) then begin
+  { AP 6.4.12.6 (ADR-0255): a *factory*. A function of this program may answer
+    a handle, which until now only an `external` one could -- so a library can
+    hand a caller an open stream instead of making the caller declare a
+    variable and pass it as a `var` parameter, which is what every producer in
+    `lib/` does because the first was refused.
+
+    It costs no new lowering. A handle is IsMemory, so a function answering
+    one already takes the address of the variable the result is to live in;
+    the callee's own `Open := ExtFopen(...)` is AP 6.4.12.2's assignment
+    through that address, so the value is born straight into the variable that
+    will own it and is never held anywhere else. A factory over a factory
+    passes the same address on and there is no intermediate handle at all.
+
+    A *bare* handle only. A record containing one, or a file, or an owned
+    pointer, is still refused below: this is admitted because a handle result
+    has exactly one destination and the address can be handed to the callee,
+    and neither of those is true of a structure that merely contains one. }
+  if IsHandle(t) then
+    { admitted }
+  { AP 6.4.13.5 (ADR-0256): and the fallible form of the same thing, which is
+    what a factory in `lib/` actually wants -- every producer there answers an
+    ErrorCode and says which one, so a factory that could answer only nil
+    would be a regression on what the library already has. The arms are laid
+    apart for it, so the value side has bytes of its own, and the result is
+    built in the caller's variable exactly as a bare handle's is. }
+  else if IsFallible(t) and t^.armsApart then
+    { admitted }
+  else if IsFile(t) or ContainsFile(t) then begin
     ErrorAt(line, col);
     write('a function cannot return ');
     WriteTypeName(t);
     write(': a result may not be, or ');
-    if IsHandle(t) then
-      writeln('contain, a handle -- only an ''external'' function ',
-              'answers one, and only to a handle variable')
+    if ContainsHandle(t) then
+      writeln('contain, a handle -- a handle result has one destination and ',
+              'a structure holding one has none this compiler can hand over')
     { AP 6.4.14.3. A result is a value and this is not one: the variable it
       would have to be released with is the one a result has not got. }
     else if ContainsOwnedPointer(t) then

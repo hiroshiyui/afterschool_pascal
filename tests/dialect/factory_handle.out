@@ -1,0 +1,10 @@
+open: TRUE
+before exit: [empty]
+after exit: [made by the factory]
+two deep, after exit: [made two deep]
+first, after reassignment: [first]
+second, still open: [empty]
+second, after exit: [second]
+answered nothing: TRUE
+then something: TRUE
+after the nil answer: [after the nil]

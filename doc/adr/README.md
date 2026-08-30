@@ -263,3 +263,5 @@ the alternatives that were rejected and why.
 | [0252](0252-the-answer-is-cached-against-the-document.md) | The answer is cached against the document | Accepted |
 | [0253](0253-a-declaration-has-an-extent.md) | A declaration has an extent | Accepted |
 | [0254](0254-a-generic-activation-need-not-write-its-types.md) | A generic activation need not write its types | Accepted |
+| [0255](0255-a-function-may-answer-a-handle.md) | A function may answer a handle | Accepted |
+| [0256](0256-a-fallible-value-may-be-owned.md) | A fallible value may be owned, and then the arms are laid apart | Accepted |

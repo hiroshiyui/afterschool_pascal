@@ -1,0 +1,11 @@
+ok: FALSE
+cause is nopath: TRUE
+ok: TRUE
+before exit: [empty]
+after exit: [written through the factory]
+two deep, after exit: [two deep]
+first, after reassignment: [first]
+second, still open: [empty]
+second, after exit: [second]
+now a cause: TRUE
+value survived the cause: [open when the cause arrived]

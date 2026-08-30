@@ -73,11 +73,13 @@
 6.4.12.3	Release
 6.4.12.4	Crossing the boundary
 6.4.12.5	The release-function
+6.4.12.6	The factory
 6.4.13	Fallible-types
 6.4.13.1	The denoter
 6.4.13.2	What it denotes
 6.4.13.3	Assignment
 6.4.13.4	The tag
+6.4.13.5	An affine value-type
 6.4.14	Owned-pointer-types
 6.4.14.1	The denoter
 6.4.14.2	Restrictions on the domain and on the container
