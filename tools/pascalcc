@@ -50,6 +50,8 @@
 #
 #   AFTERSCHOOL_PASCAL_CFLAGS adds flags to every `clang` below, which is
 #   how a sanitizer reaches the link as well as the translations.
+#   AFTERSCHOOL_PASCAL_LDFLAGS adds flags to the final link only, and goes
+#   after the runtime, which is where a library a program binds belongs.
 # <<< usage
 #
 # `pascalc` writes LLVM IR and stops there, permanently: neither ISO 7185 nor
@@ -101,6 +103,15 @@ fi
 # `pascalc` takes its own flags and this reaches only the assembler and linker
 # half, which is the half this script owns.
 read -r -a extra_cflags <<<"${AFTERSCHOOL_PASCAL_CFLAGS:-}"
+# ...and the same for the *link* alone.
+#
+# It exists because AFTERSCHOOL_PASCAL_CFLAGS is deliberately blunt and a
+# library is not: `-lssl` handed to a `clang -c` is an input clang has nothing
+# to do with, and it says so once per translation. A program binding a foreign
+# library (6.7.7) needs the flag in exactly one place, and this is that place.
+# Appended *after* `libpasrt.a`, because a static archive is searched once and
+# only satisfies what has already been referenced.
+read -r -a extra_ldflags <<<"${AFTERSCHOOL_PASCAL_LDFLAGS:-}"
 runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-}
 if [[ -z $runtime ]]; then
   if [[ -f $root/lib/libpasrt.a ]]; then runtime=$root/lib
@@ -307,6 +318,7 @@ fi
 # refuses.
 if clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
      "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
+     ${extra_ldflags[@]+"${extra_ldflags[@]}"} \
      -o "${out:-$base}" 2>"$work/link.txt"; then
   exit 0
 fi

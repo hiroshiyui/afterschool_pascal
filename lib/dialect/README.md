@@ -1,13 +1,20 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These **twenty-one** modules use constructs no standard Pascal has, and
-**eleven** of them are the only part of this repository that reaches outside
+These **twenty-two** modules use constructs no standard Pascal has, and
+**twelve** of them are the only part of this repository that reaches outside
 the program: the environment, the file system, file descriptors, the terminal,
-`errno`, and the C functions behind them. Counted by what they *bind* — an
+`errno`, TLS, and the C functions behind them. Counted by what they *bind* — an
 `external` declaration naming a foreign symbol — which is the line that
 matters here, since the rule below is about how a foreign failure is reported:
 `pasdir`, `pasenv`, `pasfs`, `pasio`, `pasmathx`, `pasnet`, `pasos`,
-`pasprocess`, `passtream`, `pasterm`, `pasunicode`.
+`pasprocess`, `passtream`, `pasterm`, `pastls`, `pasunicode`.
+
+`pastls` is the one whose far side is neither the C library nor this project's
+runtime: it binds OpenSSL, and a program importing it links `-lssl -lcrypto`
+while every other program links neither. That is why the binding is here and
+not in `runtime/pasrt_posix.c` — the runtime links nothing, and a `pasx_` for
+this would make every program in the tree depend on a cryptography library
+(ADR-0264).
 
 The other ten are pure computation over what those hand them, here because
 they are dialect-only for ADR-0119's reason and not because they touch
@@ -37,7 +44,7 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Thirty-one exported routines take this
+**`ErrorCode`.** `errNone` is success. Thirty-six exported routines take this
 shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
 `RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `OpenRead`,
 `OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, `PasDir`'s
@@ -178,7 +185,10 @@ declared it in is what closes it. `s <> nil` asks whether it is open and is
 the whole of what a caller can ask. This is not a shape chosen over the
 others; it is the only one the type admits, and it is why `PasStream`'s
 `Open`s answer an `ErrorCode` where `PasIO.OpenRead` answers a result record
-carrying the descriptor. A module that keeps its handle private — `PasProcess`
+carrying the descriptor. `PasTls.Connect` is the same shape one level up: what
+it fills is a **record** of three handles -- a socket, a context and a session
+-- which is affine for the same reason a single handle is, and which the
+declaring block releases in one go. A module that keeps its handle private — `PasProcess`
 with its `Pipe` — shows nothing of this and answers the result record as
 before.
 

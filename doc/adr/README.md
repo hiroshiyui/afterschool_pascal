@@ -272,3 +272,4 @@ the alternatives that were rejected and why.
 | [0261](0261-the-runtimes-own-storage-had-no-oracle.md) | The runtime's own storage had no oracle | Accepted |
 | [0262](0262-the-terminal-is-the-runtimes-to-remember.md) | The terminal is the runtime's to remember | Accepted |
 | [0263](0263-one-linker-symbol-per-component-not-per-program.md) | One linker symbol per component, not per program | Accepted |
+| [0264](0264-tls-is-a-module-and-a-transcription.md) | TLS is a module, and the only new risk is a transcription | Accepted |

@@ -1,0 +1,18 @@
+unknown anchor       : the operation was refused, with a reason
+own certificate      : no error
+  protocol negotiated : TRUE
+  request written    : no error
+  request ended      : no error
+  response read      : no error
+  status line        : HTTP/1.0 200
+  a line that is long: no room left, with a reason
+  loop ended on      : not present
+  more lines followed: TRUE
+closed twice         : ok
+right chain, wrong name: the operation was refused, with a reason
+trust file absent    : not present, with a reason
+nobody listening     : the operation was refused, with a reason
+host does not resolve: not present, with a reason
+write when closed    : the operation was refused, with a reason
+read when closed     : the operation was refused, with a reason
+  line left empty    : TRUE

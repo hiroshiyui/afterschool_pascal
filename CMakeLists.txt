@@ -614,6 +614,30 @@ set_tests_properties(fpc-differential PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 1800)
 
+# PasTls against a real TLS server, and the six values it transcribed out of
+# OpenSSL's headers against those headers (ADR-0264). Two questions, and the
+# second is one no golden could answer: each of those values is a macro or a
+# bare #define, so the module holds a copy, and a wrong copy fails quietly --
+# SSL_VERIFY_NONE in place of SSL_VERIFY_PEER leaves verification off and every
+# case here would still pass. A C program including the real headers is what
+# judges them, which is foreign-layout's shape applied to constants.
+#
+# The behavioural half is worth having for its *negative* cases: a certificate
+# no anchor knows, and a certificate whose chain is perfect and whose name is
+# wrong. Two servers are started for the second, which is the case a client
+# checking only the chain gets wrong.
+#
+# Skips (77) without libssl or the `openssl` program, neither of which is a
+# documented dependency; TLS_REQUIRE is how a CI job refuses to pass by
+# skipping. Slow, because it makes two RSA keys and builds the probe twice.
+add_test(NAME tls
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/tls.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(tls PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 900
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # Does a record declared here have the layout the C struct it claims to be has?
 # ADR-0184 made a record crossable because RecordLayout *is* C's struct rule,
 # and registered in doc/sop.md 7 what that leaves open: whether the fields

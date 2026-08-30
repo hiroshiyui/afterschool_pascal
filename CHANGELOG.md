@@ -69,6 +69,23 @@ appears below in the release where it still existed.
   selection-expansion built on it.
 - The corpus is compiled and run under AddressSanitizer, UndefinedBehaviour-
   Sanitizer and LeakSanitizer as a `ctest` case (ADR-0261).
+- **`lib/dialect/pastls.pas`, a verified TLS client** (ADR-0264) — `Connect`,
+  `ConnectTrusting`, `WriteText`, `WriteLine`, `ReadLine`, `Close`, over
+  OpenSSL. **Verification cannot be turned off**: there is no flag, no mode
+  and no second entry point that skips it, and every connection checks the
+  chain to a trust anchor, checks it is valid now, and checks the certificate
+  is for the host that was asked for, with TLS 1.2 as the floor. What a caller
+  chooses is which anchors — the system's, or one PEM file, a self-signed
+  certificate being its own anchor. No server side, no client certificate and
+  no revocation checking. A program using it links `-lssl -lcrypto`; nothing
+  else here links anything, the runtime included. This closes the last row of
+  `doc/roadmap.md`'s *What a daily program still cannot reach for*, and that
+  row had said it was blocked for two reasons neither of which was true.
+- **`AFTERSCHOOL_PASCAL_LDFLAGS`**, which adds flags to `pascalcc`'s final
+  link alone, after the runtime. `AFTERSCHOOL_PASCAL_CFLAGS` reaches every
+  `clang` and stays that way for the sanitizers; a library a program *binds*
+  belongs in one place, and `-lssl` handed to a `clang -c` is an input clang
+  complains about once per translation.
 
 ### Fixed
 

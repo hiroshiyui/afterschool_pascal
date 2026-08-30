@@ -3929,3 +3929,54 @@ nothing else. What it would lose, mechanism by mechanism:
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.
+
+### TLS is a module, and the risk moved to a transcription (ADR-0264)
+
+`lib/dialect/pastls.pas` binds OpenSSL through the `external` directive
+(AP 6.7.7) and adds no C, no `pasx_` and nothing to `libpasrt.a`. Three
+mechanisms carry it.
+
+- **A handle is what an opaque pointer already is.** `SSL_CTX *` and `SSL *`
+  are incomplete types with a free function apiece, which is AP 6.4.12's
+  handle-type exactly, so ADR-0185's refusal — a library may not declare a
+  foreign struct — has nothing to bite on. A `Connection` is a record holding
+  three of them, the TCP socket included, and the block that declared it
+  releases all three; that makes the record affine and puts it under
+  lib/dialect/README.md's third rule, filled through a `var` parameter and
+  never returned.
+- **The line buffer is Pascal.** `SSL_read` is handed a slice of an
+  `array [1..n] of char` (AP 6.7.7.7), which crosses as an address and a
+  length the compiler computed and checked, so the buffering `PasNet` does in
+  40 lines of `runtime/pasrt_posix.c` is done here in about thirty lines of
+  this language. That is what keeps OpenSSL out of the runtime, and therefore
+  out of every program that does not want it: the **program** links
+  `-lssl -lcrypto`, through `AFTERSCHOOL_PASCAL_LDFLAGS`.
+- **`PasNet` is imported qualified.** Five of its exported names are five of
+  this module's, and that is the property worth keeping rather than the
+  obstacle it looks like: a program moving from a socket to a TLS connection
+  changes the type of a variable and nothing else.
+
+**Verification has no off switch** — no flag, no mode, no second entry point.
+What a caller chooses is which anchors: the system's, or one PEM file. A
+self-signed certificate is its own anchor, so the case that usually motivates
+an insecure flag is reached by naming that certificate instead, which is a
+stronger statement and no more work. A `verify: boolean` was considered and
+refused on the ground that a `false` reads as nothing at a call site.
+
+**What is new is a transcription, and it is what the gate is for.** Six values
+the module hands OpenSSL are macros or bare `#define`s no `external`
+declaration can reach — `SSL_CTRL_SET_TLSEXT_HOSTNAME`,
+`TLSEXT_NAMETYPE_host_name`, `SSL_CTRL_SET_MIN_PROTO_VERSION`,
+`TLS1_2_VERSION`, `SSL_VERIFY_PEER`, `X509_V_OK` — so the source holds copies.
+A wrong copy does not fail loudly: `SSL_VERIFY_PEER` written as 0 is
+`SSL_VERIFY_NONE`, verification is off, and every behavioural case stays green.
+`tests/checks/tls.sh` compiles a C program against the real headers and diffs
+the numbers, which is ADR-0185's `foreign-layout` shape applied to values
+rather than to offsets, and it counts the rows so a renamed constant is a
+constant the check stops looking at.
+
+The test that fails without the module's own decisions is
+`tests/checks/tls/tls_probe.pas`: removing the `SSL_set1_host` call leaves the
+constants gate green and fails the golden at *right chain, wrong name* and
+nowhere else, and `VerifyPeer = 0` fails the constants gate and nothing else.
+Each half catches what the other cannot.
