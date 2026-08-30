@@ -11817,6 +11817,8 @@ begin
   Row('IsCharArray     ', IsCharArray);
   Row('IsStringType    ', IsStringType);
   Row('IsStringOrChar  ', IsStringOrChar);
+  Row('IsOrdered       ', IsOrdered);
+  Row('IsEquatable     ', IsEquatable);
   Row('IsGeneric       ', IsGeneric);
 end;
 

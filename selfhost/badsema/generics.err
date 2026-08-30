@@ -1,0 +1,12 @@
+<source>:50:14: error: point cannot be the type argument for 'elem' of 'twice', which is declared 'numeric type': that admits integer, int64, real, complex, or a subrange of one
+<source>:50:8: error: unknown function 'twice'
+<source>:50:3: error: cannot assign integer to a variable of type point
+<source>:53:14: error: point cannot be the type argument for 'elem' of 'twice', which is declared 'numeric type': that admits integer, int64, real, complex, or a subrange of one; argument 1 of this call is what determined it
+<source>:53:8: error: unknown function 'twice'
+<source>:53:3: error: cannot assign integer to a variable of type point
+<source>:57:15: error: point cannot be the type argument for 'elem' of 'unwrap', which is declared 'ordered type': that admits any ordinal type, and int64, real, a string-type and utf8; argument 1 of this call is what determined it
+<source>:57:8: error: unknown function 'unwrap'
+<source>:57:3: error: cannot assign integer to a variable of type point
+<source>:64:20: error: point cannot be the type argument for 'elem' of 'firstof', which is declared 'equatable type': that admits any ordinal type, and int64, real, complex, a set, a pointer that is not owned, a string-type and utf8; argument 1 of this call is what determined it
+<source>:64:8: error: unknown function 'firstof'
+<source>:64:3: error: cannot assign integer to a variable of type point

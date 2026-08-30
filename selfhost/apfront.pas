@@ -1491,6 +1491,7 @@ begin
       n^.grIsProc := false;
       n^.grIsFunction := false;
       n^.grIsTypeDisc := false;
+      n^.grCat := tcNone;
       n^.grParams := nil;
       n^.grResult := nil
     end;
@@ -3998,8 +3999,29 @@ begin
   end
 end;
 
+{ AP 6.7.3.10.5's four categories (ADR-0266), by spelling and in one position.
+
+  They are **not** required identifiers and they are in no scope: 6.2.2.10
+  would have put a defining-point in the region enclosing the program and cost
+  every program that declares a `numeric` the shadowing rule to get it back.
+  Recognised here and nowhere else, so `var ordered: integer` and
+  `function equatable: boolean` go on meaning what they meant --
+  tests/dialect/generic_constraints.pas is the program that says so.
+
+  LookupBuiltin's shape, for LookupBuiltin's reason: a closed list of
+  spellings answered by one function, so the categories the language has are
+  in one place. }
+function CatOfName(at, len: integer): typeCat;
+begin
+  if PoolIs(at, len, 'numeric  ') then CatOfName := tcNumeric
+  else if PoolIs(at, len, 'ordinal  ') then CatOfName := tcOrdinal
+  else if PoolIs(at, len, 'ordered  ') then CatOfName := tcOrdered
+  else if PoolIs(at, len, 'equatable') then CatOfName := tcEquatable
+  else CatOfName := tcNone
+end;
+
 function ParseFormalParameters;
-var head, tail, g: nodePtr; more, isTypeParam: boolean;
+var head, tail, g: nodePtr; more, isTypeParam: boolean; cat: typeCat;
 begin
   head := nil;
   tail := nil;
@@ -4030,9 +4052,40 @@ begin
         anything but `of` is a juxtaposition no conforming program can write.
         One token of lookahead, which is ADR-0140's test asked of a
         *parameter-form* rather than of a statement. }
-      isTypeParam := Check(tkType) and (PeekKind(1) <> tkOf);
+      { AP 6.7.3.10.5's constrained type parameter, `T: numeric type`
+        (ADR-0266). Two tokens of lookahead and the same test ADR-0140 sets:
+        a parameter-form is a type-name, a schema-name or a type-inquiry, and
+        every one of those is *one* form -- what follows it is `;` or `)`. So
+        an identifier followed by the word-symbol `type` is a juxtaposition no
+        conforming program can write, and the category needs no word of its
+        own. It inherits `T: type`'s position rather than taking a new one,
+        which is ADR-0184's shape.
+
+        Committed on the shape and not on the spelling: `numeric` is looked
+        up after the two tokens have decided what this is, so a misspelled
+        category is a message about a category rather than a parse error
+        about a semicolon. }
+      cat := tcNone;
+      isTypeParam := false;
+      if Check(tkIdent) and (PeekKind(1) = tkType) then begin
+        cat := CatOfName(tok[pos].at, tok[pos].len);
+        if cat = tcNone then begin
+          ErrorAtCur;
+          write('''');
+          WritePool(tok[pos].at, tok[pos].len);
+          write(''' is not a type-parameter category: write ''numeric'', ');
+          writeln('''ordinal'', ''ordered'' or ''equatable'', or ''type'' ',
+                  'on its own');
+          Bail
+        end;
+        pos := pos + 1;
+        isTypeParam := true
+      end
+      else
+        isTypeParam := Check(tkType) and (PeekKind(1) <> tkOf);
       if isTypeParam then begin
         g^.grIsTypeDisc := true;
+        g^.grCat := cat;
         g^.grType := nil;
         pos := pos + 1
       end
@@ -20104,10 +20157,20 @@ type
     -- they become symbols below, once the tuple is known. }
   typeBinding = record
     at, len: integer;
-    ty: typePtr
+    ty: typePtr;
+    { Where the type came from, for AP 6.7.3.10.5's refusal (ADR-0266). An
+      inferred activation writes no type at all, so a constraint broken by
+      one has nothing to point at but the actual-parameter that determined
+      it -- and `argn` is that actual's position in the list, counted over
+      the actuals a program wrote rather than over the generic's formals. }
+    line, col, argn: integer
   end;
   typeBindings = record
     n: integer;
+    { The actual being read right now, carried on the record rather than
+      threaded through Determine's three mutually recursive walks: it is one
+      value for all of them and it changes once per actual. }
+    curLine, curCol, curArg: integer;
     b: array [1..maxTypeParams] of typeBinding
   end;
 
@@ -20176,12 +20239,23 @@ begin
   IsTypeParamName := found
 end;
 
+{ Which slot a name was bound in, or 0. The slot and not the type, because
+  AP 6.7.3.10.5's refusal needs the position the binding came from as well as
+  what it bound. }
+function BoundSlot(var bs: typeBindings; at, len: integer): integer;
+var i: integer;
+begin
+  BoundSlot := 0;
+  for i := 1 to bs.n do
+    if PoolSame(at, len, bs.b[i].at, bs.b[i].len) then BoundSlot := i
+end;
+
 function BoundHere(var bs: typeBindings; at, len: integer): typePtr;
 var i: integer;
 begin
   BoundHere := nil;
-  for i := 1 to bs.n do
-    if PoolSame(at, len, bs.b[i].at, bs.b[i].len) then BoundHere := bs.b[i].ty
+  i := BoundSlot(bs, at, len);
+  if i > 0 then BoundHere := bs.b[i].ty
 end;
 
 { The first determining position wins, so a name already bound is never
@@ -20199,7 +20273,10 @@ begin
       bs.n := bs.n + 1;
       bs.b[bs.n].at := at;
       bs.b[bs.n].len := len;
-      bs.b[bs.n].ty := t
+      bs.b[bs.n].ty := t;
+      bs.b[bs.n].line := bs.curLine;
+      bs.b[bs.n].col := bs.curCol;
+      bs.b[bs.n].argn := bs.curArg
     end
 end;
 
@@ -20303,6 +20380,40 @@ begin
         Determine(gen, d^.arElem, t^.elem, bs)
 end;
 
+{ AP 6.7.3.10.5: the type argument does not answer for the category the type
+  parameter carries (ADR-0266).
+
+  Reported **here**, at the activation, which is the whole of what a
+  constraint buys. Without one the program is refused inside the generic's own
+  source, by whatever operator the body used -- `operator '+' needs numeric
+  operands, found point and point` on a line the caller may never have opened
+  -- and ADR-0259's attribution line is the reader's only way back. With one
+  the call is refused where it stands, and the body is never read for this
+  tuple at all.
+
+  `argn` is 0 for a written type argument, whose position is the argument
+  itself, and the actual's number for an inferred one (AP 6.7.3.10.4), where
+  the position reported is the actual that determined the parameter and the
+  tail says which one it was. That is the one thing the inferred form has to
+  say and the written form does not: nothing in the source spells the type. }
+procedure ReportCat(gen: symPtr; nm, g: nodePtr; given: typePtr;
+                    ln, cl, argn: integer);
+begin
+  ErrorAt(ln, cl);
+  WriteTypeName(given);
+  write(' cannot be the type argument for ''');
+  WritePool(nm^.dnAt, nm^.dnLen);
+  write(''' of ''');
+  WritePool(gen^.at, gen^.len);
+  write(''', which is declared ''');
+  WriteCatName(g^.grCat);
+  write(' type'': that admits ');
+  WriteCatAdmits(g^.grCat);
+  if argn > 0 then
+    write('; argument ', argn:1, ' of this call is what determined it');
+  writeln
+end;
+
 function InstantiateGeneric;
 var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     given: typePtr; found, ip: instPtr;
@@ -20319,6 +20430,9 @@ begin
   ok := true;
 
   bs.n := 0;
+  bs.curLine := line;
+  bs.curCol := col;
+  bs.curArg := 0;
   GenericShape(gen, nTypes, nFormals, firstType);
   nArgs := 0;
   a := args;
@@ -20359,8 +20473,13 @@ begin
       here, and it is marked so CheckArguments does not check it again. }
     FirstFormal(gen, g, n);
     a := args;
+    k := 0;
     while (g <> nil) and (a <> nil) do begin
       if not g^.grIsTypeDisc then begin
+        { The actual's own number, counted over what the program wrote: a type
+          parameter occupies no position in an inferred activation's list, so
+          this is what a reader would count to (AP 6.7.3.10.5). }
+        k := k + 1;
         { A procedural actual is an identifier and not an expression, and it
           determines nothing: 6.7.3.1 gives it a heading rather than a
           parameter-form. }
@@ -20369,6 +20488,9 @@ begin
             CheckExpr(a);
             a^.nChecked := true
           end;
+          bs.curLine := a^.line;
+          bs.curCol := a^.col;
+          bs.curArg := k;
           Determine(gen, g^.grType, a^.ntype, bs)
         end;
         a := a^.next
@@ -20382,7 +20504,9 @@ begin
     FirstFormal(gen, g, n);
     while (g <> nil) and ok do begin
       if g^.grIsTypeDisc then begin
-        given := BoundHere(bs, n^.dnAt, n^.dnLen);
+        k := BoundSlot(bs, n^.dnAt, n^.dnLen);
+        given := nil;
+        if k > 0 then given := bs.b[k].ty;
         if given = nil then begin
           ErrorAt(line, col);
           write('nothing in this call says what ''');
@@ -20391,6 +20515,11 @@ begin
           WritePool(gen^.at, gen^.len);
           write(''' is: write the type arguments, or pass an argument whose ');
           writeln('type determines it');
+          ok := false
+        end
+        else if not SatisfiesCat(given, g^.grCat) then begin
+          ReportCat(gen, n, g, given, bs.b[k].line, bs.b[k].col,
+                    bs.b[k].argn);
           ok := false
         end
         else AppendType(tuple, tupleTail, given)
@@ -20422,6 +20551,12 @@ begin
             WritePool(gen^.at, gen^.len);
             write(''' must name a type, because the parameter it matches ');
             writeln('is declared ''type''');
+            ok := false
+          end
+          else if not SatisfiesCat(given, g^.grCat) then begin
+            { The type is written, so the argument is where the reader looks
+              and there is no determining position to name. }
+            ReportCat(gen, n, g, given, a^.line, a^.col, 0);
             ok := false
           end
           else AppendType(tuple, tupleTail, given)
@@ -22986,10 +23121,16 @@ begin
   { AP 6.7.3.10's type parameter has no denoter to show -- `type` *is* the
     parameter-form. Said in a word rather than left as an empty `type` line,
     which is what a group whose denoter failed to parse would also print, and
-    the two are not the same thing. }
+    the two are not the same thing.
+
+    The word after it is AP 6.7.3.10.5's category as the source spelled it,
+    and `type` for an unconstrained one, which is exactly the parameter-form
+    written back (ADR-0266). }
   if g^.grIsTypeDisc then begin
     Pad;
-    writeln('type-parameter')
+    write('type-parameter ');
+    WriteCatName(g^.grCat);
+    writeln
   end
   else
     DumpTypeExpr(g^.grType);

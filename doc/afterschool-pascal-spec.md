@@ -1931,6 +1931,74 @@ nothing, 6.7.1 making a result type a type-identifier and not an
 actual-parameter. Such a routine can be activated only by the form of
 6.7.3.10.1.
 
+**6.7.3.10.5 The category of a type parameter [added].** A
+type-parameter-specification may be preceded, within the
+formal-parameter-section, by a **type-parameter-category**:
+
+    type-parameter-specification = identifier-list ':'
+                                   [ type-parameter-category ] 'type' .
+    type-parameter-category      = 'numeric' | 'ordinal'
+                                 | 'ordered' | 'equatable' .
+
+The identifiers `numeric`, `ordinal`, `ordered` and `equatable` occurring as a
+type-parameter-category shall have no defining-point and shall be identified by
+their spelling in that position only. It shall be an error for any other
+identifier to occur in that position; the error shall be reported.
+
+Where a type parameter is written with a type-parameter-category, it shall be
+an error for the corresponding component of the type-argument-tuple of an
+activation of that generic routine to be a type not admitted by the category;
+the error shall be reported at the activation. The categories admit:
+
+  a) `numeric`, the types the dyadic arithmetic operators of 6.8.3.2 accept:
+     the integer-types, the real-type, the complex-type, and any subrange-type
+     whose host-type is one of them;
+
+  b) `ordinal`, the ordinal-types of 6.4.2.2, and no other type. `int64` is
+     not among them, 6.4.2.6.2 making it a numeric type that is not an
+     ordinal-type;
+
+  c) `ordered`, the types the operators `<`, `<=`, `>` and `>=` of 6.8.3.5
+     accept on both operands: every type admitted by `ordinal`, and
+     `int64`, the real-type, the string-types of 6.4.3.3 and the text-type of
+     6.4.15;
+
+  d) `equatable`, the types the operators `=` and `<>` of 6.8.3.5 accept on
+     both operands: every type admitted by `ordered`, and the complex-type,
+     the set-types, and the pointer-types that are not owned-pointer-types
+     (6.4.14).
+
+Where an activation is an inferred activation (6.7.3.10.4), the error shall be
+attributed to the actual-parameter that determined the type parameter.
+
+NOTE 9 — A category constrains the *activation* and does not make the generic
+declaration's block separately subject to the requirements of this document.
+6.7.3.10.2 is unchanged: the block is read once for each distinct
+type-argument-tuple, and a block that misuses a type its category admits is
+refused there, as it was before. What a category moves is the diagnostic for
+the block that misuses a type its category does **not** admit, from the
+generic's own source to the call that asked for it.
+
+NOTE 10 — The four spellings are recognised between the `:` of a
+formal-parameter-section and the word-symbol `type`, and nowhere else. A
+parameter-form is one type-identifier, schema-name or type-inquiry, and what
+may follow one is `;` or `)`, so an identifier followed by the word-symbol
+`type` is a juxtaposition no program of the languages this document is written
+against could contain. The category therefore reserves nothing and puts
+nothing in any region, and a program may go on declaring a type, a variable, a
+field or a routine of each of the four names.
+
+NOTE 11 — The set is closed. A category is a name for a group of operators
+this document already gives, so admitting an arbitrary predicate would be
+admitting a second type system; where a requirement on a type parameter is not
+one of these four, 6.7.3.10.2 remains the mechanism and the diagnostic is the
+body's.
+
+NOTE 12 — A formal-discriminant of 6.4.7.1 takes no category. A schema's
+type-valued discriminant is written where a *type-denoter* is being built and
+not where a routine is being activated, so there is no activation for a
+refusal to be attributed to.
+
 #### 6.7.5 Required procedures [extended]
 
 **6.7.5.9 The exit procedure [added].** The required procedure-identifier

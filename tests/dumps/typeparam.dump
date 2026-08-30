@@ -1,0 +1,171 @@
+program p
+  params
+    name output @12:11
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+    procs
+      func sum @14:1
+        params
+          group
+            names
+              name elem @14:14
+            type
+              type-parameter numeric
+          group
+            names
+              name a @14:34
+              name b @14:37
+            type
+              named elem @14:40
+        result
+          named elem @14:47
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @15:1
+              assign @15:7
+                var sum @15:7
+                binary add @15:16
+                  var a @15:14
+                  var b @15:18
+      func span @17:1
+        params
+          group
+            names
+              name elem @17:15
+            type
+              type-parameter ordinal
+          group
+            names
+              name lo @17:35
+              name hi @17:39
+            type
+              named elem @17:43
+        result
+          named integer @17:50
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @18:1
+              assign @18:7
+                var span @18:7
+                binary sub @18:23
+                  call ord @18:15
+                    args
+                      var hi @18:19
+                  call ord @18:25
+                    args
+                      var lo @18:29
+      func larger @20:1
+        params
+          group
+            names
+              name elem @20:17
+            type
+              type-parameter ordered
+          group
+            names
+              name a @20:37
+              name b @20:40
+            type
+              named elem @20:43
+        result
+          named elem @20:50
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @21:1
+              if @21:7
+                binary gt @21:12
+                  var a @21:10
+                  var b @21:14
+                assign @21:21
+                  var larger @21:21
+                  var a @21:31
+                else
+                assign @21:38
+                  var larger @21:38
+                  var b @21:48
+      func alike @23:1
+        params
+          group
+            names
+              name elem @23:16
+            type
+              type-parameter equatable
+          group
+            names
+              name a @23:38
+              name b @23:41
+            type
+              named elem @23:44
+        result
+          named boolean @23:51
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @24:1
+              assign @24:7
+                var alike @24:7
+                binary eq @24:18
+                  var a @24:16
+                  var b @24:20
+      func id @26:1
+        params
+          group
+            names
+              name elem @26:13
+            type
+              type-parameter type
+          group
+            names
+              name a @26:25
+            type
+              named elem @26:28
+        result
+          named elem @26:35
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @27:1
+              assign @27:7
+                var id @27:7
+                var a @27:13
+    body
+      compound @29:1
+        writeln @30:3
+          arg w -
+            call sum @30:11
+              args
+                int 1 @30:15
+                int 2 @30:18
+            int 1 @30:21

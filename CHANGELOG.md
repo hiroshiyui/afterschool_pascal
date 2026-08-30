@@ -15,6 +15,18 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A type parameter may say what it needs** (ADR-0266, AP 6.7.3.10.5).
+  `function Sum(Elem: numeric type; a, b: Elem): Elem` -- a type parameter may
+  carry one of four categories, `numeric`, `ordinal`, `ordered` or
+  `equatable`, and the call that names a type outside it is refused **at the
+  call**, saying which requirement it missed. Without one such a program was
+  refused inside the generic's own source, by whatever operator its body used.
+  The four names are recognised only between a parameter's colon and the word
+  `type`: nothing is reserved, and a program may go on declaring a type, a
+  variable or a routine of each. A category filters the activation and does
+  not check the generic's body abstractly -- a body that misuses a type its
+  category admits is still caught where it always was.
+
 - **A generic activation need not write its types** (ADR-0254,
   AP 6.7.3.10.4). `Swap(i, j)` where `Swap(integer, i, j)` was required, and
   `ValueOr(r, 0)` where `r` already says the type. A call writes an argument
