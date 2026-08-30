@@ -1,4 +1,4 @@
-# 259. The runtime's own storage had no oracle
+# 261. The runtime's own storage had no oracle
 
 Date: 2026-08-30
 

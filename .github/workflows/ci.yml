@@ -281,7 +281,7 @@ jobs:
         run: tests/checks/seed_current.sh
 
   # The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
-  # LeakSanitizer (ADR-0259). It is a `ctest` case and so runs in the job above
+  # LeakSanitizer (ADR-0261). It is a `ctest` case and so runs in the job above
   # too; it is here as well for the reason `unicode-conformance` is -- a gate
   # that can skip needs one place that refuses to let it, and this one skips
   # with 77 when clang or ar is missing.

@@ -565,7 +565,7 @@ set_tests_properties(runtime-isoc PROPERTIES
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
 # The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
-# LeakSanitizer (ADR-0259). It is the only oracle here that watches the
+# LeakSanitizer (ADR-0261). It is the only oracle here that watches the
 # runtime's own *storage*: every other gate compares what a program printed,
 # and `heap-balance` -- the closest -- counts `pas_new` against `pas_dispose`,
 # which is calls rather than memory and misses every other allocator the

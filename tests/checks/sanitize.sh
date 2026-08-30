@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run the corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
-# LeakSanitizer (ADR-0259).
+# LeakSanitizer (ADR-0261).
 #
 # **This is the only oracle here that reads the runtime's own memory
 # behaviour.** Every other gate compares what a program printed, or counts

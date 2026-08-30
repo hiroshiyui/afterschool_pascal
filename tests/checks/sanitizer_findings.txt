@@ -1,5 +1,5 @@
 # What `tests/checks/sanitize.sh` finds and this tree has argued for
-# (ADR-0259). One case per line, then the argument.
+# (ADR-0261). One case per line, then the argument.
 #
 # It fails in both directions, as every catalogue here does: a case that
 # starts reporting is as loud as one that stops. An entry is a claim about

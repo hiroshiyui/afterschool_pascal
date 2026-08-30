@@ -9394,6 +9394,34 @@ begin
   end
 end;
 
+{ Every denoter in a formal-parameter-list, forgotten.
+
+  A **procedural** parameter has no `grType`. Its types are in a
+  formal-parameter-list of its own and in its result, and a loop over
+  `grType` alone therefore walks straight past them -- so a second
+  instantiation of a generic taking a procedural parameter whose own parameter
+  type is a type-inquiry read the *first* instantiation's answer, and the
+  actual was refused as incongruent against a type from another activation.
+  `tests/dialect/generic_procparam.pas` is the case; ADR-0260 has the finding.
+
+  It is ADR-0039's remedy reaching one place it did not, which is why this is
+  a routine and not another arm of the loop: a procedural parameter may itself
+  take a procedural parameter, so the walk has to recur. }
+procedure ForgetFormals(g: nodePtr);
+begin
+  while g <> nil do begin
+    if g^.grIsProc then begin
+      ForgetFormals(g^.grParams);
+      ForgetResolved(g^.grResult)
+    end
+    { A type parameter is not a denoter: AP 6.7.3.10 binds it as a type name,
+      and forgetting a resolution cannot unbind one. }
+    else if not g^.grIsTypeDisc then
+      ForgetResolved(g^.grType);
+    g := g^.next
+  end
+end;
+
 { An arm's field-list is a field-list, so its groups and its own variant part
   are walked exactly as the record's are (ADR-0026). }
 procedure ForgetArms;
@@ -19991,11 +20019,7 @@ begin
         makes "per tuple" true. The nodes are shared because the *body* is
         re-parsed and the heading is not; forgetting is the cheaper half of
         that bargain and is what the schema already does. }
-      g := gen^.genDecl^.pdParams;
-      while g <> nil do begin
-        if not g^.grIsTypeDisc then ForgetResolved(g^.grType);
-        g := g^.next
-      end;
+      ForgetFormals(gen^.genDecl^.pdParams);
       ForgetResolved(gen^.genDecl^.pdResult);
 
       InstantiateHeading(decl, inst);
