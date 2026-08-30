@@ -353,6 +353,16 @@ var
     way handleBirth says the handle's. A permission rather than a claim, set
     before the value is checked and cleared by CheckTake. }
   takeOk: boolean;
+  { AP 6.9.3.12 (ADR-0268): the declaration being parsed was written `task`.
+    A flag rather than a parameter because ParseProcHeading is reached from
+    four places and only one of them can be a task; it is set immediately
+    before the call and cleared by the heading itself. }
+  parsingTask: boolean;
+  { AP 6.7.8.2 (ADR-0268): the task whose block is being checked, or nil.
+    Set and restored by CheckProcBody, so a routine declared *inside* a task
+    is checked under the same rule -- which it must be, its activation being
+    the task's. }
+  taskBody: symPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
 { ------------------------------------------------------- character classes }
@@ -1333,6 +1343,7 @@ begin
     ctxFinalEnd:       write('after the final ''end''');
     ctxAfterFile:      write('after ''file''');
     ctxAfterSet:       write('after ''set''');
+    ctxChannel:        write('in a channel type');
     ctxSetMembers:     write('after the members of a set');
     ctxAfterGoto:      write('after ''goto''');
     ctxLabelStart:     write('at the start of a labelled statement');
@@ -1486,6 +1497,7 @@ begin
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
     nkDefer: n^.dfIndex := 0;
+    nkSpawn: n^.spSym := nil;
     nkVariantArm: begin
       n^.vaTagType := nil;
       n^.vaVariants := nil;
@@ -1529,7 +1541,8 @@ begin
       n^.ssListed := false
     end;
     nkOptional: n^.opElem := nil;
-    nkHandle: begin n^.hdAt := 0; n^.hdLen := 0 end;
+    nkHandle: begin n^.hdAt := 0; n^.hdLen := 0;
+                    n^.hdCap := nil; n^.hdElem := nil end;
     nkFallible: begin n^.faVal := nil; n^.faCause := nil end;
     nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
@@ -2521,7 +2534,35 @@ begin
       t := NewNode(nkHandle, CurLine, CurCol);
       t^.hdAt := tok[pos + 2].at;
       t^.hdLen := tok[pos + 2].len;
+      t^.hdCap := nil;
+      t^.hdElem := nil;
       pos := pos + 3
+    end
+    { channel-type = 'channel' '[' constant-expression ']' 'of' type-denoter
+      (AP 6.4.16, ADR-0268). The word is not reserved and the shape is
+      ADR-0140's test asked of a juxtaposition, as the handle's is: a
+      type-denoter that is an identifier is a type-name, and no type-name may
+      be followed by `[` -- a schema takes `(`, and `array` is a word-symbol.
+      So `channel [8] of integer` is three tokens no conforming program can
+      have written here, and a program that declares a type called `channel`
+      and writes `var c: channel;` still means what it meant.
+
+      It reuses nkHandle because a channel-type *is* a handle-type whose
+      closer is the runtime's: hdAt is 0, which is what says the closer is not
+      a foreign name of the program's. }
+    else if Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'channel  ') and
+            (PeekKind(1) = tkLBracket) then begin
+      t := NewNode(nkHandle, CurLine, CurCol);
+      t^.hdAt := 0;
+      t^.hdLen := 0;
+      t^.hdCap := nil;
+      t^.hdElem := nil;
+      pos := pos + 2;
+      t^.hdCap := ParseExpr;
+      Expect(tkRBracket, ctxChannel);
+      Expect(tkOf, ctxChannel);
+      if not aborted then t^.hdElem := ParseTypeDenoter
     end
     { type-inquiry = 'type' 'of' type-inquiry-object (6.4.9). Both words are
       already reserved in ISO 7185, so this feature reserves nothing -- the
@@ -3491,7 +3532,27 @@ begin
 
     So `defer;`, `defer(x)`, `defer := 3` and `if c then defer else s` all
     stay what a program that declared `defer` meant by them. }
-  if PoolIs(at, len, 'defer    ') and
+  { AP 6.9.3.12's spawn-statement (ADR-0268), and the question is `defer`'s
+    exactly: a statement beginning with an identifier can continue only as a
+    designator, as a call, or not at all, so an identifier after the name is a
+    token no conforming program can have written there. `spawn;`, `spawn(x)`
+    and `spawn := 3` all stay what a program that declared `spawn` meant. }
+  if PoolIs(at, len, 'spawn    ') and (k = tkIdent) then begin
+    s := NewNode(nkSpawn, l, c);
+    s^.spArgs := nil;
+    pos := pos + 1;
+    s^.spAt := tok[pos].at;
+    s^.spLen := tok[pos].len;
+    pos := pos + 1;
+    if Check(tkLParen) then begin
+      pos := pos + 1;
+      head := nil;
+      tail := nil;
+      ParseActualParameters(head, tail, ctxCallArgs);
+      s^.spArgs := head
+    end
+  end
+  else if PoolIs(at, len, 'defer    ') and
      (k <> tkAssign) and (k <> tkLBracket) and (k <> tkPeriod) and
      (k <> tkCaret) and (k <> tkLParen) and
      (k <> tkSemi) and (k <> tkEnd) and (k <> tkElse) and (k <> tkUntil) and
@@ -3611,6 +3672,7 @@ begin
     nkGoto:      write('goto');
     nkLabeled:   write('labelled');
     nkDefer:     write('defer');
+    nkSpawn:     write('spawn');
     nkEmpty:     write('empty');
     otherwise    write('statement')
   end
@@ -3744,7 +3806,16 @@ begin
       d^.kdValue := ParseExpr;
       Expect(tkSemi, ctxConstDefEnd);
       Append(head, tail, d);
-      more := (not aborted) and Check(tkIdent)
+      { AP 6.7.8: a task-declaration begins with an identifier, and so does
+        a type-definition and a variable-declaration -- so each part has to
+        stop at one rather than take it for its own. The test is the block
+        loop's, and it is a *pair* of tokens: `task` followed by an
+        identifier, which no declaration in either standard begins with. A
+        program that declares a type called `task` writes `task = ...`, whose
+        second token is `=`, and is untouched. }
+      more := (not aborted) and Check(tkIdent) and
+              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+                   (PeekKind(1) = tkIdent))
     end
   end
 end;
@@ -3835,7 +3906,16 @@ begin
       d^.tdType := ParseTypeExpr;
       Expect(tkSemi, ctxTypeDefEnd);
       Append(head, tail, d);
-      more := (not aborted) and Check(tkIdent)
+      { AP 6.7.8: a task-declaration begins with an identifier, and so does
+        a type-definition and a variable-declaration -- so each part has to
+        stop at one rather than take it for its own. The test is the block
+        loop's, and it is a *pair* of tokens: `task` followed by an
+        identifier, which no declaration in either standard begins with. A
+        program that declares a type called `task` writes `task = ...`, whose
+        second token is `=`, and is untouched. }
+      more := (not aborted) and Check(tkIdent) and
+              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+                   (PeekKind(1) = tkIdent))
     end
   end
 end;
@@ -3856,7 +3936,11 @@ begin
     g^.grType := ParseTypeExpr;
     Expect(tkSemi, ctxVarDeclEnd);
     Append(head, tail, g);
-    more := (not aborted) and Check(tkIdent)
+    { AP 6.7.8: stop at a task-declaration, whose two tokens are `task`
+      and an identifier -- see ParseTypePart for why that pair is the test. }
+    more := (not aborted) and Check(tkIdent) and
+            not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+                 (PeekKind(1) = tkIdent))
   end
 end;
 
@@ -4001,6 +4085,8 @@ begin
   d^.pdIsForward := false;
   d^.pdInHeading := false;
   d^.pdIsExternal := false;
+  d^.pdIsTask := parsingTask;
+  parsingTask := false;
   d^.pdExtAt := 0;
   d^.pdExtLen := 0;
   d^.pdParams := nil;
@@ -4193,6 +4279,17 @@ begin
     else if Check(tkType) then part := 2
     else if Check(tkVar) then part := 3
     else if Check(tkProcedure) or Check(tkFunction) then part := 4
+    { AP 6.7.8's task-declaration (ADR-0268). ADR-0140's test is at its
+      easiest here: a declaration-part admits only `label`, `const`, `type`,
+      `var`, `procedure`, `function` and `begin`, every one of them a
+      word-symbol, so an *identifier* in this position is already a syntax
+      error in both standards and the dialect may spell what it likes with
+      one. The second token is required to be an identifier too, so a program
+      that has somehow written `task` alone still gets the diagnostic it
+      got before. }
+    else if Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+            (PeekKind(1) = tkIdent) then part := 5
     else begin
       part := -1;
       done := true
@@ -4202,6 +4299,10 @@ begin
       else if part = 1 then ParseConstPart(ch, ct)
       else if part = 2 then ParseTypePart(th, tt)
       else if part = 3 then ParseVarPart(vh, vt)
+      else if part = 5 then begin
+        parsingTask := true;
+        Append(ph, pt, ParseProcOrFunc(false))
+      end
       else if Check(tkFunction) then Append(ph, pt, ParseProcOrFunc(true))
       else Append(ph, pt, ParseProcOrFunc(false))
     end
@@ -4307,7 +4408,16 @@ begin
         spec^.isItems := ih;
         Append(head, tail, spec);
         Expect(tkSemi, ctxImportEnd);
-        more := (not aborted) and Check(tkIdent)
+        { AP 6.7.8: a task-declaration begins with an identifier, and so does
+        a type-definition and a variable-declaration -- so each part has to
+        stop at one rather than take it for its own. The test is the block
+        loop's, and it is a *pair* of tokens: `task` followed by an
+        identifier, which no declaration in either standard begins with. A
+        program that declares a type called `task` writes `task = ...`, whose
+        second token is `=`, and is untouched. }
+      more := (not aborted) and Check(tkIdent) and
+              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+                   (PeekKind(1) = tkIdent))
       end
     end
   end;
@@ -4416,7 +4526,16 @@ begin
       part^.epItems := ih;
       Append(head, tail, part);
       Expect(tkSemi, ctxExportEnd);
-      more := (not aborted) and Check(tkIdent) and not Check(tkEnd)
+      { AP 6.7.8: a task-declaration begins with an identifier, and so does
+        a type-definition and a variable-declaration -- so each part has to
+        stop at one rather than take it for its own. The test is the block
+        loop's, and it is a *pair* of tokens: `task` followed by an
+        identifier, which no declaration in either standard begins with. A
+        program that declares a type called `task` writes `task = ...`, whose
+        second token is `=`, and is untouched. }
+      more := (not aborted) and Check(tkIdent) and
+              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
+                   (PeekKind(1) = tkIdent)) and not Check(tkEnd)
     end
   end
 end;
@@ -4831,6 +4950,8 @@ begin
   s^.frameCount := 0;
   s^.defers := nil;
   s^.deferCount := 0;
+  s^.spawns := false;
+  s^.isTask := false;
   s^.exitBlock := 0;
   s^.memConsts := nil;
   s^.memConstTail := nil;
@@ -7200,7 +7321,7 @@ begin
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
           biStrGe, biBinding, biDate, biTime, biArgCount, biArgument,
-          biTry, biTake, biRelease: ;
+          biTry, biTake, biReceive, biRelease: ;
         end
     end
     else if e^.clArgs^.next^.next = nil then begin
@@ -8214,12 +8335,69 @@ end;
   is `i32 (ptr)` -- the shape `fclose`, `closedir` and `pclose` have -- and an
   `external` declaration of the same name is held to the same shape where the
   heading is checked, so the two cannot declare one global two ways. }
+{ AP 6.4.16 (ADR-0268): whether every component of `t` is a value that
+  carries no reference to anything -- which is what a channel may carry,
+  because a value crossing between two tasks must mean the same thing on the
+  far side and nothing reachable through a pointer, a file or another handle
+  does.
+
+  Asked structurally and not by a predicate on the kind, because a record of
+  records of pointers is as unsendable as a pointer. `IsAffine` is one half of
+  the answer and `tyPointer` is the other: an ordinary `^T` is not affine and
+  is exactly the thing share-nothing forbids. }
+function Transferable(t: typePtr): boolean;
+var f: fieldPtr; ok: boolean;
+begin
+  if t = nil then exit(false);
+  if IsAffine(t) or IsFile(t) then exit(false);
+  if t^.kind = tyPointer then exit(false);
+  if t^.kind = tyProc then exit(false);
+  if t^.kind = tySlice then exit(false);
+  if t^.kind = tyArray then exit(Transferable(t^.elem));
+  if t^.kind = tyRecord then begin
+    ok := true;
+    f := t^.fields;
+    while f <> nil do begin
+      if not Transferable(f^.ftype) then ok := false;
+      f := f^.next
+    end;
+    exit(ok)
+  end;
+  Transferable := true
+end;
+
 function ResolveHandle(d: nodePtr): typePtr;
-var t: typePtr;
+var t, capType: typePtr; cap: integer;
 begin
   t := NewType(tyHandle);
   t^.handleAt := d^.hdAt;
   t^.handleLen := d^.hdLen;
+  { A channel-type, which is a handle-type whose closer is the runtime's --
+    so there is no foreign name to check and the two questions below do not
+    apply. What is checked instead is the capacity and what it carries. }
+  if d^.hdElem <> nil then begin
+    t^.elem := ResolveType(d^.hdElem);
+    cap := 0;
+    if not EvalOrdinal(d^.hdCap, capType, cap) then begin
+      ErrorAt(d^.hdCap^.line, d^.hdCap^.col);
+      writeln('a channel''s capacity must be a constant expression')
+    end
+    else if cap < 1 then begin
+      ErrorAt(d^.hdCap^.line, d^.hdCap^.col);
+      writeln('a channel''s capacity must be at least 1, and this is ', cap:1)
+    end;
+    if cap < 1 then cap := 1;
+    t^.hi := cap;
+    t^.lo := 1;
+    if not Transferable(t^.elem) then begin
+      ErrorAt(d^.line, d^.col);
+      write('a channel cannot carry ');
+      WriteTypeName(t^.elem);
+      write(': what crosses between two tasks is a value, and this holds ');
+      writeln('a reference to something the other task does not own')
+    end;
+    exit(t)
+  end;
   if d^.hdLen = 0 then begin
     ErrorAt(d^.line, d^.col);
     writeln('the foreign name that releases a handle cannot be empty')
@@ -9385,7 +9563,7 @@ begin
       nkStructValue, nkValueElem,
       nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-      nkProcCall, nkWith, nkDefer, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
+      nkProcCall, nkWith, nkDefer, nkSpawn, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
       nkPointer, nkHandle, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
@@ -11231,7 +11409,7 @@ begin
       nkSetMember, nkField, nkDeref, nkWriteArg, nkEmpty,
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
-      nkWith, nkDefer, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
+      nkWith, nkDefer, nkSpawn, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkFallible,
       nkConfArray,
@@ -12267,6 +12445,18 @@ begin
         WriteTypeName(p^.sym^.stype);
         writeln(' and needs a variable')
       end
+      { AP 6.7.8.1: a channel crossing into a task. `Assignable` refuses a
+        handle from any other handle and must go on doing so -- that refusal
+        is what makes a handle uncopyable, and ADR-0058's sentence says a
+        permission granted in a shared predicate leaks to every caller. So
+        the exception is written here, at the one position that has it, and
+        it is narrower than it looks: the callee must be a task, the formal's
+        type and the actual's must be the *same* type object, and the actual
+        must be a variable -- a channel is not a value anything can produce. }
+      else if IsChannel(p^.sym^.stype) and callee^.isTask and
+              (a^.ntype = p^.sym^.stype) and IsDesignator(a) then
+        { admitted: the two activations name one object, which is what a
+          channel is }
       else if not Assignable(p^.sym^.stype, a^.ntype) then begin
         ErrorAt(a^.line, a^.col);
         write('argument ', i:1, ' of ''');
@@ -12995,6 +13185,12 @@ begin
     its own keeps it. }
   else if PoolIs(at, len, 'take     ') then
     LookupBuiltin := biTake
+  { AP 6.9.3.13 (ADR-0268), and the same sentence twice more. `send` and
+    `receive` are required identifiers, so a program that declares either
+    keeps it -- which matters more here than for `take`, `send` being a word
+    a program about a network is likely to want. }
+  else if PoolIs(at, len, 'receive  ') then
+    LookupBuiltin := biReceive
   { AP 6.4.12.5 (ADR-0206), and the same sentence a third time: a program with
     a `release` of its own keeps it. }
   else if PoolIs(at, len, 'release  ') then
@@ -13169,6 +13365,73 @@ end;
   An empty variable answers 0 and is not an error, which is the assignment of
   `nil` on an empty one (AP 6.4.12.2) rather than `dispose` of nil: a program
   that released nothing has nothing to be told about. }
+{ AP 6.9.3.13's two channel operations (ADR-0268).
+
+  `send` is a **procedure** and `receive` a **function**, and the asymmetry is
+  the design rather than an accident: a send either happens or the program has
+  lost track of who is listening, which is a fault this language stops for
+  (ADR-0014's discipline, applied to a value with nowhere to go); a receive has
+  an ordinary second outcome -- the channel is closed and drained -- and that
+  outcome *is* the loop condition a reader wants. `while receive(c, v) do`
+  reads as what it does, where a procedure would need a `var` flag beside it.
+
+  Both take the channel first and the value second, which is `read` and
+  `write`'s order and `PasNet.ReadLine`'s. }
+{ AP 6.9.3.13's receive.
+
+  `send` is a **procedure** and this is a function, and the asymmetry is the
+  design rather than an accident: a send either happens or the program has
+  lost track of who is listening, which is a fault this language stops for
+  (ADR-0014's discipline, applied to a value with nowhere to go); a receive
+  has an ordinary second outcome -- the channel is closed and drained -- and
+  that outcome *is* the loop condition a reader wants. `while receive(c, v) do`
+  reads as what it does, where a procedure would need a `var` flag beside it.
+
+  Both take the channel first and the value second, which is `read` and
+  `write`'s order and `PasNet.ReadLine`'s. }
+procedure CheckReceive(c: nodePtr; n: integer);
+var chan, val: nodePtr;
+begin
+  c^.ntype := boolType;
+  if n <> 2 then begin
+    ErrorAt(c^.line, c^.col);
+    writeln('''receive'' takes a channel and a variable');
+    exit
+  end;
+  chan := c^.clArgs;
+  val := chan^.next;
+  if not IsChannel(chan^.ntype) then begin
+    ErrorAt(chan^.line, chan^.col);
+    write('''receive'' takes a channel and this is ');
+    WriteTypeName(chan^.ntype);
+    writeln
+  end
+  else if not IsDesignator(chan) then begin
+    ErrorAt(chan^.line, chan^.col);
+    writeln('''receive'' takes a channel variable, so its first argument ',
+            'must be one')
+  end
+  { A receive writes through its second argument, so it is a variable and
+    6.9.4's threats apply to it exactly as `read`'s do. The type must be the
+    channel's own and not merely assignable to it: what the runtime copies is
+    the element's storage, and a narrower variable would be written past. }
+  else if not IsDesignator(val) then begin
+    ErrorAt(val^.line, val^.col);
+    writeln('''receive'' writes the value it received, so its second ',
+            'argument must be a variable')
+  end
+  else if val^.ntype <> chan^.ntype^.elem then begin
+    ErrorAt(val^.line, val^.col);
+    write('''receive'' writes ');
+    WriteTypeName(chan^.ntype^.elem);
+    write(' and this is ');
+    WriteTypeName(val^.ntype);
+    writeln
+  end
+  else if Threatened(val) then
+    writeln('it cannot be written by ''receive''')
+end;
+
 procedure CheckRelease(c: nodePtr; n: integer);
 begin
   c^.ntype := intType;
@@ -13620,6 +13883,9 @@ begin
       { AP 6.4.12.5 (ADR-0206). }
       else if c^.clBuiltin = biRelease then
         CheckRelease(c, n)
+      { AP 6.9.3.13 (ADR-0268). }
+      else if c^.clBuiltin = biReceive then
+        CheckReceive(c, n)
       else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
         c^.ntype := boolType;
         if n = 0 then begin
@@ -14706,6 +14972,27 @@ begin
             it here reproduces the "undeclared identifier" this always said. }
           e^.vrSym := LookupUser(e^.vrAt, e^.vrLen);
           NoteUse(e^.line, e^.col, e^.vrLen, e^.vrSym);
+          { AP 6.7.8.2 (ADR-0268): a task's body may name only its own
+            variables. 6.7.8.1 refuses a formal parameter that would let a
+            second activation reach one, and it is *not* the whole rule --
+            Pascal's own scope rules let a nested block name a variable of an
+            enclosing one, and a global is enclosing for every block. Two
+            tasks incrementing one global is a data race the formals rule
+            cannot see, and this is where it is refused instead.
+
+            Asked of the **owner**: a task's locals and formals are owned by
+            the task, and everything else is not. A constant, a type and a
+            routine are all still reachable -- what a task may not have is a
+            second name for storage somebody else may be writing. }
+          if (taskBody <> nil) and (e^.vrSym <> nil) and
+             IsVariable(e^.vrSym) and (e^.vrSym^.owner <> taskBody) then begin
+            ErrorAt(e^.line, e^.col);
+            write('''');
+            WritePool(e^.vrAt, e^.vrLen);
+            write(''' is not this task''s: a task may name only its own ');
+            writeln('variables, because anything else is storage another ',
+                    'activation may be writing at the same time')
+          end;
           { AP 6.7.6.10's argcount, bare. LookupUser answered nil because what
             it found was the required marker and not a declaration of the
             program's -- which is exactly the case in which the bare name is
@@ -15358,6 +15645,7 @@ begin
   else if PoolIs(p^.pcAt, p^.pcLen, 'break    ') then p^.pcStd := spBreak
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'continue        ') then
     p^.pcStd := spContinue
+  else if PoolIs(p^.pcAt, p^.pcLen, 'send     ') then p^.pcStd := spSend
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -15373,6 +15661,37 @@ begin
     a := a^.next
   end;
 
+  { AP 6.9.3.13.1's send (ADR-0268): a channel variable and a value assignable
+    to what it carries. The channel is a variable and not an expression for
+    the reason `release`'s is -- there is one object and the statement acts on
+    it -- and the value is copied, which is what makes the far side's read
+    share nothing with this activation. }
+  if p^.pcStd = spSend then begin
+    if n <> 2 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''send'' takes a channel and a value')
+    end
+    else if not IsChannel(p^.pcArgs^.ntype) then begin
+      ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+      write('''send'' takes a channel and this is ');
+      WriteTypeName(p^.pcArgs^.ntype);
+      writeln
+    end
+    else if not IsDesignator(p^.pcArgs) then begin
+      ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+      writeln('''send'' takes a channel variable, so its first argument ',
+              'must be one')
+    end
+    else if not Assignable(p^.pcArgs^.ntype^.elem,
+                           p^.pcArgs^.next^.ntype) then begin
+      ErrorAt(p^.pcArgs^.next^.line, p^.pcArgs^.next^.col);
+      write('cannot send ');
+      WriteTypeName(p^.pcArgs^.next^.ntype);
+      write(' on a channel of ');
+      WriteTypeName(p^.pcArgs^.ntype^.elem);
+      writeln
+    end
+  end
   { 6.7.5.7: "Following execution of the control procedure halt ... no further
     processing of the activation of the program shall occur." Everything about
     *how* it stops belongs to the runtime -- the files a block exit would have
@@ -15385,7 +15704,7 @@ begin
     all, which is why there is nothing in either to take a spelling from -- and
     why a Pascal program otherwise has no way to tell whatever invoked it that
     it failed. This compiler is the program that needed it. }
-  if p^.pcStd = spHalt then begin
+  else if p^.pcStd = spHalt then begin
     if n > 1 then begin
       ErrorAt(p^.line, p^.col);
       writeln('''halt'' takes at most one argument, the exit status')
@@ -16403,6 +16722,15 @@ begin
         ErrorAt(s^.line, s^.col);
         writeln('a deferred statement may not defer another statement')
       end;
+      { AP 6.9.3.12: a deferred statement runs when the statement-sequence it
+        stands in is completed, and the join that ends a block's tasks has run
+        by then -- so a task spawned here would be joined by nothing. Refused
+        for the reason the goto above it is: the statement is executed
+        somewhere its author cannot see. }
+      nkSpawn: begin
+        ErrorAt(s^.line, s^.col);
+        writeln('a deferred statement may not spawn a task')
+      end;
       nkCompound: begin
         sub := s^.cpBody;
         while sub <> nil do begin
@@ -16472,6 +16800,41 @@ end;
   The list is pushed onto rather than appended to, so it ends up in reverse
   source order: 6.9.3.11 runs the armed statements in the reverse of the order
   they are written, and walking this list forwards is that order. }
+{ AP 6.9.3.12's spawn-statement (ADR-0268).
+
+  The actuals are checked by `CheckArguments` and by nothing of this
+  routine's, which is the point: a spawn is a procedure-statement in every
+  respect a *reader* can see, and what differs is only that the activation
+  runs beside the one that started it. What the task-declaration admits as a
+  formal is checked where it is declared (CheckTaskFormals), so by the time a
+  spawn is checked the share-nothing property is a fact about the callee and
+  needs no restating here.
+
+  A task may be started by this statement and by nothing else, and a procedure
+  may not be started by it. The two refusals are one rule read from both ends,
+  as AP 6.4.12.2's handle-birth is. }
+procedure CheckSpawn(s: nodePtr);
+var sym: symPtr;
+begin
+  sym := LookupName(0, 0, s^.spAt, s^.spLen, s^.line, s^.col);
+  if sym = nil then exit;
+  if (sym^.kind <> skProc) or not sym^.isTask then begin
+    ErrorAt(s^.line, s^.col);
+    write('''');
+    WritePool(s^.spAt, s^.spLen);
+    writeln(''' is not a task, and only a task may be spawned');
+    exit
+  end;
+  s^.spSym := sym;
+  CheckArguments(sym, s^.spArgs, s^.line, s^.col);
+  { The block that spawns is the block that joins, so it needs a task-set slot
+    and CodeGen needs to know which blocks have one. Recorded on the routine
+    for the same reason a defer-statement is (ADR-0175): the emitter reads a
+    fact Sema established rather than walking the tree a second time
+    (ADR-0111, ADR-0230). }
+  if currentProc <> nil then currentProc^.spawns := true
+end;
+
 procedure CheckDefer(s: nodePtr);
 var e: nodeListPtr; saveLoops: integer;
 begin
@@ -16973,6 +17336,7 @@ begin
 
       nkWith:  CheckWith(s);
       nkDefer: CheckDefer(s);
+      nkSpawn: CheckSpawn(s);
       nkCase:  CheckCase(s);
       nkWrite: CheckWrite(s);
       nkRead:  CheckRead(s);
@@ -17019,6 +17383,8 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'exit     ') or
             PoolIs(s^.pcAt, s^.pcLen, 'break    ') or
             PoolIsWide(s^.pcAt, s^.pcLen, 'continue        ') or
+            { AP 6.9.3.13's send, behind `sym = nil` like every other one. }
+            PoolIs(s^.pcAt, s^.pcLen, 'send     ') or
             IsRequiredProc(s^.pcAt, s^.pcLen)) then
           CheckStdProc(s)
         else if sym = nil then begin
@@ -17026,6 +17392,17 @@ begin
           write('unknown procedure ''');
           WritePool(s^.pcAt, s^.pcLen);
           writeln('''')
+        end
+        { AP 6.7.8: a task is started by a spawn-statement and by nothing
+          else. This and CheckSpawn's refusal of a procedure are one rule read
+          from both ends, as AP 6.4.12.2's handle-birth is: what makes a task
+          safe is the join, and a procedure-statement has none. }
+        else if sym^.isTask then begin
+          ErrorAt(s^.line, s^.col);
+          write('''');
+          WritePool(s^.pcAt, s^.pcLen);
+          writeln(''' is a task: it is started by ''spawn'' and not by ',
+                  'being called')
         end
         else if not IsInvocable(sym) or (ResultTypeOf(sym) <> nil) then begin
           ErrorAt(s^.line, s^.col);
@@ -17541,10 +17918,19 @@ begin
         is the variable-parameter clause and says nothing about files. }
       { ...and a handle is lent to an `external` routine by value (AP
         6.4.12.4), which is the one value parameter of an owned type there
-        is: the word crosses and the variable keeps what it owns. }
+        is: the word crosses and the variable keeps what it owns.
+
+        AP 6.7.8.1 adds the second, and it is the same shape one step
+        further: a **channel** crosses into a task by value, the formal takes
+        a reference to it, and the two activations then name one object --
+        which is exactly what a channel is for and the only thing in this
+        language two tasks may share. It is not admitted for a procedure,
+        only for a task, because what makes it safe is the join that ends the
+        spawning block. }
       if ContainsFile(t) and not g^.grByRef and (g^.grNames <> nil) and
          not (IsHandle(t) and (into <> nil) and
-              (into^.linkKind = lnkForeign)) then begin
+              (into^.linkKind = lnkForeign)) and
+         not (IsChannel(t) and (into <> nil) and into^.isTask) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         if IsFile(t) then
           writeln('a file parameter must be a var parameter')
@@ -18267,6 +18653,68 @@ begin
     scopeTop := mark
 end;
 
+{ AP 6.7.8.1: what may cross into a task.
+
+  **This is where share-nothing is enforced, and it is the whole of it.**
+  ADR-0201 decided that nothing may be reachable from two tasks at once, and
+  the enforcement is a rule about formal parameters rather than a checker over
+  the body: a task can only reach what it was handed, because Pascal has no
+  address-of and `new` is the only producer of a pointer, so a task's body has
+  no way to name a variable of the spawning activation except through a formal.
+
+  Three things are admitted and everything else is refused.
+
+  A **value parameter of a transferable type** -- a value carrying no
+  reference -- which is copied into the argument block at the spawn, so the
+  two activations share nothing at all.
+
+  A **channel**, which is lent: the one object two tasks touch, and the one
+  with a mutex in it. It is a handle, so it cannot be copied, and the lend is
+  bounded by the join that ends the block (AP 6.9.3.12) exactly as a `var`
+  parameter's borrow is bounded by the call that made it (ADR-0201).
+
+  Nothing else. A `var` parameter is the escaping alias this language has
+  never had, arriving with no model to govern it -- ADR-0201's rejected
+  `cobegin` in one parameter. A file, a handle that is not a channel and an
+  owned pointer are refused because a task cannot yet be *given* ownership:
+  AP 6.4.12.7's move exists (ADR-0267) and the argument block does not use it
+  yet, which is the next increment's and is said so rather than left to be
+  discovered. }
+procedure CheckTaskFormals(d: nodePtr; sym: symPtr);
+var p: symListPtr; f: symPtr;
+begin
+  p := sym^.params;
+  while p <> nil do begin
+    f := p^.sym;
+    if f^.kind = skVarParam then begin
+      ErrorAt(d^.line, d^.col);
+      write('a task''s parameter ''');
+      WritePool(f^.at, f^.len);
+      write(''' cannot be a variable parameter: it would be a second name ');
+      writeln('for a variable of the activation that spawned the task')
+    end
+    else if f^.kind = skProcParam then begin
+      ErrorAt(d^.line, d^.col);
+      write('a task''s parameter ''');
+      WritePool(f^.at, f^.len);
+      write(''' cannot be a procedure or a function: what would cross is ');
+      writeln('the activation it runs under, which is another task''s')
+    end
+    else if IsChannel(f^.stype) then
+      { admitted: the one thing two tasks may touch, and it is lent }
+    else if not Transferable(f^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('a task''s parameter ''');
+      WritePool(f^.at, f^.len);
+      write(''' cannot be ');
+      WriteTypeName(f^.stype);
+      write(': what crosses into a task is a copy, and this holds a ');
+      writeln('reference to something the spawning activation owns')
+    end;
+    p := p^.next
+  end
+end;
+
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
 var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
     p, q: symListPtr;
@@ -18370,8 +18818,21 @@ begin
       formals are checked below, and a handle is admitted in both positions
       for an `external` heading and refused for any other (AP 6.4.12). }
     if d^.pdIsExternal then sym^.linkKind := lnkForeign;
+    { AP 6.9.3.12 (ADR-0268). Set before the formals are checked below, so
+      CheckTaskFormals can be asked of the symbol rather than of the node. }
+    if d^.pdIsTask then begin
+      sym^.isTask := true;
+      if d^.pdIsExternal then begin
+        ErrorAt(d^.line, d^.col);
+        writeln('a task has a block of this program: it cannot be ''external''')
+      end
+    end;
 
-    if not sym^.isGeneric then InstantiateHeading(d, sym)
+    if not sym^.isGeneric then InstantiateHeading(d, sym);
+    { AP 6.9.3.12: asked *after* the formals are built, which is what
+      InstantiateHeading finishes -- before it, `sym^.params` is empty and
+      this refused nothing at all. }
+    if d^.pdIsTask then CheckTaskFormals(d, sym)
   end
 end;
 
@@ -18400,6 +18861,12 @@ begin
       sym^.defined := true;
       outer := currentProc;
       currentProc := sym;
+      { AP 6.7.8.2: everything inside a task's block is checked under the
+        task's rule, including a routine declared there -- its activation is
+        the task's, so a variable it names from an enclosing block is one two
+        threads reach. Nested rather than saved-and-cleared for that reason:
+        `taskBody` stays set through the whole subtree. }
+      if sym^.isTask then taskBody := sym;
 
       mark := scopeTop;
       scopeDepth := scopeDepth + 1;
@@ -18475,7 +18942,8 @@ begin
             writeln('''')
           end;
 
-      currentProc := outer
+      currentProc := outer;
+      if sym^.isTask then taskBody := nil
     end
 end;
 
@@ -21361,6 +21829,8 @@ begin
   handleClosers := nil;
   handleBirth := false;
   takeOk := false;
+  parsingTask := false;
+  taskBody := nil;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly
@@ -22180,6 +22650,24 @@ begin
     { AP 6.9.3.11. The index is Sema's -- which flag in the frame says this
       statement is armed -- so it prints only where the annotations do, as
       every other resolved fact does. }
+    { AP 6.9.3.12: the task and its actuals, which is a procedure-statement's
+      shape -- what the annotation adds is nothing, the resolution being a
+      symbol the name already names. }
+    nkSpawn: begin
+      write('spawn ');
+      WritePool(n^.spAt, n^.spLen);
+      if annotate then begin
+        write(' -> ');
+        WriteSymRef(n^.spSym)
+      end;
+      At(n^.line, n^.col);
+      level := level + 1;
+      Pad;
+      writeln('args');
+      level := level + 1;
+      DumpExprList(n^.spArgs);
+      level := level - 2
+    end;
     nkDefer: begin
       write('defer');
       WritePos(n^.line, n^.col);

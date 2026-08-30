@@ -101,15 +101,21 @@ for t in $targets; do
   fi
   checked=$((checked + 1))
   [[ $t == "$host" ]] || crossed=$((crossed + 1))
+  # Two translation units, because the `_Static_assert`s are in two.
+  # runtime/pasrt.c carries PAS_FILE_SIZE's and PAS_JUMP_SIZE's;
+  # runtime/pasrt_task.c carries PAS_TASKSET_SIZE's, and a task set is a
+  # pointer and two ints, so a 32-bit target sizes it differently (ADR-0268).
   if "$cc" -c "$root/runtime/pasrt.c" -I"$root/runtime" -o "$work/$t.o" \
-       2>"$work/$t.err"; then
+       2>"$work/$t.err" &&
+     "$cc" -c "$root/runtime/pasrt_task.c" -I"$root/runtime" \
+       -o "$work/$t-task.o" 2>>"$work/$t.err"; then
     echo "target-sizes: $t ok"
   else
     failed=$((failed + 1))
     echo "target-sizes: $t FAILED" >&2
-    # The two asserts are the point; anything else is a portability problem in
-    # the runtime that this check has found and should also report.
-    grep -m3 -E 'PAS_(FILE|JUMP)_SIZE|error' "$work/$t.err" >&2
+    # The three asserts are the point; anything else is a portability problem
+    # in the runtime that this check has found and should also report.
+    grep -m3 -E 'PAS_(FILE|JUMP|TASKSET)_SIZE|error' "$work/$t.err" >&2
   fi
 done
 

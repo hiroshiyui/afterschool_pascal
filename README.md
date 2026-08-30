@@ -836,6 +836,45 @@ write to one. A deferred statement may not contain a label, a `goto` or
 another `defer`, and `defer` is nobody's word: a program that declares one
 keeps it in every position a conforming program could have written it.
 
+**Two threads of control** (ADR-0268), share-nothing and reserving no word:
+
+```pascal
+type Ints = channel [32] of integer;
+
+task Worker(jobs, results: Ints);
+var n: integer;
+begin
+  while receive(jobs, n) do send(results, n * n)
+end;
+
+var jobs, results: Ints; k, v: integer;
+begin
+  for k := 1 to 4 do spawn Worker(jobs, results);
+  for k := 1 to 20 do send(jobs, k);
+  k := release(jobs);                 { the workers drain, then return }
+  for k := 1 to 20 do
+    if receive(results, v) then writeln(v:1)
+end
+```
+
+A `channel [n] of T` is a bounded queue and **is** a handle: no copy, released
+when its block ends, `release` to close it earlier. A `task` is a procedure
+only `spawn` may start, and what may cross into one is a **copy** of a
+transferable value or a **reference** to a channel — nothing else, and it may
+name only its own variables. Those two rules together are the whole of
+share-nothing: a task cannot reach a variable another activation may be
+writing.
+
+Every task a block spawned is **joined** before that block releases anything,
+which is what makes a lent channel safe. `send` waits while the channel is
+full and stops the program if it was closed; `receive` waits while it is empty
+and answers *false* once it is closed and drained, which is the loop condition
+above. `channel`, `task`, `spawn`, `send` and `receive` are nobody's words — a
+program that declares any of them keeps it.
+
+What is not here: a task cannot be *given* a handle, there is no way to wait
+for one task, no select over several channels, and no timeout.
+
 **`exit` leaves the block early** (ADR-0177), which no standard Pascal has and
 every widely used one does:
 

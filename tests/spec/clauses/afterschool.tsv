@@ -101,6 +101,10 @@
 6.4.15.10	Writing
 6.4.15.11	Read
 6.4.15.12	The version of the Unicode Standard
+6.4.16	Channel-types
+6.4.16.1	The denoter
+6.4.16.2	A channel is a handle
+6.4.16.3	What a channel may carry
 6.5	Declarations and denotations of variables
 6.5.3	Component-variables
 6.5.3.2	Indexed-variables
@@ -139,6 +143,9 @@
 6.7.7.9	What shall not cross
 6.7.7.10	Reserved foreign names
 6.7.7.11	One declaration per linker symbol
+6.7.8	Task-declarations
+6.7.8.1	What may cross into a task
+6.7.8.2	What a task's body may name
 6.8	Expressions
 6.8.3	Operators
 6.8.3.5	Relational operators
@@ -153,6 +160,11 @@
 6.9.3.11.1	Arming
 6.9.3.11.2	Execution
 6.9.3.11.3	What a deferred statement may not contain
+6.9.3.12	Spawn-statements
+6.9.3.12.1	The join
+6.9.3.13	The channel operations
+6.9.3.13.1	send
+6.9.3.13.2	receive
 6.10	Input and output
 6.11	Modules
 6.13	Programs

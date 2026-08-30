@@ -364,7 +364,28 @@ struct pas_file {
   struct pas_file *prev_open, *next_open;
 };
 
-static struct pas_file *pas_open_files;
+/* AP 6.9.3.12 (ADR-0268): the runtime's per-activation bookkeeping is
+ * **thread-local**, and every list below carries the keyword for one reason.
+ *
+ * Each of them is a stack of what the *current chain of activations* owns --
+ * the files a block opened, the handles it holds, the deferred statements it
+ * armed, the string temporaries the statement is using. A task is a second
+ * chain of activations, so it needs a second stack of each, and sharing one
+ * is a data race on a doubly-linked list that nothing locks.
+ *
+ * ThreadSanitizer found this on the first run of the first program that
+ * spawned two tasks, in `pas_handle_done`: two threads unlinking their own
+ * handle slots from one global list. It is not a race a test could have found
+ * by comparing output -- both orders produce the same answer nearly always --
+ * which is why the evidence for this feature is a sanitizer and not a golden.
+ *
+ * `_Thread_local` is ISO C11 (§6.7.1) and not POSIX, so this costs the
+ * runtime's conformance nothing. What it costs is storage: the string arena
+ * is a megabyte, and a program with eight tasks has eight of them. That is
+ * the honest price of a share-nothing model where the arena is a stack --
+ * the alternative is a lock on every string temporary, which would make
+ * every single-threaded program pay for a feature it does not use. */
+_Thread_local static struct pas_file *pas_open_files;
 
 /* AP 6.4.12 (ADR-0174): a handle is a foreign address this program owns and
  * the routine that releases it -- a FILE * and fclose, a DIR * and closedir.
@@ -383,7 +404,7 @@ struct pas_handle {
 _Static_assert(sizeof(struct pas_handle) <= PAS_HANDLE_SIZE,
                "PAS_HANDLE_SIZE is smaller than struct pas_handle");
 
-static struct pas_handle *pas_live_handles;
+_Thread_local static struct pas_handle *pas_live_handles;
 
 void pas_handle_init(void *slot, void *closer) {
   struct pas_handle *h = slot;
@@ -476,7 +497,7 @@ struct pas_defer {
 _Static_assert(sizeof(struct pas_defer) <= PAS_DEFER_SIZE,
                "PAS_DEFER_SIZE is smaller than struct pas_defer");
 
-static struct pas_defer *pas_live_defers;
+_Thread_local static struct pas_defer *pas_live_defers;
 
 void pas_defer_init(void *slot, void *run, void *frame) {
   struct pas_defer *d = slot;
@@ -2209,7 +2230,7 @@ _Static_assert(sizeof(int) == PAS_STR_LENGTH_BYTES,
                "which this runtime reads through an int");
 
 #define PAS_STR_ARENA (1 << 20)
-static char pas_str_arena[PAS_STR_ARENA];
+_Thread_local static char pas_str_arena[PAS_STR_ARENA];
 
 /* How much of the arena is in use, and the one datum the generated code shares
  * with this file rather than reaching through a function. It is named
@@ -2219,7 +2240,7 @@ static char pas_str_arena[PAS_STR_ARENA];
  * could not be optimised away. It is an `int` for the same reason a
  * variable-string's length is: the compiler writes both as an LLVM i32, and
  * the assertion above is what ties the two spellings together. */
-int pas_str_at;
+_Thread_local int pas_str_at;
 
 /* Both ways to run out are errors, and they are different mistakes: one value
  * too big for the arena however empty it is, against a statement holding more

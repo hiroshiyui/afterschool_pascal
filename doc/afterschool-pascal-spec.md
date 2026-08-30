@@ -1579,6 +1579,55 @@ NOTE 6 — This clause is what lets a routine parameterised by a type (6.7.3.5)
 read an element type off the container it was given, instead of being handed
 the same type twice. `lib/dialect/pascontainer.pas` is the caller.
 
+#### 6.4.16 Channel-types [added]
+
+A channel-type denotes a bounded queue of values that two activations running
+concurrently may both name, and it is the **only** such thing in this language
+(ADR-0201, ADR-0268).
+
+**6.4.16.1 The denoter.**
+
+    channel-type = 'channel' '[' constant-expression ']' 'of' type-denoter .
+
+Neither `channel` nor the bracketed capacity is a word-symbol. A type-denoter
+that is an identifier is a type-name, and no type-name may be followed by `[` —
+a schema production takes `(` and `array` is a word-symbol — so the
+juxtaposition is one no conforming program can have written in this position
+(6.1.10, ADR-0140). A program declaring a type named `channel` writes
+`channel = …` and `var c: channel;`, whose second token is `=` or `;`, and is
+untouched.
+
+The constant-expression shall be an ordinal constant greater than zero. It is
+the number of values the channel holds before a send waits.
+
+**6.4.16.2 A channel is a handle.** A channel-type shall be a handle-type
+(6.4.12) whose releasing routine is this processor's. Everything 6.4.12 says of
+a handle shall hold of a channel: it has no copy, it is released when the
+variable holding it ceases to exist, `release` (6.4.12.5) releases it earlier,
+and it may be compared with `nil` and with nothing else.
+
+NOTE 1 — A kind of its own was considered and refused. Everything a channel
+needs from the language is what a handle already has, so a second kind would be
+a parallel mechanism where a field does — and every routine that asks a
+question about a handle would have had to be taught a second answer.
+
+NOTE 2 — Unlike every other handle, a channel-variable does **not** start
+empty: its capacity is part of its type, so there is nothing left for an
+assignment to decide and no birth for a program to write. That is why
+`channel [8] of integer` is a declaration rather than a constructor, and it is
+the one place 6.4.12.2's "shall be empty when its block is activated" does not
+apply.
+
+**6.4.16.3 What a channel may carry.** The component type shall be
+**transferable**: it shall contain no pointer-type, no file-type, no
+handle-type, no owned-pointer-type, no slice and no procedural type, at any
+depth.
+
+NOTE — What crosses between two activations is a *value*, and a value holding a
+reference is a name for something the other side does not own. The rule is
+asked structurally rather than of the kind, because a record of records of
+pointers is as unsendable as a pointer.
+
 ### 6.5 Declarations and denotations of variables
 
 #### 6.5.3 Component-variables [extended]
@@ -2378,6 +2427,74 @@ NOTE 3 — The restriction is per program-component. Two modules of one program
 may each declare the same foreign name; §6.13 translates them separately, each
 emits its own declaration, and the linker resolves both to one symbol.
 
+**6.7.8 Task-declarations [added].**
+
+    task-declaration = 'task' identifier formal-parameter-list? ';' block .
+
+A task-declaration shall declare a procedure whose activation may be commenced
+only by a spawn-statement (6.9.3.12), and a procedure-statement shall not
+commence one. It shall not have a directive; in particular it shall not be an
+external-declaration (6.7.7), a task's block being this program's.
+
+`task` is not a word-symbol. A declaration-part admits only `label`, `const`,
+`type`, `var`, `procedure`, `function` and `begin`, every one of them a
+word-symbol, so an identifier in this position is already a syntax error in
+both standards and the dialect may spell what it likes with one (ADR-0140). The
+second token is required to be an identifier as well, so a program that has
+written `task` alone gets the diagnostic it got before.
+
+**6.7.8.1 What may cross into a task.** Every formal parameter of a
+task-declaration shall be a value parameter, and its type shall be either
+transferable (6.4.16.3) or a channel-type.
+
+It shall not be a variable parameter, and it shall not be a procedural or
+functional parameter (§6.7.3.4, §6.7.3.5).
+
+NOTE 1 — **This clause is where share-nothing is enforced, and it is the whole
+of it.** A task's body cannot name a variable of the activation that spawned
+it except through a formal: this language has no address-of operator, `new` is
+the only producer of a pointer, and 6.4.16.3 keeps a pointer out of a channel.
+So a rule about formal parameters is a rule about everything a task can reach.
+
+NOTE 2 — A variable parameter would be a second name for a variable of another
+activation, running at the same time — the escaping alias this language has
+never had (ADR-0201). A procedural parameter would carry the activation it runs
+under, which is another task's.
+
+NOTE 3 — A channel is the exception and is the only one. What crosses is the
+one word the channel is, and the variable the value arrives in takes a
+reference to it, so the two activations name one object — which is what a
+channel is for, and it is safe because that object is the only one in this
+language with a lock in it.
+
+NOTE 4 — A handle that is not a channel is refused, so a task cannot yet be
+*given* a stream or a socket. 6.4.12.7's move exists and this clause does not
+use it; that is a boundary of this increment rather than a property of the
+model (ADR-0267, ADR-0268).
+
+**6.7.8.2 What a task's body may name.** A variable-access occurring in the
+block of a task-declaration, or in the block of any procedure or function
+declared within it, shall denote a variable declared in that task-declaration
+or in a block within it.
+
+NOTE 1 — 6.7.8.1 is not the whole rule, and believing it was is a mistake this
+document records rather than hides. Pascal's scope rules let a block name a
+variable of an enclosing block, and a program's own variables enclose every
+block in it — so two activations of a task incrementing one global is a data
+race that a rule about *formal parameters* cannot see. This clause is where it
+is refused.
+
+NOTE 2 — The rule is asked of the variable's **owner** and reaches nothing
+else: a constant, a type, a routine, a required identifier and a channel handed
+in as a parameter all remain nameable. What a task may not have is a second
+name for storage another activation may be writing.
+
+NOTE 3 — It is **not** transitive. A task may call a procedure declared outside
+it, and that procedure may name whatever its own scope admits — so a task can
+still reach a global through a call. Closing that needs a whole-program walk
+over the call graph, which this processor does not do, and it is recorded as
+unchecked rather than claimed (`doc/sop.md` §7).
+
 ### 6.8 Expressions [extended]
 
 #### 6.8.3 Operators [extended]
@@ -2564,6 +2681,78 @@ this language for it to raise, and 6.9.3.11.2 gives it nothing to report to.
 NOTE 5 — An armed statement is not executed when the program is terminated by
 an error being detected (§3.2, Annex A), because such a termination is not the
 termination of an activation.
+
+#### 6.9.3.12 Spawn-statements [added]
+
+    spawn-statement = 'spawn' procedure-identifier actual-parameter-list? .
+
+The procedure-identifier shall denote a task (6.7.8). Executing a
+spawn-statement shall commence an activation of that task which proceeds
+concurrently with the statement following, and shall not wait for it.
+
+The actual parameters shall be evaluated, and each value copied, before the
+activation commences.
+
+`spawn` is not a word-symbol, and the position is `defer`'s (6.9.3.11): a
+statement beginning with an identifier can continue only as a designator, as a
+call, or not at all, so an identifier after the name is a token no conforming
+program can have written there. `spawn;`, `spawn(x)` and `spawn := 3` all
+remain what a program that declared `spawn` meant by them.
+
+**6.9.3.12.1 The join.** Every activation a block commenced shall be complete
+before that block's activation ends, and before any variable of that block is
+released.
+
+NOTE 1 — **This is the whole safety argument of the construct.** A task's body
+is reached through a static link into the spawning activation's storage, and it
+holds a reference to whatever channels it was given. ADR-0201 observed that
+every alias in this language is safe *because* there is one thread of control —
+a variable parameter cannot outlive the call, because the caller is not running
+during it — and named two threads of control as the one thing that breaks that
+sentence. The join is what makes it true again.
+
+NOTE 2 — The order in the second sentence is not tidiness. The block's
+deferred statements (6.9.3.11) run statements of the block, and releasing its
+handles closes what a task may still be using, so both must happen after the
+join and not before.
+
+NOTE 3 — A spawn-statement shall not be a deferred statement (6.9.3.11.3),
+because a deferred statement is executed when the statement-sequence it stands
+in is completed, which is after the join: such a task would be joined by
+nothing.
+
+#### 6.9.3.13 The channel operations [added]
+
+**6.9.3.13.1 send.** The required procedure-identifier `send` shall take a
+channel-variable and an expression assignable to the channel's component type.
+The value shall be copied into the channel. Where the channel is full the
+activation shall wait until it is not; where the channel has been released
+(6.4.12.5) it shall be an error.
+
+**6.9.3.13.2 receive.** The required function-identifier `receive` shall take a
+channel-variable and a variable of the channel's component type, and shall
+yield a value of type `boolean`. Where a value is available it shall be
+written into the variable and the result shall be *true*. Where the channel is
+empty the activation shall wait; where it is empty and has been released the
+result shall be *false* and the variable shall not be written.
+
+The variable shall be threatened (§6.9.4) as `read`'s is.
+
+NOTE 1 — One is a procedure and the other a function, and the asymmetry is the
+design. A send either happens or the program has lost track of who is
+listening, which is a fault of the kind this language stops for (Annex A). A
+receive has an ordinary second outcome — the channel is closed and drained —
+and that outcome *is* the loop condition a reader wants: `while receive(c, v)
+do` reads as what it does, where a procedure would need a flag beside it.
+
+NOTE 2 — A released channel is drained before the close is reported, so the
+values still in flight when a program closes a channel are delivered. That is
+what makes closing a job channel the way to tell a pool of workers that there
+is no more work.
+
+NOTE 3 — Both are required identifiers, so a program that declares its own
+`send` or `receive` keeps it (§6.1.3), which is `int64`'s and `exit`'s route
+(ADR-0128, ADR-0177).
 
 ### 6.10 Input and output [extended]
 

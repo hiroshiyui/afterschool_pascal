@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 446
-instrumented 18152
+uncovered 457
+instrumented 18613
 
 accept 0/4
 accumulate 0/84
@@ -86,17 +86,17 @@ chainhas 0/10
 chainnames 0/4
 chainrecof 0/3
 check 0/1
-checkarguments 6/234
+checkarguments 6/235
 checkarrayvalue 7/60
 checkbinary 6/165
 checkblock 0/25
-checkcall 24/273
+checkcall 24/275
 checkcase 0/82
 checkcomponentvalue 0/12
 checkconstdecl 0/32
 checkdeclarations 1/67
 checkdefer 0/14
-checkdeferbody 0/32
+checkdeferbody 0/34
 checkedforsetbase 0/29
 checkedforstore 0/2
 checkedforsubrange 0/52
@@ -121,6 +121,7 @@ checkpendingimplementations 0/8
 checkprocargument 0/46
 checkprocbody 0/45
 checkread 3/71
+checkreceive 5/27
 checkrecordvalue 0/92
 checkrelease 0/14
 checkresultassign 4/37
@@ -130,11 +131,13 @@ checkschemadomain 0/51
 checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
-checkstdproc 19/347
-checkstmt 2/237
+checkspawn 0/11
+checkstdproc 23/367
+checkstmt 2/245
 checkstringargs 0/13
 checkstructvalue 0/39
-checktake 2/20
+checktake 0/20
+checktaskformals 0/25
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
@@ -142,7 +145,7 @@ checkwith 1/101
 checkwrite 2/83
 checkwriteargs 0/20
 claimboundsslot 0/7
-closefiles 0/18
+closefiles 0/24
 collecttagtests 0/31
 compile 0/50
 complexcall 0/19
@@ -173,7 +176,7 @@ copytype 0/24
 curcol 0/1
 curline 0/1
 declare 0/24
-declareprocheading 0/40
+declareprocheading 0/46
 declareprocs 0/12
 declareschema 9/54
 def 0/5
@@ -215,7 +218,7 @@ dumpoptional 0/7
 dumpproc 0/36
 dumpprogram 0/74
 dumprecordlayout 0/9
-dumpstmt 0/195
+dumpstmt 0/207
 dumpstmtlist 0/4
 dumpstrchild 0/5
 dumpsymbols 1/16
@@ -236,9 +239,9 @@ dynsize 0/47
 earlier 0/1
 emitaddress 3/191
 emitarrayvalue 0/24
-emitassign 0/74
+emitassign 0/88
 emitbinary 4/204
-emitcall 8/522
+emitcall 8/539
 emitcase 0/83
 emitcheckedarith 0/45
 emitcomplexbinary 0/63
@@ -249,7 +252,7 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/132
+emitdeclares 0/145
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
@@ -263,7 +266,7 @@ emitforin 0/110
 emitforintext 0/71
 emitframealiases 0/14
 emitframeglobal 0/6
-emitframetype 0/14
+emitframetype 0/17
 emitglobals 0/11
 emitgoto 0/10
 emithandletest 0/11
@@ -279,7 +282,7 @@ emitnewtuple 7/63
 emitoptionaltest 0/13
 emitownrels 0/38
 emitprocargument 0/27
-emitprocbody 0/39
+emitprocbody 0/40
 emitprocs 0/8
 emitread 0/49
 emitreadargs 0/65
@@ -290,8 +293,9 @@ emitset 0/63
 emitsetbinary 0/61
 emitshortcircuit 0/21
 emitslicevalue 0/87
-emitstdproc 2/171
-emitstmt 1/37
+emitspawn 0/76
+emitstdproc 2/206
+emitstmt 1/38
 emitstore 0/34
 emitstring 0/197
 emitstringcompare 12/33
@@ -300,6 +304,8 @@ emitstringstore 0/2
 emitstringstorevalue 0/41
 emitstringvalue 2/2
 emitstructvalue 0/3
+emittaskargtype 0/7
+emittaskwrapper 0/58
 emittextcompare 1/28
 emittransfer 0/110
 emittrapdisc 0/13
@@ -318,7 +324,7 @@ emitwriteargs 12/92
 emptyargumentlist 0/6
 endsequence 0/6
 ensurestdfile 0/16
-enterframe 0/204
+enterframe 0/214
 enterlevel 0/5
 enumconstof 0/9
 enumcount 0/6
@@ -399,6 +405,7 @@ initfiles 0/12
 initialstateinto 0/9
 initialstateof 0/12
 initinitialstates 0/7
+inittasks 0/6
 inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
@@ -423,6 +430,7 @@ isarith 0/1
 isarray 0/1
 isboolean 0/2
 iscallvalue 0/5
+ischannel 0/1
 ischar 0/2
 ischararray 0/5
 iscomplex 0/1
@@ -489,7 +497,7 @@ llsize 3/19
 lookslikestructuredvalue 0/20
 lookslikesubrange 0/23
 lookup 0/5
-lookupbuiltin 0/54
+lookupbuiltin 0/56
 lookupinscope 0/6
 lookupkeyword 0/17
 lookupname 8/30
@@ -516,9 +524,9 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/84
+newnode 0/86
 newresultslot 0/7
-newsymbol 0/93
+newsymbol 0/95
 newtype 0/41
 nextformal 0/4
 nonvarying 3/42
@@ -549,7 +557,7 @@ parameterof 0/6
 parseactualparameters 0/6
 parseargs 10/127
 parsearraytype 0/17
-parseblock 0/45
+parseblock 0/50
 parseboundident 1/12
 parsecase 0/38
 parsecaselabel 0/8
@@ -566,7 +574,7 @@ parsefieldgroups 0/19
 parsefor 0/29
 parseformaldiscriminants 0/35
 parseformalparameters 0/34
-parseidentstatement 0/68
+parseidentstatement 0/81
 parseif 0/11
 parseimportpart 0/58
 parselabel 0/16
@@ -578,7 +586,7 @@ parsemoduleparts 0/30
 parsenamelist 1/22
 parsepointertypeargs 0/11
 parseprimary 2/115
-parseprocheading 0/48
+parseprocheading 0/50
 parseprocheadingonly 0/3
 parseprocorfunc 0/19
 parseprocparam 0/23
@@ -592,7 +600,7 @@ parsesimpleexpr 1/29
 parsestatement 0/32
 parsestructuredvalue 0/29
 parseterm 0/22
-parsetypedenoter 6/140
+parsetypedenoter 6/153
 parsetypeexpr 0/7
 parsetypepart 0/21
 parsevariantpart 0/59
@@ -637,10 +645,12 @@ putop 0/2
 putparamtypes 0/26
 putprocsignature 0/9
 putslottype 0/4
-putstmtword 1/17
+putstmtword 2/18
 putstoragetypeat 1/4
 putstructat 0/21
 putsymkindword 0/13
+puttaskargtype 0/2
+puttaskname 0/1
 putusenumbers 0/1
 reaches 0/6
 readimportsin 2/15
@@ -666,7 +676,7 @@ resolvearray 0/25
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
-resolvehandle 0/14
+resolvehandle 2/33
 resolveinquiry 1/41
 resolvename 0/12
 resolveoptional 0/20
@@ -684,10 +694,10 @@ resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
 roundup 0/1
-row 0/54
+row 0/55
 runcodegen 0/91
 rundefersreversed 0/4
-runsema 2/81
+runsema 2/82
 samelink 0/1
 sametuple 0/7
 schemahastypedisc 0/6
@@ -728,6 +738,8 @@ tagfieldat 0/4
 tagtypeat 0/4
 targetindex 0/4
 targetname 0/3
+tasksetbase 0/4
+tasksetslot 0/4
 textofcapacity 1/23
 threatened 0/30
 threatsym 0/5
@@ -735,6 +747,7 @@ tocomplex 0/5
 toint64 0/8
 tokenize 0/15
 toreal 0/7
+transferable 0/14
 transferargs 0/10
 typeargument 0/6
 typeend 0/4
@@ -745,12 +758,12 @@ variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
 version 0/1
-walkfiles 0/115
+walkfiles 0/127
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
-writecontext 7/78
+writecontext 8/79
 writedistincttypenote 0/38
 writekeyword 0/2
 writekwword 0/3

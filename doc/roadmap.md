@@ -322,12 +322,26 @@ and does not find:
 **And two absences in the language rather than the library**, both deliberate
 and both now the shape of a decision rather than an omission:
 
-- **Concurrency.** Not one construct: no thread, task, process or channel.
-  ADR-0201 decided what it must be — share-nothing, a task owning what it is
-  given — and declined to build it, and the trigger it named was met and
-  answered by a library routine instead. What would demand it now is a slow
-  client not slowing the others, which is the language server's `didChange`
-  arriving mid-compile. See the concurrency row in
+- ~~**Concurrency.**~~ **Built** (ADR-0268), and built as ADR-0201 designed it
+  four increments earlier: `task`, `spawn`, `channel [n] of T`, `send` and
+  `receive`, share-nothing, with no word-symbol reserved and every spelling in
+  one of the three free positions that record itself listed. **ADR-0116's bar
+  was not met and is not claimed to be** — nothing in this tree wants it, and
+  the four times something looked as though it did, something cheaper answered
+  and is recorded above. What the four-increment delay bought is that the
+  design was settled before a line was written, and the two things that had to
+  be discovered were discovered by probes rather than by argument: the formals
+  rule is **not** the whole of share-nothing, because Pascal's scope rules let
+  a nested block name an enclosing one's variables and four tasks incrementing
+  one global printed the right answer three times out of three (AP 6.7.8.2);
+  and the runtime's per-activation bookkeeping had to become thread-local,
+  which **ThreadSanitizer** found on the first run of the first two-task
+  program and which no golden could ever have held. That second one forced the
+  first reseed outside a release, the arena's cursor being a name the emitted
+  module carries. What is still not here: a task cannot be *given* a handle
+  (AP 6.4.12.7's move exists and the argument block does not use it), there is
+  no way to wait for one task, no select over several channels, and no
+  timeout. See the concurrency row in
   [where the ideas come from](#where-the-ideas-come-from).
 - **Generics have no constraints**, and what waits on them is now known to be
   less than this page thought. The generic map was filed behind them and

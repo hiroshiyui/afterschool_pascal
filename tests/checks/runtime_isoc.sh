@@ -311,10 +311,55 @@ if [[ -n $uni_extra ]]; then
   exit 1
 fi
 
+# --- pass 5: and the concurrency unit is bounded by one header --------------
+#
+# runtime/pasrt_task.c is AP 6.4.16's channel and AP 6.9.3.12's task set
+# (ADR-0268). It is the fourth translation unit and the second bounded by its
+# **headers** rather than by a list of names -- one header beyond ISO C:
+#
+#     <pthread.h>
+#
+# A system without it loses the concurrency construct and not the language,
+# which is pasrt_posix.c's own bargain (ADR-0186). Unlike that file it holds
+# `pas_` names, because what it implements is what the *compiler emits* rather
+# than what a program may bind -- so the `pasx_` rule is the wrong question
+# here and the header list is the right one.
+task_src=$root/runtime/pasrt_task.c
+if [[ ! -f $task_src ]]; then
+  echo "runtime-isoc: no runtime/pasrt_task.c -- if the concurrency runtime" \
+       "moved, this check moved with it (ADR-0268)" >&2
+  exit 1
+fi
+task_allowed="pthread.h"
+task_extra=$(grep -oE '^[[:space:]]*#[[:space:]]*include[[:space:]]*<[^>]+>' \
+               "$task_src" |
+             grep -oE '<[^>]+>' | tr -d '<>' | sort -u |
+             while read -r hh; do
+               case " $ISO_HEADERS $task_allowed pasrt.h " in
+                 *" $hh "*) ;;
+                 *) echo "$hh" ;;
+               esac
+             done)
+if [[ -n $task_extra ]]; then
+  echo "runtime-isoc: runtime/pasrt_task.c includes a header outside ISO C" \
+       "and its one catalogued one:" >&2
+  for hh in $task_extra; do echo "          $hh" >&2; done
+  echo "        <pthread.h> is the whole of what a port has to have for the" \
+       "concurrency construct. Adding a second is a decision for an ADR." >&2
+  exit 1
+fi
+if ! clang -std=c11 -Wall -Wextra -Werror -c "$task_src" -I"$root/runtime" \
+     -o "$work/task.o" 2>"$work/task.err"; then
+  echo "runtime-isoc: runtime/pasrt_task.c is not clean POSIX C11:" >&2
+  head -20 "$work/task.err" >&2
+  exit 1
+fi
+
 n=$(echo "$found" | wc -l)
 h=$(echo "$posix_named" | wc -l)
 echo "runtime-isoc: runtime/pasrt.c is strict ISO C11 apart from $n catalogued" \
      "names ($(echo $found | tr '\n' ' ')), runtime/pasrt_posix.c is bounded by" \
      "$h catalogued headers ($(echo $posix_named | tr '\n' ' ')),"\
-     "runtime/pasrt_unicode.c needs no catalogue at all, and the" \
+     "runtime/pasrt_unicode.c needs no catalogue at all," \
+     "runtime/pasrt_task.c is bounded by <pthread.h> alone, and the" \
      "emitted module names nothing but its own"

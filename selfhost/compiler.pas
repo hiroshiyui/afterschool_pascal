@@ -1723,6 +1723,41 @@ begin
   writeln(ircode, ', i32 0, i32 ', DeferBase(p):1)
 end;
 
+{ AP 6.9.3.12: where this block's task set sits -- after the defer record and
+  its flags, which is after the jump record, which is after the variables. The
+  rule is one rule said three times: a slot nothing in the source can name
+  goes at the end, so no frame index a *name* resolves to can move. }
+function TaskSetBase(p: symPtr): integer;
+var k: integer;
+begin
+  k := 1 + p^.frameCount;
+  if p^.nlLabels <> nil then k := k + 1;
+  if p^.deferCount > 0 then k := k + 2;
+  TaskSetBase := k
+end;
+
+procedure TaskSetSlot(p: symPtr; var frame: str; var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
+  PutOp(frame);
+  writeln(ircode, ', i32 0, i32 ', TaskSetBase(p):1)
+end;
+
+{ The wrapper emitted for a task, and the reason there is one. `pthread_create`
+  takes a pointer to a C function of one argument, and a Pascal routine is a
+  code-and-link pair (ADR-0030), so no procedure of the program can be handed
+  to C -- ADR-0201's finding 4. What crosses instead is *this*, which the compiler emits: it
+  unpacks an argument block the spawn filled and calls the task's body with the
+  static link and the actuals. The Pascal side never names it.
+
+  A dot keeps the name out of a program's reach, as the defer runner's does:
+  ReservedForeignName refuses any foreign name containing one (ADR-0144). }
+procedure PutTaskName(p: symPtr);
+begin
+  write(ircode, '@p', p^.irId:1, '.task')
+end;
+
 procedure DeferFlag(p: symPtr; var frame: str; k: integer; var v: str);
 begin
   Def(v);
@@ -2376,20 +2411,43 @@ procedure WalkFiles(addr: str; t: typePtr; init: boolean;
 var comp, istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     f: fieldPtr;
     v: variantPtr;
-    nohdr, count, iv, i, more, elem, next, zero, one, held: str;
+    nohdr, count, iv, i, more, elem, next, zero, one, held, chan: str;
 begin
   { AP 6.4.12 (ADR-0174): a handle is set up empty with its closer and torn
     down by the runtime, which releases what it holds -- the file's own two
     calls, for the file's reason: the storage is going away. }
   if IsHandle(t) then begin
     if init then begin
-      StrClear(nohdr);
-      AppendPool(nohdr, t^.handleAt, t^.handleLen);
-      write(ircode, '  call void @pas_handle_init(ptr ');
-      PutOp(addr);
-      write(ircode, ', ptr @');
-      PutOp(nohdr);
-      writeln(ircode, ')')
+      { AP 6.4.16: a channel-type's closer is the runtime's and there is no
+        foreign name to write; and unlike every other handle, the variable
+        does not start empty. A channel exists for as long as the variable
+        that declares it -- its capacity is part of its type, so there is
+        nothing left for an assignment to decide and no birth for a program to
+        write. That is why `channel [8] of integer` is a declaration and not a
+        constructor. }
+      if IsChannel(t) then begin
+        write(ircode, '  call void @pas_handle_init(ptr ');
+        PutOp(addr);
+        writeln(ircode, ', ptr @pas_chan_close)');
+        Def(chan);
+        write(ircode, 'call ptr @pas_chan_new(i64 ', LlSize(t^.elem):1,
+              ', i64 ', t^.hi:1, ')');
+        writeln(ircode);
+        write(ircode, '  call void @pas_handle_set(ptr ');
+        PutOp(addr);
+        write(ircode, ', ptr ');
+        PutOp(chan);
+        writeln(ircode, ')')
+      end
+      else begin
+        StrClear(nohdr);
+        AppendPool(nohdr, t^.handleAt, t^.handleLen);
+        write(ircode, '  call void @pas_handle_init(ptr ');
+        PutOp(addr);
+        write(ircode, ', ptr @');
+        PutOp(nohdr);
+        writeln(ircode, ')')
+      end
     end
     else begin
       write(ircode, '  call void @pas_handle_done(ptr ');
@@ -2885,6 +2943,10 @@ end;
 { ============================== expressions ============================== }
 
 procedure EmitExpr(e: nodePtr; var v: str); forward;
+{ AP 6.9.3.12: written below with the task wrapper it pairs with, because the
+  two are one construct read from its two ends -- the statement that fills an
+  argument block and the function that unpacks it. }
+procedure EmitSpawn(s: nodePtr); forward;
 procedure EmitAddress(e: nodePtr; var v: str); forward;
 { 6.8.7's structured-value-constructor, built into `into` -- the hidden frame
   slot Sema gave it when `into` is empty, and otherwise the component or the
@@ -5611,6 +5673,30 @@ begin
     PutOp(x);
     writeln(ircode, ')')
   end
+  { AP 6.9.3.13's receive. The channel's own word out of the slot, and the
+    address of the variable the value is written into -- the runtime copies
+    `esize` bytes into it, which is what makes the reader's value share
+    nothing with the sender's. Answers 1 with a value and 0 when the channel
+    is closed and drained, which is the loop condition and the whole reason
+    this is a function where `send` is a procedure. }
+  else if e^.clBuiltin = biReceive then begin
+    EmitAddress(e^.clArgs, x);
+    Def(y);
+    write(ircode, 'call ptr @pas_handle_lend(ptr ');
+    PutOp(x);
+    writeln(ircode, ')');
+    EmitAddress(e^.clArgs^.next, c_);
+    Def(w);
+    write(ircode, 'call i32 @pas_chan_receive(ptr ');
+    PutOp(y);
+    write(ircode, ', ptr ');
+    PutOp(c_);
+    writeln(ircode, ')');
+    Def(v);
+    write(ircode, 'icmp ne i32 ');
+    PutOp(w);
+    writeln(ircode, ', 0')
+  end
   else if (e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim) or
           (e^.clBuiltin = biArgument) then
     EmitStringValue(e, v)
@@ -7939,6 +8025,7 @@ end;
 
 procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
+    chSlot, chan, chVal, chTmp, chMark: str;
     disposeValue: boolean;
     status: str;
     domain, idx: typePtr; head, msg, k: integer;
@@ -7979,6 +8066,71 @@ begin
     else
       writeln(ircode, '  br label %L', contBlock:1);
     StartBlock(NewBlock)
+  end
+  { AP 6.9.3.13's send. The value is evaluated into storage of this
+    activation and the runtime copies it into the channel, so what the reader
+    gets is a copy and not a name -- share-nothing, at the one place a value
+    crosses between two activations.
+
+    The temporary is an `alloca`, and here that is safe for the reason
+    ADR-0102 gives: it is claimed once per *statement* and the statement is
+    not a loop. A send inside a loop would claim one per iteration, so the
+    storage is a frame slot Sema gave the statement... which it is not, and
+    this is the one place the emitter is knowingly at ADR-0102's boundary --
+    see the send arm's note in doc/sop.md §7. }
+  else if s^.pcStd = spSend then begin
+    EmitAddress(s^.pcArgs, chSlot);
+    Def(chan);
+    write(ircode, 'call ptr @pas_handle_lend(ptr ');
+    PutOp(chSlot);
+    writeln(ircode, ')');
+    { A structured value has no register form (ADR-0017), so what a
+      designator of one yields *is* an address and the runtime copies from
+      it -- no temporary at all. }
+    if IsStructured(s^.pcArgs^.ntype^.elem) then begin
+      EmitAddress(s^.pcArgs^.next, chTmp);
+      write(ircode, '  call void @pas_chan_send(ptr ');
+      PutOp(chan);
+      write(ircode, ', ptr ');
+      PutOp(chTmp);
+      writeln(ircode, ')')
+    end
+    { A scalar needs somewhere for the runtime to copy from, and the storage
+      is claimed and given back around this one statement.
+
+      ADR-0102's rule is that an `alloca` is only safe where the emitter
+      reaches it once per activation, and a send inside a loop is exactly
+      where it is not -- so the stack pointer is saved and restored, which
+      bounds the claim to the statement rather than to the iteration. A frame
+      slot would have been the other answer and needs one per send-statement
+      *type*, which the frame layout is emitted too early to know; passing the
+      value in a register would need the runtime to know its width, and
+      taking the low bytes of a word is an assumption about byte order this
+      compiler does not make. }
+    else begin
+      Def(chMark);
+      writeln(ircode, 'call ptr @llvm.stacksave.p0()');
+      EmitExpr(s^.pcArgs^.next, chVal);
+      Def(chTmp);
+      write(ircode, 'alloca ');
+      PutLlType(s^.pcArgs^.ntype^.elem);
+      writeln(ircode);
+      write(ircode, '  store ');
+      PutLlType(s^.pcArgs^.ntype^.elem);
+      write(ircode, ' ');
+      PutOp(chVal);
+      write(ircode, ', ptr ');
+      PutOp(chTmp);
+      writeln(ircode);
+      write(ircode, '  call void @pas_chan_send(ptr ');
+      PutOp(chan);
+      write(ircode, ', ptr ');
+      PutOp(chTmp);
+      writeln(ircode, ')');
+      write(ircode, '  call void @llvm.stackrestore.p0(ptr ');
+      PutOp(chMark);
+      writeln(ircode, ')')
+    end
   end
   else if s^.pcStd = spHalt then begin
     { The operand is computed first: the emitter is sequential, so anything
@@ -9195,6 +9347,7 @@ begin
       nkWith: EmitWith(s);
       nkCase: EmitCase(s);
       nkGoto: EmitGoto(s);
+      nkSpawn: EmitSpawn(s);
       nkLabeled: EmitLabeled(s);
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
@@ -9297,6 +9450,33 @@ begin
   end
 end;
 
+{ AP 6.9.3.12: the type of one field of a task's argument block.
+
+  It is the formal's *slot* type, but for a channel -- where the slot is a
+  handle record and what crosses is the one word the channel is. The block is
+  what the two activations have instead of a shared stack, so every field is
+  either a value copied into it or the address of an object with a lock. }
+procedure PutTaskArgType(f: symPtr);
+begin
+  if IsChannel(f^.stype) then write(ircode, 'ptr')
+  else PutSlotType(f)
+end;
+
+{ The argument-block type of a task: the static link, then one field per
+  formal, in order. Named after the task and emitted beside its frame type. }
+procedure EmitTaskArgType(p: symPtr);
+var l: symListPtr;
+begin
+  write(ircode, '%targ', p^.irId:1, ' = type { ptr');
+  l := p^.params;
+  while l <> nil do begin
+    write(ircode, ', ');
+    PutTaskArgType(l^.sym);
+    l := l^.next
+  end;
+  writeln(ircode, ' }')
+end;
+
 procedure EmitFrameType(p: symPtr);
 var l: symListPtr;
 begin
@@ -9324,7 +9504,15 @@ begin
     write(ircode, ', [', deferSize div 8:1, ' x i64]');
     write(ircode, ', [', p^.deferCount:1, ' x i8]')
   end;
-  writeln(ircode, ' }')
+  { AP 6.9.3.12: the set of tasks this block has spawned, so it can join every
+    one before its activation ends. Last, for the two records above's reason,
+    and absent from a block that spawns nothing -- so the construct costs a
+    program that does not use it exactly nothing, which is ADR-0175's rule
+    applied a third time. }
+  if p^.spawns then
+    write(ircode, ', [', taskSetSize div 8:1, ' x i64]');
+  writeln(ircode, ' }');
+  if p^.isTask then EmitTaskArgType(p)
 end;
 
 procedure DeclareProcs(b: nodePtr);
@@ -9368,7 +9556,13 @@ var l: symListPtr; addr: str;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
+    { AP 6.7.8.1: a task's channel parameter is installed by the prologue --
+      the value crossed and the slot takes a reference to it -- so this walk
+      must not *create* a channel over it. Every other handle parameter is a
+      var parameter and was already excluded; this is the one value parameter
+      of a handle-type a routine of this program can have. }
+    if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) and
+       not (IsChannel(l^.sym^.stype) and (l^.sym^.kind = skParam)) then begin
       case l^.sym^.binding of
         fbInternal:  binding := 0;
         fbStdInput:  binding := 1;
@@ -9387,6 +9581,20 @@ end;
   record goes on the runtime's list, so that a `goto` past this block and a
   `halt` can run what this block armed. A block that defers nothing emits none
   of it. }
+{ AP 6.9.3.12: the task set starts empty. An `alloca` does not, and the
+  runtime reads the count before it reads the array. }
+procedure InitTasks(p: symPtr);
+var frame, slot: str;
+begin
+  if p^.spawns then begin
+    FrameAt(p^.level, frame);
+    TaskSetSlot(p, frame, slot);
+    write(ircode, '  call void @pas_tasks_init(ptr ');
+    PutOp(slot);
+    writeln(ircode, ')')
+  end
+end;
+
 procedure InitDefers(p: symPtr);
 var frame, rec, flag: str; k: integer;
 begin
@@ -9438,6 +9646,28 @@ begin
     what a `goto` inside the block left pending. Calling it twice is a no-op
     -- pas_defer_done clears the runner as it unlinks -- which is what lets a
     module's finalization share this epilogue with its initialization. }
+  { AP 6.9.3.12: **join before releasing anything**, and this is the whole
+    safety argument of the construct rather than a tidiness.
+
+    A task's body is a nested routine reached through a static link into this
+    frame, and it was lent whatever channels it was given. So it must not
+    outlive either -- and everything below this releases something: the defer
+    runner runs statements of this block, the file walk closes this block's
+    files and handles, and the frame itself goes away when the activation
+    ends. Joining first is what makes ADR-0201's sentence -- *a borrow cannot
+    outlive the call because the caller is not running during it* -- true
+    again in the presence of two threads of control, which is the one sentence
+    that record said two threads break.
+
+    It is emitted first for the same reason it is placed last in the frame:
+    the ordering is the rule, and the rule is stated in one place. }
+  if p^.spawns then begin
+    FrameAt(p^.level, frame);
+    TaskSetSlot(p, frame, rec);
+    write(ircode, '  call void @pas_tasks_join(ptr ');
+    PutOp(rec);
+    writeln(ircode, ')')
+  end;
   if p^.deferCount > 0 then begin
     FrameAt(p^.level, frame);
     DeferRecord(p, frame, rec);
@@ -10055,6 +10285,30 @@ begin
         StrClear(shdr);
         EmitStringStoreValue(slot, l^.sym^.stype, arg, arglen, shdr)
       end
+      { AP 6.7.8.1: a task's channel parameter. The value crosses and the
+        formal takes a *reference* to the channel -- which is the one thing
+        this language lets two activations name, and the reason it may is
+        that the object is the only one here with a mutex in it.
+
+        The slot is an ordinary handle slot, so `send`, `receive` and every
+        other reader of it need nothing added; what differs is the closer.
+        An owned channel variable is released by `pas_chan_close`, which
+        marks it closed and drops a reference; this one is released by
+        `pas_chan_unref`, which drops the reference and does **not** close --
+        because a worker that has finished must not close the channel its
+        colleagues are still draining. Two closers for one type, and which
+        one a variable gets says whether it owns the channel or shares it. }
+      else if (l^.sym^.kind <> skVarParam) and IsChannel(l^.sym^.stype) then
+      begin
+        write(ircode, '  call void @pas_handle_init(ptr ');
+        PutOp(slot);
+        writeln(ircode, ', ptr @pas_chan_unref)');
+        write(ircode, '  call void @pas_handle_set(ptr ');
+        PutOp(slot);
+        write(ircode, ', ptr ');
+        PutOp(arg);
+        writeln(ircode, ')')
+      end
       else if (l^.sym^.kind <> skVarParam) and IsStructured(l^.sym^.stype) then
       begin
         { A structured value parameter arrives as the caller's address; the
@@ -10090,6 +10344,7 @@ begin
   InitInitialStates(p);
   InitFiles(p);
   InitDefers(p);
+  InitTasks(p);
   { 6.2.3.6 orders the *commencements* of the modules that supply the
     main-program-block before the program's own, and written order is such an
     order -- 6.2.2.9 already puts a module-heading before everything that
@@ -10134,6 +10389,211 @@ end;
 
   The list is already in reverse source order (Sema pushes onto it), so
   walking it forwards is the order 6.9.3.11 requires. }
+{ AP 6.9.3.12's wrapper: what `pthread_create` is actually given.
+
+  A Pascal routine is a code address *and* the activation it runs under
+  (ADR-0030) and C takes one word, so no procedure of this program can be
+  handed to a thread library -- ADR-0201's finding 4, and the reason
+  concurrency here had to be a language construct. This is the shape that
+  answers it: the compiler emits one C-callable function per task, taking the
+  argument block the spawn filled, and it unpacks the static link and the
+  actuals and makes an ordinary call. Nothing the program wrote becomes a
+  function pointer.
+
+  A structured value parameter is passed by address, as it is at every other
+  call site here -- and the address is the field *inside the block*, which the
+  thread owns and frees, so the callee's prologue copies from storage that
+  outlives the activation that spawned it. }
+procedure EmitTaskWrapper(p: symPtr);
+var l: symListPtr; a, fld, val, target: str; k: integer;
+    ops, opTail, o: opndPtr;
+begin
+  if not p^.isTask then exit;
+  writeln(ircode);
+  write(ircode, '; the thread entry of ');
+  WritePoolIr(p^.at, p^.len);
+  writeln(ircode);
+  write(ircode, 'define internal void ');
+  PutTaskName(p);
+  writeln(ircode, '(ptr %a) {');
+  BeginFunction(p);
+  StrClear(a);
+  StrAppend(a, '%');
+  StrAppend(a, 'a');
+  { Every operand is computed first and the call is written afterwards, which
+    the sequential emitter requires: `Def` begins an instruction, so a
+    getelementptr written between two arguments would land inside the
+    argument list. It is the shape EmitUserCall has, for the same reason. }
+  ops := nil;
+  opTail := nil;
+  Def(val);
+  write(ircode, 'load ptr, ptr ');
+  PutOp(a);
+  writeln(ircode);
+  AppendOpnd(ops, opTail, val, true, nil);
+  l := p^.params;
+  k := 1;
+  while l <> nil do begin
+    Def(fld);
+    write(ircode, 'getelementptr inbounds %targ', p^.irId:1, ', ptr ');
+    PutOp(a);
+    writeln(ircode, ', i32 0, i32 ', k:1);
+    { A structured value parameter travels as an address everywhere in this
+      emitter, so the field itself is what crosses -- and the block outlives
+      this activation, which a frame slot of the spawning one would not. }
+    if IsStructured(l^.sym^.stype) and not IsChannel(l^.sym^.stype) then
+      AppendOpnd(ops, opTail, fld, true, nil)
+    else if IsChannel(l^.sym^.stype) then begin
+      Def(val);
+      write(ircode, 'load ptr, ptr ');
+      PutOp(fld);
+      writeln(ircode);
+      AppendOpnd(ops, opTail, val, true, nil)
+    end
+    else begin
+      Def(val);
+      write(ircode, 'load ');
+      PutSlotType(l^.sym);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode);
+      AppendOpnd(ops, opTail, val, false, l^.sym^.stype)
+    end;
+    k := k + 1;
+    l := l^.next
+  end;
+  StrClear(target);
+  AppendProcName(target, p);
+  write(ircode, '  call void ');
+  PutOp(target);
+  write(ircode, '(');
+  o := ops;
+  while o <> nil do begin
+    if o <> ops then write(ircode, ', ');
+    if o^.asPtr then write(ircode, 'ptr') else PutLlType(o^.otype);
+    write(ircode, ' ');
+    PutOp(o^.text);
+    o := o^.next
+  end;
+  writeln(ircode, ')');
+  writeln(ircode, '  ret void');
+  writeln(ircode, '}')
+end;
+
+{ AP 6.9.3.12's spawn-statement.
+
+  Three things happen. The argument block is allocated by the runtime -- not
+  by an `alloca`, which a spawn inside a loop would claim once per iteration
+  (ADR-0102), and not by a frame slot, which would have to be sized to the
+  largest block in the block before the frame type knows any of them. Its size
+  comes from LLVM rather than from this compiler: a null-based getelementptr
+  of one element is the type's size, so nothing here has an opinion about the
+  layout it just asked for.
+
+  Then it is filled: the static link the callee will run under, then each
+  actual. A structured value is copied *into* the block, because the callee
+  takes its address and the block outlives the activation that spawned it. A
+  channel crosses as the one word it is, with a reference taken for the formal
+  that is about to hold it -- taken here, before the thread exists, so it
+  cannot race with the owner releasing the channel.
+
+  Then the thread. `pas_tasks_spawn` takes ownership of the block and the
+  thread frees it. }
+procedure EmitSpawn;
+var task: symPtr; l: symListPtr; arg: nodePtr;
+    frame, set_, size, one, blk, fld, val, link: str;
+    k: integer;
+begin
+  task := s^.spSym;
+  if task = nil then exit;
+  Def(one);
+  write(ircode, 'getelementptr %targ', task^.irId:1, ', ptr null, i32 1');
+  writeln(ircode);
+  Def(size);
+  write(ircode, 'ptrtoint ptr ');
+  PutOp(one);
+  writeln(ircode, ' to i64');
+  Def(blk);
+  write(ircode, 'call ptr @pas_tasks_alloc(i64 ');
+  PutOp(size);
+  writeln(ircode, ')');
+
+  { The static link: a task declared at level L runs with the frame at level
+    L-1 as its enclosing scope, which is the rule every other call here
+    follows (ADR-0016). }
+  FrameOf(task^.owner, link);
+  write(ircode, '  store ptr ');
+  PutOp(link);
+  write(ircode, ', ptr ');
+  PutOp(blk);
+  writeln(ircode);
+
+  arg := s^.spArgs;
+  l := task^.params;
+  k := 1;
+  while (arg <> nil) and (l <> nil) do begin
+    if IsChannel(l^.sym^.stype) then begin
+      EmitAddress(arg, val);
+      Def(link);
+      write(ircode, 'call ptr @pas_handle_lend(ptr ');
+      PutOp(val);
+      writeln(ircode, ')');
+      write(ircode, '  call void @pas_chan_ref(ptr ');
+      PutOp(link);
+      writeln(ircode, ')');
+      Def(fld);
+      write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
+      PutOp(blk);
+      writeln(ircode, ', i32 0, i32 ', k:1);
+      write(ircode, '  store ptr ');
+      PutOp(link);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode)
+    end
+    else if IsStructured(l^.sym^.stype) then begin
+      EmitAddress(arg, val);
+      Def(fld);
+      write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
+      PutOp(blk);
+      writeln(ircode, ', i32 0, i32 ', k:1);
+      write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ',
+            LlAlign(l^.sym^.stype):1, ' ');
+      PutOp(fld);
+      write(ircode, ', ptr align ', LlAlign(l^.sym^.stype):1, ' ');
+      PutOp(val);
+      writeln(ircode, ', i64 ', LlSize(l^.sym^.stype):1, ', i1 false)')
+    end
+    else begin
+      EmitExpr(arg, val);
+      Def(fld);
+      write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
+      PutOp(blk);
+      writeln(ircode, ', i32 0, i32 ', k:1);
+      write(ircode, '  store ');
+      PutSlotType(l^.sym);
+      write(ircode, ' ');
+      PutOp(val);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode)
+    end;
+    k := k + 1;
+    arg := arg^.next;
+    l := l^.next
+  end;
+
+  FrameAt(irProc^.level, frame);
+  TaskSetSlot(irProc, frame, set_);
+  write(ircode, '  call void @pas_tasks_spawn(ptr ');
+  PutOp(set_);
+  write(ircode, ', ptr ');
+  PutTaskName(task);
+  write(ircode, ', ptr ');
+  PutOp(blk);
+  writeln(ircode, ')')
+end;
+
 procedure EmitDeferRunner(p: symPtr);
 var e: nodeListPtr;
 begin
@@ -10221,7 +10681,8 @@ begin
       so there is nothing left to hand back. }
     writeln(ircode, '  ret void');
   writeln(ircode, '}');
-  EmitDeferRunner(p)
+  EmitDeferRunner(p);
+  EmitTaskWrapper(p)
 end;
 
 procedure EmitProcs(b: nodePtr);
@@ -10262,6 +10723,18 @@ begin
   writeln(ircode, 'declare void @pas_defer_done(ptr)');
   { AP 6.4.12 (ADR-0174) }
   writeln(ircode, 'declare void @pas_handle_init(ptr, ptr)');
+  writeln(ircode, 'declare i32 @pas_chan_close(ptr)');
+  writeln(ircode, 'declare ptr @pas_chan_new(i64, i64)');
+  writeln(ircode, 'declare void @pas_chan_ref(ptr)');
+  writeln(ircode, 'declare i32 @pas_chan_unref(ptr)');
+  writeln(ircode, 'declare void @pas_chan_send(ptr, ptr)');
+  writeln(ircode, 'declare ptr @llvm.stacksave.p0()');
+  writeln(ircode, 'declare void @llvm.stackrestore.p0(ptr)');
+  writeln(ircode, 'declare i32 @pas_chan_receive(ptr, ptr)');
+  writeln(ircode, 'declare void @pas_tasks_init(ptr)');
+  writeln(ircode, 'declare ptr @pas_tasks_alloc(i64)');
+  writeln(ircode, 'declare void @pas_tasks_spawn(ptr, ptr, ptr)');
+  writeln(ircode, 'declare void @pas_tasks_join(ptr)');
   writeln(ircode, 'declare void @pas_handle_done(ptr)');
   writeln(ircode, 'declare void @pas_handle_set(ptr, ptr)');
   writeln(ircode, 'declare ptr @pas_handle_lend(ptr)');
@@ -10329,7 +10802,17 @@ begin
     load with no reader in a program that never concatenates, and is deleted;
     the calls it replaces would have been emitted and kept in every function of
     every program. `int` on that side, i32 here, asserted there. }
-  writeln(ircode, '@pas_str_at = external global i32');
+  { AP 6.9.3.12 (ADR-0268): the arena cursor is thread-local, because the
+    arena is a stack of what the current chain of activations is using and a
+    task is a second chain. The keyword has to be here as well as in the
+    runtime -- a module that declared it as an ordinary global would read the
+    wrong storage, and LLVM would not object. }
+  { AP 6.9.3.12 (ADR-0268): the arena cursor is thread-local, because the
+    arena is a stack of what the current chain of activations is using and a
+    task is a second chain. The keyword has to be here as well as in the
+    runtime -- a module declaring it as an ordinary global would read the
+    wrong storage, and the linker says so rather than letting it pass. }
+  writeln(ircode, '@pas_str_at = external thread_local global i32');
   writeln(ircode, 'declare i32 @pas_str_cmp_pad(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_cmp_exact(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_trimlen(ptr, i32)');
@@ -11318,6 +11801,7 @@ begin
   Row('IsPointer       ', IsPointer);
   Row('IsFile          ', IsFile);
   Row('IsHandle        ', IsHandle);
+  Row('IsChannel       ', IsChannel);
   Row('IsOwned         ', IsOwned);
   Row('IsOwnedPointer  ', IsOwnedPointer);
   Row('IsAffine        ', IsAffine);

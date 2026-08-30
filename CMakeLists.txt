@@ -58,7 +58,7 @@ set(APASCAL_WARNINGS -Wall -Wextra)
 # landed before the language rests on it precisely so that it can be judged on
 # its own.
 add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c
-                         runtime/pasrt_unicode.c)
+                         runtime/pasrt_unicode.c runtime/pasrt_task.c)
 target_include_directories(pasrt PUBLIC runtime)
 target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 

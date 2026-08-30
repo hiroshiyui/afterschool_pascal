@@ -275,3 +275,4 @@ the alternatives that were rejected and why.
 | [0264](0264-tls-is-a-module-and-a-transcription.md) | TLS is a module, and the only new risk is a transcription | Accepted |
 | [0265](0265-the-grammar-and-the-transport-are-two-modules.md) | HTTP's grammar and its transport are two modules | Accepted |
 | [0267](0267-a-handle-moves.md) | A handle moves | Accepted |
+| [0268](0268-two-threads-of-control.md) | Two threads of control | Accepted |

@@ -528,3 +528,15 @@ extended	6.13	testable	Programs
 afterschool	6.13	structural	introduces 6.13.1 and 6.13.2
 afterschool	6.13.1	testable	
 afterschool	6.13.2	testable	
+afterschool	6.4.16	structural	
+afterschool	6.4.16.1	testable	
+afterschool	6.4.16.2	testable	
+afterschool	6.4.16.3	testable	
+afterschool	6.7.8	testable	
+afterschool	6.7.8.1	testable	
+afterschool	6.9.3.12	testable	
+afterschool	6.9.3.12.1	testable	
+afterschool	6.9.3.13	structural	
+afterschool	6.9.3.13.1	testable	
+afterschool	6.9.3.13.2	testable	
+afterschool	6.7.8.2	testable	

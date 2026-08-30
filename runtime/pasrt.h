@@ -49,6 +49,14 @@
  * the same number; irtest.sh checks. */
 #define PAS_DEFER_SIZE 32
 
+/* AP 6.9.3.12's task set (ADR-0268): the threads a block has spawned, so it
+ * can join every one of them before its activation ends. A pointer, a count
+ * and a capacity -- 16 bytes on a 64-bit target and 12 on a 32-bit one, and
+ * 32 clears both with room, as the defer record's does. One per *block* that
+ * spawns, not one per task. `taskSetSize` in selfhost/aptypes.pas is the same
+ * number; selfhost/irtest.sh checks the two. */
+#define PAS_TASKSET_SIZE 32
+
 /* The storage a block needs to be the target of a non-local `goto`: somewhere
  * to jump back to, and the mark that says which files the jump abandons. It is
  * opaque for the same reason a file variable is, and sized here for the same

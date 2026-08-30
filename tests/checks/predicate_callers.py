@@ -198,6 +198,7 @@ var
   nf: file of integer;
   df: file [1..10] of integer;
   ps: schp;
+  uc: channel [4] of integer;
 """
 
 # One entry per *position* -- a place in the grammar that reaches a call of
@@ -239,10 +240,16 @@ POSITIONS = [
      "read(nf, u)"),
     ("new-tuple", "CheckNewTuple", 1, "stmt",
      "new(ps, u)"),
-    ("unpack-index", "CheckStdProc", 2, "stmt",
+    ("unpack-index", "CheckStdProc", 3, "stmt",
      "unpack(pk, ch, u)"),
-    ("seek-position", "CheckStdProc", 2, "stmt",
+    ("seek-position", "CheckStdProc", 3, "stmt",
      "seekread(df, u)"),
+    # AP 6.9.3.13's send (ADR-0268). The value crosses into a channel by
+    # being copied into its storage, which *is* an assignment -- so the same
+    # predicate decides it and the same refusals apply, which is what this
+    # position exists to require.
+    ("send-value", "CheckStdProc", 3, "stmt",
+     "send(uc, u)"),
     ("case-selector", "CheckCase", 1, "stmt",
      "case u of 1: i := 1 end"),
     ("assignment", "CheckStmt", 4, "stmt",

@@ -22,7 +22,7 @@
 # ctxFormalDisc, ctxVarDecl, ctxParamList -- and `what` is read nowhere else,
 # so the five spellings are the whole domain. A sixth caller passing a sixth
 # context is what this entry is here to make fail.
-ParseNameList:ctxKind:1 names 5 of 78
+ParseNameList:ctxKind:1 names 5 of 79
 
 # --- an expression walker cannot meet a statement -------------------------
 #
@@ -37,20 +37,20 @@ ParseNameList:ctxKind:1 names 5 of 78
 # and a component that is not another schema -- are resolved by ConfArrayType
 # with the kind tested first. So no path reaches these four with one, which is
 # the same shape ADR-0040 gave a bare schema-name one clause earlier.
-EvalConst:nodeKind:1 names 58 of 63
-CheckExpr:nodeKind:1 names 58 of 63
-EmitExpr:nodeKind:1 names 58 of 63
-ResolveType:nodeKind:1 names 58 of 63
+EvalConst:nodeKind:1 names 58 of 64
+CheckExpr:nodeKind:1 names 58 of 64
+EmitExpr:nodeKind:1 names 58 of 64
+ResolveType:nodeKind:1 names 58 of 64
 
 # EmitAddress is the same walk with one more exclusion: a substring designates
 # characters rather than storage, so ADR-0052 emits an assignment to one
 # through the runtime and never asks for its address.
-EmitAddress:nodeKind:1 names 57 of 63
+EmitAddress:nodeKind:1 names 57 of 64
 
 # And the statement walker's own exclusion. nkLabelDecl is the label-declaration
 # part of a block, which CheckBlock reads directly; it never appears in a
 # statement-sequence.
-CheckStmt:nodeKind:1 names 62 of 63
+CheckStmt:nodeKind:1 names 63 of 64
 
 # --- the three dump walkers each own a third of the node kinds ------------
 #
@@ -59,9 +59,9 @@ CheckStmt:nodeKind:1 names 62 of 63
 # type-denoter -- so each names its own third. This is the one group where the
 # subsets are large, and it is also the group ADR-0103 gave a corpus to:
 # tests/dumps/ enters all thirty-one walker procedures.
-DumpExpr:nodeKind:1 names 17 of 63
-DumpStmt:nodeKind:1 names 15 of 63
-DumpTypeExpr:nodeKind:1 names 15 of 63
+DumpExpr:nodeKind:1 names 17 of 64
+DumpStmt:nodeKind:1 names 16 of 64
+DumpTypeExpr:nodeKind:1 names 15 of 64
 
 # --- an operator the arm above already took -------------------------------
 #
@@ -105,7 +105,7 @@ EmitStringCompare:binaryOp:1 names 19 of 20
 # are taken by arms of their own above it, as eof and eoln are, and so is
 # AP 6.8.9's try (ADR-0178), AP 6.4.14.6's take (ADR-0182) and AP 6.4.12.5's
 # release (ADR-0206).
-CheckCall:builtinKind:1 names 27 of 45
+CheckCall:builtinKind:1 names 27 of 46
 
 # EmitCall's first three are catch-all lists that mean to name every builtin,
 # and each omits the same four. biBinding, biDate and biTime are the builtins
@@ -133,14 +133,14 @@ CheckCall:builtinKind:1 names 27 of 45
 # one runtime call and none of the instruction-shaped arms below could spell
 # that. It is left out for the same reason as the other four -- a fallback
 # body would emit something rather than stop.
-EmitCall:builtinKind:1 names 39 of 45
-EmitCall:builtinKind:2 names 39 of 45
-EmitCall:builtinKind:3 names 39 of 45
+EmitCall:builtinKind:1 names 39 of 46
+EmitCall:builtinKind:2 names 39 of 46
+EmitCall:builtinKind:3 names 39 of 46
 
 # The fourth is the real-valued intrinsics, guarded by the arm above it that
 # established the argument is real. argcount and argument never reach it: the
 # first is an arm near the top of EmitCall and the second goes to EmitString.
-EmitCall:builtinKind:4 names 18 of 45
+EmitCall:builtinKind:4 names 18 of 46
 
 # --- a required procedure the arm above already took ----------------------
 #
@@ -151,14 +151,14 @@ EmitCall:builtinKind:4 names 18 of 45
 # exit is taken by an `if` before it too, and is still *named* by the arm that
 # says so, which is what keeps this count one short of the whole rather than
 # two (ADR-0177).
-EmitStdProc:stdProcKind:1 names 20 of 22
+EmitStdProc:stdProcKind:1 names 20 of 23
 
 # The two below it are nested inside that case's own arms -- one in the
 # `spReset, spRewrite, spGet, spPut, spUpdate, spExtend` arm and one in the
 # three-seek arm -- and each names the whole enumeration except the four that
 # no arm of the outer case can have narrowed to.
-EmitStdProc:stdProcKind:2 names 15 of 22
-EmitStdProc:stdProcKind:3 names 15 of 22
+EmitStdProc:stdProcKind:2 names 15 of 23
+EmitStdProc:stdProcKind:3 names 15 of 23
 
 # --- constants nothing dispatches on --------------------------------------
 #
@@ -203,34 +203,34 @@ stdProcKind:spUnpack unused
 #
 # A new *designator* node kind is therefore the change these are waiting for,
 # and it would fail all of them at once, which is the point.
-IsDesignator:nodeKind:1 chains 6 of 63
-IsConstantAccess:nodeKind:1 chains 4 of 63
-DesignatorBindable:nodeKind:1 chains 4 of 63
-RootDesignator:nodeKind:1 chains 3 of 63
-ContainerOf:nodeKind:1 chains 3 of 63
-PackedComponent:nodeKind:1 chains 3 of 63
-ConstAccessNode:nodeKind:1 chains 3 of 63
-IsCallValue:nodeKind:1 chains 2 of 63
-NotBindable:nodeKind:1 chains 2 of 63
-VariantSelector:nodeKind:1 chains 2 of 63
-ThreatSym:nodeKind:1 chains 2 of 63
-EvalConstAccess:nodeKind:1 chains 2 of 63
-RootName:nodeKind:1 chains 2 of 63
-CheckWith:nodeKind:1 chains 2 of 63
-HeapHeader:nodeKind:1 chains 2 of 63
-EmitSliceValue:nodeKind:1 chains 2 of 63
-StringConstOf:nodeKind:1 chains 2 of 63
+IsDesignator:nodeKind:1 chains 6 of 64
+IsConstantAccess:nodeKind:1 chains 4 of 64
+DesignatorBindable:nodeKind:1 chains 4 of 64
+RootDesignator:nodeKind:1 chains 3 of 64
+ContainerOf:nodeKind:1 chains 3 of 64
+PackedComponent:nodeKind:1 chains 3 of 64
+ConstAccessNode:nodeKind:1 chains 3 of 64
+IsCallValue:nodeKind:1 chains 2 of 64
+NotBindable:nodeKind:1 chains 2 of 64
+VariantSelector:nodeKind:1 chains 2 of 64
+ThreatSym:nodeKind:1 chains 2 of 64
+EvalConstAccess:nodeKind:1 chains 2 of 64
+RootName:nodeKind:1 chains 2 of 64
+CheckWith:nodeKind:1 chains 2 of 64
+HeapHeader:nodeKind:1 chains 2 of 64
+EmitSliceValue:nodeKind:1 chains 2 of 64
+StringConstOf:nodeKind:1 chains 2 of 64
 
 # The two that reach a designator by way of 6.8.7.4's set-value, whose tokens
 # are a subscript's: only nkIndex and nkSubstr can be the spine the parser
 # built, because a set-value is written with brackets and nothing else.
-SetValueTypeOf:nodeKind:1 chains 2 of 63
-CheckSetValue:nodeKind:1 chains 2 of 63
+SetValueTypeOf:nodeKind:1 chains 2 of 64
+CheckSetValue:nodeKind:1 chains 2 of 64
 
 # 6.8.8's constant-accesses are three: an indexed-constant, a
 # field-designated-constant and a substring-constant. nkStructValue is the
 # fourth thing a constant-definition's value may be and is not an access.
-CheckConstDecl:nodeKind:1 chains 3 of 63
+CheckConstDecl:nodeKind:1 chains 3 of 64
 
 # --- a type-denoter, and the three node kinds one can be --------------------
 #
@@ -239,8 +239,8 @@ CheckConstDecl:nodeKind:1 chains 3 of 63
 # production, nkRestricted for 6.4.2.5's restricted type. The structured
 # denoters -- nkArray, nkRecord, nkSetOf, nkFile, nkPointer -- are named by the
 # case-statements above and never reach these three, which ask about a *name*.
-CheckSchemaBodyNames:nodeKind:1 chains 3 of 63
-InitialStateOf:nodeKind:1 chains 2 of 63
+CheckSchemaBodyNames:nodeKind:1 chains 3 of 64
+InitialStateOf:nodeKind:1 chains 2 of 64
 
 # --- the two mixed dispatchers ----------------------------------------------
 #
@@ -255,13 +255,13 @@ InitialStateOf:nodeKind:1 chains 2 of 63
 # The other two enumerations its conditions test are not tags: `e^.bnOp` and
 # `e^.clBuiltin` are ordinary fields, so binaryOp and builtinKind are outside
 # this gate by the rule that selects it.
-EmitString:nodeKind:1 chains 4 of 63
+EmitString:nodeKind:1 chains 4 of 64
 
 # DumpStmt's is the husk rule (ADR-0044) and not a dispatch over statements:
 # nkWrite and nkRead are the two statement kinds Sema may have replaced with a
 # call, so this asks those two and hands everything else to the case-statement
 # below it, which is where the other statement kinds are named.
-DumpStmt:nodeKind:1 chains 2 of 63
+DumpStmt:nodeKind:1 chains 2 of 64
 
 # --- symKind: what a name may turn out to be at one position ----------------
 #
@@ -349,7 +349,7 @@ CheckArguments:symKind:2 chains 2 of 12
 # expression a tag test could hide in. Every other kind is a leaf as far as
 # this walk is concerned, so there is nothing to recurse into and the trailing
 # fall-through is the answer for all 61 of them.
-CollectTagTests:nodeKind:1 chains 2 of 63
+CollectTagTests:nodeKind:1 chains 2 of 64
 
 # AP 6.7.7.6: what an `external` heading refuses in a parameter position -- a
 # procedural parameter, which would cross as a code pointer and its link where
@@ -362,7 +362,7 @@ CheckForeignHeading:symKind:1 chains 2 of 12
 # names, and every other denoter contains *types* -- an array's component, a
 # pointer's domain, a set's base -- which have no name for an outline to hold.
 # So the fall-through is the right answer for all 61 of the rest.
-DumpSymType:nodeKind:1 chains 2 of 63
+DumpSymType:nodeKind:1 chains 2 of 64
 
 # The four node kinds a block's declaration parts hold, which is the whole
 # domain this walk has: a constant-definition, a type-definition, a
@@ -370,13 +370,13 @@ DumpSymType:nodeKind:1 chains 2 of 63
 # named and there is no trailing `else` at all, so a fifth kind of declaration
 # would be reported as nothing rather than as a procedure -- the better of the
 # two wrong answers, and the one ADR-0221 says a chain must be written for.
-DumpSymDecl:nodeKind:1 chains 4 of 63
+DumpSymDecl:nodeKind:1 chains 4 of 64
 
 # Which word names a type-definition's denoter. A record and an enumerated
 # type are the two an outline distinguishes, because they are the two with
 # children under them; every other denoter is reported as `type`, which is
 # what the trailing arm says for all 61 of them.
-DumpSymDecl:nodeKind:2 chains 2 of 63
+DumpSymDecl:nodeKind:2 chains 2 of 64
 
 # --- AP 6.7.3.10.4's determining positions --------------------------------
 #
@@ -396,8 +396,8 @@ DumpSymDecl:nodeKind:2 chains 2 of 63
 # A constant added to nodeKind fails both, and the question it asks is the
 # right one: can a formal parameter be declared with the new shape, and if so
 # does a type parameter show through it? Answering "no" is moving the number.
-Mentions:nodeKind:1 chains 3 of 63
-Determine:nodeKind:1 chains 3 of 63
+Mentions:nodeKind:1 chains 3 of 64
+Determine:nodeKind:1 chains 3 of 64
 
 # --- a construct identified inside a type dispatch ------------------------
 #
@@ -419,4 +419,28 @@ Determine:nodeKind:1 chains 3 of 63
 # comment above sets: can the new node kind stand as the whole right side of
 # an assignment to a handle or an owned pointer? Sema admits one construct in
 # each and it is a required function, so the answer is no unless that changes.
-EmitAssign:nodeKind:1 chains 2 of 63
+EmitAssign:nodeKind:1 chains 2 of 64
+
+# --- what may cross into a task -------------------------------------------
+#
+# CheckTaskFormals asks two questions about a formal's *kind* -- is it a
+# variable parameter, is it a procedural one -- and both are refusals with a
+# reason of their own (AP 6.9.3.12). Every other symKind either cannot be a
+# formal parameter at all (skConst, skType, skVar, skProc, skFunc, skDisc,
+# skField, skModule, skIface) or is skParam, the value parameter, which is
+# what the *type* test after the chain is about.
+#
+# So the trailing else is not a fall-through nobody thought about: it is the
+# ordinary value parameter, and the question asked of it is asked in the two
+# arms below the chain rather than in it. A symKind added to the enumeration
+# belongs there only if it is a new *kind of formal parameter*, which is the
+# question this number moving should make a reader ask.
+CheckTaskFormals:symKind:1 chains 2 of 12
+
+# --- send is emitted by an if-chain, not by a case ------------------------
+#
+# EmitStdProc dispatches on stdProcKind twice with a case-statement and once
+# with an if-chain, and `send` is in the chain: its arm needs the channel's
+# *element type* to choose between an address and a temporary, which is a
+# test on a type rather than on the tag. AP 6.9.3.13, ADR-0268.
+stdProcKind:spSend unused

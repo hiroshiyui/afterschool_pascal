@@ -46,6 +46,7 @@ export ApTypes = (
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, nul,
   tab, newline, creturn, poolMax, tokMax, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
+  taskSetSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
   lnkForeign, strLen, nameStr, bindText, str, kwLit, wordLit, msgLit,
   textLit, tokenKind, token, ctxKind, labelWhat, binaryOp, unaryOp,
@@ -72,7 +73,7 @@ export ApTypes = (
   tkPow, tkProtected, tkValue, tkBindable, tkRestricted, tkModule,
   tkExport, tkImport, tkOnly, tkQualified, tkStarStar, tkGtLt, tkArrow,
   tkAndThen, tkOrElse, ctxNone, ctxProgramStart, ctxProgramParams,
-  ctxProgramHeader, ctxFinalEnd, ctxAfterFile, ctxAfterSet, ctxSetMembers,
+  ctxProgramHeader, ctxFinalEnd, ctxAfterFile, ctxAfterSet, ctxChannel, ctxSetMembers,
   ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray, ctxSchemaArgs,
   ctxFormalDisc, ctxTypeInquiry, ctxDirectIndex, ctxArrayIndex,
   ctxRecordEnd, ctxFieldList, ctxVariantTag, ctxVariantLabels,
@@ -96,7 +97,7 @@ export ApTypes = (
   nkSetMember, nkVar, nkIndex, nkField, nkDeref, nkBinary, nkUnary,
   nkCall, nkSubstr, nkStructValue, nkValueElem, nkEmpty, nkAssign,
   nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
-  nkWith, nkCase, nkGoto, nkLabeled, nkDefer, nkWriteArg, nkCaseArm,
+  nkWith, nkCase, nkGoto, nkLabeled, nkDefer, nkSpawn, nkWriteArg, nkCaseArm,
   nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray,
   nkRecord, nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible,
   nkConfArray, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
@@ -112,9 +113,10 @@ export ApTypes = (
   biArg, biCard, biPosition, biLastPosition, biEmpty, biLength, biIndex,
   biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe,
   biBinding, biDate, biTime, biArgCount, biArgument, biTry, biTake,
+  biReceive,
   biRelease, spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut,
   spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend, spBind,
-  spUnbind, spHalt, spGetTimeStamp, spPack, spUnpack, spPage, spExit,
+  spUnbind, spHalt, spSend, spGetTimeStamp, spPack, spUnpack, spPage, spExit,
   spBreak, spContinue, readingImports, line, col, pool, poolLen, tokCount,
   pos, depth, aborted, errorSeen, errorCount, progBlock, progModules,
   progModuleTail, progMainIndex, activeModules, msgOut, msgBuf, annotate,
@@ -131,7 +133,7 @@ export ApTypes = (
   IsStringRep, IsOptional, IsFallible, IsHandleBirth,
   IsSlice, SliceOf, IsNumeric,
   IsArith, IsBoolean, IsChar, IsEnum, IsArray, IsRecord, IsPointer,
-  IsFile, IsHandle, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
+  IsFile, IsHandle, IsChannel, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
   IsSet, IsProcType, IsEmptySet, IsRestricted, Underlying, IsStructured,
   IsMemory, Protectable, IsOrdinal, IsCharArray, IsStringType,
   IsStringOrChar, StringValueFormal, ForeignStringFormal, EnumCount,
@@ -305,6 +307,14 @@ const
     which statements are armed is a flag apiece in the frame, and the runner
     is what reads them. }
   deferSize = 32;
+  { AP 6.9.3.12's task set (ADR-0268): the threads a block has spawned, so it
+    can join every one before its activation ends. A pointer, a count and a
+    capacity; 32 clears a 64-bit target with room, as the defer record's does.
+    One per *block* that spawns, not one per task -- the defer record's shape,
+    and the reason a block spawning in a loop needs no more storage than one
+    spawning once. It must equal PAS_TASKSET_SIZE in runtime/pasrt.h; irtest.sh
+    checks the two. }
+  taskSetSize = 32;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -419,7 +429,7 @@ type
     of spelling it. }
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
-    ctxAfterFile, ctxAfterSet, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
+    ctxAfterFile, ctxAfterSet, ctxChannel, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
     ctxSchemaArgs, ctxFormalDisc, ctxTypeInquiry, ctxDirectIndex,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
@@ -496,6 +506,13 @@ type
       Dialect only, and spelled with no reserved word -- ADR-0140's test is
       asked of the token after the identifier. }
     nkDefer,
+    { AP 6.9.3.12's spawn-statement, `spawn P(...)` (ADR-0268): P is a
+      task-declaration and this starts an activation of it that runs
+      concurrently with the statement after. Spelled with no reserved word,
+      ADR-0140's test being a statement-initial identifier followed by none of
+      `(`, `:=`, `[`, `.`, `^` or a terminator -- which is `defer`'s, and here
+      the token after is the task's own identifier. }
+    nkSpawn,
     { the pieces the C++ side keeps in vectors of plain structs }
     nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName,
     { type denoters }
@@ -718,6 +735,12 @@ type
                    position rule, reached by the same flag. Appended for
                    biTry's reason. }
                  biTake,
+                 { AP 6.9.3.13's receive (ADR-0268), which answers whether a
+                   value arrived -- the loop condition a reader wants. Its
+                   twin `send` is a required *procedure* (spSend) and not a
+                   builtin function, which is the asymmetry the clause
+                   argues for rather than an accident of where each landed. }
+                 biReceive,
                  { AP 6.4.12.5's release, the dialect's early close with an
                    answer (ADR-0206). `release(h)` releases what a handle
                    variable holds and yields what the closer answered.
@@ -736,6 +759,14 @@ type
                    activation of the program shall occur". A required
                    *identifier*, so a program may declare its own halt. }
                  spHalt,
+                 { AP 6.9.3.13's send (ADR-0268). A *procedure* where
+                   `receive` is a function, and the asymmetry is the design:
+                   a send either happens or the program has lost track of who
+                   is listening, which is a fault this language stops for; a
+                   receive has an ordinary second outcome -- closed and
+                   drained -- and that outcome is the loop condition a reader
+                   wants. }
+                 spSend,
                  { 6.7.5.8's time procedure, the only required one that reads
                    something outside the program which is not a file. 6.9.4 f)
                    makes it threaten its argument. }
@@ -1061,6 +1092,15 @@ type
       executed in, so nothing has to walk it backwards (ADR-0175). }
     defers: nodeListPtr;
     deferCount: integer;
+    { AP 6.9.3.12 (ADR-0268): this routine's block contains a
+      spawn-statement, so its activation needs a task-set slot and must join
+      what it spawned before it ends. A boolean and not a count, the set
+      growing in the runtime -- and recorded by Sema rather than found by
+      CodeGen walking the tree, which is ADR-0111's rule and ADR-0230's. }
+    spawns: boolean;
+    { AP 6.7.8: this routine was declared `task` and not `procedure`, so
+      only a spawn-statement may start an activation of it. }
+    isTask: boolean;
     { AP 6.7.5.9: the block a `br` leaves this activation through, or 0 where
       no exit-statement was emitted. It is CodeGen's and is claimed by the
       first `exit` of a function body -- the label is written before the
@@ -1826,6 +1866,11 @@ type
         the list in that order, which is *reverse* source order and so is the
         order the armed statements run in. }
       nkDefer:      (dfStmt: nodePtr; dfIndex: integer);
+      { The task and its actuals. spSym is the task-declaration's symbol and
+        spArgs the actual-parameter-list, both what nkProcCall holds -- a
+        separate kind rather than a flag on that one because what is emitted
+        is not a call: it is an argument block, a copy of it, and a thread. }
+      nkSpawn:      (spAt, spLen: integer; spArgs: nodePtr; spSym: symPtr);
       { csHasOtherwise, not `csOtherwise <> nil`: `otherwise` followed by
         nothing is an empty statement -- a legal way to say "and otherwise do
         nothing", which is exactly the case that must not trap. }
@@ -1889,7 +1934,11 @@ type
                        conforming program can write. }
                      ptArgs: nodePtr);
       nkOptional:   (opElem: nodePtr);
-      nkHandle:     (hdAt, hdLen: integer);   { the closer's foreign name }
+      { hdAt/hdLen name the closer. hdElem is nil for a handle-type written
+        out (AP 6.4.12) and the element type for a channel-type (AP 6.4.16),
+        which is a handle whose closer is the runtime's -- the denoter's own
+        version of IsChannel's question. hdCap is the channel's capacity. }
+      nkHandle:     (hdAt, hdLen: integer; hdCap, hdElem: nodePtr);
       nkFallible:   (faVal, faCause: nodePtr);
       { caLo and caHi are nkDeclName nodes -- these are defining-points, and a
         declared name is what that node kind is for. caIndex is the
@@ -1945,6 +1994,13 @@ type
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward, pdInHeading: boolean;
                      pdIsExternal: boolean;
+                     { AP 6.7.8 (ADR-0268): this declaration was written
+                       `task` and not `procedure`, so an activation of it may
+                       be started by a spawn-statement and by nothing else.
+                       A flag rather than a kind of its own, which is
+                       `owns`'s shape on a pointer: what changes is how the
+                       activation is started, and nothing about the block. }
+                     pdIsTask: boolean;
                      { Where the *name* was written, which the node's own
                        line and col are not: those are the word-symbol that
                        opened the declaration, and both tree dumps print them
@@ -2484,6 +2540,15 @@ function IsFile(t: typePtr): boolean;
   comparison with nil -- and through IsOwned everywhere a file's refusals
   apply, which is the rest. }
 function IsHandle(t: typePtr): boolean;
+
+{ AP 6.4.16 (ADR-0268): a channel-type, which **is** a handle-type -- one whose
+  closer is the runtime's and whose `elem` is what it carries. A kind of its
+  own was considered and refused: everything a channel needs from the language
+  is what a handle already has -- no copy, released when the variable dies,
+  `release` before that, and lending to a routine without giving it away -- so
+  a second kind would be a parallel mechanism where a field does. `elem` is nil
+  for every other handle, which is what makes the question answerable. }
+function IsChannel(t: typePtr): boolean;
 
 { A file or a handle: the two owned things whose *value* lives in memory and
   therefore travels by address. IsMemory is what asks this, and it is why the
@@ -3396,6 +3461,9 @@ begin IsFile := (t <> nil) and (t^.kind = tyFile) end;
   apply, which is the rest. }
 function IsHandle;
 begin IsHandle := (t <> nil) and (t^.kind = tyHandle) end;
+
+function IsChannel;
+begin IsChannel := IsHandle(t) and (t^.elem <> nil) end;
 
 { A file or a handle: the two owned things whose *value* lives in memory and
   therefore travels by address. IsMemory is what asks this, and it is why the

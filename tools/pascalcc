@@ -317,7 +317,7 @@ fi
 # error into something else would be the silent-ignoring this script's header
 # refuses.
 if clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
-     "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
+     "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm -pthread \
      ${extra_ldflags[@]+"${extra_ldflags[@]}"} \
      -o "${out:-$base}" 2>"$work/link.txt"; then
   exit 0

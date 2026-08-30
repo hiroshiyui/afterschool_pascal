@@ -4022,3 +4022,51 @@ The duplication between the two transports is declined rather than removed:
 what they share is a loop shape, and factoring it out needs the interface type
 this language has not got (ADR-0201). Twenty-four lines against nine hundred,
 stated in the module.
+
+### Two threads of control (ADR-0268)
+
+ADR-0201 designed this construct four increments before it was built, declined
+to build it under ADR-0116, and named the one thing left of ADR-0151's
+aliasing fork: *two threads of control*. This is that construct, built as
+decided — `task`, `spawn`, `channel [n] of T`, `send` and `receive`, with **no
+word-symbol reserved**, in the three free positions ADR-0201 itself listed.
+
+Five things carry it.
+
+- **A channel is a handle, not a new kind.** Everything it needs from the
+  language — no copy, released when its variable dies, `release` earlier,
+  comparison with `nil` alone — is what AP 6.4.12 already has, so a channel is
+  a handle-type whose closer is the runtime's and whose element type sits in a
+  field a handle does not use. One thing differs: it does not start empty, its
+  capacity being part of its type.
+- **A task's body cannot be handed to C.** §6.6.3.1's procedural parameter is
+  a code-and-link pair and C takes one word (ADR-0030, ADR-0201's finding 4),
+  which is why concurrency here had to be a language construct. So the
+  *compiler* emits the C-callable function — one per task, unpacking an
+  argument block the spawn filled — and nothing a program wrote becomes a
+  function pointer.
+- **The join is the safety argument.** ADR-0201's sentence was *a borrow
+  cannot outlive the call, because the caller is not running during it*, and
+  it named two threads as the one thing that breaks it. Every task a block
+  spawned is joined before that block releases anything, and the emitter puts
+  the join first in the epilogue.
+- **The formals rule was not the whole rule, and a probe found it.**
+  AP 6.7.8.1 admits a transferable value parameter and a channel, and the
+  argument for its sufficiency was good — a task can only reach what it was
+  handed. But Pascal's scope rules let a nested block name an enclosing one's
+  variables, and four tasks incrementing one global compiled and printed the
+  right answer. AP 6.7.8.2 refuses that; it is not transitive, and
+  `doc/sop.md` §7 says so.
+- **The runtime's bookkeeping is per-thread, and TSan is what said so.** The
+  open files, the live handles, the armed deferred statements and the string
+  arena are each a stack of what the current chain of activations owns, and a
+  task is a second chain. ThreadSanitizer found the first of them on the first
+  run of the first two-task program. Making the arena's cursor thread-local
+  changed what the compiler *emits*, which the committed seed could not
+  declare — so this is the first reseed outside a release, under CLAUDE.md's
+  own sentence that a feature must be expressible in `seed/*.ll` or the seed is
+  refreshed first.
+
+The mutation that is **not** caught is the join, and that is recorded rather
+than papered over: every task in `tests/dialect/concurrency.pas` finishes
+before its block ends, so removing the join changes nothing observable.

@@ -502,6 +502,15 @@ feature, because each was arrived at more than once:
   had; a discriminant-selected variant has no designator to attribute a value
   to. Where a check would have gone, the code says why it is not there.
 
+**Two threads of control exist** (ADR-0268), and every alias rule above is
+written for one. `task`, `spawn`, `channel [n] of T`, `send` and `receive`
+reserve no word-symbol; a task takes only transferable values and channels
+(AP 6.7.8.1) and may name only its own variables (AP 6.7.8.2), which is the
+half a probe found after the first looked sufficient; and every task a block
+spawned is joined **before** that block releases anything, which is what makes
+ADR-0201's *a borrow cannot outlive the call* true again. The compiler is one
+thread and must stay so — the seed compiles it.
+
 **`doc/implementation-defined.md` is still the register of what this processor
 decides** where a clause leaves it open, and the two extensions listed there are
 still listed. What it no longer carries is the clause 5.1 a) compliance
@@ -661,7 +670,20 @@ type, because each reads its own descriptor. `runtime/pasrt.c`
 holds anything not expressible in IR — formatted output and runtime checks —
 where `width < 0` / `prec < 0` mean "not given", and nothing else: a width the
 program *wrote* is checked against §6.9.3.1's or §6.10.3.1's least value
-before it gets there, so the runtime never sees a negative one (ADR-0064). `runtime/pasrt_unicode.c` is the third translation unit and the newest: AP 6.4.15's Normalization Form C and grapheme segmentation, strict ISO C11 over tables `runtime/unicode/generate.py` transcribes from the Unicode Character Database into `runtime/pasrt_unicode_data.h`. **The database is fetched and never committed**, the generated header is committed, and `unicode-conformance` checks both directions of that (ADR-0189, ADR-0190). It was landed first, before anything called it, so Unicode's own conformance files could judge it before any language rested on it; since AP 6.4.15 landed, `runtime/pasrt.c` calls it — the **compiler** never does, naming only the `pas_text_*` entry points in `pasrt.c` itself.
+before it gets there, so the runtime never sees a negative one (ADR-0064). `runtime/pasrt_task.c` is the **fourth** translation unit (ADR-0268): AP
+6.4.16's channel and AP 6.9.3.12's task set, bounded by one header beyond ISO
+C — `<pthread.h>` — as `pasrt_posix.c` is bounded by six, so a system without
+it loses the concurrency construct and not the language. It holds `pas_` names
+rather than `pasx_` ones because what it implements is what the *compiler
+emits* and not what a program may bind. **And it made four of the runtime's
+globals `_Thread_local`** — the open files, the live handles, the armed
+deferred statements and the string arena with its cursor — because each is a
+stack of what the current chain of activations owns and a task is a second
+chain. ThreadSanitizer found the first of them on the first run of the first
+two-task program, which is a defect no golden could hold. The arena's cursor
+is named by the emitted module, so that change is one the **seed** could not
+declare: it forced the first reseed outside a release.
+`runtime/pasrt_unicode.c` is the third translation unit: AP 6.4.15's Normalization Form C and grapheme segmentation, strict ISO C11 over tables `runtime/unicode/generate.py` transcribes from the Unicode Character Database into `runtime/pasrt_unicode_data.h`. **The database is fetched and never committed**, the generated header is committed, and `unicode-conformance` checks both directions of that (ADR-0189, ADR-0190). It was landed first, before anything called it, so Unicode's own conformance files could judge it before any language rested on it; since AP 6.4.15 landed, `runtime/pasrt.c` calls it — the **compiler** never does, naming only the `pas_text_*` entry points in `pasrt.c` itself.
 
 Adding a language feature usually touches, in order, the components of
 `selfhost/compiler.pas`: the token kinds and the lexer → the node kinds and the

@@ -84,6 +84,19 @@ appears below in the release where it still existed.
   not otherwise import what it needs. This closes the last row of
   `doc/roadmap.md`'s *What a daily program still cannot reach for*, and that
   row had said it was blocked for two reasons neither of which was true.
+- **Concurrency: `task`, `spawn`, `channel [n] of T`, `send` and `receive`**
+  (ADR-0268), share-nothing and reserving no word-symbol. A task takes a copy
+  of every value it is passed and a reference to every channel, and may name
+  only its own variables; every task a block spawned is joined before that
+  block releases anything. Built to the design ADR-0201 settled four
+  increments earlier, on ADR-0267's move.
+  Not here: a task cannot be *given* a handle, there is no way to wait for one
+  task, no select over several channels, and no timeout on a send or receive.
+- **A handle moves** (ADR-0267, AP 6.4.12.7). `take` applies to a variable of
+  a handle-type as it applies to one of an owned-pointer-type — the two are
+  one word apiece, and the reason neither may be copied is the reason both
+  need a move. A **file** is still refused and always will be: there is no
+  value in one for a variable to stop holding.
 - **`lib/dialect/pashttps.pas`, HTTP/1.1 over TLS** (ADR-0265), and the
   `PasHttp` grammar it is built on: `BeginRequest` and `NextPiece` turn a
   request into the octets to write, and `BeginResponse`, `WantsLine`,
@@ -98,6 +111,16 @@ appears below in the release where it still existed.
   `clang` and stays that way for the sanitizers; a library a program *binds*
   belongs in one place, and `-lssl` handed to a `clang -c` is an input clang
   complains about once per translation.
+
+### Changed
+
+- **A handle may be assigned three things rather than two**, and `take` empties
+  two kinds rather than one, so both diagnostics were reworded (ADR-0267).
+- **The runtime's per-activation bookkeeping is thread-local** — the open
+  files, the live handles, the armed deferred statements and the string
+  arena — because each is a stack of what one chain of activations owns and a
+  task is a second chain (ADR-0268). It costs a single-threaded program
+  nothing measurable and costs a program with *n* tasks *n* string arenas.
 
 ### Fixed
 
