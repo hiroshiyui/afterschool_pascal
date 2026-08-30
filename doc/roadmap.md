@@ -20,7 +20,7 @@ nobody has decided yet.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
-| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and what each landed feature left open behind it — two of those are still open |
+| [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the FFI and container increments — three rows, and the chapter's own lesson about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the five library gaps still open — JSON was the sixth and is done — and the two deliberate language absences, none of which is a mystery |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the six of its twenty-one findings that are still open |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
@@ -63,23 +63,29 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ---
 
-## What blocks the library
+## What each landed feature left open
 
-**Nothing is left of the list this chapter was named for.** Every row a survey
-of daily needs put here has been struck, and the last of them went the way the
-two before it did — a decision that looked like it needed the memory-safety
-model turned out to need it for only part of its surface.
+**This chapter was called "What blocks the library" and is renamed**, because
+nothing is left of the list that named it. Every row a survey of daily needs
+put here has been struck, and the last of them went the way the two before it
+did — a decision that looked like it needed the memory-safety model turned out
+to need it for only part of its surface.
 
-What stands below it is a different thing and is why the chapter is still
-here: **one narrow foreign-interface item that genuinely waits on the model**,
-and **what each landed feature left open behind it** — the two things the
-handle opened, both since struck within two days of being written down; the
-move a k-way merge would have liked; and, newest, the routine half of the
-schema's type discriminant. None of those is a gap a survey found: each is a
-consequence of a feature landing. That is the shape to expect from here on —
-this page empties faster than it fills, and a landed feature is both the
-commonest way it fills and, one increment later, the commonest way a row
+What stands below is a different thing: **what each landed feature left open
+behind it**. The two things the handle opened, both since struck within two
+days of being written down; the move a k-way merge would have liked; the
+routine half of the schema's type discriminant. None is a gap a survey found —
+each is a consequence of a feature landing, which is the shape to expect from
+here on. This page empties faster than it fills, and a landed feature is both
+the commonest way it fills and, one increment later, the commonest way a row
 leaves it.
+
+**One row here is a compiler item and not a library one**, and it is stated
+under the move below rather than in a heading of its own, which is where
+nobody will find it: `function Open(p): Stream ! ErrorCode` is refused by a
+*representation* choice — a fallible-type's two arms share storage, as a
+variant part's do — and changing that reaches four gates and the emitted
+struct shape. It is the only thing on this page with a named cost.
 
 ~~A foreign struct the callee owns~~ is **done** (ADR-0187, AP 6.7.7.8): an
 `external` function may answer an optional of a record, a null address is the
@@ -88,7 +94,26 @@ occurs. That is the whole of it, and choosing a copy is what kept the model out
 of it — nothing holds the address, so there is no lifetime to reason about.
 `readdir`, `gmtime` and `localtime` are declarable. What is still not
 declarable is a member that is *itself* a pointer, so a chained list of structs
-— `getaddrinfo` — waits, and it waits on the model rather than on a clause.
+cannot be read by a Pascal program.
+
+**The example this sentence used to give has been answered, and by the same
+move that answered the four below it.** It said `getaddrinfo` waits, and on
+the memory model rather than on a clause. `getaddrinfo` is *called* — in
+`runtime/pasrt_posix.c`, behind `<netdb.h>`, one of the six headers that unit
+is bounded by — and `PasNet` crosses a host and a service as **strings** at
+both ends so that the chain never reaches Pascal at all (ADR-0203). `PasDir`
+did the same thing first: a library may not declare `struct dirent` under
+ADR-0185's fifth decision, so the runtime supplies the one member access
+(ADR-0188). Twice now the answer has been *arrange for nothing to hold the
+address*, which is this chapter's closing lesson applied before the row could
+be believed.
+
+So what is left of the row is a **shape without a client**: no program here
+wants a chained struct badly enough to have been written, and the two that
+looked as though they would were answered in C. By ADR-0116's rule that is not
+a thing to build. What would move it is a probe — a program that wants such a
+chain and cannot get it through a `pasx_` binding — and writing one is how the
+four estimates below were found to be wrong.
 
 **And a rule this page had not noticed cuts across all of it** (ADR-0188).
 ADR-0187 is a *program*-level feature: a program knows what it was built for
@@ -155,7 +180,7 @@ for a day:
 | A daily program wants | Why it waits |
 | --- | --- |
 | ~~a server that serves more than one client~~ | **done** — `PasNet.Wait` (ADR-0205), and it needed nothing from the language. The server was written before the feature and compiled: an array of handles is admitted, `Accept(srv, clients[k])` writes a connection into a slot through a `var` parameter, `clients[k] := nil` releases one, and a schema gives the array whatever length a program wants. What was missing was only *which of these can I read without blocking*, which is a library routine over `poll`. The set is built and thrown away inside one call rather than being an object, because an object would hold a second name for every socket in it and `clients[k] := nil` would dangle it — ADR-0187's rule a second time |
-| **to hand an owned value to something else** | Of the three affine kinds only `owned ^T` moves. `take` is refused for a handle in as many words — *nothing else has a value one variable can stop holding* — and there is no move for a file at all (ADR-0182, AP 6.4.14 NOTE 5). This row lost its stated client the day after it was written: it was entered because a task cannot be given a socket, and the server turned out to need neither a task nor a move, a handle reaching its slot as the `var` parameter its producer writes through. So a **second client was written on purpose**, to find out what the row is worth rather than to wait for one — a k-way merge of sorted files, a binary heap of open streams ordered by the line each is showing, which is the textbook program whose data structure exists to exchange its elements. **It is writable today**, and the whole of what the missing move costs is one indirection: an `array [1..K]` of records each holding a `Stream` is admitted and readable, but the heap has to be over *positions* in it rather than over the records, so every comparison reads `src[heap[c]].head` and `Swap` exchanges integers. That is not a workaround but the ordinary shape here — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element, for the unrelated reason that this compiler has no generic *routines* — a schema may now be parameterised by a type (ADR-0209) and a routine over one may not be, which is the row below — and its own header names parallel arrays as a caller it expects. The one bug the probe carried lived in exactly that doubled subscript, which is one author in one sitting and is worth recording rather than deciding on. **So the row is real and small**: an ergonomic cost and not a wall, and by ADR-0116's rule it stays unbuilt, the program that wants the move having managed without it. What would change the answer is the **factory** — `function Open(p): Stream ! ErrorCode`, which is how a caller would rather receive one. That was tried, and the trying is what the row is now worth reading for. The bare half is nearly free: a handle is `IsMemory`, so a declared function answering one already takes the address of the variable the result is to live in, `CloseFiles` already skips it for being a `var` parameter, and a factory over a factory passes `%res` straight through with no intermediate handle at all — three Sema arms and one address. **But the bare half has no caller**: every handle producer in `lib/` answers an `ErrorCode` and writes the handle through a `var` parameter, so a factory that can only answer `nil` is a regression, not an improvement. And the fallible half is refused by something load-bearing. AP 6.4.13.1's refusal is not an oversight — it is `HoldsFile`'s invariant, whose own comment says a variant part cannot hold a file *because the arms share storage and a file's storage is its own*, which is also what lets `WalkFiles` reach every file exactly once. A fallible-type's two arms **are** a variant part, so an owned value in one would have its closer clobbered by the other arm and be released through garbage. Making it work means laying the two arms side by side instead of over one another, which changes the emitted struct shape and reaches `PutStructAt`, `SelectedSize`, `target-layout` and `foreign-layout`. So the row stands, and what stands in front of it is now named: **a representation change to every fallible-type, not a clause** |
+| **to hand an owned value to something else** | Of the three affine kinds only `owned ^T` moves. `take` is refused for a handle in as many words — *nothing else has a value one variable can stop holding* — and there is no move for a file at all (ADR-0182, AP 6.4.14 NOTE 5). This row lost its stated client the day after it was written: it was entered because a task cannot be given a socket, and the server turned out to need neither a task nor a move, a handle reaching its slot as the `var` parameter its producer writes through. So a **second client was written on purpose**, to find out what the row is worth rather than to wait for one — a k-way merge of sorted files, a binary heap of open streams ordered by the line each is showing, which is the textbook program whose data structure exists to exchange its elements. **It is writable today**, and the whole of what the missing move costs is one indirection: an `array [1..K]` of records each holding a `Stream` is admitted and readable, but the heap has to be over *positions* in it rather than over the records, so every comparison reads `src[heap[c]].head` and `Swap` exchanges integers. That is not a workaround but the ordinary shape here — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element, for the unrelated reason that this compiler has no generic *routines* — a schema may now be parameterised by a type (ADR-0209) and a routine over one may not be, which is the row below — and its own header names parallel arrays as a caller it expects. The one bug the probe carried lived in exactly that doubled subscript, which is one author in one sitting and is worth recording rather than deciding on. **So the row is real and small**: an ergonomic cost and not a wall, and by ADR-0116's rule it stays unbuilt, the program that wants the move having managed without it. The **factory** that would change the answer is a compiler item and has a section of its own below. |
 
 **What building on the handle found.** Two modules were written over
 AP 6.4.12 the day it landed, and each met one edge of the clause:
@@ -181,6 +206,45 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 | --- | --- |
 | ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` removes — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214), and the dialect widening it is a feature (ADR-0215). Five of the module's headings have lost a type parameter; `VecGet` and `MapGet` keep theirs, because they return the element type and §6.7.1 makes a result-type a type-name. **A generic map keyed by anything but a string** still waits on constraints |
 
+### The factory, and the representation it waits on
+
+**`function Open(p): Stream ! ErrorCode` is the one item on this page with a
+named cost**, and it sat inside a table cell where nobody would find it. It is
+a compiler item and not a library one: what a caller wants is to *receive* a
+handle rather than to declare a variable and pass it as a `var` parameter, and
+every producer in `lib/` does the second because the first is refused.
+
+**The bare half is nearly free and has no caller.** A handle is `IsMemory`, so
+a declared function answering one already takes the address of the variable the
+result is to live in; `CloseFiles` already skips it for being a `var`
+parameter; and a factory over a factory passes `%res` straight through with no
+intermediate handle at all. Three Sema arms and one address. But a factory that
+can answer only `nil` is a *regression* on what `lib/` has — every producer
+there answers an `ErrorCode` and says which one — so the bare form would be
+built for nobody.
+
+**The fallible half is refused by something load-bearing, and that is the
+whole of the item.** AP 6.4.13.1's refusal is not an oversight: it is
+`HoldsFile`'s invariant, whose own comment says a variant part cannot hold a
+file *because the arms share storage and a file's storage is its own* — which
+is also what lets `WalkFiles` reach every file exactly once. A fallible-type's
+two arms **are** a variant part, so an owned value in one would have its closer
+clobbered by the other arm and be released through garbage.
+
+**What it would take is a representation change to every fallible-type**:
+laying the two arms side by side instead of over one another. That is not a
+clause and not a Sema arm. It changes the emitted struct shape and reaches
+`PutStructAt`, `SelectedSize`, `target-layout` and `foreign-layout` — the last
+two being gates that compare offsets, so both would move and both would have
+to be re-argued rather than regenerated. Every fallible-type in the corpus
+grows, whether or not it holds anything affine, unless the change is made
+conditional on the arms — which is a second shape for one type and a second
+thing for `HoldsFile` to be right about.
+
+It is written down here rather than done because the cost is known and the
+demand is not: no program in this tree has been unable to do its work for want
+of it, which is ADR-0116's test and the same test the move above fails.
+
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only
 part of its surface, and the part that does not is usually worth taking first.
@@ -192,6 +256,16 @@ actually bites*. It did not bite there. It bites one level further in, at a
 struct member that is a pointer, and the reason is worth stating in general:
 **an ownership question is only a question while something holds the address.**
 Each of the four was answered by arranging for nothing to.
+
+**And the row that was left as the place it genuinely bites has since been
+answered the same way**, which makes five — `getaddrinfo`'s chained list is
+walked in `runtime/pasrt_posix.c` and `PasNet` crosses strings, exactly as
+`PasDir` crosses a name rather than a `struct dirent`. The pattern is now
+strong enough to state as a prior rather than as a tally: **before recording
+that something waits on the memory model, ask whether the address can be
+retired at the call.** Five times running it could, and twice the answer was
+not a language feature at all but a `pasx_` routine that does the walking on
+the far side.
 
 ---
 
@@ -293,7 +367,7 @@ Three things buy it back.
   argument.** Documents by URI, symbols per file, positions, capability
   records: a heterogeneous container is unavoidable, so the four monomorphic
   containers stop being something this page asserts and become something met
-  in the first hour — which is the row [above](#what-blocks-the-library) and
+  in the first hour — which is the row [above](#what-each-landed-feature-left-open) and
   the caller ADR-0116 wants for it. And `didChange` arriving while a compile is
   in flight, with request cancellation, is **exactly the sentence** the
   concurrency row [below](#where-the-ideas-come-from) says no program here has
@@ -529,7 +603,7 @@ the open decision it would settle.
 | Unicode-correct `String` | Swift | the text model | **Done**, entirely — ADR-0189 – ADR-0193, then ADR-0196 and ADR-0199; the row in [the goal's table](#the-goal-adr-0109) is what the increments were and what each cost, and this one is only about the borrowing. The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
 | ARC | Swift | aliasing | **The question is withdrawn** (ADR-0201). ADR-0117's containment fixes what `^T` means, and ARC changes it — so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
-| Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-blocks-the-library) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
+| Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-each-landed-feature-left-open) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
 | Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. So the sentence is still unsaid. What has changed is that saying it is now a step rather than a proposal: the program that would is in the tree, the shape of what blocks it is visible, and the row is one increment away from having a caller instead of a candidate |
 

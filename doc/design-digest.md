@@ -3079,7 +3079,8 @@ silences. All four earlier dependencies happened to be functions.
   `pas_` name defined in that file.
 
 **A foreign answer of a record is a copy** (ADR-0187, AP 6.7.7.8). The last row
-under the roadmap's "What blocks the library": a routine that *answers* a
+under the roadmap's "What each landed feature left open", which carried this
+  under its former title "What blocks the library": a routine that *answers* a
 struct. `readdir`, `gmtime` and `localtime` each hand back the address of
 storage they own and reuse, and each hand back a null that is an ordinary
 outcome. ADR-0123 had already lifted ADR-0122's refusal as far as a string with

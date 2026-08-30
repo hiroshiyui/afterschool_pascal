@@ -1461,7 +1461,7 @@ things the standards require, and no way to reach a socket.
 The blocker recorded one increment ago is what made it possible: a syscall
 wrapper is a routine that can fail, and ADR-0120 gave the language a shape to
 say so in. The blocker recorded in
-[the roadmap](roadmap.md#what-blocks-the-library) is not solved — an FFI is
+[the roadmap](roadmap.md#what-each-landed-feature-left-open) is not solved — an FFI is
 a hole in every safety property, and the memory-safety model is still open — so
 the
 boundary is made **lexically visible** instead, which is the answer the
