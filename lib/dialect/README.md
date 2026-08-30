@@ -1,12 +1,22 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These sixteen modules use constructs no standard Pascal has, and **thirteen**
-of them are the only part of this repository that reaches outside the program: the
-environment, the file system, file descriptors, `errno`, and the C functions
-behind them. `pascontainer`, `pasjson` and `paslsp` are the three that do not —
-they are pure computation over what the other thirteen hand them, here because
+These **twenty-one** modules use constructs no standard Pascal has, and
+**eleven** of them are the only part of this repository that reaches outside
+the program: the environment, the file system, file descriptors, the terminal,
+`errno`, and the C functions behind them. Counted by what they *bind* — an
+`external` declaration naming a foreign symbol — which is the line that
+matters here, since the rule below is about how a foreign failure is reported:
+`pasdir`, `pasenv`, `pasfs`, `pasio`, `pasmathx`, `pasnet`, `pasos`,
+`pasprocess`, `passtream`, `pasterm`, `pasunicode`.
+
+The other ten are pure computation over what those hand them, here because
 they are dialect-only for ADR-0119's reason and not because they touch
-anything. The rule below is about the thirteen.
+anything: `pascontainer`, `paserror`, `pashttp`, `pasjson`, `paslist`,
+`paslsp`, `paslspdiag`, `pasparse`, `pasregex`, `pastime`. `pashttp` is the
+one worth a second look — a network client that binds nothing, because
+`PasNet` is what holds the socket and HTTP is a grammar over it.
+
+The rule below is about the eleven.
 
 They were built one at a time, each demanded by the boundary rather than
 designed, and they arrived with **four** ways of reporting a failure. This file
@@ -131,7 +141,7 @@ whoever lent it, the kernel says `ssize_t`. A parameter is where that is exactly
 right — passing a slice *is* the caller's ownership written down. A result has
 no owner, so a boundary shape there is the boundary leaking into your interface.
 
-**Convert at the first opportunity**, which is what the thirteen already
+**Convert at the first opportunity**, which is what the eleven already
 do:
 
 - `o^` after a `= nil` test, and the value copied out — `PasEnv.LookupOr`,

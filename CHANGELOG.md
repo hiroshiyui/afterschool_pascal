@@ -51,8 +51,34 @@ appears below in the release where it still existed.
   the change being waited for is compiled first rather than last.
 - `PasIO.FdReady` and `PasLsp.LspPending` ask whether a read would block.
 
+- **Four library modules**: `PasTime` (arithmetic on a date, an ISO 8601 form
+  written and parsed, a UTC offset shift), `PasTerm` (is this a terminal, how
+  big is it, raw mode, a key, the cursor sequences), `PasHttp` (an HTTP/1.1
+  client over `PasNet`, `Content-Length` and chunked, no TLS) and `PasRegex`
+  (regular expressions with a stated worst case, `2 × program × subject`,
+  because a backtracking matcher has no bound this language could enforce).
+- **A map may be keyed by any type a program names** (ADR-0260). The hash and
+  the equality travel with each operation as procedural parameters, which is
+  what `PasSort` has always done; no language feature was needed, and the
+  roadmap's claim that this waited on generic *constraints* was wrong.
+- **A generic's diagnostic says which activation asked for the instantiation**
+  (ADR-0259). An error inside a generic's body is reported at the generic, as
+  it must be; one more line now names the call that demanded that translation,
+  which matters most for a call that writes no type arguments at all.
+- `pascalc --dump-stmts`, and the language server's folding and
+  selection-expansion built on it.
+- The corpus is compiled and run under AddressSanitizer, UndefinedBehaviour-
+  Sanitizer and LeakSanitizer as a `ctest` case (ADR-0261).
+
 ### Fixed
 
+- **A file variable bound by `bind` leaked its name.** The name was freed only
+  when *replaced*, so a bound file going out of scope lost one — once per
+  bind, and the language server binds once per keystroke.
+- **A generic taking a procedural parameter could be instantiated wrongly.**
+  The second instantiation reused the first's resolved types where the
+  procedural parameter's own parameter type depended on the type arguments,
+  and the actual was then refused against a type from another activation.
 - **A generic call could not put a type parameter after a value parameter.**
   `procedure P(a, b: integer; T: type; x: T)` matched the type parameter
   against the second `integer` and reported that an argument nobody meant as a
