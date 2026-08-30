@@ -136,11 +136,10 @@ written. The gap was permission, not arithmetic, and a record now crosses as a
 declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
-Everything else a survey of daily needs found is closed. The library is
-twenty-five modules, eight conforming and seventeen dialect. **`README.md`'s
-module table is the one place to count them** — one row each, checkable
-against `ls lib lib/dialect`, and this sentence has held a number that went
-stale twice. `lib/dialect/README.md` is not a second listing and should not be
+Everything else a survey of daily needs found is closed. **`README.md`'s
+module table is the one place to count the library** — one row each, checkable
+against `ls lib lib/dialect`, and it is named here instead of a number because
+this sentence carried one and it went stale three times. `lib/dialect/README.md` is not a second listing and should not be
 read as one: it is the error-shape convention, and it names only the modules
 that illustrate it. That survey (2026-08-23, against the thirteen modules that
 then existed in total) named six gaps. Three needed no language change and closed the same day:
@@ -304,17 +303,20 @@ have, and it is separate because the two have never competed for the same
 hours: every gate, oracle and sweep in this tree serves correctness, and
 almost nothing serves the loop a person actually sits in.
 
-Five items, in the order I would take them. Each says what is measured and
-what is guessed, because two of them rest on timings taken incidentally while
-building the language server rather than on a profile anybody ran.
+Five items, in the order I would take them. Every number below was measured on
+2026-08-31 and the command that produced it is named, because the first
+version of this chapter quoted seven figures taken incidentally while building
+the language server and **six of them were wrong within two releases** — the
+suite's duration by a factor of three. A figure here is a reading with a date
+on it, and re-reading it is cheaper than trusting it.
 
 - **There is no formatter, and it is the largest gap by developer-time.**
   `tools/` holds `pascalcc` and nothing else; `.clang-format` covers the C,
-  which is three files, and nothing covers the 36 000 lines of Pascal that are
-  the compiler, the twenty-five library modules or the ~950 corpus sources.
-  Hand-alignment drift is already recorded as a *reason a whole-tree
-  clang-format is refused* for the C, and the Pascal has no equivalent claim
-  either way.
+  which is four files, and nothing covers the 40 821 lines of Pascal that are
+  the compiler, the 10 507 in the thirty-one library modules, or the 765
+  tracked corpus sources. Hand-alignment drift is already recorded as a
+  *reason a whole-tree clang-format is refused* for the C, and the Pascal has
+  no equivalent claim either way.
 
   **The language server did the hard half without meaning to.** ADR-0258 makes
   the parser report where every statement begins and ends, and ADR-0253 does
@@ -328,28 +330,34 @@ building the language server rather than on a profile anybody ran.
   `rangeFormatting` in the server, a `style:` gate for the Pascal of the kind
   `git clang-format` gives the C, and the prerequisite for any later
   refactoring tool. The cost to watch is ADR-0126's: trivia goes in the one
-  array whose headroom is measured, and `--dump-limits` says ApFront is at
-  535 309 of 1 000 000 pool characters and 125 917 of 300 000 tokens today.
-  Measure before believing an estimate.
+  array whose headroom is measured, and `buffer-headroom` reports the pool at
+  550 722 of 1 000 000 with ApFront the worst, and the tokens at 188 586 of
+  300 000 with the *program* the worst — 44.9% and 37.1% free. Measure before
+  believing an estimate; the last reading written here named ApFront for both
+  and was 63 000 tokens light.
 
 - **Nothing has ever profiled the compiler.** `performance-profile` is a skill
   and there is no evidence in the tree that it has been run. What numbers
-  exist arrived sideways: a full compile of `selfhost/apfront.pas` (22 900
-  lines) is about 340 ms, and `--dump-uses` over it is about 180 ms.
+  exist arrived sideways: a full compile of `selfhost/apfront.pas` (24 206
+  lines) is 376 ms, `--dump-uses` over it 199 ms, and `--dump-stmts` and
+  `--dump-symbols` 104 ms each — the last two stopping after the parse, which
+  is most of the difference.
 
   One of those is worth acting on before any profile. **A hover costs
-  1 555 350 bytes and 37 521 lines of dump to answer one question**, which the
+  1 599 325 bytes and 38 519 lines of dump to answer one question**, which the
   server then scans linearly. Nobody chose that; it is what "dump everything"
   costs when the caller wants one line. `--dump-uses --at line:col` would make
-  it a lookup, and the same question is now open for `--dump-stmts`.
+  it a lookup, and `--dump-stmts` has the same shape at a quarter the size —
+  423 152 bytes and 15 388 lines for a fold or an expansion at one position.
 
   What is missing first, though, is a *baseline*: the self-hosting build is
   the natural benchmark and no committed number says how long it takes, so
   there is nothing for a regression to fail against.
 
-- **Every diagnostic is an error.** 450 `ErrorAt` sites in ApFront and no
+- **Every diagnostic is an error.** 523 `ErrorAt` sites in ApFront and no
   other severity anywhere: `lib/dialect/paslspdiag.pas` writes
-  `'severity', 1` as a constant, so LSP's severity 2 is unused and the
+  `'severity', 1` as a constant, and its own comment says a second severity
+  would be a branch no input reaches — so LSP's severity 2 is unused and the
   compiler has no category for *this compiles and is probably wrong*. An
   unused variable, an unused import, a `var` parameter never written through,
   a function whose result is assigned on one path and not another, a statement
@@ -360,43 +368,49 @@ building the language server rather than on a profile anybody ran.
   every message, so each warning buys a case — which is the gate working
   rather than an obstacle, and is the reason to add them in small batches.
 
-- **Three blind spots the gates cannot see, and all three are closable.**
-  `doc/sop.md` §7 records the first two and they are worth doing rather than
-  keeping:
+- **Two blind spots the gates cannot see, and a third that closed.**
+  `doc/sop.md` §7 records both of the ones that remain, and both are worth
+  doing rather than keeping:
 
   *A branch is invisible.* `line-coverage` counts a **statement**, so
   `if c then a else b` on one line is covered when either arm runs. The
-  ratchet stands at 446 uncovered of 18 131 — a statement denominator, and
+  ratchet stands at 456 uncovered of 18 700 — a statement denominator, and
   nobody knows the branch one. `pascalc --coverage` already emits a counter
   per statement; a counter per arm is the same mechanism.
 
   *A dump's exit status is read by nothing.* The coverage sweep drives
   `--dump-all` over every source and reads the lines reached, never the
-  child's status — which is how `--dump-sema` crashed on every program
-  declaring a fallible-type for three days and 714 green cases. The fix is a
-  few lines and is named in the row.
+  child's status — `sweep()` in `tests/checks/coverage.py` calls
+  `subprocess.run` and discards what it returns — which is how `--dump-sema`
+  crashed on every program declaring a fallible-type for three days and 714
+  green cases. The fix is a few lines and is named in the row.
 
-  *And a third that §7 does not record: nothing fuzzes, and nothing runs the
-  runtime under a sanitizer.* `-fsanitize-coverage` appears only as the
-  coverage instrumentation; AddressSanitizer appears only in ADR-0019 as a
-  one-off run in 2024, and the seven CI jobs are `test`,
-  `unicode-conformance`, `fpc-differential`, `seed-is-current`, `unoptimised`,
-  `second-backend` and `model-drift` — not one of them is a memory checker.
-  A hand-written lexer and parser over **fixed buffers** (ADR-0012) is the
-  canonical fuzzing target, and `selfhost/torture.pas` and `selfhost/badparse/`
-  are hand-written corpora — which is exactly ADR-0067's sentence, *a claim no
-  test names is a claim nothing checks*, applied to crash-resistance instead
-  of to conformance. The runtime is the only C here and it does the
-  allocation, the handles and the string arena; it is the obvious thing to run
-  under ASan and UBSan over the whole corpus, and that is a CI job rather than
-  a research project.
+  *The third was that nothing runs the runtime under a sanitizer, and
+  ADR-0261 closed it.* `sanitizers` is a ctest case and a CI job: the corpus
+  again under AddressSanitizer, UndefinedBehaviorSanitizer and LeakSanitizer,
+  over a second `libpasrt.a` built with the same flags — 286 programs clean.
+  It is the most expensive gate here after the fixed point, at 49.8 s. **It
+  had never passed on CI until 2026-08-30**, `debian:trixie` and
+  `ubuntu:24.04` shipping a `clang` without compiler-rt, so every
+  `-fsanitize=address` link failed and the harness counted 516 silent skips;
+  its own floor caught it, `libclang-rt-dev` fixed it, and the harness now
+  prints the first build failure rather than only a count. **Fuzzing is still
+  open**, and is now the whole of what this bullet asks for: a hand-written
+  lexer and parser over **fixed buffers** (ADR-0012) is the canonical target,
+  and `selfhost/torture.pas` and `selfhost/badparse/` are hand-written
+  corpora — ADR-0067's *a claim no test names is a claim nothing checks*,
+  applied to crash-resistance instead of to conformance.
 
-- **The suite is 85 seconds and one case is 57 of them.** `selfhost-codegen`
-  — the stage-2-equals-stage-3 fixed point — dominates, and it is not
-  obviously parallelisable, being a fixed point by construction. Worth
-  measuring where the rest goes before acting, and worth saying plainly that
-  this is the item on the list I am least sure repays the effort: 85 seconds
-  is not the reason anything here is slow to work on.
+- **The suite is 262 seconds, and sixteen cases are 234 of them.** The other
+  758 take about 28 seconds between them, so this is not a suite that is slow;
+  it is a suite of gates with a suite attached. `selfhost-codegen` — the
+  stage-2-equals-stage-3 fixed point — is 63.6 s, `sanitizers` 49.8 s and
+  `fpc-differential` 44.4 s, which is 60% of the wall clock in three cases,
+  and each of the three is a whole second corpus run by construction rather
+  than an accident of implementation. This remains the item on the list I am
+  least sure repays the effort, and the correction sharpens rather than
+  softens that: the number was wrong by a factor of three and nobody noticed,
+  which is the evidence that nobody is waiting on it.
 
 **What the list is not.** None of these is a language feature and none of them
 changes what the compiler accepts, which is why they sit apart from every
