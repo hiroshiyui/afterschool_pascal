@@ -1419,6 +1419,7 @@ begin
   n^.nsOk := false;
   n^.nsBindable := false;
   n^.nParen := false;
+  n^.nChecked := false;
   { What Sema will fill in. A C++ struct gets these from its member
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
@@ -9602,9 +9603,20 @@ var n: numPtr;
 begin
   new(n);
   n^.value_ := v;
+  n^.ty := nil;
   n^.next := nil;
   if head = nil then head := n else tail^.next := n;
   tail := n
+end;
+
+{ A type-valued component: 6.4.7's identity is the id, and the type is kept
+  beside it so AP 6.7.3.10.4 can read the tuple backwards. Every site that
+  appends a `typeId` goes through this, so there is no tuple in which the two
+  disagree. }
+procedure AppendType(var head, tail: numPtr; t: typePtr);
+begin
+  AppendNum(head, tail, t^.typeId);
+  tail^.ty := t
 end;
 
 { Whether this schema's body is being resolved right now, at any depth. }
@@ -9656,7 +9668,7 @@ begin
         end
         else begin
           a^.ntype := given;
-          AppendNum(tuple, tupleTail, given^.typeId)
+          AppendType(tuple, tupleTail, given)
         end;
         a := a^.next
       end
@@ -9841,7 +9853,7 @@ begin
           writeln(''' of this schema is a type, so a type name belongs here');
           ok := false
         end
-        else AppendNum(tuple, tupleTail, given^.typeId)
+        else AppendType(tuple, tupleTail, given)
       end
       else if not EvalOrdinal(a, given, value_) then begin
         given := a^.ntype;
@@ -11707,12 +11719,12 @@ begin
   p := callee^.params;
   i := 1;
   while a <> nil do begin
-    if p <> nil then
-      if p^.sym^.kind = skProcParam then
-        CheckProcArgument(p^.sym, a, callee, i)
-      else
-        CheckExpr(a)
-    else
+    { An actual carrying nChecked was read by AP 6.7.3.10.4's inference, which
+      had to know its type before this routine's callee existed; CheckExpr is
+      not idempotent, so it is not asked twice (ADR-0254). }
+    if (p <> nil) and (p^.sym^.kind = skProcParam) then
+      CheckProcArgument(p^.sym, a, callee, i)
+    else if not a^.nChecked then
       CheckExpr(a);
     if p <> nil then p := p^.next;
     i := i + 1;
@@ -19292,60 +19304,348 @@ end;
   second statement of every node's shape, free to disagree with the parser in
   one field of one kind and be caught by nothing here; starting the parser over
   at a saved token cannot disagree with parsing, because it is parsing. }
+{ ------------------------------------------------------------------------ }
+{ AP 6.7.3.10.4: inferred type arguments (ADR-0254).                         }
+
+const
+  { A generic routine's type parameters, all at once. A fixed bound in the
+    shape ADR-0012 gives every buffer here; the widest heading in this tree
+    has two, and inference is a walk over a call's own arguments rather than
+    over a program, so there is nothing here for a corpus to grow. }
+  maxTypeParams = 16;
+
+type
+  { What one type parameter turned out to be, and the name it answers to. The
+    name and not the symbol: at the moment inference runs, the generic's
+    region has not been restored and its type parameters are not symbols yet
+    -- they become symbols below, once the tuple is known. }
+  typeBinding = record
+    at, len: integer;
+    ty: typePtr
+  end;
+  typeBindings = record
+    n: integer;
+    b: array [1..maxTypeParams] of typeBinding
+  end;
+
+
+{ The formals of a generic heading, one at a time.
+
+  `a, b: integer` is two formals and one group, and until AP 6.7.3.10.4 wanted
+  an exact actual-to-formal correspondence the walks below counted *groups*.
+  That was already wrong in two ways nothing had asked about, because every
+  generic in this tree happens to write its type parameters first and one to a
+  group: `procedure P(a, b: integer; T: type; x: T)` matched the type group
+  against the second `integer` and reported "this argument must name a type"
+  about an argument nobody meant as one; and `procedure P(T, U: type; ...)`
+  took one actual for the two names and bound `U` to `T`'s type. Counting what
+  the language counts fixes both. }
+procedure NextFormal(var g, n: nodePtr);
+begin
+  if n <> nil then n := n^.next;
+  while (g <> nil) and (n = nil) do begin
+    g := g^.next;
+    if g <> nil then n := g^.grNames
+  end
+end;
+
+procedure FirstFormal(gen: symPtr; var g, n: nodePtr);
+begin
+  { No skip-the-empty-group loop, where NextFormal needs one: every group has
+    at least one name, ParseNameList and ParseProcParam each producing one or
+    calling Bail. NextFormal's loop is for the end of a group and is reached
+    at every group boundary; one here would be reached by nothing. }
+  g := gen^.genDecl^.pdParams;
+  n := nil;
+  if g <> nil then n := g^.grNames
+end;
+
+{ How many formals, how many of them are type parameters, and where the first
+  of those stands. The counts AP 6.7.3.10.4's rule is written in terms of. }
+procedure GenericShape(gen: symPtr; var nTypes, nFormals, firstType: integer);
+var g, n: nodePtr;
+begin
+  nTypes := 0;
+  nFormals := 0;
+  firstType := 0;
+  FirstFormal(gen, g, n);
+  while g <> nil do begin
+    nFormals := nFormals + 1;
+    if g^.grIsTypeDisc then begin
+      nTypes := nTypes + 1;
+      if firstType = 0 then firstType := nFormals
+    end;
+    NextFormal(g, n)
+  end
+end;
+
+{ Is this name one of the generic's type parameters? }
+function IsTypeParamName(gen: symPtr; at, len: integer): boolean;
+var g, n: nodePtr; found: boolean;
+begin
+  found := false;
+  FirstFormal(gen, g, n);
+  while g <> nil do begin
+    if g^.grIsTypeDisc then
+      if PoolSame(at, len, n^.dnAt, n^.dnLen) then found := true;
+    NextFormal(g, n)
+  end;
+  IsTypeParamName := found
+end;
+
+function BoundHere(var bs: typeBindings; at, len: integer): typePtr;
+var i: integer;
+begin
+  BoundHere := nil;
+  for i := 1 to bs.n do
+    if PoolSame(at, len, bs.b[i].at, bs.b[i].len) then BoundHere := bs.b[i].ty
+end;
+
+{ The first determining position wins, so a name already bound is never
+  rebound. That is the whole of AP 6.7.3.10.4's answer to "what happens when
+  two arguments imply different types": the second one is not a second
+  opinion, it is an ordinary actual, and 6.4.6 judges it against the formal
+  the first one produced. `ValueOr(st, 'none')` is the case -- `st` says `T`
+  is `string(8)` and `'none'` is a four-character string, which is
+  assignment-compatible with it and would be a *conflict* under any rule that
+  let both positions speak. }
+procedure BindType(var bs: typeBindings; at, len: integer; t: typePtr);
+begin
+  if (t <> nil) and (BoundHere(bs, at, len) = nil) then
+    if bs.n < maxTypeParams then begin
+      bs.n := bs.n + 1;
+      bs.b[bs.n].at := at;
+      bs.b[bs.n].len := len;
+      bs.b[bs.n].ty := t
+    end
+end;
+
+{ Does this parameter-form mention a type parameter anywhere inference can
+  read it? Asked before the actual is checked, because checking one is not
+  free: CheckExpr writes a `use` line for every applied occurrence in it
+  (ADR-0246) and claims a frame slot for a nested call's result, so an actual
+  checked twice is a duplicated answer to go-to-definition and a frame with a
+  slot nobody uses. Only a determining position is checked here, and
+  CheckArguments is told not to check it again. }
+function Mentions(gen: symPtr; d: nodePtr): boolean;
+var a: nodePtr; found: boolean;
+begin
+  found := false;
+  if d <> nil then
+    if d^.kind = nkNamed then
+      found := IsTypeParamName(gen, d^.nmAt, d^.nmLen)
+    else if d^.kind = nkSchema then begin
+      a := d^.scArgs;
+      while a <> nil do begin
+        if (a^.kind = nkVar) and (a^.vrField = nil) then
+          if IsTypeParamName(gen, a^.vrAt, a^.vrLen) then found := true;
+        a := a^.next
+      end
+    end
+    else if d^.kind = nkArray then
+      { ADR-0125's `array of T`, whose denoter is an nkArray with no
+        dimensions. A pointer is not here because 6.7.3.1 admits none: a
+        parameter-form is a type-name, a schema-name or a type-inquiry, so
+        `var p: ^T` is a syntax error and there is no shape to read. }
+      if d^.arDims = nil then found := Mentions(gen, d^.arElem);
+  Mentions := found
+end;
+
+{ One argument of a schema production, read against the tuple component the
+  actual's type was produced with. A bare name and nothing else: `Fallible(T)`
+  and `Map(K, V)` are the shapes, and a nested production would be parsed as
+  an expression here rather than as a denoter. }
+procedure DetermineArg(gen: symPtr; a: nodePtr; t: typePtr;
+                       var bs: typeBindings);
+begin
+  if (a <> nil) and (t <> nil) then
+    if (a^.kind = nkVar) and (a^.vrField = nil) then
+      if IsTypeParamName(gen, a^.vrAt, a^.vrLen) then
+        BindType(bs, a^.vrAt, a^.vrLen, t)
+end;
+
+procedure DetermineTuple(gen: symPtr; args: nodePtr; t: typePtr;
+                         var bs: typeBindings);
+var a: nodePtr; c: numPtr;
+begin
+  a := args;
+  c := t^.tuple;
+  while (a <> nil) and (c <> nil) do begin
+    { Nil for an ordinal component, and for a tuple built where nothing kept
+      the type -- either way there is nothing here to read. }
+    if c^.ty <> nil then DetermineArg(gen, a, c^.ty, bs);
+    a := a^.next;
+    c := c^.next
+  end
+end;
+
+{ What an actual's type says about the type parameters, read off the formal's
+  parameter-form. Three shapes determine and every other one is a
+  *non-determining position* that is skipped rather than refused: a formal
+  declared `integer` constrains nothing, and neither does one naming a schema
+  whose arguments are all written out.
+
+    T             a type parameter, bound to the actual's own type
+    S(.., T, ..)  a production, whose actual must have been produced from S --
+                  then each argument is read against the tuple, which is what
+                  `numRec.ty` is for
+    array of T    ADR-0125's slice, read through its component
+
+  There is no pointer shape because 6.7.3.1 admits no pointer: a
+  parameter-form is a type-name, a schema-name or a type-inquiry, and `var p:
+  ^T` is refused by the parser before any of this could see it.
+
+  The schema is found by looking its name up **at the call**, so a generic
+  whose parameter-form names a schema the caller cannot see infers nothing and
+  the types have to be written out. That is a graceful degradation and not a
+  wrong answer, and it is why this is a lookup and not a comparison of
+  spellings: a same-named schema of the caller's own would otherwise bind a
+  type the callee never meant. }
+procedure Determine(gen: symPtr; d: nodePtr; t: typePtr;
+                    var bs: typeBindings);
+var sc: symPtr;
+begin
+  if (d <> nil) and (t <> nil) then
+    if d^.kind = nkNamed then begin
+      if IsTypeParamName(gen, d^.nmAt, d^.nmLen) then
+        BindType(bs, d^.nmAt, d^.nmLen, t)
+    end
+    else if d^.kind = nkSchema then begin
+      sc := LookupQuiet(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen);
+      if sc <> nil then
+        if t^.schema = sc then DetermineTuple(gen, d^.scArgs, t, bs)
+    end
+    else if d^.kind = nkArray then
+      if (d^.arDims = nil) and IsSlice(t) then
+        Determine(gen, d^.arElem, t^.elem, bs)
+end;
+
 function InstantiateGeneric;
 var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     given: typePtr; found, ip: instPtr;
     saveTop, mark: entryPtr; saveDepth, savePos, saveImport: integer;
     saveCur: symPtr; saveFile: nameStr;
     ok: boolean; tp: nodePtr; ts: symPtr;
+    n: nodePtr; c: numPtr; bs: typeBindings;
+    nTypes, nFormals, firstType, nArgs, k: integer; inferred: boolean;
 begin
   InstantiateGeneric := nil;
   tuple := nil;
   tupleTail := nil;
   ok := true;
 
-  { The type arguments, in the order the type parameters were written. An
-    actual in that position must name a type and nothing else: it is not an
-    expression, and TypeArgument is what Stage A already asks of a schema's
-    type-valued discriminant (ADR-0209). }
-  g := gen^.genDecl^.pdParams;
+  bs.n := 0;
+  GenericShape(gen, nTypes, nFormals, firstType);
+  nArgs := 0;
   a := args;
-  while (g <> nil) and ok do begin
-    if g^.grIsTypeDisc then begin
-      if a = nil then begin
-        ErrorAt(line, col);
-        write('''');
-        WritePool(gen^.at, gen^.len);
-        writeln(''' needs a type here, and the argument list ended');
-        ok := false
-      end
-      else begin
-        given := TypeArgument(a);
+  while a <> nil do begin
+    nArgs := nArgs + 1;
+    a := a^.next
+  end;
+
+  { AP 6.7.3.10.4: which of the two forms this activation is.
+
+    A type parameter occupies a position in the generic's formal list and
+    none in the produced routine's, so an activation that writes its types has
+    `nFormals` actuals and one that leaves them to be inferred has
+    `nFormals - nTypes`. There is at least one type parameter or this is not a
+    generic, so the two counts can never be the same number and the reading is
+    never ambiguous by arity alone.
+
+    The count is not quite enough, and the case that says so is already in the
+    corpus. `P(integer)` against `procedure P(T: type; var a: T)` has exactly
+    `nFormals - nTypes` actuals, and it is a call that forgot its second
+    argument rather than a call inferring its first -- `generic_errors.err`
+    holds the message it has always produced. So the tie-break is the one
+    question that cannot be wrong: an actual that denotes a type cannot denote
+    a value, and `TypeArgument` is that question asked without side effects. If
+    the actual standing where the first type parameter would stand names a
+    type, the activation is the explicit one, short an argument, and says so
+    in the words it always did. }
+  inferred := false;
+  if (nTypes > 0) and (nArgs = nFormals - nTypes) then begin
+    a := args;
+    for k := 2 to firstType do
+      if a <> nil then a := a^.next;
+    inferred := TypeArgument(a) = nil
+  end;
+
+  if inferred then begin
+    { Read the types off the actuals. Only a determining position is checked
+      here, and it is marked so CheckArguments does not check it again. }
+    FirstFormal(gen, g, n);
+    a := args;
+    while (g <> nil) and (a <> nil) do begin
+      if not g^.grIsTypeDisc then begin
+        { A procedural actual is an identifier and not an expression, and it
+          determines nothing: 6.7.3.1 gives it a heading rather than a
+          parameter-form. }
+        if (not g^.grIsProc) and Mentions(gen, g^.grType) then begin
+          if not a^.nChecked then begin
+            CheckExpr(a);
+            a^.nChecked := true
+          end;
+          Determine(gen, g^.grType, a^.ntype, bs)
+        end;
+        a := a^.next
+      end;
+      NextFormal(g, n)
+    end;
+
+    { The tuple, in the order the type parameters were written -- which is the
+      order 6.4.7 gives a tuple its identity in, so an inferred activation and
+      a written one produce the same instantiation and share a cache entry. }
+    FirstFormal(gen, g, n);
+    while (g <> nil) and ok do begin
+      if g^.grIsTypeDisc then begin
+        given := BoundHere(bs, n^.dnAt, n^.dnLen);
         if given = nil then begin
-          ErrorAt(a^.line, a^.col);
-          write('this argument of ''');
+          ErrorAt(line, col);
+          write('nothing in this call says what ''');
+          WritePool(n^.dnAt, n^.dnLen);
+          write(''' of ''');
           WritePool(gen^.at, gen^.len);
-          write(''' must name a type, because the parameter it matches ');
-          writeln('is declared ''type''');
+          write(''' is: write the type arguments, or pass an argument whose ');
+          writeln('type determines it');
+          ok := false
+        end
+        else AppendType(tuple, tupleTail, given)
+      end;
+      NextFormal(g, n)
+    end
+  end
+  else begin
+    { The type arguments as written, in the order the type parameters were.
+      An actual in that position must name a type and nothing else: it is not
+      an expression, and TypeArgument is what Stage A already asks of a
+      schema's type-valued discriminant (ADR-0209). }
+    FirstFormal(gen, g, n);
+    a := args;
+    while (g <> nil) and ok do begin
+      if g^.grIsTypeDisc then begin
+        if a = nil then begin
+          ErrorAt(line, col);
+          write('''');
+          WritePool(gen^.at, gen^.len);
+          writeln(''' needs a type here, and the argument list ended');
           ok := false
         end
         else begin
-          { Kept on the argument node, because the type must be resolved
-            *here* -- in the caller's region, where a type the caller declared
-            is visible -- and read again below, after the generic's scope has
-            been restored, where it is not. Resolving it twice was the defect:
-            the second lookup ran in the generic's own region, so a client
-            calling an imported generic with a type of its own got a frame slot
-            of no type at all, which LLVM refuses as `void` in a struct. The
-            node is about to be unlinked from the argument list, so this is the
-            husk idiom with nothing left over. }
-          a^.ntype := given;
-          AppendNum(tuple, tupleTail, given^.typeId)
+          given := TypeArgument(a);
+          if given = nil then begin
+            ErrorAt(a^.line, a^.col);
+            write('this argument of ''');
+            WritePool(gen^.at, gen^.len);
+            write(''' must name a type, because the parameter it matches ');
+            writeln('is declared ''type''');
+            ok := false
+          end
+          else AppendType(tuple, tupleTail, given)
         end
-      end
-    end;
-    if a <> nil then a := a^.next;
-    g := g^.next
+      end;
+      if a <> nil then a := a^.next;
+      NextFormal(g, n)
+    end
   end;
 
   if ok then begin
@@ -19378,20 +19678,24 @@ begin
         heading and for the whole body. That is the whole of what makes
         `var v: Vec(T, 8)` and `var t: T` resolve: nothing below this knows a
         generic is being instantiated. }
-      g := gen^.genDecl^.pdParams;
-      a := args;
+      { Read out of the tuple and not off the argument nodes, which is what
+        `numRec.ty` bought: an inferred activation has no argument node in a
+        type position to read, and a written one has exactly the type that was
+        appended here. It also fixes a walk that took one actual per *group*
+        and gave every name in it the same type, so `T, U: type` bound `U` to
+        `T`'s (ADR-0254). The types were resolved at the call, in the caller's
+        region where a type the caller declared is visible; this scope is the
+        generic's, where it is not. }
+      FirstFormal(gen, g, n);
+      c := tuple;
       while g <> nil do begin
-        if g^.grIsTypeDisc then begin
-          given := a^.ntype;
-          tp := g^.grNames;
-          while tp <> nil do begin
-            ts := Declare(tp^.dnAt, tp^.dnLen, skType, tp^.line, tp^.col);
-            ts^.stype := given;
-            tp := tp^.next
-          end
-        end;
-        if a <> nil then a := a^.next;
-        g := g^.next
+        if g^.grIsTypeDisc then
+          if c <> nil then begin
+            ts := Declare(n^.dnAt, n^.dnLen, skType, n^.line, n^.col);
+            ts^.stype := c^.ty;
+            c := c^.next
+          end;
+        NextFormal(g, n)
       end;
 
       { An ordinary routine from here on, declared in the *generic's* scope
@@ -19490,17 +19794,19 @@ begin
       further on: elsewhere a parser's node is left in place and its real
       operands moved out, and here the node is removed outright, because
       CodeGen walks this list to emit actuals and a type has none. }
-    prev := nil;
-    a := args;
-    g := gen^.genDecl^.pdParams;
-    while (g <> nil) and (a <> nil) do begin
-      nxt := a^.next;
-      if g^.grIsTypeDisc then begin
-        if prev = nil then args := nxt else prev^.next := nxt
+    if not inferred then begin
+      prev := nil;
+      a := args;
+      FirstFormal(gen, g, n);
+      while (g <> nil) and (a <> nil) do begin
+        nxt := a^.next;
+        if g^.grIsTypeDisc then begin
+          if prev = nil then args := nxt else prev^.next := nxt
+        end
+        else prev := a;
+        a := nxt;
+        NextFormal(g, n)
       end
-      else prev := a;
-      a := nxt;
-      g := g^.next
     end
   end
 end;

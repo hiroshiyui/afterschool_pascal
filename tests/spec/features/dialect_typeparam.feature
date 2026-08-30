@@ -128,3 +128,88 @@ Feature: A routine may be parameterised by a type
       """
       takes 1 argument(s), but 0 were given
       """
+
+  @afterschool:6.7.3.10.4
+  Scenario: the types may be left out where an actual determines them
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      procedure Swap(T: type; var a, b: T);
+      var held: T;
+      begin held := a; a := b; b := held end;
+      var i, j: integer;
+      begin i := 1; j := 2; Swap(i, j); writeln(i:1, j:1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      21
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: the determining position may be inside a production
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Code = (failed);
+           Fallible(T: type) = T ! Code;
+      function ValueOr(T: type; res: Fallible(T); whenBad: T): T;
+      begin if res.ok then ValueOr := res.val else ValueOr := whenBad end;
+      var r: Fallible(integer);
+      begin r := failed; writeln(ValueOr(r, 9):1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      9
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: an inferred activation and a written one are one instantiation
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Id(T: type; x: T): T;
+      begin Id := x end;
+      begin writeln(Id(integer, 3):1, Id(4):1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      34
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: a type parameter no actual determines is refused
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Pick(T: type; n: integer): T;
+      var got: T;
+      begin Pick := got end;
+      begin writeln(Pick(3):1) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      nothing in this call says what
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: a later actual does not redetermine, and is judged as any other
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      procedure Swap(T: type; var a, b: T);
+      var held: T;
+      begin held := a; a := b; b := held end;
+      var i: integer; c: char;
+      begin Swap(i, c) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      but the argument is char
+      """

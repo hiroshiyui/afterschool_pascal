@@ -1,0 +1,5 @@
+<source>:52:11: error: nothing in this call says what 't' of 'pick' is: write the type arguments, or pass an argument whose type determines it
+<source>:52:11: error: unknown function 'pick'
+<source>:56:11: error: var parameter 'b' is integer, but the argument is char
+<source>:60:19: error: this argument of 'valueor' must name a type, because the parameter it matches is declared 'type'
+<source>:60:11: error: unknown function 'valueor'

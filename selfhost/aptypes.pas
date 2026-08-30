@@ -774,7 +774,24 @@ type
   symListPtr = ^symListRec;
   nodeListPtr = ^nodeListRec;
 
-  numRec = record value_: integer; next: numPtr end;
+  { A component of a schema's type-argument-tuple (6.4.7), or of a generic
+    routine's (AP 6.7.3.10). `value_` is the whole of 6.4.7's identity -- an
+    ordinal, or ADR-0209's `typeId` for a type-valued one -- and `ty` is that
+    type again, beside it.
+
+    It is there for AP 6.7.3.10.4's inference, which reads a tuple *backwards*:
+    given an actual whose type was produced from `Fallible`, it has to recover
+    what `Fallible` was produced *with* in order to bind `T`, and until this
+    field there was no way -- `ProduceFromSchema` says so where it re-derives
+    the type from the argument node instead ("the tuple holds an id and there
+    is no registry to turn one back into a type"). Nil for an ordinal
+    component, and for a tuple built before this field existed.
+
+    It does **not** make `typeId` an identity, which ADR-0209 warns against:
+    nothing compares these types by id. `SameTuple` goes on comparing
+    `value_`, and a reader that wants the type gets a pointer back and
+    compares pointers, which is ADR-0017. }
+  numRec = record value_: integer; ty: typePtr; next: numPtr end;
   { A folded case-constant: the closed interval it denotes. A single
     constant is lo = hi, so every user of a label list works one way and a
     range is never expanded into its members -- `1..maxint` is one of
@@ -1546,6 +1563,15 @@ type
       `(a + b) * c` being the node `a + b` is, so the node has to remember they
       were written. Nothing else reads this. }
     nParen: boolean;
+    { AP 6.7.3.10.4: this actual has already been checked, by the inference
+      that read its type in order to bind a type parameter (ADR-0254).
+      CheckArguments would otherwise check it a second time, and CheckExpr is
+      not idempotent -- it writes a `use` line for every applied occurrence
+      (ADR-0246), so an editor would be told twice where a name is declared,
+      and it claims a frame slot for a nested call's result, so the frame
+      would grow a slot nothing reads. Set nowhere else and read nowhere
+      else. }
+    nChecked: boolean;
     case kind: nodeKind of
       nkInt:        (intVal: integer);
       { A real literal is kept as its source text and not converted. The

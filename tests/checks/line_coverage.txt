@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 445
-instrumented 17882
+instrumented 17989
 
 accept 0/4
 accumulate 0/84
@@ -36,12 +36,13 @@ appendinstdecl 0/4
 appendint 0/13
 appendlinkname 0/9
 appendlit 0/5
-appendnum 0/5
+appendnum 0/6
 appendopnd 0/7
 appendpool 0/2
 appendprocname 0/5
 appendrange 0/6
 appendsym 0/5
+appendtype 0/2
 arg 0/77
 arm 0/25
 armat 0/9
@@ -68,6 +69,8 @@ bindboundtypes 0/4
 bindname 4/6
 bindprogramparameters 0/32
 bindto 0/4
+bindtype 0/6
+boundhere 0/3
 boundschema 0/65
 boundschemafor 0/9
 boundvalue 1/35
@@ -81,7 +84,7 @@ chainhas 0/10
 chainnames 0/4
 chainrecof 0/3
 check 0/1
-checkarguments 6/235
+checkarguments 6/234
 checkarrayvalue 7/60
 checkbinary 6/165
 checkblock 0/25
@@ -177,6 +180,9 @@ deferrecord 0/4
 deferstmtof 0/4
 definekeyword 0/2
 designatorbindable 0/18
+determine 0/11
+determinearg 0/4
+determinetuple 0/6
 discselectorfor 0/4
 discvalue 6/34
 dumparmlist 0/25
@@ -344,6 +350,7 @@ findfieldin 0/9
 findinterface 0/6
 findmodule 0/6
 finishreal 0/7
+firstformal 0/3
 fixedcomponent 0/2
 foldintop 2/33
 foldrealbinary 5/50
@@ -362,6 +369,7 @@ frameof 0/2
 frameslot 0/10
 framevarat 0/6
 genericfromschema 5/98
+genericshape 0/10
 giveresultslot 0/1
 groupfieldname 0/8
 guardlnarg 0/5
@@ -390,7 +398,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/119
+instantiategeneric 0/156
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -457,6 +465,7 @@ isstructured 0/3
 istext 0/1
 istextfile 0/1
 istimebuiltin 0/1
+istypeparamname 0/7
 isvariable 0/1
 isvarstring 0/1
 jumpdispatch 0/21
@@ -486,6 +495,7 @@ lower 0/3
 makecomplex 0/10
 makeconstreal 0/15
 makeconststr 0/6
+mentions 0/13
 moduledigest 0/9
 msgend 0/3
 msgstart 0/2
@@ -500,10 +510,11 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/80
+newnode 0/81
 newresultslot 0/7
 newsymbol 0/93
 newtype 0/40
+nextformal 0/4
 nonvarying 3/42
 notbindable 3/29
 noteblockdeclarations 0/1

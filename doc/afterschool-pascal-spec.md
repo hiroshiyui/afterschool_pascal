@@ -1344,14 +1344,15 @@ strings, `PasMap` maps a string to an integer, and `PasSort` avoids the
 question entirely by taking two procedural parameters and never seeing an
 element. Four of those are one data structure written once per element type.
 
-NOTE 2 — Nothing here parameterises a *routine*. A schematic formal parameter
-(§6.7.3.2) reads its discriminants from a descriptor the actual brings, which
-is what lets one compiled body serve every tuple; a type is not something a
-descriptor can carry, since the body's layout differs for each. So a routine
-over such a schema names the types it is over, and a routine generic in `T`
-would have to be translated once per `T` — which this document does not
-describe and this processor does not do. That restriction is stated in the
-requirement above rather than left to be discovered.
+NOTE 2 — This clause parameterises a *type* and not a routine. A schematic
+formal parameter (§6.7.3.2) reads its discriminants from a descriptor the
+actual brings, which is what lets one compiled body serve every tuple; a type
+is not something a descriptor can carry, since the body's layout differs for
+each. So a routine generic in `T` has to be translated once per `T`, and that
+is a separate construct with its own clause: 6.7.3.10's type parameter, whose
+6.7.3.10.2 states the per-tuple translation this note says is required. A
+routine over a *schema* still names the types it is over — but 6.7.3.10.4 lets
+the activation leave them out where the other actuals determine them.
 
 NOTE 3 — The spelling is a *position* and not a word (ADR-0140): §6.4.7
 requires a type-identifier there and `type` is a word-symbol of both standards,
@@ -1681,6 +1682,72 @@ NOTE 4 — It has already done its work by the time the produced routine exists:
 it chose which routine that is. What is passed at the activation is what
 6.7.3.1 admits, and a type is not among those things in any of the three
 languages this document is written against.
+
+**6.7.3.10.4 Inferred type arguments [added].** An activation of a generic
+routine shall write an actual-parameter for every formal-parameter of the
+generic declaration, or shall write one for every formal-parameter that is not
+a type parameter; it shall be an error to write any other number.
+
+Where the actual-parameter-list contains an actual-parameter for every
+formal-parameter that is not a type parameter, and the actual-parameter
+occupying the position of the first type parameter, if there is one in that
+position, does not denote a type, the activation shall be an **inferred
+activation**; otherwise the type-argument-tuple shall be as 6.7.3.10.1 gives
+it.
+
+For an inferred activation the type-argument-tuple shall be determined from the
+actual-parameters, taking each in the order it is written and reading it
+against the parameter-form of the formal-parameter it matches, as follows.
+
+  a) Where the parameter-form is a type-identifier having a defining-point as a
+     type parameter of that generic declaration, that type parameter shall be
+     determined as the type possessed by the actual-parameter.
+
+  b) Where the parameter-form is a schema-name followed by an
+     actual-discriminant-part, and the type possessed by the actual-parameter
+     is a type produced from that schema, each actual-discriminant that is a
+     type-identifier having a defining-point as a type parameter of that
+     generic declaration shall determine that type parameter as the
+     corresponding component of the type-argument-tuple of that type.
+
+  c) Where the parameter-form is a slice-parameter-type (6.7.3.9.1), and the
+     actual-parameter is one 6.7.3.9.3 admits, the type-denoter after `of`
+     shall be read against the component type of that actual-parameter.
+
+  d) Otherwise the formal-parameter shall determine nothing.
+
+A type parameter shall be determined by the first actual-parameter that
+determines it, and a later one shall not redetermine it. It shall be an error
+for a type parameter of an inferred activation to be determined by no
+actual-parameter.
+
+The type-argument-tuple of an inferred activation shall be the types so
+determined, in the order the type parameters are written; and 6.7.3.10.2 shall
+then apply to it unchanged.
+
+NOTE 5 — So an inferred activation and a written one with the same types are
+one activation of one produced routine, not two: they name the same tuple, and
+6.7.3.10.2 makes the tuple the identity.
+
+NOTE 6 — The two counts can never be the same number, there being at least one
+type parameter in a generic declaration, so a well-formed activation is never
+ambiguous by arity. The further condition on the first type parameter's
+position is what distinguishes an inferred activation from a written one that
+is short of an argument, and it is decidable because an actual-parameter that
+denotes a type cannot denote a value.
+
+NOTE 7 — A later actual-parameter does not redetermine, and so cannot conflict.
+Once a type parameter is determined the formal-parameters that mention it have
+types, and every remaining actual-parameter is subject to 6.7.3.1 and 6.4.6 as
+any other actual-parameter is. An activation whose second actual-parameter
+possesses a type merely assignment-compatible with the first's is therefore
+well-formed, and one whose second actual-parameter is not is refused where any
+other mismatch is refused.
+
+NOTE 8 — A type parameter occurring only in the result type is determined by
+nothing, 6.7.1 making a result type a type-identifier and not an
+actual-parameter. Such a routine can be activated only by the form of
+6.7.3.10.1.
 
 #### 6.7.5 Required procedures [extended]
 

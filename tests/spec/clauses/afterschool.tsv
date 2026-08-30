@@ -114,6 +114,7 @@
 6.7.3.10.1	The actual
 6.7.3.10.2	Instantiation
 6.7.3.10.3	What a type parameter is not
+6.7.3.10.4	Inferred type arguments
 6.7.5	Required procedures
 6.7.5.9	The exit procedure
 6.7.5.10	The break procedure

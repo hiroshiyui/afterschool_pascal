@@ -377,3 +377,24 @@ DumpSymDecl:nodeKind:1 chains 4 of 63
 # children under them; every other denoter is reported as `type`, which is
 # what the trailing arm says for all 61 of them.
 DumpSymDecl:nodeKind:2 chains 2 of 63
+
+# --- AP 6.7.3.10.4's determining positions --------------------------------
+#
+# `Mentions` and `Determine` dispatch over the three parameter-forms a type
+# parameter can be read out of, and the bound is 6.7.3.1's rather than a
+# convention: a parameter-form is a type-name, a schema-name or a
+# type-inquiry, plus AP 6.7.3.9's slice. The three named here are the
+# type-name (nkNamed), the production (nkSchema) and the slice (nkArray with
+# no dimensions).
+#
+# The rest of nodeKind is expressions, statements and declarations, which
+# never stand in a parameter's type at all, and the denoters that do not
+# determine -- a type-inquiry names a *variable's* type and mentions no
+# parameter, and every remaining denoter is refused in this position by the
+# parser, which is why `^T` has no arm (ADR-0254).
+#
+# A constant added to nodeKind fails both, and the question it asks is the
+# right one: can a formal parameter be declared with the new shape, and if so
+# does a type parameter show through it? Answering "no" is moving the number.
+Mentions:nodeKind:1 chains 3 of 63
+Determine:nodeKind:1 chains 3 of 63
