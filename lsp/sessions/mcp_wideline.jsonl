@@ -1,0 +1,22 @@
+# The outline's *fallback*, which every other session here masks.
+#
+# Both readers of a `symbol` line -- the LSP outline and this one, rendered as
+# text for MCP -- overwrite the folded name the compiler reported with a slice
+# of the source, because the string pool holds only the case-folded spelling
+# (ADR-0239). That slice is available exactly when the declaration lies inside
+# the 4096 characters `DiagLine` holds, and every source the other sessions
+# name is ordinary Pascal where it always does. So the field the folded name
+# is read from was never compared with anything.
+#
+# ADR-0253 then widened the line from six numbers to eight and the name moved
+# from field 7 to field 9. The LSP reader was moved with it and this one was
+# not, and nothing failed: field 7 is now the end line, and the source slice
+# overwrote it before any golden saw it. `wideline.pas` puts a declaration at
+# column 4210 so there is no slice, and this file is what that costs.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+
+# `Early` is inside the line the server holds and comes back as the programmer
+# wrote it; `LaterName` is past the end of it and comes back folded, which is
+# the degradation this fallback is -- and a name, not a number.
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"outline","arguments":{"path":"%ROOT%/lsp/sessions/workspace/wideline.pas"}}}

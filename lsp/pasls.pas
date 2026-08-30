@@ -1011,13 +1011,12 @@ end;
   the programmer wrote out of it. The folded name is the fallback for a line
   the store no longer has.
 
-  **The range is the name and not the declaration.** LSP wants `range` to
-  span the whole symbol and `selectionRange` to be the name inside it; the
-  parse tree records where a declaration *starts* and never where it ends, so
-  the honest answer is the extent this compiler can actually name, given
-  twice. An editor's outline, go-to-symbol and breadcrumbs are all right; what
-  degrades is "expand selection to the enclosing declaration", and inventing
-  an end for it would be inventing a claim about the source. }
+  **The range is the declaration and `selectionRange` is the name inside
+  it**, which is what LSP asks for and what "expand selection to the enclosing
+  declaration" needs. It was not always: until the parse tree learned where a
+  block ends (ADR-0253) both were the name, because inventing an end would
+  have been inventing a claim about the source. A constant and a type still
+  answer with the end of their own name, having no block to end. }
 
 { The n'th space-separated field of a line, or the empty string. }
 function SymField(line: StrItem; n: integer): ParseLine;
@@ -1037,6 +1036,43 @@ begin
       end
     end;
   SymField := out
+end;
+
+{ One `symbol` line, taken apart once. Two readers here want it -- the outline
+  this server answers over LSP, and the one it renders as text for MCP -- and
+  until this record they each wrote the field numbers out for themselves.
+  ADR-0253 then put the declaration's extent in at 7 and 8, so the name moved
+  from 7 to 9, and only one of the two moved with it. Nothing failed: both
+  readers overwrite the folded name with a slice of the source, and every
+  session here reads a file it can open, so what broke was exactly the
+  fallback -- the outline of a source the server could not read would have
+  been a column of end-line numbers. A wire format is a place two readers have
+  to agree, and the way to make them agree is to have one of them. }
+type
+  SymRow = record
+    depth, line, col, len, endLine, endCol: integer;
+    kind, name: ParseLine
+  end;
+
+function SymParse(text: StrItem; var s: SymRow): boolean;
+begin
+  if SymField(text, 1) <> 'symbol' then
+    SymParse := false
+  else begin
+    s.depth := IntOr(ParseInt(SymField(text, 2)), 0);
+    s.kind := SymField(text, 3);
+    s.line := IntOr(ParseInt(SymField(text, 4)), 0);
+    s.col := IntOr(ParseInt(SymField(text, 5)), 0);
+    s.len := IntOr(ParseInt(SymField(text, 6)), 0);
+    { The extent, which a block gives and a constant answers with the end of
+      its own name (ADR-0253). }
+    s.endLine := IntOr(ParseInt(SymField(text, 7)), 0);
+    s.endCol := IntOr(ParseInt(SymField(text, 8)), 0);
+    { Folded, the lexer having case-folded it: a fallback for a source neither
+      reader can slice the real spelling out of. }
+    s.name := SymField(text, 9);
+    SymParse := true
+  end
 end;
 
 { Pascal's word for a declaration, as the protocol's number. A kind this
@@ -1133,6 +1169,7 @@ var uri: DocUri;
     name: DiagLine;
     kind: ParseLine;
     endLine, endCol: integer;
+    sym: SymRow;
     tooDeep: boolean;
 begin
   reply := NewResponse(id);
@@ -1168,18 +1205,15 @@ begin
           { A line that is not a symbol is skipped and is not an error: a
             source with a syntax error in it says so on this same stream, and
             an outline of what parsed is still the best answer available. }
-          if SymField(text, 1) = 'symbol' then begin
-            depth := IntOr(ParseInt(SymField(text, 2)), 0);
-            kind := SymField(text, 3);
-            symLine := IntOr(ParseInt(SymField(text, 4)), 0);
-            symCol := IntOr(ParseInt(SymField(text, 5)), 0);
-            symLen := IntOr(ParseInt(SymField(text, 6)), 0);
-            { The declaration's extent, which a block gives and a constant or
-              a type does not -- there the compiler writes the name's own end
-              (ADR-0253). }
-            endLine := IntOr(ParseInt(SymField(text, 7)), 0);
-            endCol := IntOr(ParseInt(SymField(text, 8)), 0);
-            name := SymField(text, 9);
+          if SymParse(text, sym) then begin
+            depth := sym.depth;
+            kind := sym.kind;
+            symLine := sym.line;
+            symCol := sym.col;
+            symLen := sym.len;
+            endLine := sym.endLine;
+            endCol := sym.endCol;
+            name := sym.name;
             if depth > SymDepthMax then begin
               tooDeep := true;
               depth := SymDepthMax
@@ -1696,24 +1730,36 @@ end;
 
 { The outline of a file on disk, rendered for a reader rather than for a
   parser: two spaces a level, the kind, the name as the *programmer* wrote it
-  and the position. The compiler's own line is six fields and the folded
-  spelling (ADR-0239); the source is read here to recover the case, as the
-  LSP side reads the document it is holding. }
+  and the position. The compiler's own line is eight numbers and the folded
+  spelling (ADR-0239, widened by ADR-0253); the source is read here to recover
+  the case, as the LSP side reads the document it is holding.
+
+  **Both readers count the fields, and this one was left behind once.**
+  ADR-0253 put the declaration's extent in at positions 7 and 8, so the name
+  moved from 7 to 9; the LSP side was moved with it and this was not. Nothing
+  failed, because the next lines overwrite `name` with a slice of the source
+  and every session here reads a file it can open -- so what broke was
+  precisely the fallback, and the outline of an unreadable source would have
+  been a column of end-line numbers. A field index is a place two readers
+  agree, and there is no gate that compares them. }
 function OutlineText(lines: StrVecPtr; var doc: JsonChars): JsonPtr;
 var v: JsonPtr; i, depth, symLine, symCol, symLen: integer;
     text: StrItem; kind: ParseLine; name, srcLine: DiagLine;
+    sym: SymRow;
     pad: StrItem;
 begin
   v := JsonNewText('');
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);
-    if SymField(text, 1) = 'symbol' then begin
-      depth := IntOr(ParseInt(SymField(text, 2)), 0);
-      kind := SymField(text, 3);
-      symLine := IntOr(ParseInt(SymField(text, 4)), 0);
-      symCol := IntOr(ParseInt(SymField(text, 5)), 0);
-      symLen := IntOr(ParseInt(SymField(text, 6)), 0);
-      name := SymField(text, 7);
+    if SymParse(text, sym) then begin
+      depth := sym.depth;
+      kind := sym.kind;
+      symLine := sym.line;
+      symCol := sym.col;
+      symLen := sym.len;
+      { The extent is read and not shown: this outline says where a
+        declaration begins, not how far it runs. }
+      name := sym.name;
       LineOf(doc, symLine, srcLine);
       if (symCol >= 1) and (symLen > 0)
          and (symCol + symLen - 1 <= length(srcLine)) then

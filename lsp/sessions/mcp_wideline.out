@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"pasls","version":"1.0.0"},"instructions":"Ask `outline` where something is declared in a Pascal source and `diagnostics` what the compiler makes of one. Both take a path to a .pas file. `outline` answers for a file that does not compile."}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"program wideline  13:9\n  var Early  14:5\n  var latername  15:4210\n"}],"isError":false}}
