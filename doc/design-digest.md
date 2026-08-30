@@ -3858,6 +3858,30 @@ nothing else. What it would lose, mechanism by mechanism:
   constituent's defining-point as an occurrence in the importing document, and
   a hover over `Doubled` came back as `(Double`. ADR-0249's mistake from the
   other side, caught by a session golden and not by reasoning.
+- **A statement has an extent** (ADR-0258), which is what `foldingRange` and
+  `selectionRange` are answered from — one `--dump-stmts` for both, as one
+  `--dump-uses` serves definition and hover. The trap is that ADR-0253's
+  convention does not transfer: a block ends at the token *past* its `end`,
+  which is right because that token is adjacent, and a statement is followed
+  by `;`, `end`, `else`, `until` or `otherwise`, routinely lines later with
+  comments between — and a comment is not a token. A statement ends at its own
+  last token, and the token record could not say where that is: `len` is a
+  length in the string *pool*, zero for every token `AddSimple` builds and
+  different from the source length for a literal. So `token` gained `endCol`,
+  stamped from the lexer's own `col`, which is already one past the token. The
+  parser reports where it stamps, which is ADR-0246's principle and ADR-0230's
+  argument against a walker; the order is completion order and the format
+  carries no depth, containment being decidable from the ranges.
+- **A change nobody will see the answer to is not compiled** (ADR-0257). A
+  keystroke carries the whole document, so the server drains what has
+  *arrived* — never waits, which would be a policy about typing speed — and
+  keeps the last change per file: four queued edits of a 22 900-line source,
+  780 ms to 340. `pasx_fd_ready`, `PasIO.FdReady` and `PasLsp.LspPending` are
+  the whole of it, the last asking the reader's buffer *and* the descriptor
+  for ADR-0205's reason. What it does not do is abandon a compile in flight,
+  and the reason is measured rather than argued: the cheapest route to that
+  needs the pipe unbuffered, and reading a hover's own dump unbuffered costs
+  621 ms against 5.
 - **An interface declares itself, and a module declares twice** (ADR-0251).
   Two things a source declares are not on the scope chain the walk above uses.
   §6.11.1 registers an *interface* in a table of its own, §6.2.2.2 making one

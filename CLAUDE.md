@@ -120,11 +120,16 @@ the harness and compared byte for byte (ADR-0236). **It speaks two protocols**
 (ADR-0241): the same binary answers MCP over stdio when given `--mcp`, one
 message to a line instead of `Content-Length`, with two tools built on
 `--dump-symbols` and on a compilation. A session says which by a `name.mcp`
-marker. It answers four questions about a document — the diagnostics, the
-outline (ADR-0239), and go-to-definition and hover, which are one question
-asked twice and come from one `--dump-uses` (ADR-0246) — and the three do not
-cost the same: the outline stops after the parse and needs no `--import`,
-where the other two run Sema and do. The corpus sweeps reach it
+marker. It answers six questions about a document — the diagnostics, the
+outline (ADR-0239), go-to-definition and hover, which are one question asked
+twice and come from one `--dump-uses` (ADR-0246), and folding and selection
+expansion, which are a second such pair and come from one `--dump-stmts`
+(ADR-0258) — and they do not cost the same: the outline and the two extent
+answers stop after the parse and need no `--import`, where the diagnostics and
+the two `use` answers run Sema and do. **Nothing waits on a compile that is
+already stale**: the server drains the messages that have arrived and keeps
+only the last `didChange` per document, which took four queued edits of a
+22 900-line source from 780 ms to 340 (ADR-0257). The corpus sweeps reach it
 through a second root rather than through the glob: `coverage.py` names it,
 `variant_check.sh` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`, and
 `heap-balance` drives `lsp/run.sh` instead of `run_test.sh` — which has to take
@@ -820,7 +825,7 @@ single cost of the dialect decision, and `unicode-conformance` — Unicode's own
 here that nobody in this project wrote.
 
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
-  `--dump-all`, `--dump-symbols`, `--dump-imports`, `--dump-uses` — and each stops at the stage it names. They were unconditional
+  `--dump-all`, `--dump-symbols`, `--dump-stmts`, `--dump-imports`, `--dump-uses` — and each stops at the stage it names. They were unconditional
   while there was a second binary to compare them against, which is the reason
   ADR-0025 gave for having no mode to select; it expired with stage 0. Each
   section reports what its own stage found and shows its result only when

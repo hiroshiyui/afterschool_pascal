@@ -39,6 +39,18 @@ appears below in the release where it still existed.
   it, since `try` yields the value and an owned value has none to yield — test
   `.ok`. The cause side may not be owned, for the same reason.
 
+- **The language server folds code and expands a selection** (ADR-0258).
+  `textDocument/foldingRange` puts an arrow beside every `begin`, `if` and
+  loop; `textDocument/selectionRange` expands outward through nested
+  statements instead of jumping to the enclosing declaration. Both come from a
+  new `pascalc --dump-stmts`, which stops after the parse — so both work on a
+  file that does not compile yet.
+- **The language server does not compile a change nobody will see the answer
+  to** (ADR-0257). A burst of keystrokes costs one compilation rather than one
+  each: four queued edits of a 22 900-line source went from 780 ms to 340, and
+  the change being waited for is compiled first rather than last.
+- `PasIO.FdReady` and `PasLsp.LspPending` ask whether a read would block.
+
 ### Fixed
 
 - **A generic call could not put a type parameter after a value parameter.**

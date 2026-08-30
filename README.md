@@ -247,9 +247,22 @@ tree.
 
 `lsp/` holds a Language Server Protocol server, written in this language and
 using this library. It publishes the compiler's diagnostics for every file you
-open or edit, without your having to save one, and answers
-`textDocument/documentSymbol` with the outline of a document — including one
-that does not compile yet, which is when an outline is most wanted.
+open or edit, without your having to save one, and answers five requests
+besides:
+
+| Request | What you get |
+| --- | --- |
+| `documentSymbol` | the outline of a document |
+| `definition` | where a name was declared, across program-components |
+| `hover` | what a name is, and its type |
+| `foldingRange` | the gutter arrows beside every `begin`, `if` and loop |
+| `selectionRange` | expand-selection, outward through nested statements |
+
+The outline and the two extent answers work on a document that **does not
+compile yet**, which is when they are most wanted: they stop after the parse.
+And a burst of keystrokes costs one compilation rather than one each — a
+change with a newer change already queued behind it is not compiled, since
+nobody would ever see the answer.
 
 ```sh
 PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \

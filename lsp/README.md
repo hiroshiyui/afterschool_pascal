@@ -153,7 +153,8 @@ in `sessions/` is a golden written here, so Microsoft's `vscode-jsonrpc` — the
 reference implementation of the wire protocol that VS Code itself uses — was
 driven against the server as an independent client: a real capabilities
 object, `initialized`, diagnostics, `definition`, `hover`, `documentSymbol`
-with hierarchy, `$/cancelRequest`, pipelined requests, out-of-range positions,
+with hierarchy, `foldingRange`, `selectionRange` with its parent chain walked
+to the root, `$/cancelRequest`, pipelined requests, out-of-range positions,
 an unimplemented method. Zero connection errors and zero unhandled
 notifications. The sharpest result is the position encoding: on a line where
 an astral pair and an accented letter precede an identifier, the byte column
@@ -168,6 +169,27 @@ to 106. The cache is emptied wherever the text is replaced, which is the three
 places a document's text goes away and nowhere else. The outline is
 deliberately not cached: it is asked once per open where a hover is asked
 continuously.
+
+**A statement knows where it ends**
+([ADR-0258](../doc/adr/0258-a-statement-has-an-extent.md)), which is what
+`foldingRange` and `selectionRange` are answered from — one `--dump-stmts` for
+both, as one `--dump-uses` serves `definition` and `hover`. Both stop after the
+parse, so folds and selection expansion work on a file that does not compile,
+which is when a file is being typed into. Folds are offered only for the
+constructs that *contain* statements and are deduplicated by the lines they
+cover, because `while c do begin … end` is two statements over the same lines
+and two identical arrows in a gutter is one too many.
+
+**A change nobody will see the answer to is not compiled**
+([ADR-0257](../doc/adr/0257-a-change-nobody-will-see-is-not-compiled.md)). A
+keystroke is a `didChange` carrying the whole document, so a reader typing
+faster than the compiler runs leaves several queued; the server drains what
+has *arrived* — never waiting for more — and keeps the last change per file.
+Four queued edits of `selfhost/apfront.pas` went from 780 ms to 340, and the
+change a reader is waiting for is compiled first rather than fourth. What it
+does not do is abandon a compile already in flight; that costs one compilation
+at the end of a burst, and the record says what the cheapest route to it would
+cost instead.
 
 `lsp/mcp.sh` is the **MCP launcher**, named by `.mcp.json` at the top of the
 checkout so that an agent working on this repository has `outline` and
