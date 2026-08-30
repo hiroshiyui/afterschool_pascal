@@ -749,6 +749,17 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
 void pas_file_done(void *v) {
   struct pas_file *f = v;
   pas_unlink_open(f);
+  /* ISO/IEC 10206:1991 6.7.5.6's binding: `pas_bind` copies the external name
+   * and frees whichever it replaced, and nothing freed the last one. A file
+   * variable bound once and then destroyed lost its name -- seven bytes, and
+   * invisible to `heap-balance`, which tallies `pas_new` against
+   * `pas_dispose` and never saw this allocator at all (ADR-0261).
+   *
+   * Freed here rather than after the early return below, which is for the
+   * standard files: those carry no bound name, so it would be correct either
+   * way, and before is the position that stays correct if one ever does. */
+  free(f->bound_name);
+  f->bound_name = NULL;
   if (f->fp) {
     if (f->binding == PAS_BIND_INPUT || f->binding == PAS_BIND_OUTPUT) {
       fflush(f->fp);

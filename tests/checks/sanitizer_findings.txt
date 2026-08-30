@@ -12,20 +12,16 @@
 # apart.
 
 # ---------------------------------------------------------------------------
-# `bind` leaks the name it was given, and the block's exit does not free it.
+# Nothing. The catalogue is empty, and that is the finding.
 #
-# `pas_bind` mallocs a copy of the external name and frees the *previous* one;
-# `pas_file_done` does not free it at all, so a bound file variable going out
-# of scope loses its name. Seven bytes for the case below, and unbounded in a
-# program that binds repeatedly -- `lsp/pasls.pas` binds once per document
-# write, which is once per keystroke in an editor.
+# It arrived with one entry -- `pas_bind` copied the external name a file
+# variable was bound to, `pas_file_done` never freed it, and a program that
+# binds repeatedly leaked a name each time. `lsp/pasls.pas` binds once per
+# document write, which is once per keystroke in an editor, so the one program
+# here that runs for hours was the one paying. It is fixed: one `free` in
+# `pas_file_done`, before the early return the standard files take.
 #
-# It is here rather than fixed because this catalogue arrived with the gate
-# that found it, and a runtime change wants `heap-balance` regenerated and the
-# whole suite re-run behind it. **The fix is one `free` in `pas_file_done`**,
-# beside the `fclose`, and the case below is what proves it.
-#
-# heap-balance cannot see this and never could: it tallies `pas_new` against
-# `pas_dispose` and the runtime has more allocators than one, which ADR-0183's
-# own record says in the sentence "It counts no files and no handles".
-defer  a bound file variable's name is not freed when the block ends
+# What is worth keeping is why no other oracle could see it. `heap-balance`
+# tallies `pas_new` against `pas_dispose` and the runtime has more allocators
+# than one -- ADR-0183's own record says so, in the sentence "It counts no
+# files and no handles", which nobody had tested. This gate is what tests it.
