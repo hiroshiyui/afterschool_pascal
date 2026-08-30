@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 446
-instrumented 18152
+uncovered 445
+instrumented 18230
 
 accept 0/4
 accumulate 0/84
@@ -71,15 +71,17 @@ bindboundtypes 0/4
 bindname 4/6
 bindprogramparameters 0/32
 bindto 0/4
-bindtype 0/6
+bindtype 0/9
 boundhere 0/3
 boundschema 0/65
 boundschemafor 0/9
+boundslot 0/3
 boundvalue 1/35
 buildformals 7/143
 buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
+catofname 0/5
 chainarms 0/6
 chainfield 0/11
 chainhas 0/10
@@ -201,7 +203,7 @@ dumpfield 0/8
 dumpfieldlist 0/3
 dumpframe 1/22
 dumpframes 0/5
-dumpgroup 0/37
+dumpgroup 0/39
 dumpgrouplist 0/4
 dumpimports 0/25
 dumplayout 0/19
@@ -294,7 +296,7 @@ emitstdproc 2/171
 emitstmt 1/37
 emitstore 0/34
 emitstring 0/197
-emitstringcompare 12/33
+emitstringcompare 11/33
 emitstringcompare2 1/25
 emitstringstore 0/2
 emitstringstorevalue 0/41
@@ -403,7 +405,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/160
+instantiategeneric 0/176
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -432,6 +434,7 @@ isdesignator 0/15
 isdigit 0/1
 isemptyset 0/1
 isenum 0/2
+isequatable 0/1
 isfallible 0/1
 isfile 0/1
 isfileenquiry 0/1
@@ -448,6 +451,7 @@ ismemoryconstant 0/2
 isnil 0/1
 isnumeric 0/1
 isoptional 0/1
+isordered 0/1
 isordinal 1/5
 isowndiscriminant 0/7
 isowned 0/1
@@ -516,7 +520,7 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/84
+newnode 0/85
 newresultslot 0/7
 newsymbol 0/93
 newtype 0/41
@@ -565,7 +569,7 @@ parsefactor 0/17
 parsefieldgroups 0/19
 parsefor 0/29
 parseformaldiscriminants 0/35
-parseformalparameters 0/34
+parseformalparameters 0/48
 parseidentstatement 0/68
 parseif 0/11
 parseimportpart 0/58
@@ -657,6 +661,7 @@ refill 0/21
 releasestrtemps 0/3
 reof 0/4
 repeateddisc 1/7
+reportcat 0/13
 requirearg 0/9
 requiredfunc 0/2
 requiredfuncwide 0/166
@@ -684,12 +689,13 @@ resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
 roundup 0/1
-row 0/54
+row 0/56
 runcodegen 0/91
 rundefersreversed 0/4
 runsema 2/81
 samelink 0/1
 sametuple 0/7
+satisfiescat 0/6
 schemahastypedisc 0/6
 schemaisbusy 0/6
 schematicformal 0/3
@@ -750,6 +756,8 @@ widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
+writecatadmits 0/5
+writecatname 0/6
 writecontext 7/78
 writedistincttypenote 0/38
 writekeyword 0/2

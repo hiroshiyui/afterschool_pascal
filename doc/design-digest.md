@@ -2890,6 +2890,51 @@ in the tree writes its type parameters first and one to a group:
 `integer` must name a type, and `procedure P(T, U: type; …)` gave `U` the type
 of `T`. Both are pinned now, and `lib_container` catches the second.
 
+**A type parameter may say what it needs, and the refusal moves to the call**
+(ADR-0266, AP 6.7.3.10.5). `T: numeric type` is the spelling and it takes no
+position of its own: a parameter-form is one type-identifier, schema-name or
+type-inquiry and what follows one is `;` or `)`, so an identifier before the
+word-symbol `type` is unwritable and ADR-0140 is satisfied by inheritance.
+`numeric`, `ordinal`, `ordered` and `equatable` are recognised by spelling
+between the colon and `type` and are **in no region at all** — not required
+identifiers, which §6.2.2.10 would have charged every program that declares
+one; `generic_constraints.pas` declares a type, a variable and a field of each
+of the four in the program that constrains four parameters with them. The
+parser commits on the *shape* and looks the spelling up afterwards, which is
+what makes `hashable type` a message about a category rather than one about a
+missing semicolon.
+
+**What it buys is one diagnostic instead of three.** AP 6.7.3.10.2 reads the
+block once per tuple in the generic's own source, so `Add(Point, p, p)` was
+refused at the generic's line by whatever operator the body used, with
+ADR-0259's attribution line last; it is now refused at the activation, naming
+the requirement, and the block is never read for that tuple. **It does not
+make the body separately type-checked** and the clause says so: a body that
+misuses a type its category *does* admit is still caught at the tuple.
+
+Each category is a group of operators the language already has, backed by a
+predicate rather than by a list written at the call site — `IsArith`,
+`IsOrdinal`, and `IsOrdered` and `IsEquatable`, which are new and so are
+watched by `predicate-kinds`. Two readings are worth carrying. **`ordinal`
+excludes `int64`**, AP 6.4.2.6.2 saying in its own title that it is numeric
+and not ordinal; `ordered` is where it belongs. And **`equatable` is read off
+`CheckBinary`'s `opEq` arms and not off `not IsAffine`**: §6.8.3.5 gives a
+record and an array no relational operators, so the shorter predicate would
+have *accepted* `Alike(Point, p, p)` and let the body fail — the exact
+diagnostic the feature moves. `tcNone` admits everything, so no call site is
+conditional and every generic written before the clause is unchanged; making
+it admit nothing fails ten of the eleven `generic_*` cases.
+
+The check runs where the tuple is built, in both activation forms, and they
+differ in what they can point at: a written type argument is pointed at, and
+an **inferred** one has no type written anywhere, so `typeBinding` carries the
+position and the number of the actual-parameter that determined it and the
+message ends *argument 1 of this call is what determined it*.
+`badsema/generics.pas` drives that through all three determining shapes,
+because each is a different walk in `Determine`. CodeGen is untouched and so
+is `verify/lowering.py`: a category chooses whether an instantiation happens
+and never what it is.
+
 **A function of this program may answer a handle** (ADR-0255, AP 6.4.12.6),
 so a library hands a caller an open stream instead of making the caller
 declare a variable and pass it as a `var` parameter. It cost no new lowering:

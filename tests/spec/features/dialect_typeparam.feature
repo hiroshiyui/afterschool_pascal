@@ -213,3 +213,90 @@ Feature: A routine may be parameterised by a type
       """
       but the argument is char
       """
+
+  @afterschool:6.7.3.10.5
+  Scenario: a category admits a type that answers for it
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Sum(Elem: numeric type; a, b: Elem): Elem;
+      begin Sum := a + b end;
+      begin writeln(Sum(2, 3):1, Sum(1.5, 2.5):4:1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      5 4.0
+      """
+
+  @afterschool:6.7.3.10.5
+  Scenario: a category refuses the activation and not the body
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Point = record x, y: integer end;
+      function Sum(Elem: numeric type; a, b: Elem): Elem;
+      begin Sum := a + b end;
+      var q: Point;
+      begin q := Sum(Point, q, q) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      which is declared 'numeric type'
+      """
+
+  @afterschool:6.7.3.10.5
+  Scenario: an inferred activation names the actual that determined the type
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Point = record x, y: integer end;
+      function Larger(Elem: ordered type; a, b: Elem): Elem;
+      begin if a > b then Larger := a else Larger := b end;
+      var q: Point;
+      begin q := Larger(q, q) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      argument 1 of this call is what determined it
+      """
+
+  @afterschool:6.7.3.10.5
+  Scenario: the four category spellings are ordinary identifiers everywhere else
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ordinal = 1..9;
+      var numeric: ordinal; ordered: char; equatable: boolean;
+      function Span(Elem: ordinal type; lo, hi: Elem): integer;
+      begin Span := ord(hi) - ord(lo) end;
+      begin
+        numeric := 4; ordered := 'z'; equatable := true;
+        writeln(numeric:1, ordered, equatable, Span('a', 'c'):1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      4zTRUE2
+      """
+
+  @afterschool:6.7.3.10.5
+  Scenario: a spelling that is not one of the four is refused as a category
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Sum(Elem: hashable type; a, b: Elem): Elem;
+      begin Sum := a + b end;
+      begin writeln(Sum(1, 2):1) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      is not a type-parameter category
+      """

@@ -274,3 +274,4 @@ the alternatives that were rejected and why.
 | [0263](0263-one-linker-symbol-per-component-not-per-program.md) | One linker symbol per component, not per program | Accepted |
 | [0264](0264-tls-is-a-module-and-a-transcription.md) | TLS is a module, and the only new risk is a transcription | Accepted |
 | [0265](0265-the-grammar-and-the-transport-are-two-modules.md) | HTTP's grammar and its transport are two modules | Accepted |
+| [0266](0266-a-type-parameter-may-say-what-it-needs.md) | A type parameter may say what it needs | Accepted |

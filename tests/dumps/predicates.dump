@@ -35,4 +35,6 @@ IsOrdinal 4 of 21: tyInteger tyBoolean tyChar tyEnum
 IsCharArray 0 of 21:
 IsStringType 1 of 21: tyString
 IsStringOrChar 2 of 21: tyChar tyString
+IsOrdered 8 of 21: tyInteger tyReal tyBoolean tyChar tyEnum tyString tyText tyInt64
+IsEquatable 11 of 21: tyInteger tyReal tyBoolean tyChar tyEnum tyPointer tySet tyComplex tyString tyText tyInt64
 IsGeneric 0 of 21:

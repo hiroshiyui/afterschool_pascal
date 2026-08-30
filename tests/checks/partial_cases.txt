@@ -398,3 +398,18 @@ DumpSymDecl:nodeKind:2 chains 2 of 63
 # does a type parameter show through it? Answering "no" is moving the number.
 Mentions:nodeKind:1 chains 3 of 63
 Determine:nodeKind:1 chains 3 of 63
+
+# --- a category that constrains nothing has nothing to explain ------------
+#
+# AP 6.7.3.10.5 (ADR-0266) gives a type parameter one of four categories, and
+# tcNone is the fifth constant: a parameter written `T: type`, which every
+# generic written before that clause is. SatisfiesCat answers *true* for it
+# whatever the type, so nothing ever reports about such a parameter, and
+# WriteCatAdmits -- which is only ever asked where SatisfiesCat has already
+# said no -- cannot be reached with it. The guard is that answer and is one
+# line above the only two call sites, both in InstantiateGeneric.
+#
+# WriteCatName, the sibling routine, names all five: --dump-ast writes
+# `type-parameter type` for an unconstrained one, so its tcNone arm is
+# reached on every dump of a generic.
+WriteCatAdmits:typeCat:1 names 4 of 5

@@ -106,7 +106,8 @@ export ApTypes = (
   fbInternal, fbStdInput, fbStdOutput, fbArgument, tyVoid, tyInteger,
   tyReal, tyBoolean, tyChar, tyEnum, tySubrange, tyArray, tyRecord,
   tyPointer, tyFile, tySet, tyProc, tyComplex, tyRestricted, tySlice,
-  tyOptional, tyHandle, tyString, tyText, tyInt64, biNone, biAbs, biSqr,
+  tyOptional, tyHandle, tyString, tyText, tyInt64, typeCat, tcNone,
+  tcNumeric, tcOrdinal, tcOrdered, tcEquatable, biNone, biAbs, biSqr,
   biOdd, biOrd, biChr, biSucc, biPred, biSqrt, biSin, biCos, biLn, biExp,
   biArcTan, biTrunc, biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm,
   biArg, biCard, biPosition, biLastPosition, biEmpty, biLength, biIndex,
@@ -134,7 +135,8 @@ export ApTypes = (
   IsFile, IsHandle, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
   IsSet, IsProcType, IsEmptySet, IsRestricted, Underlying, IsStructured,
   IsMemory, Protectable, IsOrdinal, IsCharArray, IsStringType,
-  IsStringOrChar, StringValueFormal, ForeignStringFormal, EnumCount,
+  IsStringOrChar, IsOrdered, IsEquatable, SatisfiesCat, WriteCatName,
+  WriteCatAdmits, StringValueFormal, ForeignStringFormal, EnumCount,
   OrdinalLo, OrdinalHi, TypeLength, PadsToFixedString, ArmAtIn, FindField,
   ArmsAt, FieldsAt, TagFieldAt, TagTypeAt, WriteOrdinalName,
   WriteTypeName, WriteDistinctTypeNote);
@@ -655,6 +657,21 @@ type
                 control variable, because each of those needs a value the
                 compiler must hold. }
               tyInt64);
+
+  { AP 6.7.3.10.5's category of a type parameter (ADR-0266). The set is small
+    and closed on purpose: each constant names a group of operations a
+    generic's body may use, so an instantiation naming a type outside it is
+    refused at the *call* rather than inside the generic's own source. There
+    is no user-written category, and nothing here is a scope: `numeric`,
+    `ordinal`, `ordered` and `equatable` are ordinary identifiers everywhere
+    else, recognised by their spelling in one position and nowhere at all in
+    6.2.2's regions.
+
+    tcNone is a type parameter written `T: type`, which every existing
+    generic is and which admits every type -- so the constraint check is a
+    no-op there and no call site is conditional, which is ADR-0018's shape
+    for CheckedForSubrange said again. }
+  typeCat = (tcNone, tcNumeric, tcOrdinal, tcOrdered, tcEquatable);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
@@ -1851,9 +1868,15 @@ type
         grType and always has exactly one name. }
       { grIsTypeDisc is AP 6.4.7's type-valued formal discriminant (ADR-0209),
         written `T: type`. grType is then nil: there is no type-name there to
-        resolve, the word-symbol standing where one would be. }
+        resolve, the word-symbol standing where one would be.
+
+        grCat is AP 6.7.3.10.5's category (ADR-0266), read only where
+        grIsTypeDisc is set and tcNone for every other group -- so a
+        constrained type parameter is the same node with one more field, and
+        nothing that walks a formal list had to learn anything. }
       nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProtected,
                      grIsProc, grIsFunction, grIsTypeDisc: boolean;
+                     grCat: typeCat;
                      grParams, grResult: nodePtr);
       { nmQualAt/nmQualLen is 6.11.3's qualified name in a type-denoter. There
         is nothing else `a.b` could be there -- a type has no fields to select
@@ -2582,6 +2605,38 @@ function IsStringType(t: typePtr): boolean;
   wherever a string does -- in a comparison, a concatenation, an assignment --
   without being one. }
 function IsStringOrChar(t: typePtr): boolean;
+
+{ AP 6.7.3.10.5's `ordered`: exactly the types 6.8.3.5's four ordering
+  operators accept on both sides. Every ordinal-type, `real` and `int64`
+  because 6.8.3.5 admits any simple-type but complex, and the string-types
+  and `text` because 6.8.3.5 and AP 6.4.15.6 give each the padded and the
+  element-wise comparison. Not complex -- there is no order on the complex
+  numbers and the standard declines to invent one; not a set, `<=` there
+  being inclusion and not an order; not a pointer, `<` on an address being
+  nothing a program may reason about. }
+function IsOrdered(t: typePtr): boolean;
+
+{ AP 6.7.3.10.5's `equatable`: exactly the types `=` and `<>` accept on both
+  sides. Read off CheckBinary's own dispatch, arm by arm, rather than from
+  the shorter answer `not IsAffine` -- which would have admitted a record and
+  an array, and the whole of what a constraint buys is that the refusal
+  happens at the call instead of inside the generic. An owned pointer, a
+  handle and an optional compare with `nil` and with nothing else, so none of
+  them is equatable *with itself*; a file, a slice, a restricted type, an
+  array and a record have no equality at all. }
+function IsEquatable(t: typePtr): boolean;
+
+{ Does a type answer for a category? tcNone admits everything, so the caller
+  needs no test of its own (ADR-0018's shape for CheckedForSubrange). }
+function SatisfiesCat(t: typePtr; c: typeCat): boolean;
+
+{ The category as a program spells it, for the diagnostic that names it. }
+procedure WriteCatName(c: typeCat);
+
+{ And what the category admits, in the words of the clause -- so the reader is
+  told what would have satisfied it rather than only what did not. Asked only
+  where SatisfiesCat has already said no, so tcNone never reaches it. }
+procedure WriteCatAdmits(c: typeCat);
 
 { ISO/IEC 10206:1991 6.7.3.2's rule for the required schema `string` as a
   **value** parameter, which is a rule of its own and not the schematic-formal
@@ -3558,6 +3613,73 @@ begin IsStringType := IsVarString(t) or IsCharArray(t) end;
   without being one. }
 function IsStringOrChar;
 begin IsStringOrChar := IsStringType(t) or IsChar(t) end;
+
+{ AP 6.7.3.10.5. IsNumeric carries `real` and `int64`; IsOrdinal carries the
+  four ordinal kinds and, through Base, every subrange of one. }
+function IsOrdered;
+begin
+  IsOrdered := IsOrdinal(t) or IsNumeric(t) or IsStringType(t) or IsText(t)
+end;
+
+{ AP 6.7.3.10.5, and the arms are CheckBinary's for opEq read in its order.
+  An owned pointer is excluded by the second half of the pointer test rather
+  than by IsAffine, because what the clause is about is the *operator* and not
+  the copy: `p = nil` is admitted and `p = q` is not, so no owned pointer is
+  a type two values of which may be compared. }
+function IsEquatable;
+begin
+  IsEquatable := IsOrdinal(t) or IsNumeric(t) or IsComplex(t) or IsSet(t) or
+                 IsStringType(t) or IsText(t) or
+                 (IsPointer(t) and not IsOwnedPointer(t))
+end;
+
+function SatisfiesCat;
+begin
+  case c of
+    tcNone:      SatisfiesCat := true;
+    { The arithmetic operators' own predicate, unchanged and unwrapped: a
+      constraint that named a second list would be a second list to drift. }
+    tcNumeric:   SatisfiesCat := IsArith(t);
+    tcOrdinal:   SatisfiesCat := IsOrdinal(t);
+    tcOrdered:   SatisfiesCat := IsOrdered(t);
+    tcEquatable: SatisfiesCat := IsEquatable(t)
+  end
+end;
+
+procedure WriteCatName;
+begin
+  case c of
+    { `type` and not a blank: it is the parameter-form as the source spells
+      it, which is what --dump-ast reports for an unconstrained type
+      parameter and is what makes this arm reachable at all. }
+    tcNone:      write('type');
+    tcNumeric:   write('numeric');
+    tcOrdinal:   write('ordinal');
+    tcOrdered:   write('ordered');
+    tcEquatable: write('equatable')
+  end
+end;
+
+{ Four arms of five, and the fifth cannot be reached: SatisfiesCat answers
+  true for tcNone whatever the type, so nothing ever reports about a type
+  parameter written `T: type`. The guard is that answer and
+  tests/checks/partial_cases.txt names it. }
+procedure WriteCatAdmits;
+begin
+  case c of
+    tcNumeric:   write('integer, int64, real, complex, or a subrange of one');
+    tcOrdinal:   write('integer, char, boolean, an enumerated type, ',
+                       'or a subrange of one');
+    { `utf8` and not `text`: AP 6.4.15's text-type is spelled `utf8` and the
+      identifier `text` is 6.4.3.5's file of char, which is neither ordered
+      nor equatable. WriteTypeName spells the type the same way, so the two
+      halves of the message agree. }
+    tcOrdered:   write('any ordinal type, and int64, real, a string-type ',
+                       'and utf8');
+    tcEquatable: write('any ordinal type, and int64, real, complex, a set, ',
+                       'a pointer that is not owned, a string-type and utf8')
+  end
+end;
 
 { ISO/IEC 10206:1991 6.7.3.2's rule for the required schema `string` as a
   **value** parameter, which is a rule of its own and not the schematic-formal
