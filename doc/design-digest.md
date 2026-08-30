@@ -2890,6 +2890,41 @@ in the tree writes its type parameters first and one to a group:
 `integer` must name a type, and `procedure P(T, U: type; …)` gave `U` the type
 of `T`. Both are pinned now, and `lib_container` catches the second.
 
+**A function of this program may answer a handle** (ADR-0255, AP 6.4.12.6),
+so a library hands a caller an open stream instead of making the caller
+declare a variable and pass it as a `var` parameter. It cost no new lowering:
+a handle is `IsMemory`, so such a function already receives the address of the
+variable its result is to occupy, and its own `Open := ExtFopen(...)` is
+AP 6.4.12.2's assignment made through that address — the value is born in the
+variable that will own it. A factory over a factory passes the address on and
+emits no `pas_handle_set` at all. **Nothing is stored at the call**, and that
+is the correctness crux: a store there would release what the callee had just
+written into that slot, which is what `factory_handle.pas` catches. CodeGen
+learns the destination through `factoryInto`, deliberately the shape Sema's
+`handleBirth` has — the same statement from the other end of the pipeline, and
+a parameter would have meant a second reader of which node kind holds a call.
+A record *containing* a handle is still refused: one destination can be handed
+over and a structure's components have none.
+
+**A fallible-type's value side may be owned, and then its arms are laid
+apart** (ADR-0256, AP 6.4.13.5). The refusal it replaces was load-bearing —
+the arms of a variant part share storage and a handle's storage is its own, so
+a cause would overwrite the front of a `struct pas_handle` the runtime is
+holding and the block's exit would close whatever was left. `armsApart` is set
+only where a side is affine, so every fallible written until now keeps its
+layout and no offset moves. Storage-only, so the tag still selects and
+`EmitVariantGuard` still traps a read of the inactive arm; collapsing the arms
+into fixed fields would have lost that and had to reimplement it. The **cause**
+side may not be affine and `try` is refused on such a type, both for one
+reason: a cause is carried out by `try`, which is a copy, and 6.8.9.4 makes
+the expression denote the *value* — an owned value has neither. The one
+assignment admitted is a call of a function of that type, built in place;
+a memcpy would be ADR-0150's double free with a handle for a file.
+`factory_fallible.pas`'s `causeOverValue` is the case that matters — writing a
+cause over a *live* stream — and it is what the first version of that test did
+not do, so the mutation restoring the overlay passed all 754 cases before it
+was added and exits 139 after.
+
 **A pointer domain may bind a schema's type discriminants and leave its
 ordinal ones open** (ADR-0213, AP 6.4.4.1). `^Vec(integer)` with `new(p, 8)`
 supplying the rest, and the split is the idea rather than a convenience: the

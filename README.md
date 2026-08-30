@@ -654,13 +654,49 @@ end, on a `goto` out of it, on `halt`, on `dispose`. Assigning another value
 releases the old one first, and `d := nil` releases what it holds and leaves it
 empty — which is how a library closes a stream before the block ends. That
 assigns no *value*: `nil` is the empty state, so a handle is still acquired
-from an external function and from nowhere else. That call is the **only**
+from a **function call** and from nowhere else. That call is the **only**
 place such a call may stand — anywhere else there would be nothing to own what it answered —
 and a parameterless one written as a bare name is that call, in the one
 position it may stand and in none of the others. A handle may be lent to a
 foreign routine as a value parameter, and lending an empty one stops the
-program. What it is not is a value: no Pascal function returns one and no
-record copies one.
+program. What it is not is a value: no record copies one.
+
+**A function of your own may answer one** (ADR-0255), so a library can hand a
+caller an open stream instead of making the caller declare a variable and pass
+it as a `var` parameter:
+
+```pascal
+function Open(path: string): Dir;
+begin
+  Open := ExtOpendir(path)         { or `Open := nil` }
+end;
+```
+
+The value is built directly in the variable the caller assigns it to, so there
+is no moment at which two names identify one resource — and a factory calling
+another factory passes the destination on, holding nothing itself. What is
+still refused is a *record* containing a handle: a handle result has one
+destination and a structure has none.
+
+**And a factory can say why it failed** (ADR-0256). The value side of a
+fallible type may be a handle, a file or an owned pointer, which is what a
+producer actually wants:
+
+```pascal
+type Opened = Dir ! ErrorCode;
+function Open(path: string): Opened;
+begin
+  if path = '' then Open := noPath else Open := ExtOpendir(path)
+end;
+```
+
+The two arms of such a record are laid **beside** one another rather than over
+one another, so writing a cause cannot overwrite a stream the record is still
+holding. Two things follow. Such a record has no copy — the one assignment it
+takes is a call of a function of its own type — and `try` cannot be used on
+it, because `try` yields the value and an owned value has no copy to yield;
+test `.ok` instead. The *cause* side may not be owned, for the same reason: a
+cause is what `try` carries out.
 
 **`release(h)` closes it and answers what the closer said** (ADR-0206). Every
 other release throws that result away and must — a block ending, a `goto` past

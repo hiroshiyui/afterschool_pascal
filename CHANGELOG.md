@@ -26,6 +26,19 @@ appears below in the release where it still existed.
   determines, such as an element type appearing only in the result, must still
   be written, and the compiler says which one.
 
+- **A function may answer a handle** (ADR-0255), so a library can hand back an
+  open stream, directory or pipe instead of taking a `var` parameter for it.
+  The value is built in the variable it is assigned to, so no second name for
+  it exists at any moment, and a factory calling a factory passes the
+  destination on. A record containing a handle is still not a valid result.
+- **A fallible type's value side may be a handle, a file or an owned pointer**
+  (ADR-0256), so `function Open(p: Path): Stream ! ErrorCode` is writable and a
+  producer can say *why* it failed. Such a record's two arms are laid beside
+  one another rather than over one another; it has no copy, the one assignment
+  it takes being a call of a function of its own type; and `try` is refused on
+  it, since `try` yields the value and an owned value has none to yield — test
+  `.ok`. The cause side may not be owned, for the same reason.
+
 ### Fixed
 
 - **A generic call could not put a type parameter after a value parameter.**

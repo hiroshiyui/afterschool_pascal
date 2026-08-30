@@ -206,44 +206,45 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 | --- | --- |
 | ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` removes — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214), and the dialect widening it is a feature (ADR-0215). Five of the module's headings have lost a type parameter; `VecGet` and `MapGet` keep theirs, because they return the element type and §6.7.1 makes a result-type a type-name. **A generic map keyed by anything but a string** still waits on constraints |
 
-### The factory, and the representation it waits on
+### The factory — **done** (ADR-0255, ADR-0256)
 
-**`function Open(p): Stream ! ErrorCode` is the one item on this page with a
-named cost**, and it sat inside a table cell where nobody would find it. It is
-a compiler item and not a library one: what a caller wants is to *receive* a
-handle rather than to declare a variable and pass it as a `var` parameter, and
-every producer in `lib/` does the second because the first is refused.
+**`function Open(p): Stream ! ErrorCode` was the one item on this page with a
+named cost**, and it is written: AP 6.4.12.6 admits a handle as the result of a
+function of this program, and AP 6.4.13.5 admits an affine *value* side to a
+fallible-type and lays that record's two arms beside one another rather than
+over one another. `tests/dialect/factory_handle.pas` and
+`tests/dialect/factory_fallible.pas` are the cases.
 
-**The bare half is nearly free and has no caller.** A handle is `IsMemory`, so
-a declared function answering one already takes the address of the variable the
-result is to live in; `CloseFiles` already skips it for being a `var`
-parameter; and a factory over a factory passes `%res` straight through with no
-intermediate handle at all. Three Sema arms and one address. But a factory that
-can answer only `nil` is a *regression* on what `lib/` has — every producer
-there answers an `ErrorCode` and says which one — so the bare form would be
-built for nobody.
+**The estimate written here was wrong in both directions at once**, and that is
+worth more than the feature. It said the change reaches `target-layout` and
+`foreign-layout`, "gates that compare offsets, so both would move and both
+would have to be re-argued rather than regenerated". Neither moved. Neither
+holds an expected value — both compute from the compiler's own output on every
+run — and neither read a source that declared a fallible-type at all, so there
+was nothing to re-argue and nothing to see. `tests/checks/target_layout.pas`
+declares one now, which is the fix for a gate that could not have watched this
+shape.
 
-**The fallible half is refused by something load-bearing, and that is the
-whole of the item.** AP 6.4.13.1's refusal is not an oversight: it is
-`HoldsFile`'s invariant, whose own comment says a variant part cannot hold a
-file *because the arms share storage and a file's storage is its own* — which
-is also what lets `WalkFiles` reach every file exactly once. A fallible-type's
-two arms **are** a variant part, so an owned value in one would have its closer
-clobbered by the other arm and be released through garbage.
+And it said the item is "not a clause and not a Sema arm … a representation
+change". The representation is the small half. What it did not name: the record
+then contains something with no copy, so it needs an assignment rule of its own,
+a *mandatory* in-place build at the call — a memcpy there is ADR-0150's double
+free with a handle in place of a file — two walks taught to reach an arm, and a
+decision about `try`, which is refused because it yields the value and an owned
+value has none to yield.
 
-**What it would take is a representation change to every fallible-type**:
-laying the two arms side by side instead of over one another. That is not a
-clause and not a Sema arm. It changes the emitted struct shape and reaches
-`PutStructAt`, `SelectedSize`, `target-layout` and `foreign-layout` — the last
-two being gates that compare offsets, so both would move and both would have
-to be re-argued rather than regenerated. Every fallible-type in the corpus
-grows, whether or not it holds anything affine, unless the change is made
-conditional on the arms — which is a second shape for one type and a second
-thing for `HoldsFile` to be right about.
+**The bare half was as cheap as this page said.** A handle is `IsMemory`, so a
+function answering one already receives the address of the variable its result
+is to occupy; its own `Open := ExtFopen(...)` is AP 6.4.12.2's assignment made
+through that address; and a factory over a factory emits no `pas_handle_set` at
+all. Three claims, checked rather than trusted, all three true.
 
-It is written down here rather than done because the cost is known and the
-demand is not: no program in this tree has been unable to do its work for want
-of it, which is ADR-0116's test and the same test the move above fails.
+**The first mutation survived and the test is what changed.** Laying the arms
+over one another again passed all 754 cases, because the case wrote a cause
+only over a handle that had never been opened — where the corrupted bytes are
+zero either way. A case that writes a cause over a *live* stream makes the same
+mutation exit 139. A test of a representation is worth nothing until it stages
+the corruption the representation prevents.
 
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only
@@ -266,6 +267,14 @@ that something waits on the memory model, ask whether the address can be
 retired at the call.** Five times running it could, and twice the answer was
 not a language feature at all but a `pasx_` routine that does the walking on
 the far side.
+
+**And the factory above is the first item where the prior does not apply**,
+which is what makes it worth keeping as a prior rather than a rule. The whole
+point of a factory is that the callee's answer **outlives the call** — the
+address cannot be retired there, because retiring it is exactly what a factory
+must not do. So the question the prior asks is still the right first question,
+and "no" is now a possible answer with a case behind it. Where the answer is
+no, expect the ownership rule the five easy ones did not need.
 
 ---
 
