@@ -1,15 +1,15 @@
 <source>:25:33: error: 'n' cannot be protected: list is not a protectable type
 <source>:27:13: error: 'n' is a protected parameter, so it cannot be emptied by 'take'
-<source>:32:13: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
+<source>:32:13: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
 <source>:32:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:33:13: error: 'take' empties an owned pointer and this is plain: nothing else has a value one variable can stop holding
+<source>:33:13: error: 'take' empties an owned pointer or a handle and this is plain: nothing else has a value one variable can stop holding
 <source>:33:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:34:15: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
+<source>:34:15: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
 <source>:34:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:41:13: error: 'take' empties an owned pointer and this is nil: nothing else has a value one variable can stop holding
+<source>:41:13: error: 'take' empties an owned pointer or a handle and this is nil: nothing else has a value one variable can stop holding
 <source>:41:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
 <source>:42:13: error: 'extstream' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
-<source>:42:13: error: 'take' empties an owned pointer and this is stream: nothing else has a value one variable can stop holding
+<source>:42:13: error: 'take' empties a variable, so its argument must be one
 <source>:42:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
 <source>:44:8: error: 'take' takes one variable of an owned pointer type
 <source>:44:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy

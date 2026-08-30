@@ -1,0 +1,11 @@
+opened        : TRUE
+source emptied: TRUE
+target holds  : TRUE
+and it is live: TRUE
+self-move     : TRUE TRUE
+target closed : TRUE
+and it is live: TRUE
+across a call : TRUE
+nil releases  : TRUE
+empty moves   : TRUE
+done          : TRUE

@@ -105,7 +105,7 @@ Feature: Handle-types
     Then it is rejected
      And the diagnostic includes
       """
-      a handle may be assigned only nil or the result of a function
+      a handle may be assigned only nil, 'take' of a variable of its own type
       """
 
   # 6.4.12.2's second form (ADR-0202). `nil` is not a value of the type -- it is
@@ -151,7 +151,7 @@ Feature: Handle-types
     Then it is rejected
      And the diagnostic includes
       """
-      a handle may be assigned only nil or the result of a function
+      a handle may be assigned only nil, 'take' of a variable of its own type
       """
 
   # 6.4.12.5 (ADR-0206). Every other release throws the closer's result away
@@ -338,4 +338,72 @@ Feature: Handle-types
      And the diagnostic includes
       """
       a result may not be, or contain, a handle
+      """
+
+  # AP 6.4.12.7: the move. `take` was an owned pointer's alone and the refusal
+  # named the reason -- nothing else has a value one variable can stop
+  # holding -- which was written of the three affine kinds together and is
+  # true of only one of them.
+  @afterschool:6.4.12.7
+  Scenario: a handle moves from one variable to another
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      var a, b: f;
+      begin
+        a := ExtFopen('/dev/null', 'w');
+        b := take(a);
+        if (a = nil) and (b <> nil) then writeln('moved')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      moved
+      """
+
+  # A self-move is a no-op and not a close, which is what the order of the two
+  # operations buys: the source is emptied before the target releases, so the
+  # release finds nothing.
+  @afterschool:6.4.12.7
+  Scenario: a handle moved onto itself is not released
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      function ExtFputs(text: string; h: f): integer; external 'fputs';
+      var a: f;
+      begin
+        a := ExtFopen('/dev/null', 'w');
+        a := take(a);
+        if (a <> nil) and (ExtFputs('x', a) >= 0) then writeln('still open')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      still open
+      """
+
+  # And a file is still refused, which is the half this clause did not widen.
+  @afterschool:6.4.12.7
+  Scenario: a file has no move
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      var h: f; t: text;
+      begin
+        h := take(t);
+        writeln('unreached')
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      nothing else has a value one variable can stop holding
       """

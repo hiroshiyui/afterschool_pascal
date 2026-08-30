@@ -6998,6 +6998,40 @@ begin
     Nothing is stored here in that case, and that is the correctness crux
     rather than an optimisation: a `pas_handle_set` after the call would
     release what the callee had just written into this very slot. }
+  { AP 6.4.12.7 (ADR-0267): the move, for a handle. Two calls and the order
+    is the whole of it -- `pas_handle_take` empties the source *without*
+    calling the closer, which is what makes it a move, and `pas_handle_set`
+    then releases what the target held and stores.
+
+    Emptying first is ADR-0182's decision read one type over, and it is what
+    makes a self-move work: `h := take(h)` empties the slot, so the release
+    inside `pas_handle_set` finds nothing and the value goes back where it
+    was. Doing it the other way round would close the very handle being
+    moved.
+
+    This arm stands *before* the birth arm below because a `take` is an
+    nkCall and EmitCall has no arm for biTake -- reaching it would stop the
+    compiler, which is the property AP 6.4.14.6 relies on to make every other
+    position unreachable. }
+  else if IsHandle(s^.asTarget^.ntype) and
+          (s^.asValue^.kind = nkCall) and
+          (s^.asValue^.clBuiltin = biTake) then begin
+    EmitAddress(s^.asValue^.clArgs, src);
+    Def(hdr);
+    write(ircode, 'call ptr @pas_handle_take(ptr ');
+    PutOp(src);
+    writeln(ircode, ')');
+    { ADR-0118, as every other arm here does it: this is the one designator
+      whose variant a write activates. }
+    designatorGuard := vgWrite;
+    EmitAddress(s^.asTarget, dst);
+    designatorGuard := vgRead;
+    write(ircode, '  call void @pas_handle_set(ptr ');
+    PutOp(dst);
+    write(ircode, ', ptr ');
+    PutOp(hdr);
+    writeln(ircode, ')')
+  end
   else if IsHandle(s^.asTarget^.ntype) then begin
     if s^.asFactory then factoryInto := s^.asTarget;
     EmitExpr(s^.asValue, src);
@@ -10232,6 +10266,7 @@ begin
   writeln(ircode, 'declare void @pas_handle_set(ptr, ptr)');
   writeln(ircode, 'declare ptr @pas_handle_lend(ptr)');
   writeln(ircode, 'declare i32 @pas_handle_release_result(ptr)');
+  writeln(ircode, 'declare ptr @pas_handle_take(ptr)');
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
   writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');

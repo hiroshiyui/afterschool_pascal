@@ -776,7 +776,8 @@ The value `nil` shall denote the empty state of every handle-type. A handle
 shall be comparable with `nil` by `=` and `<>` and with nothing else, the
 comparison asking whether the variable is empty.
 
-There shall be exactly two forms of assignment to a variable of a handle-type.
+There shall be exactly three forms of assignment to a variable of a
+handle-type; the third is 6.4.12.7's and is stated there.
 
 The first is an assignment-statement whose expression is a
 function-designator of an external-declaration (6.7.7) whose result type is
@@ -933,6 +934,46 @@ NOTE 4 — Yielding zero for an empty variable is the assignment of `nil`
 program that released nothing has nothing to be told about. A caller that must
 distinguish "closed, and the closer said zero" from "there was nothing to
 close" has the variable itself to ask, before.
+
+**6.4.12.7 The move [added].** An assignment-statement whose expression is
+`take` (6.4.14.6) applied to a variable-access of the same handle-type shall be
+the third form of 6.4.12.2's assignment.
+
+The variable named by the actual-parameter shall be emptied, and shall be
+emptied **before** the target variable releases the value it holds. The target
+shall then hold the value the actual-parameter's variable held, which shall be
+the empty state where it held none.
+
+`take` shall be applicable to a variable of a handle-type and of an
+owned-pointer-type (6.4.14.6) and to no other type. It shall not be applicable
+to a file-variable.
+
+NOTE 1 — 6.4.14.6 admitted `take` for an owned pointer alone, and the reason
+given there was that nothing else has a value one variable can stop holding.
+That was written of the three affine kinds together and is true of only one of
+them. A handle is one word the processor holds on the program's behalf, exactly
+as an owned pointer is one word of the heap; a **file-variable** is neither,
+being several storage units the processor is holding, and there is no value in
+one for a variable to stop holding. So the rule is stated over the two kinds
+rather than over affineness, which would reach the file.
+
+NOTE 2 — The order in the second paragraph is the whole of what makes a
+self-move work. `h := take(h)` empties the variable, so the release finds
+nothing and the value returns where it was; releasing first would close the
+very handle being moved. It is 6.4.14.6's own order stated for this type, and
+that clause's reason — a target reached through the source must not be built
+into a cycle nothing owns — applies unchanged.
+
+NOTE 3 — What this clause buys is that a handle may **leave** the variable that
+owns it without being released, which no other construct permits: 6.4.12.4's
+lending crosses a value for the duration of a call and leaves the ownership
+where it was. A routine may therefore be handed a variable to fill and another
+to empty, and at no moment do two variables hold one value.
+
+NOTE 4 — It is a prerequisite of a construct that does not exist when this
+clause is written: a task cannot be **given** a socket or a stream until a
+handle can move. It is stated separately because it is a rule about handles and
+is complete without one (ADR-0201, ADR-0267).
 
 #### 6.4.13 Fallible-types [added]
 

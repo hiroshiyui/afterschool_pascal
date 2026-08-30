@@ -13116,9 +13116,17 @@ begin
   else begin
     { CheckCall has already checked it -- see CheckRelease, which is this
       routine's twin and where the duplicate this removes is described. }
-    if not IsOwnedPointer(c^.clArgs^.ntype) then begin
+    { AP 6.4.12.7 (ADR-0267) widened this from an owned pointer to a handle,
+      and the two are one rule: both are affine, both are one word, and a
+      move is the only way either can leave the variable that owns it. A
+      *file* is still refused and always will be -- it is `IsMemory`, several
+      words of the runtime's, and there is no value in it one variable can
+      stop holding. So the question is `IsOwned or IsHandle` and not
+      `IsAffine`, which would admit the file. }
+    if not (IsOwnedPointer(c^.clArgs^.ntype) or
+            IsHandle(c^.clArgs^.ntype)) then begin
       ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
-      write('''take'' empties an owned pointer and this is ');
+      write('''take'' empties an owned pointer or a handle and this is ');
       WriteTypeName(c^.clArgs^.ntype);
       writeln(': nothing else has a value one variable can stop holding')
     end
@@ -16769,7 +16777,8 @@ begin
             identifier and always written with its parenthesised argument, so
             only an nkCall could be one, where a handle-valued call has the
             bare spelling too (ADR-0179). }
-          takeOk := IsOwnedPointer(s^.asTarget^.ntype) and
+          takeOk := (IsOwnedPointer(s^.asTarget^.ntype) or
+                     IsHandle(s^.asTarget^.ntype)) and
                     (s^.asValue^.kind = nkCall);
           CheckExpr(s^.asValue);
           handleBirth := false;
@@ -16843,9 +16852,25 @@ begin
           else if IsHandle(s^.asTarget^.ntype) and
                   IsNil(s^.asValue^.ntype) then
             { admitted: the variable releases what it holds and is empty }
+          { AP 6.4.12.7 (ADR-0267): the third assignment a handle has, and
+            it is the owned pointer's own (AP 6.4.14.6) read one type over.
+            `take` is the only value of a handle-type a variable may be
+            given from another variable, because it is the only one that
+            leaves nothing else holding it -- which is the same sentence
+            ADR-0182 wrote, and the reason both are one arm in CheckTake.
+
+            ADR-0201 named this as the prerequisite for a concurrency
+            construct in as many words: *a task cannot be given a socket or
+            a file until a handle can move*. }
+          else if IsHandle(s^.asTarget^.ntype) and
+                  (s^.asValue^.kind = nkCall) and
+                  (s^.asValue^.clBuiltin = biTake) and
+                  (s^.asValue^.ntype = s^.asTarget^.ntype) then
+            { admitted: the variable takes what the other stopped holding }
           else if IsHandle(s^.asTarget^.ntype) then begin
             ErrorAt(s^.line, s^.col);
-            write('a handle may be assigned only nil or the result of a ');
+            write('a handle may be assigned only nil, ''take'' of a variable ');
+            write('of its own type, or the result of a ');
             write('function of its own type: it is owned, ');
             writeln('and there is no copy')
           end

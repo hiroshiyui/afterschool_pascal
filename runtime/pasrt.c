@@ -424,6 +424,24 @@ int pas_handle_release_result(void *slot) {
   return r;
 }
 
+/* AP 6.4.12.7 (ADR-0267): the move. What one variable stops holding, another
+ * takes -- so the value leaves *without* the closer being called, which is the
+ * whole of what makes this a move and not a release.
+ *
+ * It is deliberately not `pas_handle_set(dst, pas_handle_take(src))` written
+ * as one routine: the compiler emits the two calls in that order, and the
+ * order is the correctness crux for a self-move. `h := take(h)` empties the
+ * slot here, so the release inside `pas_handle_set` finds nothing and the
+ * value goes back where it was -- which is `take`'s own property for an owned
+ * pointer (ADR-0182) reached the same way.
+ */
+void *pas_handle_take(void *slot) {
+  struct pas_handle *h = slot;
+  void *v = h->value;
+  h->value = NULL;
+  return v;
+}
+
 void pas_handle_done(void *slot) {
   struct pas_handle *h = slot;
   pas_handle_release(h);

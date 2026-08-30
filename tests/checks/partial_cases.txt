@@ -398,3 +398,25 @@ DumpSymDecl:nodeKind:2 chains 2 of 63
 # does a type parameter show through it? Answering "no" is moving the number.
 Mentions:nodeKind:1 chains 3 of 63
 Determine:nodeKind:1 chains 3 of 63
+
+# --- a construct identified inside a type dispatch ------------------------
+#
+# EmitAssign dispatches on the *target's type* and not on the value's node
+# kind: the arms are a string, a text, a handle, a fallible with arms apart,
+# an owned pointer, and then the ordinary store. Two of them ask
+# `s^.asValue^.kind = nkCall` as part of a compound condition, because
+# AP 6.4.12.7 and AP 6.4.14.6 each admit exactly one construct in that
+# position -- a `take` -- and the test is how the emitter recognises it.
+#
+# ADR-0230's shape rule sees that as an if-chain over nodeKind, and it is
+# right to: the shape is `x^.kind = c`, which is the shape it was written to
+# find. What makes this entry honest rather than a silencing is that the
+# trailing `else` here is not a fall-through nobody thought about -- it is the
+# ordinary assignment, which every other node kind is *meant* to take. A
+# constant added to nodeKind belongs there and needs no arm here.
+#
+# The question a reader should ask when this number moves is the one the
+# comment above sets: can the new node kind stand as the whole right side of
+# an assignment to a handle or an owned pointer? Sema admits one construct in
+# each and it is a required function, so the answer is no unless that changes.
+EmitAssign:nodeKind:1 chains 2 of 63
