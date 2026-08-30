@@ -22,6 +22,8 @@
 # Two forms of expectation:
 #
 #   name.out   expected stdout; the program must compile and exit 0.
+#   name.warn  expected compiler warnings, for a program that compiles.
+#              A case without one must produce none (ADR-0272).
 #   name.err   expected stderr, for a program that is *supposed* to fail —
 #              either it does not compile, or it stops on a runtime error.
 #              A non-zero exit is then required, and name.out (if present) is
@@ -55,6 +57,17 @@ pascalc=$1
 source_file=$2
 expected_out="${source_file%.pas}.out"
 expected_err="${source_file%.pas}.err"
+# A case that compiles *and* has something to say about it (ADR-0272). Neither
+# sidecar above can hold a warning: .out compares what the program printed and
+# .err requires a non-zero exit, so a remark made by a successful compilation
+# was pinnable by nothing at all -- which is how the first warning in this
+# compiler arrived with no case able to assert it.
+#
+# The rule is two-directional and the second half is the load-bearing one: a
+# case *without* this sidecar must produce no warning. Otherwise a warning
+# added later would appear on dozens of cases and every one of them would stay
+# green, which is the shape ADR-0067 keeps finding.
+expected_warn="${source_file%.pas}.warn"
 stdin_file="${source_file%.pas}.in"
 epoch_file="${source_file%.pas}.epoch"
 opt_file="${source_file%.pas}.opt"
@@ -226,6 +239,21 @@ if [[ ! -f $expected_err ]]; then
   fi
   if ! diff -u "$expected_out" "$work/actual"; then
     echo "--- $name: output differs (expected vs actual above) ---" >&2
+    exit 1
+  fi
+  # What the compiler said about a program it accepted. Matched on the
+  # severity word rather than on the whole of compile.err, because that file
+  # also carries whatever clang and the linker wrote and those are not this
+  # compiler's diagnostics.
+  actual_warn=$(normalise "$work/compile.err" | grep ': warning: ' || true)
+  if [[ -f $expected_warn ]]; then
+    if ! diff -u "$expected_warn" <(printf '%s\n' "$actual_warn"); then
+      echo "--- $name: compiler warnings differ ---" >&2
+      exit 1
+    fi
+  elif [[ -n $actual_warn ]]; then
+    echo "--- $name: the compiler warned and no $name.warn says so ---" >&2
+    printf '%s\n' "$actual_warn" >&2
     exit 1
   fi
   echo "$name: ok"

@@ -101,7 +101,10 @@ which names the ctest cases have, and buys `tests/dialect/` the per-case
 `TIMEOUT` a program that opens a socket needs.
 
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
-a non-zero exit is then required), `foo.in` (standard input), `foo.epoch` (a
+a non-zero exit is then required), `foo.warn` (expected *warnings*, for a
+program that compiles — and a case **without** one must produce none, which is
+the half that keeps a warning added later from appearing on dozens of green
+cases, ADR-0272), `foo.in` (standard input), `foo.epoch` (a
 fixed `SOURCE_DATE_EPOCH`), `foo.components` (§6.13's other program-components,
 one path per line), `foo.opt` (an optimisation level), and — since ADR-0244 —
 `foo.importpath` and `foo.importenv`, which name *where to look* rather than
@@ -184,6 +187,21 @@ production and loop tests it — Pascal has no exceptions, so what was
 `ap::ParseAbort` in the C++ became a flag (ADR-0023). Sema and the lexer instead
 accumulate into
 `Diagnostics` so one run reports many errors.
+
+**Not every diagnostic is one** (ADR-0272). `WarnAt` stands beside `ErrorAt` and
+**the only difference is `errorSeen`** — same format, same stream, same exit
+status, and no `errorCount` either, that one naming a schema's domain (§6.4.7).
+Three things govern a warning and each was learned by it failing: it is written
+only when `warnOn`, which every `--dump` flag clears, because a dump has a
+reader parsing a fixed grammar and `kind-exhaustive` stopped on the first
+warning ever written; it is written only when nothing has been reported, because
+a name that did not resolve records no use and five variables in
+`tests/dialect/slice_escape.pas` were called unused underneath the five errors
+that are the point of the file; and it is written only for `curFile = mainFile`,
+because Sema checks a whole imported component and the compiler otherwise warned
+about ApFront once per importer. The one warning today is **a local variable
+declared and never used**, which found twelve dead declarations in this compiler
+on its first run.
 
 ### The representation, in brief
 

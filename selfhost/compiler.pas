@@ -639,6 +639,17 @@ begin
 
   dumping := dumpTokensOpt or dumpAstOpt or dumpSemaOpt or dumpAllOpt;
 
+  { A warning is written on an ordinary compile and never into a dump
+    (ADR-0272). Every --dump flag is named, and not `dumping` alone: that one
+    answers *which format a diagnostic takes* and covers four of the twelve,
+    where the question here is whether anything at all may be added to what a
+    reader is parsing. `kind-exhaustive` reads --dump-dispatch and stopped on
+    the first warning ever written. }
+  warnOn := not (dumpTokensOpt or dumpAstOpt or dumpSemaOpt or dumpAllOpt
+                 or dumpSymbolsOpt or dumpStmtsOpt or dumpUsesOpt
+                 or dumpImportsOpt or dumpDispatchOpt or dumpPredsOpt
+                 or dumpLayoutOpt or dumpLimitsOpt);
+
   { The default output is the source with its extension replaced, which is the
     one piece of name arithmetic here. A source with no dot gets .ll appended
     rather than being refused. }
@@ -2155,7 +2166,7 @@ end;
   written down in doc/sop.md 7. }
 procedure EmitVariantGuard(var rec: str; t: typePtr; prefix: numPtr;
                            armIndex, guard: integer);
-var tagIdx, msg, k: integer;
+var tagIdx, msg: integer;
     arms, arm, other: variantPtr; tt: typePtr; r: rangePtr;
     tagAddr, tagVal, acc, c1, c2, c3, cond: str;
     haveAcc, single: boolean;

@@ -13,6 +13,30 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A diagnostic can be a warning** (ADR-0272). Every diagnostic this compiler
+  wrote was an error; `WarnAt` stands beside `ErrorAt` and the only difference
+  is that a warning does not fail the compilation. The format is unchanged --
+  `file:line:col: warning: message` on the same stream -- so anything already
+  parsing a diagnostic reads one, and the exit status is untouched.
+
+- **A local variable declared and never used is reported.** The first warning.
+  It applies to a variable with a frame slot in a procedure's or function's
+  activation, in the file being compiled, and deliberately not to a parameter,
+  to a variable of the program's or a module's own block, to a `bindable` one,
+  or to anything at all once an error has been reported. It found twelve dead
+  declarations in the compiler's own source on its first run.
+
+- **`name.warn`**, a test sidecar for what a *successful* compilation said --
+  neither `name.out` nor `name.err` can hold that. A case without one must
+  produce no warning.
+
+### Changed
+
+- **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing
+  a fixed grammar and a warning is not part of any of their answers.
+
 ## [3.2.0] - 2026-08-30
 
 The release that closed `doc/roadmap.md`'s *What a daily program still cannot

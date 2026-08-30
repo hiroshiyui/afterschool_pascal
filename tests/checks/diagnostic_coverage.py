@@ -91,11 +91,17 @@ def goldens(root):
     gate could not have used before tests/dumps/ existed. It cuts the other
     way too, and is meant to: a diagnostic catalogued as unreachable that
     turns up in a dump golden fails here, because tests/dumps/uses_broken.dump
-    holds the diagnostics of a compilation that failed."""
+    holds the diagnostics of a compilation that failed.
+
+    `.warn` joined them with ADR-0272. It is the sidecar for what a
+    *successful* compilation said, which neither of the other two can hold --
+    `.out` compares what the program printed and `.err` requires a non-zero
+    exit -- so without it the first diagnostic in this compiler that is not an
+    error would have been pinned by a case and invisible to this gate."""
     return "\n".join(
         p.read_text()
         for d in ("tests", "selfhost")
-        for pat in ("*.err", "*.dump")
+        for pat in ("*.err", "*.dump", "*.warn")
         for p in (root / d).rglob(pat)
         # A background agent's worktree lives inside the checkout, so a walk
         # would read a second copy of every golden -- harmless here, since a

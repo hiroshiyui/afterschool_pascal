@@ -121,12 +121,12 @@ export ApTypes = (
   spBreak, spContinue, readingImports, line, col, pool, poolLen, tokCount,
   pos, depth, aborted, errorSeen, errorCount, progBlock, progModules,
   progModuleTail, progMainIndex, activeModules, msgOut, msgBuf, annotate,
-  layoutHead, programSym, ircode, imports, importName, dumping,
+  layoutHead, programSym, ircode, imports, importName, dumping, warnOn,
   dumpLayoutOpt, dumpDispatchOpt, dispatchHead, dispatchTail, enumHead,
   enumTail, chainHead, chainTail, tagHead, tagTail, curFile, curImportIdx,
   mainTokBase, notingUses, notingStmts, mainFile, FileIndexOf, instDeclHead, intType, int64Type, canonTextType,
   stringSchema, handleClosers, StrClear, StrAppend, Put, PutIrLit,
-  ErrorAt, PoolAdd, WritePool, PoolIsWide, PoolIs, ReservedForeignName,
+  ErrorAt, WarnAt, PoolAdd, WritePool, PoolIsWide, PoolIs, ReservedForeignName,
   PoolSame, PoolPut, InternWord, InternWide, InternWide2,
   InternResultName, InternBindingName, InternCallResultName,
   InternTryName, InternWithName, InternBoundsName, InternForName, NewType,
@@ -1159,6 +1159,19 @@ type
       one mistake deserves one message. }
     resultTypeBad: boolean;
     defined: boolean;
+    { Some applied occurrence resolved to this symbol (ADR-0272). Set in
+      `NoteUse`, which is the one place Sema records a resolution and is
+      called at every applied occurrence there is -- so this is that list and
+      not a second walk over the finished tree, which is ADR-0111's rule and
+      ADR-0230's met again: a hand-written walker can miss a node kind in
+      silence and no gate here would see it.
+
+      It is `used` and not `read`: NoteUse does not know whether the
+      occurrence was a designator being assigned to or an expression being
+      evaluated, so a variable only ever written to counts as used. That is a
+      narrower claim than a warning about a *dead store* would need, and
+      naming it here is what stops the next reader assuming otherwise. }
+    used: boolean;
     { 6.4.7: the type-denoter a schema produces its types from, re-resolved
       once per distinct tuple with the discriminants bound to that tuple's
       values -- which is why a schema keeps its *syntax* and not a type. The
@@ -2233,6 +2246,19 @@ var
     `file:line:col: error: message`, which is what a person reads and what
     tests/*.err holds. }
   dumping: boolean;
+  { Whether a remark about a program that compiles is written at all
+    (ADR-0272). True on an ordinary compile and **false whenever any --dump
+    flag was given**, which is the whole of the rule: a dump answers a tool's
+    question about a program's structure and every one of them has a reader
+    parsing a fixed grammar, so an unannounced extra line is a parse error in
+    something that had no reason to expect one. `kind-exhaustive` found that
+    on the first run of the first warning, reading `--dump-dispatch`.
+
+    Every warning site tests this. There is one today and the rule is written
+    here rather than inside `WarnAt`, because a site writes its message with
+    `write`/`writeln` after the prefix and a prefix that suppressed itself
+    would leave the message behind. }
+  warnOn: boolean;
   dumpLayoutOpt: boolean;
   dumpDispatchOpt: boolean;
   dispatchHead, dispatchTail: dispatchPtr;
@@ -2342,6 +2368,22 @@ procedure PutIrLit(w: msgLit);
   for the sake of tidiness (ADR-0084 is the first and it earned its place). }
 
 procedure ErrorAt(l, c: integer);
+
+{ Begin a diagnostic that is **not** an error: the program compiles, and this
+  is a remark about it.
+
+  Every diagnostic in this compiler was an error until AP had 523 ErrorAt
+  sites in ApFront and no second severity anywhere -- so there was no way to
+  say *this compiles and is probably wrong*, and `lib/dialect/paslspdiag.pas`
+  wrote LSP's severity as the constant 1 because no other value could arise
+  (ADR-0272).
+
+  What separates the two is `errorSeen`, and nothing else: the format is the
+  same so every reader that parses `file:line:col:` already handles it, the
+  stream is the same because neither standard gives a program a second one,
+  and the exit status is untouched -- a warning that failed a build would be
+  an error with a softer word for it. }
+procedure WarnAt(l, c: integer);
 
 { -------------------------------------------------------------- the pool -- }
 
@@ -2938,6 +2980,15 @@ begin
   errorCount := errorCount + 1;
   if dumping then write(l:1, ' ', c:1, ' error ')
   else write(curFile, ':', l:1, ':', c:1, ': error: ')
+end;
+
+procedure WarnAt;
+begin
+  { Deliberately no `errorSeen` and no `errorCount`. Every stage of the
+    pipeline is guarded by the first and a schema's domain is named by the
+    second, and a remark about a program that compiles must move neither. }
+  if dumping then write(l:1, ' ', c:1, ' warning ')
+  else write(curFile, ':', l:1, ':', c:1, ': warning: ')
 end;
 
 { -------------------------------------------------------------- the pool -- }

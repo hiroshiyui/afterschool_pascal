@@ -5005,6 +5005,7 @@ begin
   s^.declCol := 0;
   s^.declFile := 0;
   s^.binding := fbInternal;
+  s^.used := false;
   s^.fileArg := 0;
   s^.intVal := 0;
   s^.charVal := chr(0);
@@ -5316,6 +5317,11 @@ end;
 
 procedure NoteUse(line, col, len: integer; s: symPtr);
 begin
+  { Recorded whether or not anything is being dumped (ADR-0272). The dump is
+    a caller's question and this is the compiler's own: `used` has to be true
+    on an ordinary compile, where NotingHere is false. }
+  if s <> nil then
+    s^.used := true;
   if NotingHere and (s <> nil) then begin
     PutUseNumbers(line, col, len,
                   s^.declFile, s^.declLine, s^.declCol, s^.len);
@@ -5396,6 +5402,73 @@ end;
 procedure NoteBlockDeclarations;
 begin
   NoteDeclarationsTo(nil)
+end;
+
+{ A local variable this block declared and no occurrence ever named
+  (ADR-0272), reported at the *end* of the block: the uses are in the
+  statement part, and a nested procedure's uses are in there too because
+  6.2.2.9 has CheckDeclarations walk every nested body before this block's
+  statements are reached.
+
+  The same walk NoteDeclarationsTo makes -- the scope is a chain and this
+  block's entries are the ones at the top with this depth -- and it stops
+  the same way, at the first entry bound deeper or shallower.
+
+  **Four things are deliberately not warned about**, and each is a false
+  positive rather than a message left out:
+
+  - a **parameter**, because a formal's presence is decided by the caller and
+    by 6.11.1's heading, not by the body: a procedure that ignores one of
+    its parameters is answering an interface;
+  - a variable at **level 0**, which is the program's or a module's (ADR-0016
+    gives a level-0 owner one activation and a global). A module's variable
+    may be exported and used only by an importer, and a program's may be a
+    program-parameter that 6.5.1 binds externally and 6.12 activates without
+    the program ever naming it -- neither is answerable here, and the
+    compiler's own twelve program-parameters are exactly that shape;
+  - a **bindable** variable, for the second half of the same reason: 6.7.5.2
+    makes it an interface to something outside the program;
+  - anything in another **file**. An `--import` names a source and 6.11.1 puts
+    the interface in its module-heading, but Sema reads and checks the whole
+    component -- so without this, compiling the compiler's own program
+    reported eleven warnings about ApFront, once per importer, about a file
+    the command line never asked to be compiled. `curFile = mainFile` is the
+    question, which is the same one `NotingHere` asks for the same reason.
+
+  What is left is a variable with a frame slot in a procedure's or function's
+  activation, spelled by the programmer, in the file being compiled, that
+  nothing named.
+
+  **And nothing at all once anything has been reported.** A warning is a
+  remark about a program that *compiles*, and the evidence here stops being
+  evidence the moment resolution fails: a name that did not resolve records
+  no use, so a variable named only in a statement Sema refused reads as one
+  nothing named. `tests/dialect/slice_escape.pas` is that exactly -- five
+  variables whose only occurrences are the escapes the case exists to refuse,
+  and every one of them would have been called unused underneath the five
+  errors that are the point of the file. A second wrong message about a
+  program with a real error in it is worse than silence. }
+procedure WarnUnusedLocals(owner: symPtr);
+var e: entryPtr; s: symPtr;
+begin
+  if warnOn and not errorSeen and (owner <> nil) and (curFile = mainFile) then
+    if owner^.level > 0 then begin
+      e := scopeTop;
+      while e <> nil do
+        if e^.depth <> scopeDepth then e := nil
+        else begin
+          s := e^.sym;
+          if s <> nil then
+            if (s^.kind = skVar) and not s^.used and not s^.isBindable
+               and (s^.declLine > 0) then begin
+              WarnAt(s^.declLine, s^.declCol);
+              write('''');
+              WritePool(s^.at, s^.len);
+              writeln(''' is declared here and never used')
+            end;
+          e := e^.prev
+        end
+    end
 end;
 
 { 6.2.2.4's field-identifier, which is the one applied occurrence in this
@@ -10695,7 +10768,7 @@ begin
 end;
 
 function GenericFromSchema;
-var t, comp: typePtr; p, q, push: symListPtr; disc: symPtr;
+var t: typePtr; p, q, push: symListPtr; disc: symPtr;
     mark: entryPtr; before, k: integer; repeated, savedSchemaBody: boolean;
 begin
   t := nil;
@@ -13631,7 +13704,7 @@ begin
 end;
 
 procedure CheckCall(c: nodePtr);
-var sym: symPtr; a, def, last, root: nodePtr; t: typePtr;
+var sym: symPtr; a, def, last: nodePtr; t: typePtr;
     n, at2, len2: integer; bad, stepped: boolean;
 begin
   { 6.11.3's qualified name. A required function is never one of the answers,
@@ -15686,7 +15759,6 @@ var
   arms, w: variantPtr;
   lbl: rangePtr;
   want: integer;
-  root: nodePtr;
   stop, discSel, seeks: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
@@ -18789,8 +18861,7 @@ begin
 end;
 
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
-var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
-    p, q: symListPtr;
+var existing, sym: symPtr;
 begin
   existing := LookupInScope(d^.pdAt, d^.pdLen);
   if existing <> nil then
@@ -20439,7 +20510,7 @@ var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     given: typePtr; found, ip: instPtr;
     saveTop, mark: entryPtr; saveDepth, savePos, saveImport: integer;
     saveCur: symPtr; saveFile: nameStr;
-    ok: boolean; tp: nodePtr; ts: symPtr;
+    ok: boolean; ts: symPtr;
     n: nodePtr; c: numPtr; bs: typeBindings;
     nTypes, nFormals, firstType, nArgs, k, before: integer;
     inferred, failedHere: boolean;
@@ -21216,7 +21287,9 @@ begin
   end;
   stmtPath := outerPath;
   loopDepth := outerLoops;
-  ResolveGotos
+  ResolveGotos;
+  { After the statement part, because that is where the uses are (ADR-0272). }
+  WarnUnusedLocals(owner)
 end;
 
 procedure InstallPredefined;
@@ -21948,7 +22021,7 @@ begin
 end;
 
 procedure RunSema;
-var p, m: nodePtr; k: integer; info: modRecPtr;
+var p, m: nodePtr; k: integer;
 begin
   intType := NewType(tyInteger);
   int64Type := NewType(tyInt64);

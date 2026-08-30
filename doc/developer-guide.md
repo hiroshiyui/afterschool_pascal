@@ -302,6 +302,14 @@ its subject belongs.
   that should be rejected at compile time, or that should stop on a runtime
   error. A non-zero exit is then required, and `name.out` (if present) is
   compared against whatever was written before the failure.
+* `name.warn` — expected compiler *warnings*, for a program that compiles
+  (ADR-0272). Neither sidecar above can hold one: `name.out` compares what the
+  program printed, and `name.err` requires a non-zero exit. The rule has a
+  second half and it is the load-bearing one — **a case without this sidecar
+  must produce no warning** — because otherwise a warning added later would
+  appear on dozens of cases and every one of them would stay green.
+  `diagnostic-coverage` reads these alongside `.err` and `.dump`, so a warning
+  is held to the same rule an error is.
 * `name.in` — fed to the program's standard input. Without it stdin is
   `/dev/null`, so a program that reads sees end-of-file rather than waiting for
   a terminal. Two writable scratch paths are always passed as arguments, so a

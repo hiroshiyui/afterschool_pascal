@@ -374,19 +374,32 @@ on it, and re-reading it is cheaper than trusting it.
   which is an argument for `--at` narrowing the **server's** scan and the
   compiler's write, and not for expecting the compile to get faster.
 
-- **Every diagnostic is an error.** 523 `ErrorAt` sites in ApFront and no
-  other severity anywhere: `lib/dialect/paslspdiag.pas` writes
-  `'severity', 1` as a constant, and its own comment says a second severity
-  would be a branch no input reaches — so LSP's severity 2 is unused and the
-  compiler has no category for *this compiles and is probably wrong*. An
-  unused variable, an unused import, a `var` parameter never written through,
-  a function whose result is assigned on one path and not another, a statement
-  after an unconditional `goto` or `exit` — none of them is sayable.
+- **A diagnostic can now be something other than an error, and one is**
+  (ADR-0272). `WarnAt` stands beside `ErrorAt` and the only difference is
+  `errorSeen` — same format, same stream, same exit status — so the category
+  *this compiles and is probably wrong* exists where it did not.
 
-  The insertion point is clean, `Diagnostics` already accumulating rather than
-  stopping. The cost is that `diagnostic-coverage` requires a golden to name
-  every message, so each warning buys a case — which is the gate working
-  rather than an obstacle, and is the reason to add them in small batches.
+  The first is **a local variable declared and never used**, and it found
+  twelve dead declarations in this compiler on its first run, six of them in
+  one `var` line. Across the rest of the corpus it is 24 warnings in 11 files
+  of 765, which is the volume that says a flag to turn warnings off has no
+  caller yet.
+
+  It also cost a sidecar and uncovered a hole. `name.warn` had to be invented
+  because neither `.out` nor `.err` can hold a remark made by a *successful*
+  compilation, and its second half — a case without one must produce **none** —
+  is what stops a warning added later from appearing on dozens of green cases.
+  The hole is `diagnostic-coverage`'s, and it is in the entry below.
+
+  **Four remain sayable and unsaid**: an unused import — which is *not*
+  obviously a mistake here, §6.2.3.6 commencing a supplying module before the
+  program-block, so importing purely for a `to begin do` part is meaningful and
+  the warning would need to know better; a `var` parameter never written
+  through, where the dialect's own `protected var` is the thing to suggest; a
+  function whose result is assigned on one path and not another; and a
+  statement after an unconditional `goto` or `exit`. Each buys a case, which is
+  the gate working rather than an obstacle, and is the reason to add them in
+  small batches.
 
 - **Two blind spots the gates cannot see, and two that closed.** What is
   left is a branch and a fuzzer; `doc/sop.md` §7 records the first, and the
