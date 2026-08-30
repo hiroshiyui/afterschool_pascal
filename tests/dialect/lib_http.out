@@ -1,0 +1,84 @@
+--- forming a request
+method with a space:  not of the expected form
+target with a space:  not of the expected form
+a GET of /ok:         no error
+field name with a space: not of the expected form
+value carrying CRLF:  not of the expected form
+body carrying a null: not of the expected form
+past MaxHeaders:      no room left
+sending without Host: not of the expected form
+
+listen:  no error
+service: no error, a port was given: TRUE
+
+--- GET, 200, Content-Length
+send:    no error
+  > GET /hello HTTP/1.1
+  > Host: localhost
+  > Accept: text/plain
+  > Connection: close
+receive: no error
+  status 200 [OK]
+  fields 2, stated 12, chunked FALSE, byClose FALSE
+    Content-Type = [text/plain]
+    Content-Length = [12]
+    body 1: [hello]
+    body 2: [world]
+
+--- POST with a body, 404, and the field lookup
+send:    no error
+  > POST /submit HTTP/1.1
+  > Host: localhost
+  > Content-Type: application/x-www-form-urlencoded
+  > Connection: close
+  > Content-Length: 8
+  > (body) a=1&b=2
+receive: no error
+  status 404 [Not Found]
+  fields 4, stated 0, chunked FALSE, byClose FALSE
+    X-Empty = []
+    Set-Cookie = [a=1]
+    Set-Cookie = [b=2]
+    Content-Length = [0]
+  a 404 is not a failure: TRUE
+  set-COOKIE = [a=1] (the first)
+  x-empty was sent, and its value is []
+  x-missing absent: TRUE, or [a default]
+
+--- chunked, and Exchange
+receive: no error
+  status 200 [OK]
+  fields 1, stated -1, chunked TRUE, byClose FALSE
+    Transfer-Encoding = [chunked]
+    body 1: [hello ]
+    body 2: [a]
+    body 3: [b]
+    body 4: [world]
+  joined: no error [hello 
+a
+b
+world]
+  into four characters: no room left, still [keep]
+
+--- 302, not followed
+receive: no error
+  status 302, Location [/elsewhere] -- the caller decides
+
+--- HEAD, whose response states a length it does not send
+receive: no error
+  status 200 [OK]
+  fields 1, stated 42, chunked FALSE, byClose FALSE
+    Content-Length = [42]
+
+--- no Content-Length and no Transfer-Encoding
+receive: no error
+  status 200 [OK]
+  fields 0, stated -1, chunked FALSE, byClose TRUE
+    body 1: [read until the far end closes]
+
+--- what is reported rather than guessed at
+status-line with no code:   not of the expected form
+field-line with no colon:   not of the expected form
+framed both ways at once:   not of the expected form
+closed without answering:   not present
+a body line too long:       no room left
