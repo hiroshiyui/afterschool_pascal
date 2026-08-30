@@ -38,7 +38,8 @@
 module PasLsp;
 
 export PasLsp = (LspBufMax, LspHeadMax, LspHeader, LspReader,
-                 LspOpen, LspRead, LspWrite, JsonlRead, JsonlWrite);
+                 LspOpen, LspRead, LspPending, LspWrite,
+                 JsonlRead, JsonlWrite);
 
 import PasError; PasIO; PasJson;
 
@@ -110,6 +111,24 @@ function JsonlRead(var r: LspReader; var body: JsonChars): ErrorCode;
   on the day it does. }
 function JsonlWrite(fd: integer; var body: JsonChars): ErrorCode;
 
+{ Would `LspRead` have something to work with without waiting? True when this
+  reader already holds unread bytes, or when the descriptor says a read would
+  not block (ADR-0257).
+
+  It is `pasx_socket_pending`'s two-halves shape and needs both for the same
+  reason ADR-0205 gives: bytes already taken off the descriptor are bytes the
+  descriptor no longer has, so asking `poll` alone would say "nothing there"
+  about a frame sitting in this buffer.
+
+  **It is a permission to try, not a promise of a whole frame.** A client that
+  has sent a header has sent the body, so a caller draining what has arrived
+  can read one frame per `true` and expect it to complete; but a descriptor
+  that is a *regular file* -- a session replayed from one, which is how this
+  server is tested -- answers true at end of input and forever after, and the
+  read is what discovers otherwise. A caller must be able to take
+  `errAbsent` for an answer. }
+function LspPending(var r: LspReader): boolean;
+
 end;
 
 procedure LspOpen;
@@ -146,6 +165,13 @@ begin
       Ready := true
     end
   end
+end;
+
+function LspPending;
+begin
+  if r.head <= r.tail then LspPending := true
+  else if r.ended then LspPending := false
+  else LspPending := FdReady(r.fd, 0)
 end;
 
 function NextByte(var r: LspReader; var c: char; var e: ErrorCode): boolean;

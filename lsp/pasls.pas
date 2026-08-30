@@ -1927,6 +1927,18 @@ end;
   enumeration: a method this server does not implement is answered when it is
   a request and ignored when it is a notification, which is what the
   specification asks for in each case. }
+{ Which document a `textDocument/didChange` is about, or the empty string for
+  any other message. Used to decide whether one change makes an earlier one
+  stale (ADR-0257). }
+function ChangedUri(msg: JsonPtr): DocUri;
+var method: JsonLine;
+begin
+  ChangedUri := '';
+  if JsonTextInto(JsonMember(msg, 'method'), method) = errNone then
+    if method = 'textDocument/didChange' then
+      ChangedUri := UriOf(JsonMember(msg, 'params'))
+end;
+
 procedure Dispatch(msg: JsonPtr);
 var method: JsonLine;
     id, params: JsonPtr;
@@ -1997,8 +2009,15 @@ var body: JsonChars;
     i: integer;
     d: Document;
     complaint: IOLine;
+    { ADR-0257's queue of one. `nextBody` and `nextMsg` are the frame the
+      drain read; `held` is one it read and did not want, dispatched after
+      this turn's message so that ordering is exactly what the client sent. }
+    nextBody: JsonChars;
+    nextMsg: JsonResult;
+    held: JsonPtr;
 
 begin
+  held := nil;
   ReadTransport;
   ReadEnvironment;
   encoding := peUtf16;
@@ -2028,9 +2047,62 @@ begin
     end else begin
       parsed := JsonParseChars(body, at);
       if parsed.ok then begin
+        { ADR-0257: a change nobody will ever see the answer to is not
+          compiled.
+
+          A keystroke is a `didChange` carrying the whole document, so when
+          two of them for one file are already waiting, compiling the first is
+          work whose answer is stale before it is published. This drains what
+          has *arrived* -- never waiting for more -- and keeps only the last
+          change per file, which is what a reader pays for and the whole of
+          the 933 ms a `didChange` behind work in flight was measured at.
+
+          It is not a construct and does not need one, which is this row's
+          third cheaper answer in a row: `select` for the sockets, a cache for
+          the hovers, and a queue of one for this. What a thread would still
+          buy is a *cancellable* compile, and that is a different sentence.
+
+          The drain stops at the first message that is not a change of the
+          same file, and that one is held rather than read again -- so
+          ordering is preserved exactly, which is what the golden of two
+          changes to two files checks. }
+        if transport <> tpMcp then
+          while (ChangedUri(parsed.val) <> '') and (held = nil) and
+                LspPending(reader) do begin
+            JsonCharsNew(nextBody);
+            if LspRead(reader, nextBody) <> errNone then
+              { The input ended or was refused mid-drain. Nothing is lost:
+                this message is still dispatched below and the next turn of
+                the loop reports it. }
+            else begin
+              nextMsg := JsonParseChars(nextBody, at);
+              if not nextMsg.ok then begin
+                writestr(complaint, 'a message that is not JSON was ignored',
+                         ', at byte ', at:1, ': ',
+                         ErrorText(nextMsg.cause));
+                Note(complaint)
+              end
+              else if ChangedUri(nextMsg.val) = ChangedUri(parsed.val) then
+              begin
+                { The earlier change is superseded outright: a didChange
+                  carries the whole document, so there is nothing in it the
+                  later one does not also say. }
+                JsonFree(parsed.val);
+                parsed.val := nextMsg.val
+              end
+              else
+                held := nextMsg.val
+            end;
+            JsonCharsFree(nextBody)
+          end;
         if transport = tpMcp then McpDispatch(parsed.val)
         else Dispatch(parsed.val);
-        JsonFree(parsed.val)
+        JsonFree(parsed.val);
+        if held <> nil then begin
+          Dispatch(held);
+          JsonFree(held);
+          held := nil
+        end
       end else begin
         writestr(complaint, 'a message that is not JSON was ignored, at byte ',
                  at:1, ': ', ErrorText(parsed.cause));

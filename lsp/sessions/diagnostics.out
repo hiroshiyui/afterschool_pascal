@@ -4,11 +4,11 @@ Content-Length: 208
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[{"range":{"start":{"line":2,"character":10},"end":{"line":2,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'greeting'"}]}}Content-Length: 447
 
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[{"range":{"start":{"line":3,"character":2},"end":{"line":3,"character":2}},"severity":1,"source":"pascalc","message":"cannot assign char to a variable of type integer"},{"range":{"start":{"line":4,"character":10},"end":{"line":4,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'undeclared'"}]}}Content-Length: 122
-
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[]}}Content-Length: 109
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[{"range":{"start":{"line":3,"character":2},"end":{"line":3,"character":2}},"severity":1,"source":"pascalc","message":"cannot assign char to a variable of type integer"},{"range":{"start":{"line":4,"character":10},"end":{"line":4,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'undeclared'"}]}}Content-Length: 109
 
 {"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"pasls does not implement textDocument/completion"}}Content-Length: 122
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[]}}Content-Length: 122
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[]}}Content-Length: 38
 

@@ -1,0 +1,31 @@
+# ADR-0257: three changes to one file, arriving together.
+#
+# A keystroke is a `didChange` carrying the whole document, so a client typing
+# faster than the compiler runs leaves several of them queued. Compiling all
+# but the last is work whose answer is stale before it could be published --
+# 933 ms of it, measured against a 22 900-line source, and the reason this row
+# of `doc/roadmap.md` named a concurrency construct.
+#
+# What is pinned here is that **one** `publishDiagnostics` comes back and it
+# is the last change's. Three would mean nothing is coalesced; none would mean
+# the drain swallowed the work. It needs no clock and no timing, which is what
+# makes it a golden at all: the whole session is available at once, so what
+# has "already arrived" is deterministic.
+#
+# It is also why the server only ever *drains what is there*. Waiting for more
+# would be a policy about a client's typing speed; reading what has already
+# arrived is a fact about the queue.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+# The document as opened, which is analysed on its own.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/hello.pas","languageId":"pascal","version":1,"text":"program p(output);\nbegin writeln('a') end.\n"}}}
+
+# Three changes, back to back. Only the third is compiled.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":2},"contentChanges":[{"text":"program p(output);\nbegin writeln(nope1) end.\n"}]}}
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":3},"contentChanges":[{"text":"program p(output);\nbegin writeln(nope2) end.\n"}]}}
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":4},"contentChanges":[{"text":"program p(output);\nbegin writeln(final) end.\n"}]}}
+
+{"jsonrpc":"2.0","id":2,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

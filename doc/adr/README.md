@@ -265,3 +265,4 @@ the alternatives that were rejected and why.
 | [0254](0254-a-generic-activation-need-not-write-its-types.md) | A generic activation need not write its types | Accepted |
 | [0255](0255-a-function-may-answer-a-handle.md) | A function may answer a handle | Accepted |
 | [0256](0256-a-fallible-value-may-be-owned.md) | A fallible value may be owned, and then the arms are laid apart | Accepted |
+| [0257](0257-a-change-nobody-will-see-is-not-compiled.md) | A change nobody will see the answer to is not compiled | Accepted |

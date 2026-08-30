@@ -1,0 +1,13 @@
+Content-Length: 208
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 122
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[]}}Content-Length: 122
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/other.pas","diagnostics":[]}}Content-Length: 273
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[{"range":{"start":{"line":1,"character":14},"end":{"line":1,"character":14}},"severity":1,"source":"pascalc","message":"undeclared identifier 'nope1'"}]}}Content-Length: 273
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/other.pas","diagnostics":[{"range":{"start":{"line":1,"character":14},"end":{"line":1,"character":14}},"severity":1,"source":"pascalc","message":"undeclared identifier 'nope2'"}]}}Content-Length: 38
+
+{"jsonrpc":"2.0","id":2,"result":null}

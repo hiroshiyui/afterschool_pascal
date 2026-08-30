@@ -15,10 +15,6 @@
 # the first line it can parse.
 {"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":2},"contentChanges":[{"text":"program hello(output);\nvar n: integer;\nbegin\n  n := 'x';\n  writeln(undeclared)\nend.\n"}]}}
 
-# Fixed. The empty array is not silence: it is how the client is told the
-# problems it was showing are gone.
-{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":3},"contentChanges":[{"text":"program hello(output);\nbegin\n  writeln('hello')\nend.\n"}]}}
-
 # A request this server does not implement, which must be answered rather than
 # ignored: a client waiting on an id it never gets back is a client that hangs.
 # It was `textDocument/hover` until ADR-0246 answered that one, which is the
@@ -26,6 +22,17 @@
 # method here is whichever one is still unimplemented, and what is asserted is
 # the -32601 and not anything about completion.
 {"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
+
+# Interleaved between the two edits on purpose (ADR-0257). Two didChange
+# messages for one file arriving back to back are coalesced -- only the last
+# is compiled, because a keystroke carries the whole document and the answer
+# to an earlier one is stale before it could be published. This session is
+# about what a *diagnostic* looks like after each edit, so the edits are kept
+# apart by a request; `coalesce.jsonl` is where the drain itself is pinned.
+# Fixed. The empty array is not silence: it is how the client is told the
+# problems it was showing are gone.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":3},"contentChanges":[{"text":"program hello(output);\nbegin\n  writeln('hello')\nend.\n"}]}}
+
 
 {"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
 {"jsonrpc":"2.0","id":3,"method":"shutdown"}

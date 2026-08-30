@@ -40,7 +40,7 @@ module PasIO;
 export PasIO = (StdIn, StdOut, StdErr, IOMax, IOLine,
                 FdResult, CountResult,
                 OpenRead, Close, ReadInto, WriteFrom, WriteAll, WriteText,
-                AtEnd, CountOr, ResultText);
+                FdReady, AtEnd, CountOr, ResultText);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part.
   PasFS supplies PathName rather than this module declaring a second one: a
@@ -108,6 +108,20 @@ function WriteAll(fd: integer; protected var buf: array of char): ErrorCode;
   why ADR-0125 has no slice of a string. }
 function WriteText(fd: integer; s: IOLine): ErrorCode;
 
+{ Whether a read of this descriptor would have something to give, waiting at
+  most `timeoutMs` milliseconds for it: negative waits indefinitely and zero
+  asks and returns at once. False for a descriptor the system refused to
+  answer about, which is the safe direction -- a caller then reads and finds
+  out, where a wrong `true` would block (ADR-0257).
+
+  **A regular file is always ready**, POSIX having nothing for a read of one
+  to wait for -- so a program whose standard input is redirected from a file
+  is told `true` at end of file and forever after. This is a permission to
+  *try* a read and never a promise that one will yield anything, and a caller
+  deciding whether a whole *message* has arrived has to say what a message is
+  and read one. `PasLsp.LspPending` is that caller. }
+function FdReady(fd: integer; timeoutMs: integer): boolean;
+
 { Whether a successful read reached the end of the input -- `ok` and a count
   of zero. A failed result is not at the end and answers false, because
   "nothing more to read" and "the read was refused" are different things and a
@@ -130,6 +144,10 @@ end;
   ssize_t, and `var b: array of char` supplies the middle two of those three
   arguments from one parameter (ADR-0129). }
 function ExtOpen(path: string; flags: integer): integer; external 'open';
+{ ADR-0257. `poll` needs a `struct pollfd`, which is a layout no library
+  module may declare (ADR-0185), so the call is one of the runtime's own. }
+function ExtReady(fd: integer; timeoutMs: integer): integer;
+  external 'pasx_fd_ready';
 function ExtClose(fd: integer): integer; external 'close';
 function ExtRead(fd: integer; var b: array of char): int64; external 'read';
 function ExtWrite(fd: integer;
@@ -188,6 +206,17 @@ begin
       e := r.cause
   end;
   WriteAll := e
+end;
+
+function FdReady;
+begin
+  { Named for the descriptor and not just `Ready`, which is what it was for an
+    hour: §6.11.3 binds an imported constituent into the importing block's
+    scope unqualified, so `Ready` here collided with PasLsp's own private
+    `Ready` and made that module refuse to compile. `only` would have hidden
+    it; a name that says what it is about is the fix, and a library export is
+    where a generic name costs the most. }
+  FdReady := ExtReady(fd, timeoutMs) = 1
 end;
 
 function WriteText;

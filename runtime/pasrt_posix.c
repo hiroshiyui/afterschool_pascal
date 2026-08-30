@@ -464,6 +464,43 @@ int pasx_socket_fd(void *p) {
  * than it asked for; the alternative is a clock, and naming one here would
  * cost a header for a case no program in this tree has.
  */
+/* Is there something to read on this descriptor, within `timeout_ms`?
+ * 1 yes, 0 the timeout expired, -1 refused. `timeout_ms` is poll's own: a
+ * negative one waits indefinitely and zero asks and returns (ADR-0257).
+ *
+ * `pasx_socket_poll` above answers the same question for a *list*, and is
+ * not what a caller with one descriptor wants: its contract is a pair of
+ * slices whose lengths must agree, which is right for a server holding many
+ * sockets and an awkward way to ask about standard input.
+ *
+ * **What it does not answer.** POSIX makes a regular file always ready, so a
+ * program reading a redirected standard input is told "yes" at end of file
+ * and forever after. That is not a defect here and cannot be fixed here --
+ * readiness is a property of the descriptor and a regular file genuinely has
+ * no waiting -- but a caller using this to decide whether a *message* has
+ * arrived has to say what a message is and read one, which is exactly what
+ * `PasLsp.LspPending` does. It is a permission to try a read and never a
+ * promise that one will yield anything.
+ */
+int pasx_fd_ready(int fd, int timeout_ms) {
+  struct pollfd pf;
+  int n;
+
+  if (fd < 0)
+    return -1;
+  pf.fd = fd;
+  pf.events = POLLIN;
+  pf.revents = 0;
+  for (;;) {
+    n = poll(&pf, (nfds_t)1, timeout_ms);
+    if (n >= 0 || errno != EINTR)
+      break;
+  }
+  if (n < 0)
+    return -1;
+  return n > 0 && pf.revents != 0;
+}
+
 int pasx_socket_poll(const int *fds, long long nfds, int *got, long long ngot,
                      int timeout_ms) {
   struct pollfd *pf;

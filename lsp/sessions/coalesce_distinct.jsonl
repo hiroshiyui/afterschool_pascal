@@ -1,0 +1,21 @@
+# ADR-0257's other direction: two changes to *two* files, arriving together.
+#
+# Coalescing must be per document and must preserve order. Both of these are
+# compiled and both publish, in the order the client sent them -- a server
+# that dropped the first because something was queued behind it would fail
+# here, which is what makes the session above a claim rather than an
+# observation. The drain stops at the first message that is not a change of
+# the same file, and that message is held rather than re-read.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/hello.pas","languageId":"pascal","version":1,"text":"program p(output);\nbegin writeln('a') end.\n"}}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/other.pas","languageId":"pascal","version":1,"text":"program p(output);\nbegin writeln('a') end.\n"}}}
+
+# One change each, adjacent.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":2},"contentChanges":[{"text":"program p(output);\nbegin writeln(nope1) end.\n"}]}}
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/other.pas","version":2},"contentChanges":[{"text":"program p(output);\nbegin writeln(nope2) end.\n"}]}}
+
+{"jsonrpc":"2.0","id":2,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}
