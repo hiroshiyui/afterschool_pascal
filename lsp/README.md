@@ -88,12 +88,13 @@ Pascal compiler.
 Two things it does that are worth knowing. The names come back with the case
 the **programmer** wrote: the compiler's string pool holds only the folded
 spelling, so what the dump reports is a position and a length, and the server
-slices the written spelling out of the document it is holding. And `range` and
-`selectionRange` are both the extent of the **name** rather than of the whole
-declaration — the parse tree records where a declaration begins and never where
-it ends, so anything wider would be invented. Go-to-symbol, the outline and
-breadcrumbs are unaffected; "expand selection to the enclosing declaration" is
-the one thing that degrades.
+slices the written spelling out of the document it is holding. And `range` is the whole
+declaration where `selectionRange` is the name inside it
+([ADR-0253](../doc/adr/0253-a-declaration-has-an-extent.md)) — the two were
+the same until the parser recorded where a block ends, which is what "expand
+selection to the enclosing declaration" needs. A *statement's* extent is still
+not recorded, so that gesture stops at the enclosing declaration rather than
+stepping outward through nested statements.
 
 It answers `textDocument/definition` and `textDocument/hover` out of
 `pascalc --dump-uses` ([ADR-0246](../doc/adr/0246-what-a-name-denotes-and-where-it-was-written.md)),

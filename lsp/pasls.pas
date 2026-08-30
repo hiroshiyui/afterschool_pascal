@@ -1072,6 +1072,25 @@ begin
   else CharacterAt := col - 1
 end;
 
+{ A range with two ends that are not the same name -- a declaration's whole
+  extent (ADR-0253). Each end converts against the line it is on, which is
+  what makes it right under `utf-16` for a block spanning many lines. }
+function SpanRange(fromLine: DiagLine; line, col: integer;
+                   toLine: DiagLine; endLine, endCol: integer): JsonPtr;
+var r, a, b: JsonPtr;
+begin
+  a := JsonNewObject;
+  JsonPut(a, 'line', JsonNewInteger(line - 1));
+  JsonPut(a, 'character', JsonNewInteger(CharacterAt(fromLine, col)));
+  b := JsonNewObject;
+  JsonPut(b, 'line', JsonNewInteger(endLine - 1));
+  JsonPut(b, 'character', JsonNewInteger(CharacterAt(toLine, endCol)));
+  r := JsonNewObject;
+  JsonPut(r, 'start', a);
+  JsonPut(r, 'end', b);
+  SpanRange := r
+end;
+
 { The extent of a name, as the protocol's Range. }
 function NameRange(source: DiagLine; line, col, len: integer): JsonPtr;
 var r, a, b: JsonPtr;
@@ -1110,8 +1129,10 @@ var uri: DocUri;
     kids, owner: array [0..SymDepthMax] of JsonPtr;
     text: StrItem;
     source: DiagLine;
+    endSource: DiagLine;
     name: DiagLine;
     kind: ParseLine;
+    endLine, endCol: integer;
     tooDeep: boolean;
 begin
   reply := NewResponse(id);
@@ -1153,7 +1174,12 @@ begin
             symLine := IntOr(ParseInt(SymField(text, 4)), 0);
             symCol := IntOr(ParseInt(SymField(text, 5)), 0);
             symLen := IntOr(ParseInt(SymField(text, 6)), 0);
-            name := SymField(text, 7);
+            { The declaration's extent, which a block gives and a constant or
+              a type does not -- there the compiler writes the name's own end
+              (ADR-0253). }
+            endLine := IntOr(ParseInt(SymField(text, 7)), 0);
+            endCol := IntOr(ParseInt(SymField(text, 8)), 0);
+            name := SymField(text, 9);
             if depth > SymDepthMax then begin
               tooDeep := true;
               depth := SymDepthMax
@@ -1172,8 +1198,16 @@ begin
             obj := JsonNewObject;
             JsonPut(obj, 'name', JsonNewText(name));
             JsonPut(obj, 'kind', JsonNewInteger(SymbolKindOf(kind)));
+            { 3.17: `range` is the whole symbol and `selectionRange` is the
+              name inside it. They were the same until the parse tree learned
+              where a block ends (ADR-0253); now a procedure's range reaches
+              its `end`, which is what "expand selection to the enclosing
+              declaration" needs. The end is converted against *its own* line,
+              which is why it is looked up separately. }
+            LineOf(d.text, endLine, endSource);
             JsonPut(obj, 'range',
-                    NameRange(source, symLine, symCol, symLen));
+                    SpanRange(source, symLine, symCol,
+                              endSource, endLine, endCol));
             JsonPut(obj, 'selectionRange',
                     NameRange(source, symLine, symCol, symLen));
             { The array this depth's symbols go in, made when the first of

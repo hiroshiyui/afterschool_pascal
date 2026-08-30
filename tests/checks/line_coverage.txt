@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 448
-instrumented 17871
+uncovered 445
+instrumented 17882
 
 accept 0/4
 accumulate 0/84
@@ -120,7 +120,7 @@ checkrecordvalue 0/92
 checkrelease 0/14
 checkresultassign 4/28
 checkschemaarms 0/8
-checkschemabodynames 2/37
+checkschemabodynames 0/37
 checkschemadomain 0/51
 checksetexpr 0/14
 checksetmember 0/15
@@ -209,8 +209,8 @@ dumprecordlayout 0/9
 dumpstmt 0/195
 dumpstmtlist 0/4
 dumpstrchild 0/5
-dumpsymbols 0/14
-dumpsymdecl 0/23
+dumpsymbols 1/16
+dumpsymdecl 0/25
 dumpsymfields 0/8
 dumpsymrecord 0/6
 dumpsymtype 0/10
@@ -355,7 +355,7 @@ foreignstringformal 0/1
 foreigntype 0/1
 forgetarms 0/8
 forgetlist 0/3
-forgetresolved 6/20
+forgetresolved 4/20
 frameat 0/12
 frameglobal 0/8
 frameof 0/2
@@ -532,7 +532,7 @@ parameterof 0/6
 parseactualparameters 0/6
 parseargs 10/125
 parsearraytype 0/17
-parseblock 0/39
+parseblock 0/43
 parseboundident 1/12
 parsecase 0/38
 parsecaselabel 0/8
@@ -557,7 +557,7 @@ parselabelpart 0/6
 parsemainprogram 0/31
 parsemodule 0/76
 parsemoduleblock 0/16
-parsemoduleparts 0/28
+parsemoduleparts 0/30
 parsenamelist 1/22
 parsepointertypeargs 0/11
 parseprimary 2/115
@@ -701,7 +701,8 @@ striswide 0/9
 suppliedby 0/9
 suppliersof 0/23
 symhead 0/1
-symtail 0/3
+symtail 0/1
+symtailto 0/3
 tag 0/28
 tagfieldat 0/4
 tagtypeat 0/4

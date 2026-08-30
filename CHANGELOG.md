@@ -20,6 +20,12 @@ appears below in the release where it still existed.
   that document and dropped when its text changes, so five hovers on an
   unchanged 22 900-line source cost one compilation rather than five — 795 ms
   to 106. Nothing about an answer changes; only how often one is computed.
+- **`--dump-symbols` writes a declaration's extent** (ADR-0253), so its line
+  is now `symbol <depth> <kind> <line> <col> <len> <endline> <endcol> <name>`.
+  A declaration with a block reaches its closing `end`; one without answers
+  with the end of its own name. The language server maps the two onto the
+  protocol's `range` and `selectionRange`, which were the same value until
+  the parser recorded where a block stops.
 
 ## [3.1.0] — 2026-08-30
 

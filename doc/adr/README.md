@@ -261,3 +261,4 @@ the alternatives that were rejected and why.
 | [0250](0250-a-declaration-is-an-occurrence-of-itself.md) | A declaration is an occurrence of itself | Accepted |
 | [0251](0251-an-interface-declares-itself.md) | An interface declares itself, and a module declares twice | Accepted |
 | [0252](0252-the-answer-is-cached-against-the-document.md) | The answer is cached against the document | Accepted |
+| [0253](0253-a-declaration-has-an-extent.md) | A declaration has an extent | Accepted |

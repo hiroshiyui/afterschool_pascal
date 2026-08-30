@@ -1,41 +1,41 @@
-symbol 0 program 21 9 7 symbols
-symbol 1 const 23 7 5 first
-symbol 1 enum 26 3 6 colour
-symbol 2 value 26 13 3 red
-symbol 2 value 26 18 5 green
-symbol 2 value 26 25 4 blue
-symbol 1 var 28 5 5 early
-symbol 1 const 30 7 6 second
-symbol 1 record 33 3 5 point
-symbol 2 field 34 5 1 x
-symbol 2 field 34 8 1 y
-symbol 1 record 40 3 5 shape
-symbol 2 field 41 5 4 name
-symbol 2 field 42 10 3 tag
-symbol 2 field 43 13 6 radius
-symbol 2 field 44 15 1 w
-symbol 2 field 44 18 1 h
-symbol 2 field 46 14 5 inner
-symbol 2 field 47 18 4 deep
-symbol 1 type 53 3 5 count
-symbol 1 type 54 3 7 colours
-symbol 1 type 55 3 4 link
-symbol 1 type 56 3 3 row
-symbol 1 schema 60 3 6 buffer
-symbol 2 field 61 5 4 used
-symbol 2 field 62 5 4 data
-symbol 1 var 66 3 6 origin
-symbol 1 var 69 3 4 anon
-symbol 2 field 70 5 4 left
-symbol 2 field 70 11 5 right
-symbol 1 var 72 3 4 mood
-symbol 2 value 72 10 4 calm
-symbol 2 value 72 16 5 cross
-symbol 1 function 76 10 5 twice
-symbol 2 var 77 5 7 doubled
-symbol 2 function 78 12 4 half
-symbol 1 procedure 89 11 5 later
-symbol 2 const 90 7 6 inside
-symbol 2 var 91 5 3 sum
-symbol 1 procedure 98 11 5 trace
-symbol 1 var 100 5 4 last
+symbol 0 program 21 9 7 106 4 symbols
+symbol 1 const 23 7 5 23 12 first
+symbol 1 enum 26 3 6 26 9 colour
+symbol 2 value 26 13 3 26 16 red
+symbol 2 value 26 18 5 26 23 green
+symbol 2 value 26 25 4 26 29 blue
+symbol 1 var 28 5 5 28 10 early
+symbol 1 const 30 7 6 30 13 second
+symbol 1 record 33 3 5 33 8 point
+symbol 2 field 34 5 1 34 6 x
+symbol 2 field 34 8 1 34 9 y
+symbol 1 record 40 3 5 40 8 shape
+symbol 2 field 41 5 4 41 9 name
+symbol 2 field 42 10 3 42 13 tag
+symbol 2 field 43 13 6 43 19 radius
+symbol 2 field 44 15 1 44 16 w
+symbol 2 field 44 18 1 44 19 h
+symbol 2 field 46 14 5 46 19 inner
+symbol 2 field 47 18 4 47 22 deep
+symbol 1 type 53 3 5 53 8 count
+symbol 1 type 54 3 7 54 10 colours
+symbol 1 type 55 3 4 55 7 link
+symbol 1 type 56 3 3 56 6 row
+symbol 1 schema 60 3 6 60 9 buffer
+symbol 2 field 61 5 4 61 9 used
+symbol 2 field 62 5 4 62 9 data
+symbol 1 var 66 3 6 66 9 origin
+symbol 1 var 69 3 4 69 7 anon
+symbol 2 field 70 5 4 70 9 left
+symbol 2 field 70 11 5 70 16 right
+symbol 1 var 72 3 4 72 7 mood
+symbol 2 value 72 10 4 72 14 calm
+symbol 2 value 72 16 5 72 21 cross
+symbol 1 function 76 10 5 85 4 twice
+symbol 2 var 77 5 7 77 12 doubled
+symbol 2 function 78 12 4 81 6 half
+symbol 1 procedure 89 11 5 95 4 later
+symbol 2 const 90 7 6 90 13 inside
+symbol 2 var 91 5 3 91 8 sum
+symbol 1 procedure 98 11 5 98 16 trace
+symbol 1 var 100 5 4 100 9 last

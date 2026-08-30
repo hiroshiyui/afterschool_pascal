@@ -4078,6 +4078,8 @@ begin
     without another level being claimed. }
   EnterLevel;
   b := NewNode(nkBlock, CurLine, CurCol);
+  b^.blEndLine := 0;
+  b^.blEndCol := 0;
   b^.blImports := nil;
   b^.blLabels := nil;
   b^.blConsts := nil;
@@ -4135,6 +4137,12 @@ begin
   b^.blProcs := ph;
 
   b^.blBody := ParseCompound;
+  { Just past the `end` ParseCompound consumed, which is where this block
+    stops (ADR-0253). `pos` is the token after it, and its position is where
+    a caller's range should end -- an extent that stopped *at* the `end` would
+    exclude the word itself. }
+  b^.blEndLine := tok[pos].line;
+  b^.blEndCol := tok[pos].col;
   LeaveLevels(1);
   ParseBlock := b
 end;
@@ -4338,6 +4346,10 @@ function ParseModuleParts(headings: boolean): nodePtr;
 var b, ph, pt, ch, ct, th, tt, vh, vt: nodePtr; done: boolean;
 begin
   b := NewNode(nkBlock, CurLine, CurCol);
+  { A module-heading has no compound-statement to end, so its extent is the
+    heading's own and this stays 0 (ADR-0253). }
+  b^.blEndLine := 0;
+  b^.blEndCol := 0;
   b^.blLabels := nil;
   b^.blBody := nil;
   ph := nil; pt := nil;
@@ -22575,11 +22587,24 @@ end;
 { The three numbers and the name. The length is not redundant with the name:
   the name is folded and the length is the *source* extent, which is what a
   caller holding the document slices to recover the written spelling. }
-procedure SymTail(line, col, at, len: integer);
+{ The three numbers, the extent, and the name. A declaration with a *block*
+  occupies more than its name, and the two positions are what LSP calls
+  `range` and `selectionRange` -- until ADR-0253 they were the same, because
+  the tree recorded where a declaration began and never where it stopped. }
+procedure SymTailTo(line, col, at, len, endLine, endCol: integer);
 begin
-  write(' ', line:1, ' ', col:1, ' ', len:1, ' ');
+  write(' ', line:1, ' ', col:1, ' ', len:1, ' ', endLine:1, ' ', endCol:1,
+        ' ');
   WritePool(at, len);
   writeln
+end;
+
+procedure SymTail(line, col, at, len: integer);
+begin
+  { No block, so the extent is the name's own: 6.2.2.1's defining-point is one
+    identifier, and that is the whole of what a constant, a type, a field or
+    an enumeration constant occupies as far as this tree records. }
+  SymTailTo(line, col, at, len, line, col + len)
 end;
 
 { A record-section list: each group's names are fields, one symbol apiece. }
@@ -22693,7 +22718,13 @@ begin
   else if d^.kind = nkProcDecl then begin
     SymHead(depth);
     if d^.pdIsFunction then write('function') else write('procedure');
-    SymTail(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen);
+    if d^.pdBody <> nil then
+      SymTailTo(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen,
+                d^.pdBody^.blEndLine, d^.pdBody^.blEndCol)
+    else
+      { A heading with no block in this translation -- 6.11.1's, or a
+        `forward` -- occupies its name and no more here. }
+      SymTail(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen);
     if d^.pdBody <> nil then DumpSymBlock(d^.pdBody, depth + 1)
   end
 end;
@@ -22777,7 +22808,14 @@ begin
     if m^.mdFileIdx = 0 then begin
       SymHead(0);
       write('module');
-      SymTail(m^.mdNameLine, m^.mdNameCol, m^.mdAt, m^.mdLen);
+      { A module's extent is its *block*'s where this translation has one;
+        6.13 admits a heading translated on its own, and then the heading is
+        all there is (ADR-0253). }
+      if m^.mdBlock <> nil then
+        SymTailTo(m^.mdNameLine, m^.mdNameCol, m^.mdAt, m^.mdLen,
+                  m^.mdBlock^.blEndLine, m^.mdBlock^.blEndCol)
+      else
+        SymTail(m^.mdNameLine, m^.mdNameCol, m^.mdAt, m^.mdLen);
       { 6.2.2.12 makes every defining-point of the heading one of the block's
         too, so the two are one scope reported at one depth. }
       if m^.mdHeading <> nil then DumpSymBlock(m^.mdHeading, 1);
@@ -22788,7 +22826,8 @@ begin
   if progBlock <> nil then begin
     SymHead(0);
     write('program');
-    SymTail(progLine, progCol, progAt, progLen);
+    SymTailTo(progLine, progCol, progAt, progLen,
+              progBlock^.blEndLine, progBlock^.blEndCol);
     DumpSymBlock(progBlock, 1)
   end
 end;

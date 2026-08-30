@@ -1879,7 +1879,15 @@ type
         constant, type, variable and procedure parts -- in every block, and
         not only a module's. There is at most one. }
       nkBlock:      (blImports, blLabels, blConsts, blTypes, blVars, blProcs,
-                     blBody: nodePtr);
+                     blBody: nodePtr;
+                     { Where the block *ends* -- the position just past its
+                       closing `end`. The tree records where every declaration
+                       begins and, until ADR-0253, nowhere recorded where one
+                       stopped, so a tool asking for the extent of a procedure
+                       could be given only the extent of its name. It is taken
+                       in ParseBlock after the compound-statement, which is
+                       the one place a block is finished. }
+                     blEndLine, blEndCol: integer);
       { 6.11.1's module-declaration in whichever of its three forms was
         written. The heading and the block are one module however they were
         split, and 6.2.2.12 makes every defining-point of the heading one of

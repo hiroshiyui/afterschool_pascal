@@ -269,7 +269,7 @@ fi
 checked=$((checked + 1))
 dump_out=$(PASCALC=$pascalc "$driver" --dump-symbols "$work/target.pas" \
              -o "$work/target.ll" 2>"$work/dump.err")
-if [[ $dump_out != "symbol 0 program 1 9 6 target" ]]; then
+if [[ $dump_out != "symbol 0 program 1 9 6 4 4 target" ]]; then
   echo "--- dump: pascalcc --dump-symbols did not pass the dump through ---" >&2
   echo "wrote: $dump_out" >&2
   cat "$work/dump.err" >&2

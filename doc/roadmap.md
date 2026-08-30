@@ -540,11 +540,35 @@ activity and had never been done. Three came out of one pass.
   against zero. The cause is that `try(x)` propagates by *leaving the routine*
   (AP 6.8.9), which is right for a program that may fail and wrong for a
   server, which must answer something to every request — so the library grew
-  `…Or(r, whenBad)` and the client uses that. **There are nine such helpers
-  across `lib/`**, one per result type, because a routine generic over the
-  fallible type cannot be written: AP 6.7.3.5 parameterises a *schema* by a
-  type and ADR-0211's row for generic routines is still open. The boilerplate
-  this chapter asked about collects there, and it is nine names wide.
+  `…Or(r, whenBad)` and the client uses that.
+
+  **This entry first said the helpers exist because a routine generic over the
+  fallible type cannot be written. That was wrong, and the correction is the
+  more useful finding.** It can be written, and
+  `tests/dialect/generic_fallible.pas` is it: one
+  `ValueOr(T: type; res: Fallible(T); whenBad: T): T` serving four types, two
+  of them structured. What cannot be written is the *anonymous* form — a
+  heading saying `res: T ! Code` is a type-denoter that is not a type name,
+  and §6.4.1 makes each of those denote a type of its own, so it never matches
+  the caller's. A **schema** answers, because §6.4.7 interns a production per
+  tuple (ADR-0039), and a named production is the same type as the schema
+  applied again — which is exactly the shape `lib/` already uses for its
+  result types.
+
+  **So the language is not the blocker, and why the library does not do it is
+  the real finding.** Five of the helpers are genuinely `T ! ErrorCode → T`,
+  and all seven result types in `lib/` share that shape, so one generic would
+  serve them all — but the call site goes from `IntOr(r, 0)` to
+  `ValueOr(integer, r, 0)`, naming a type the argument already knows.
+  Collapsing five helpers into one would make **thirty call sites** wordier in
+  order to make one library smaller. The helpers are not a workaround for a
+  missing generic. They are a workaround for **missing inference**, which is a
+  row this page already carries and which now has a measured caller rather
+  than a hypothetical one.
+
+  (The nine counted here were also two patterns and not one: `JsonIntegerOr`
+  and its neighbours read a scalar out of a `JsonPtr`, and `LookupOr` takes an
+  environment default — neither is a fallible accessor at all.)
 
   This is not an argument against `try`. It is the finding that **the shape a
   server needs is the one the language does not have**, and that the shape it
@@ -639,10 +663,14 @@ a decision nobody has asked for twice.
   and the caller holding the document slices the written spelling out of its
   own copy. Retaining both in the pool would have moved the one array whose
   headroom this tree measures (ADR-0126) for a display string. **The parse tree
-  has no *extent* either** — a declaration's start is recorded and its end is
-  not — which is why `range` and `selectionRange` are both the name. That one
-  is a real limitation and is open; what would close it is the parser noting
-  where a block ends, which nothing has yet needed.
+  has no *extent* either** — a declaration's start was recorded and its end was
+  not, which is why `range` and `selectionRange` were both the name. **That is
+  closed** (ADR-0253): `ParseBlock` records the position past its closing
+  `end`, `--dump-symbols` writes it, and a procedure's range now reaches its
+  `end` where its `selectionRange` stays on the name. What is still not
+  recorded is a *statement's* extent, so selection expansion stops at the
+  enclosing declaration rather than stepping outward through nested
+  statements; nothing has asked, and the answer would have the same shape.
 
 - **`binding(f).bound` is not a readiness test, and reads exactly like one.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name
@@ -723,7 +751,7 @@ the open decision it would settle.
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-each-landed-feature-left-open) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. **And it has now been measured, which this row asserted without doing** (ADR-0252). Against `selfhost/apfront.pas` at 22 900 lines, driven by an independent client: one hover 159 ms, five sequential hovers 795 ms, five *pipelined* hovers 800 ms — so pipelining buys nothing and the server is serial, as this row said — and a `didChange` arriving behind work in flight waited **933 ms**. But the larger number was not concurrency at all: five hovers on unchanged text cost five compilations, and caching the answer against the document took that 795 ms to **106**. The cost a reader actually pays fell 7.5× with no construct. What is left is the 933 ms, and it has a *second* cheaper answer in front of it, untried: this server already has `PasNet.Wait` over `poll` (ADR-0205), and a `Capture` polling the child's pipe **and** standard input could abandon work a newer message has made stale, single-threaded, which is what most language servers do. This row has now been answered by a cheaper thing twice — `select` for the sockets, a cache for the hovers — and the rule it is teaching is worth more than the construct: **measure the cost before naming the mechanism**, because twice the expensive-looking sentence was not where the time went |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. **And it has now been measured, which this row asserted without doing** (ADR-0252). Against `selfhost/apfront.pas` at 22 900 lines, driven by an independent client: one hover 159 ms, five sequential hovers 795 ms, five *pipelined* hovers 800 ms — so pipelining buys nothing and the server is serial, as this row said — and a `didChange` arriving behind work in flight waited **933 ms**. But the larger number was not concurrency at all: five hovers on unchanged text cost five compilations, and caching the answer against the document took that 795 ms to **106**. The cost a reader actually pays fell 7.5× with no construct. What is left is the 933 ms, and the *second* cheaper answer in front of it has now been costed rather than waved at. The sketch was: this server already has `PasNet.Wait` over `poll` (ADR-0205), so a `Capture` polling the child's pipe **and** standard input could abandon work a newer message has made stale, single-threaded, which is what most language servers do. **What stops it is ADR-0174's own decision.** `PasProcess.Pipe` is `handle external 'pclose'` — an *opaque* handle, which is what made binding `popen` safe and what means no program can get a descriptor out of one to poll. `Collect` reads with `fgetc` on that handle, so there is nothing pollable anywhere on the Pascal side. Three routes and only one is small: a `pasx_` routine that polls on the far side, where the runtime holds the `FILE *` and can `fileno` it — no new headers, `<stdio.h>` being ISO C — keeping the handle opaque, which is right; exposing the descriptor, which breaks the opacity that made the binding safe; or `fork`/`exec`/`pipe`/`waitpid`, which is a large new POSIX surface for one caller. Even the small route needs `Collect` restructured to read incrementally and a server that can decide what "stale" means and abandon a child, so it is *cheaper than a construct* and not cheap. It stays unbuilt under ADR-0116: what a reader actually pays fell 7.5× without it. This row has now been answered by a cheaper thing twice — `select` for the sockets, a cache for the hovers — and the rule it is teaching is worth more than the construct: **measure the cost before naming the mechanism**, because twice the expensive-looking sentence was not where the time went |
 
 Two conclusions worth stating:
 

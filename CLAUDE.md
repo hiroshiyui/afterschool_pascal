@@ -850,8 +850,11 @@ here that nobody in this project wrote.
   diff it against — so a caller reading it would be a second reader of
   Pascal-shaped output outside the compiler, which is the shape that broke
   `foreign-reserved` and that ADR-0229 and ADR-0230 moved `kind-exhaustive`
-  off. It writes `symbol <depth> <kind> <line> <col> <len> <name>`, in
-  **Pascal's** words and not any protocol's numbers; it stops after the *parse*
+  off. It writes
+  `symbol <depth> <kind> <line> <col> <len> <endline> <endcol> <name>`, in
+  **Pascal's** words and not any protocol's numbers — the two extra positions
+  are the declaration's *extent* (ADR-0253), which a block gives and a
+  constant answers with the end of its own name; it stops after the *parse*
   because an outline is what an editor draws while a file is wrong, which also
   means it needs no `--import`; and the name is the **folded** spelling, the
   position and length beside it being how a caller holding the source recovers
