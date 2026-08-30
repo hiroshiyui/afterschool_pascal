@@ -1,0 +1,17 @@
+isatty out:  FALSE
+isatty in:   FALSE
+size:        not present, rows=0 cols=0
+raw before:  FALSE
+enter raw:   not present
+raw after:   FALSE
+leave raw:   not present
+home:        <27>[1;1H
+cursor:      <27>[12;40H
+clamped:     <27>[1;1H
+clear:       <27>[2J
+clear line:  <27>[2K
+hide:        <27>[?25l
+show:        <27>[?25h
+key 1:       no error [h]
+key 2:       no error [i]
+key 3:       not present [0]
