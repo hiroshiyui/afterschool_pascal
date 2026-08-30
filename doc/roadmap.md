@@ -336,23 +336,40 @@ on it, and re-reading it is cheaper than trusting it.
   believing an estimate; the last reading written here named ApFront for both
   and was 63 000 tokens light.
 
-- **Nothing has ever profiled the compiler.** `performance-profile` is a skill
-  and there is no evidence in the tree that it has been run. What numbers
-  exist arrived sideways: a full compile of `selfhost/apfront.pas` (24 206
-  lines) is 376 ms, `--dump-uses` over it 199 ms, and `--dump-stmts` and
-  `--dump-symbols` 104 ms each — the last two stopping after the parse, which
-  is most of the difference.
+- **The compiler has been profiled once, and the answer was a surprise.**
+  The baseline this item asked for is ADR-0270's `benchmark`, and the profile
+  it produces needs no profiler: each `--dump-*` stops at the stage it names,
+  so four measurements and three subtractions separate the stages. Over
+  `selfhost/apfront.pas` — 24 206 lines, plus the 4 295 of ApTypes its
+  translation reads — a 378 ms compile is
 
-  One of those is worth acting on before any profile. **A hover costs
-  1 599 325 bytes and 38 519 lines of dump to answer one question**, which the
-  server then scans linearly. Nobody chose that; it is what "dump everything"
-  costs when the caller wants one line. `--dump-uses --at line:col` would make
-  it a lookup, and `--dump-stmts` has the same shape at a quarter the size —
-  423 152 bytes and 15 388 lines for a fold or an expansion at one position.
+  | stage | ms | share |
+  | --- | --- | --- |
+  | lexing | 99 | 26.2% |
+  | parsing | 19 | 5.1% |
+  | Sema | 90 | 23.9% |
+  | the code generator | 169 | 44.9% |
 
-  What is missing first, though, is a *baseline*: the self-hosting build is
-  the natural benchmark and no committed number says how long it takes, so
-  there is nothing for a regression to fail against.
+  **The lexer costs five times the parser**, which nobody would have guessed
+  and which is the concrete lead: `LookupKeyword` scans all forty-five
+  word-symbols for every identifier, trimming the padding off each table entry
+  and comparing character by character. That is a measurement and not yet a
+  defect; what is now true is that changing it can be judged.
+
+  What the gate commits is *proportions* and not milliseconds, so a slow
+  machine moves nothing; it catches a stage made about a third slower and says
+  which one, and it cannot see a compiler slowed uniformly everywhere.
+
+  **The other half of this item is still open.** A hover costs 1 599 325 bytes
+  and 38 519 lines of dump to answer one question, which the server then scans
+  linearly. Nobody chose that; it is what "dump everything" costs when the
+  caller wants one line. `--dump-uses --at line:col` would make it a lookup,
+  and `--dump-stmts` has the same shape at a quarter the size — 423 152 bytes
+  and 15 388 lines for a fold or an expansion at one position. The profile
+  above says what that would buy: `--dump-uses` stops after Sema and still
+  pays 55% of a full compile, so the dump *itself* is not where the time is —
+  which is an argument for `--at` narrowing the **server's** scan and the
+  compiler's write, and not for expecting the compile to get faster.
 
 - **Every diagnostic is an error.** 523 `ErrorAt` sites in ApFront and no
   other severity anywhere: `lib/dialect/paslspdiag.pas` writes

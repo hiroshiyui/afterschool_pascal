@@ -392,6 +392,26 @@ if(Python3_FOUND)
   set_tests_properties(buffer-headroom PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
+# ...and how long the compiler takes, which nothing here had ever asked
+# (ADR-0270). A millisecond is a fact about the machine that took it, so what
+# is committed is a set of *proportions* -- four stage shares of one compile,
+# measured by the dump flags that stop at each stage, and two component scales
+# -- each divided by something measured in the same run. A slow machine moves
+# neither. It catches a stage made about a third slower and says which stage;
+# a compiler slowed uniformly everywhere is the gap, and doc/sop.md §7 has it.
+#
+# RUN_SERIAL because it is the one case here whose answer is a duration: run
+# beside seven others under `ctest -j`, it would be measuring the machine's
+# other seven jobs. The proportions absorb most of that and not all of it.
+if(Python3_FOUND)
+  add_test(NAME benchmark
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/benchmark.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(benchmark PROPERTIES RUN_SERIAL TRUE
+                                            SKIP_RETURN_CODE 77)
+endif()
+
 # ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
 # implementations of the front end, compared over every Pascal source in the
 # tree. Nothing else here can disagree with the compiler without being asked a

@@ -278,3 +278,4 @@ the alternatives that were rejected and why.
 | [0267](0267-a-handle-moves.md) | A handle moves | Accepted |
 | [0268](0268-two-threads-of-control.md) | Two threads of control | Accepted |
 | [0269](0269-a-dump-that-stopped-the-compiler-was-a-pass.md) | A dump that stopped the compiler was a pass | Accepted |
+| [0270](0270-a-duration-is-a-fact-about-the-machine.md) | A duration is a fact about the machine, so what is committed is a proportion | Accepted |
