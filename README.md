@@ -967,6 +967,37 @@ written and not made.
 lost a type parameter. The two that return the element type kept theirs,
 §6.7.1's result-type being a type-name and nothing else.
 
+**A type parameter may say what it needs** (ADR-0266), and the call that gets
+it wrong is then refused where it stands:
+
+```pascal
+function Sum(Elem: numeric type; a, b: Elem): Elem;
+begin Sum := a + b end;
+...
+Sum(Point, p, p)
+```
+
+> error: point cannot be the type argument for 'elem' of 'sum', which is
+> declared 'numeric type': that admits integer, int64, real, complex, or a
+> subrange of one
+
+Without the category that program is refused too, but inside `Sum` — at the
+`+`, in a source the caller may never have opened, and for an imported generic
+in a file the program does not contain. The requirement `Sum` actually has is
+one sentence, and this is where it is written down.
+
+Four categories, each a group of operators the language already defines:
+`numeric` for `+ - * /`, `ordinal` for the ordinal-types, `ordered` for
+`< <= > >=`, and `equatable` for `= <>`. They are recognised only between a
+parameter's colon and the word `type`, so nothing is reserved and a program
+may still declare a variable, a type or a routine called `ordered`. An
+inferred call names the argument that chose the type — *argument 1 of this
+call is what determined it* — since there is no written type to point at.
+
+A category filters the call and does **not** check the generic's body against
+it: the body is still read once per type it is used with, so a body that
+misuses a type its category admits is caught exactly where it was.
+
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
 

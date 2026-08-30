@@ -204,7 +204,7 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` removes — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214), and the dialect widening it is a feature (ADR-0215). Five of the module's headings have lost a type parameter; `VecGet` and `MapGet` keep theirs, because they return the element type and §6.7.1 makes a result-type a type-name. **A generic map keyed by anything but a string** still waits on constraints |
+| ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` removes — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214), and the dialect widening it is a feature (ADR-0215). Five of the module's headings have lost a type parameter; `VecGet` and `MapGet` keep theirs, because they return the element type and §6.7.1 makes a result-type a type-name. **A generic map keyed by anything but a string** is done too, and needed no constraint (ADR-0260) — see the hash row below |
 
 ### The factory — **done** (ADR-0255, ADR-0256)
 
@@ -329,15 +329,24 @@ and both now the shape of a decision rather than an omission:
   client not slowing the others, which is the language server's `didChange`
   arriving mid-compile. See the concurrency row in
   [where the ideas come from](#where-the-ideas-come-from).
-- **Generics have no constraints**, and what waits on them is now known to be
-  less than this page thought. The generic map was filed behind them and
-  needed none (ADR-0260): a key's hash and equality are procedural parameters,
-  which every Pascal has had. What a constraint would serve is the
-  *diagnostic* — a body that adds its `T` values is refused at the
-  instantiation, in the generic's own source — and ADR-0259 has since made
-  that attributable to the activation that asked. So the case for constraints
-  is narrower and better understood than it was, and nothing demands them.
-  Inference is **done** (ADR-0254,
+- ~~**Generics have no constraints**~~ — **done** (ADR-0266,
+  AP 6.7.3.10.5), and the row is worth reading for how much smaller it got
+  before it closed. The generic map was filed behind constraints and needed
+  none (ADR-0260): a key's hash and equality are procedural parameters, which
+  every Pascal has had. What was left was the *diagnostic* — a body that adds
+  its `T` values was refused at the instantiation, in the generic's own
+  source, three lines of it, and ADR-0259 had made the last of those three
+  name the activation. So what landed is one line at the call instead:
+  `function Sum(Elem: numeric type; a, b: Elem): Elem` refuses
+  `Sum(Point, p, p)` where it stands, saying that `numeric` admits integer,
+  int64, real, complex or a subrange of one. Four categories, `numeric`,
+  `ordinal`, `ordered` and `equatable`, each a group of operators the language
+  already defines; spelled between a parameter's colon and the word `type`,
+  which reserves nothing (ADR-0140), so a program may still declare a variable
+  called `ordered`. **It does not make a generic separately type-checked**:
+  AP 6.7.3.10.2 still reads the block once per tuple, and a body that misuses
+  a type its category admits is caught exactly where it was. Inference is
+  **done** too (ADR-0254,
   AP 6.7.3.10.4): `Swap(i, j)` reads as well as `Swap(integer, i, j)` and
   means the same activation. The question this row carried — *what happens
   when two arguments imply different types* — turned out to dissolve rather
@@ -346,10 +355,9 @@ and both now the shape of a decision rather than an omission:
   §6.4.6 judges it where it judges every other one and **no new diagnostic was
   needed for the conflict case at all**. `ValueOr(st, 'none')` is the case
   that decides it, `'none'` being assignment-compatible with the `string(8)`
-  the first argument implied rather than a second opinion about it. What
-  remains is constraints — a body that adds its `T` values is still refused,
-  at the instantiation, for a type that cannot be added — which is what a
-  generic `PasMap` needs and what the row above waits on second.
+  the first argument implied rather than a second opinion about it. What a
+  category still cannot be is a program's own predicate, and nothing has asked
+  for one.
 
 ---
 
