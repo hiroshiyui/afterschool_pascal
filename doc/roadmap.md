@@ -343,18 +343,21 @@ on it, and re-reading it is cheaper than trusting it.
   `selfhost/apfront.pas` — 24 206 lines, plus the 4 295 of ApTypes its
   translation reads — a 378 ms compile is
 
-  | stage | ms | share |
-  | --- | --- | --- |
-  | lexing | 99 | 26.2% |
-  | parsing | 19 | 5.1% |
-  | Sema | 90 | 23.9% |
-  | the code generator | 169 | 44.9% |
+  | stage | ms | share | after ADR-0271 |
+  | --- | --- | --- | --- |
+  | lexing | 99 | 26.2% | 66 ms, 19.3% |
+  | parsing | 19 | 5.1% | 19 ms, 5.5% |
+  | Sema | 90 | 23.9% | 89 ms, 26.0% |
+  | the code generator | 169 | 44.9% | 169 ms, 49.2% |
 
-  **The lexer costs five times the parser**, which nobody would have guessed
-  and which is the concrete lead: `LookupKeyword` scans all forty-five
-  word-symbols for every identifier, trimming the padding off each table entry
-  and comparing character by character. That is a measurement and not yet a
-  defect; what is now true is that changing it can be judged.
+  **The lexer cost five times the parser**, which nobody would have guessed,
+  and the fourth column is what came of measuring it. `LookupKeyword`
+  recomputed the padded length of all forty-five word-symbols for every
+  identifier in a source — a fact fixed when the table is built — and
+  precomputing it took a third off lexing and 16% off a compile of
+  `compiler.pas`. The **split** is the part to carry: the padding trim was 31%
+  of lexing, and stopping the scan at the match, which is the change anyone
+  reaches for first, was 2.6%. Guessing would have got that backwards.
 
   What the gate commits is *proportions* and not milliseconds, so a slow
   machine moves nothing; it catches a stage made about a third slower and says

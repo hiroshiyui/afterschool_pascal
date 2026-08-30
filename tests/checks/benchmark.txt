@@ -9,12 +9,12 @@
 # Doing so is a decision to argue for in the commit message: a
 # proportion that moved is one stage doing more work than it did.
 
-ratio share:lex 0.262
-ratio share:parse 0.051
-ratio share:sema 0.239
-ratio share:codegen 0.449
-ratio scale:apfront 15.344
-ratio scale:compiler 12.973
+ratio share:lex 0.193
+ratio share:parse 0.055
+ratio share:sema 0.260
+ratio share:codegen 0.492
+ratio scale:apfront 15.491
+ratio scale:compiler 12.163
 
 # Milliseconds, for a reader. NOT compared -- they are a fact about
 # the machine below and not about this compiler. A change that slows
@@ -24,9 +24,9 @@ ratio scale:compiler 12.973
 #   Linux-7.1.8+deb14-amd64-x86_64-with-glibc2.43
 #   x86_64
 #
-#   stage:lex                  98.9 ms
-#   stage:parse               118.1 ms
-#   stage:sema                208.2 ms
-#   whole:apfront.pas         377.6 ms
-#   whole:aptypes.pas          24.6 ms
-#   whole:compiler.pas        319.2 ms
+#   stage:lex                  66.2 ms
+#   stage:parse                85.0 ms
+#   stage:sema                174.0 ms
+#   whole:apfront.pas         342.7 ms
+#   whole:aptypes.pas          22.1 ms
+#   whole:compiler.pas        269.1 ms

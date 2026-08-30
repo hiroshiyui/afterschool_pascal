@@ -279,3 +279,4 @@ the alternatives that were rejected and why.
 | [0268](0268-two-threads-of-control.md) | Two threads of control | Accepted |
 | [0269](0269-a-dump-that-stopped-the-compiler-was-a-pass.md) | A dump that stopped the compiler was a pass | Accepted |
 | [0270](0270-a-duration-is-a-fact-about-the-machine.md) | A duration is a fact about the machine, so what is committed is a proportion | Accepted |
+| [0271](0271-the-padding-was-the-lexer.md) | The padding was the lexer | Accepted |

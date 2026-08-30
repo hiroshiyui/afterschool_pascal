@@ -182,6 +182,14 @@ var
 
   kwText: array [1..kwCount] of kwLit;
   kwKind: array [1..kwCount] of tokenKind;
+  { The spelling's length with the padding taken off, computed once where the
+    table is built. LookupKeyword ran that trim inside its own loop, so every
+    identifier in a source paid up to nine character comparisons per entry for
+    a fact that never changes -- 45 of them, and lexing is 26% of a compile
+    (ADR-0270). It is a separate array rather than a field because kwLit is
+    the type `DefineKeyword` takes and a record would change every one of the
+    45 calls. }
+  kwLen: array [1..kwCount] of integer;
   tok: array [1..tokMax] of token;
 
   progAt, progLen: integer;
@@ -527,9 +535,14 @@ end;
 { ---------------------------------------------------------- keyword lookup }
 
 procedure DefineKeyword(i: integer; spelling: kwLit; k: tokenKind);
+var n: integer;
 begin
   kwText[i] := spelling;
-  kwKind[i] := k
+  kwKind[i] := k;
+  n := kwWidth;
+  while (n > 0) and (spelling[n] = ' ') do
+    n := n - 1;
+  kwLen[i] := n
 end;
 
 procedure InstallKeywords;
@@ -614,17 +627,23 @@ begin
 end;
 
 function LookupKeyword(var s: str): tokenKind;
-var i, k, n, limit: integer; found: tokenKind; same: boolean;
+var i, k, n: integer; found: tokenKind; same: boolean;
 begin
   found := tkIdent;
   { Every word-symbol of the language, and there is one language: ADR-0232
     removed the mode in which `value` and `otherwise` were ordinary
-    identifiers. `limit` survives the removal because the loop reads it. }
-  limit := kwCount;
-  for i := 1 to limit do begin
-    n := kwWidth;
-    while (n > 0) and (kwText[i][n] = ' ') do
-      n := n - 1;
+    identifiers, and with it the `limit` this loop used to read.
+
+    **A while and not a for**, and the length read from kwLen rather than
+    trimmed here: this runs once per identifier in the source and lexing is
+    26% of a compile (ADR-0270). It used to trim nine characters of padding
+    off every one of the 45 entries and then carry on scanning after it had
+    already matched, so a word-symbol cost the same as the longest identifier
+    that is not one. A word-symbol is unique in the table, so there is nothing
+    after a match to find. }
+  i := 1;
+  while (i <= kwCount) and (found = tkIdent) do begin
+    n := kwLen[i];
     if n = s.len then begin
       same := true;
       k := 1;
@@ -634,7 +653,8 @@ begin
       end;
       if same then
         found := kwKind[i]
-    end
+    end;
+    i := i + 1
   end;
   { The one word-symbol too long for kwLit; see StrIsWide. }
   if found = tkIdent then
