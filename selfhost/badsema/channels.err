@@ -1,0 +1,7 @@
+<source>:16:17: error: a channel's capacity must be a constant expression
+<source>:26:3: error: 'send' takes a channel and a value
+<source>:27:9: error: 'receive' takes a channel and a variable
+<source>:28:8: error: 'mk' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:28:8: error: 'send' takes a channel variable, so its first argument must be one
+<source>:29:17: error: 'mk' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:29:17: error: 'receive' takes a channel variable, so its first argument must be one

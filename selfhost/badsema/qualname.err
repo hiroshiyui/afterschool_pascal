@@ -1,0 +1,2 @@
+<source>:16:6: error: 'thing' does not name an imported interface
+<source>:19:16: error: 'exporter.twice' needs its arguments

@@ -1,0 +1,8 @@
+<source>:13:34: error: undeclared identifier 'nosuch'
+<source>:13:31: error: the bounds of a subrange in a schematic formal parameter must be ordinal constants or discriminants
+<source>:16:8: error: no type is produced from schema 'broken' for this pointer domain
+<source>:22:10: error: schema 'rec' cannot be a pointer domain: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
+<source>:30:17: error: 'restricted' must name a type, and 'm' is not one
+<source>:13:34: error: undeclared identifier 'nosuch'
+<source>:13:31: error: the bounds of a subrange in a schematic formal parameter must be ordinal constants or discriminants
+<source>:35:10: error: no type is produced from schema 'broken' for this variable's type

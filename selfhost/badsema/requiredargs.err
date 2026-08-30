@@ -1,0 +1,6 @@
+<source>:19:8: error: 'binding' takes one bindable variable
+<source>:21:8: error: 'index' takes two strings
+<source>:23:8: error: 'substr' takes a string and one or two positions
+<source>:25:14: error: 'cmplx' needs real arguments, found boolean
+<source>:25:20: error: 'cmplx' needs real arguments, found boolean
+<source>:27:14: error: an array value's selector must be of the index type 1..3

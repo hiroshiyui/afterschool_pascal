@@ -9968,6 +9968,13 @@ begin
       end;
       g := g^.next
     end;
+    { No program reaches this, and tests/checks/unreachable_diagnostics.txt
+      carries the same argument. `CheckTypeDecl` calls DeclareSchema only when
+      `d^.tdDiscs <> nil`, and every group in that list appends one symbol per
+      name -- so the list is empty only for a group carrying no names, which
+      the parser cannot build without reporting, and Sema does not run after a
+      parse error. It would fire if a formal-discriminant-part could parse to
+      an empty list, which is why the check is kept rather than removed. }
     if s^.discs = nil then begin
       ErrorAt(d^.line, d^.col);
       write('schema ''');
@@ -17131,6 +17138,14 @@ begin
     write(''' names a result variable, so assign ');
     writeln('to that instead of to the function')
   end
+  { No program reaches this, and tests/checks/unreachable_diagnostics.txt
+    carries the same argument. `named` is set only where the target resolves to
+    an skFunc and is nilled otherwise, and `InstantiateHeading` gives every
+    skFunc a result variable -- the one symbol that skips it is a generic's
+    own, and the containment walk above has already remapped a generic to the
+    instantiation being translated or reported that the name is not this
+    block's function. It would fire if a function could be declared without a
+    heading being instantiated for it. }
   else if named^.resultVar = nil then begin
     ErrorAt(s^.line, s^.col);
     write('''');
@@ -19472,6 +19487,14 @@ end;
 function ImportedSymbol(c: constitPtr; at, len, line, col: integer): symPtr;
 var alias: symPtr;
 begin
+  { No program reaches the arm below, and tests/checks/unreachable_diagnostics.txt
+    carries the same argument. A constituent is made in exactly two places:
+    `AddConstituent`, which the export-part calls only after its `else if`
+    chain has found a symbol -- a name that is not declared is reported there
+    and added to nothing -- and `InstallRequiredInterfaces`, whose two
+    constituents start nil and are filled by `EnsureStdFile` in the import
+    loop above, before this is reached. It would fire again if a constituent
+    were ever created for a name whose declaration had failed. }
   if c^.sym = nil then begin
     ErrorAt(line, col);
     write('''');

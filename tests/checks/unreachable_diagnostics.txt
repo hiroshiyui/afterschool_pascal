@@ -36,3 +36,27 @@
 # file-valued constant. These would fire if a file result were ever permitted.
 = the file written to must be a variable
 = the file read from must be a variable
+
+# A constituent is made in two places and neither can leave `sym` nil by the
+# time this is asked. `AddConstituent` is called by the export-part only after
+# its chain has found a symbol -- a name that is not declared is reported there
+# and added to nothing -- and `InstallRequiredInterfaces` builds the two
+# required interfaces' constituents nil and `EnsureStdFile` fills them in the
+# import loop, above this call. It would fire if a constituent were ever made
+# for a name whose declaration had failed.
+= ' cannot be imported
+
+# `CheckTypeDecl` calls DeclareSchema only when the type-definition has a
+# formal-discriminant-part, and every group in one appends a symbol per name --
+# so an empty list means a group with no names, which the parser cannot build
+# without reporting, and Sema does not run after a parse error. It would fire
+# if a formal-discriminant-part could parse to an empty list.
+= ' has no discriminants
+
+# `named` is set only where an assignment's target resolves to an skFunc, and
+# `InstantiateHeading` gives every skFunc a result variable. The one symbol
+# that skips it is a generic's own, and 6.8.2.2's containment walk has already
+# remapped a generic to the instantiation being translated -- or reported that
+# the name is not this block's function and nilled `named`. It would fire if a
+# function could be declared without a heading being instantiated for it.
+= ' is not a function with a result

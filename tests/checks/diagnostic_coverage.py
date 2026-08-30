@@ -65,14 +65,68 @@ MIN_LENGTH = 20
 SOURCES = ("aptypes.pas", "apfront.pas", "compiler.pas")
 
 
+# Where a written literal begins. What it *contains* is not a regex's
+# question, and reading it as one is how this gate spent its life blind to a
+# quarter of its own subject -- see `literals`.
+WRITE = re.compile(r"write(?:ln)?\('")
+
+
+def literals(src):
+    """Every string literal the compiler writes, unescaped, with its offset.
+
+    **A regex cannot read a Pascal string literal, and this one did not.** The
+    matcher required the first character after the opening quote to be an
+    ordinary one, so a message beginning with a *doubled* quote matched
+    nothing at all. 6.1.7 writes an apostrophe inside a literal as two, and
+    this compiler's commonest diagnostic shape is exactly that: the offending
+    name is written first and the message begins mid-sentence, as in a
+    `writeln` whose literal opens with two quotes and then ` is already
+    declared in this block`.
+
+    121 messages in ApFront alone were invisible, which is a quarter of them,
+    and the gate reported the set as fully covered by never asking about one.
+    It was found because ADR-0272's first warning is that shape and arrived
+    named by no golden with nothing flagging it.
+
+    So the literal is scanned rather than matched: from the opening quote to
+    the first quote that is not doubled, each doubled pair yielding one
+    apostrophe -- which is what the goldens hold too, so what is compared is
+    the text a reader sees.
+
+    A newline ends the scan and discards it. 6.1.7 puts no newline in a
+    literal, so reaching one means the opening quote was not one -- and
+    without this a mismatched quote would swallow the rest of the file."""
+    out = []
+    for m in WRITE.finditer(src):
+        i = m.end()
+        text = []
+        while i < len(src):
+            c = src[i]
+            if c == "'":
+                if i + 1 < len(src) and src[i + 1] == "'":
+                    text.append("'")
+                    i += 2
+                    continue
+                break
+            if c == chr(10):
+                text = None
+                break
+            text.append(c)
+            i += 1
+        if text is not None:
+            out.append(("".join(text), m.start()))
+    return out
+
+
 def messages(root):
     """Every string literal the compiler writes that is long enough to be a
     diagnostic of its own, with the component and line it is written on."""
     out = {}
     for name in SOURCES:
         src = (root / "selfhost" / name).read_text()
-        for m in re.finditer(r"write(?:ln)?\('([^']{%d,})'" % MIN_LENGTH, src):
-            out.setdefault(m.group(1), f"{name}:{src[: m.start()].count(chr(10)) + 1}")
+        for text, at in literals(src):
+            if len(text) >= MIN_LENGTH:
+                out.setdefault(text, f"{name}:{src[:at].count(chr(10)) + 1}")
     return out
 
 

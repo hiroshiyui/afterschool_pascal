@@ -281,3 +281,4 @@ the alternatives that were rejected and why.
 | [0270](0270-a-duration-is-a-fact-about-the-machine.md) | A duration is a fact about the machine, so what is committed is a proportion | Accepted |
 | [0271](0271-the-padding-was-the-lexer.md) | The padding was the lexer | Accepted |
 | [0272](0272-a-diagnostic-that-is-not-an-error.md) | A diagnostic that is not an error | Accepted |
+| [0273](0273-a-regex-cannot-read-a-pascal-string.md) | A regex cannot read a Pascal string, and the diagnostic gate was one | Accepted |
