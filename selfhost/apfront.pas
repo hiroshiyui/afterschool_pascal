@@ -19773,7 +19773,8 @@ var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     saveCur: symPtr; saveFile: nameStr;
     ok: boolean; tp: nodePtr; ts: symPtr;
     n: nodePtr; c: numPtr; bs: typeBindings;
-    nTypes, nFormals, firstType, nArgs, k: integer; inferred: boolean;
+    nTypes, nFormals, firstType, nArgs, k, before: integer;
+    inferred, failedHere: boolean;
 begin
   InstantiateGeneric := nil;
   tuple := nil;
@@ -20021,7 +20022,9 @@ begin
         it); a type parameter has no symbol on the routine to be re-bound
         from, and `var t: T` in the body needs it exactly as `var a: T` in the
         heading did. }
+      before := errorCount;
       CheckProcBody(decl);
+      failedHere := errorCount > before;
 
       scopeDepth := scopeDepth - 1;
       scopeTop := mark;
@@ -20032,6 +20035,25 @@ begin
       pos := savePos;
       curFile := saveFile;
       curImportIdx := saveImport;
+      { AP 6.7.3.10.2: the body is checked once per tuple, in the generic's own
+        region and its own source (ADR-0210), so every diagnostic in it is
+        reported where the generic was *written*. What no line said until now
+        is which activation asked for that translation -- and with AP
+        6.7.3.10.4's inferred form the activation names no type at all, so a
+        reader has nothing to work backwards from. `doc/sop.md` §7 carried this
+        as an ergonomic gap and ADR-0254 made it worse.
+
+        Reported *after* the file is restored, because the position is the
+        caller's and ErrorAt names whichever source is current. A generic that
+        activates another produces one of these per level, innermost first,
+        which is the backtrace other languages carry and this one now has for
+        the one construct that needs it. }
+      if failedHere then begin
+        ErrorAt(line, col);
+        write('this activation is what asked for that instantiation of ''');
+        WritePool(gen^.at, gen^.len);
+        writeln('''')
+      end;
       InstantiateGeneric := inst
     end;
     { The type actuals have done their work -- they chose a translation -- and

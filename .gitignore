@@ -39,3 +39,7 @@ doc/vendor/
 # and it was committed once, in 7e827ad, because `git add` was given a
 # directory and the artifact was sitting in it.
 *.tmp
+
+# A background agent gets its own git worktree and this harness puts it inside
+# the checkout. It is a second copy of the repository, never part of it.
+.claude/worktrees/

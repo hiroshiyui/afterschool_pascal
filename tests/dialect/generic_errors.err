@@ -1,6 +1,12 @@
-<source>:17:5: error: this argument of 'p' must name a type, because the parameter it matches is declared 'type'
-<source>:20:7: error: this argument of 'p' must name a type, because the parameter it matches is declared 'type'
-<source>:23:3: error: 'p' needs a type here, and the argument list ended
-<source>:27:3: error: 'p' takes 1 argument(s), but 0 were given
-<source>:31:14: error: var parameter 'a' is integer, but the argument is point
-<source>:33:17: error: argument 1 of 'f' is point, but the value is integer
+<source>:27:5: error: this argument of 'p' must name a type, because the parameter it matches is declared 'type'
+<source>:30:7: error: this argument of 'p' must name a type, because the parameter it matches is declared 'type'
+<source>:33:3: error: 'p' needs a type here, and the argument list ended
+<source>:37:3: error: 'p' takes 1 argument(s), but 0 were given
+<source>:41:14: error: var parameter 'a' is integer, but the argument is point
+<source>:43:17: error: argument 1 of 'f' is point, but the value is integer
+<source>:21:16: error: operator '+' needs numeric operands, found point and point
+<source>:21:7: error: cannot assign integer to a result of type point
+<source>:57:9: error: this activation is what asked for that instantiation of 'add'
+<source>:21:16: error: operator '+' needs numeric operands, found box and box
+<source>:21:7: error: cannot assign integer to a result of type box
+<source>:59:8: error: this activation is what asked for that instantiation of 'add'
