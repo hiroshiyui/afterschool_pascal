@@ -1421,6 +1421,40 @@ end;
 
 { Whether a foreign name is declared by an `external` heading this module
   calls -- asked by the closer declarations, which must not repeat one. }
+{ Has an earlier entry already been declared under this linker name?
+
+  AP 6.7.7.11 confines its one-declaration rule to a single program-component,
+  so two components may each bind `strlen` -- and one of them may arrive here
+  anyway: AP 6.7.3.10.2 translates an instantiation in the component that
+  named the types (ADR-0212), so a generic whose body calls a foreign routine
+  brings the *other* component's declaration into this module beside the one
+  this component wrote. Two `declare`s of one global is what LLVM refuses,
+  with an error naming a file nobody wrote -- ADR-0147's own words for it.
+
+  The second is dropped here rather than the program being refused, which is
+  where ADR-0263 moved the problem: Sema asks the clause's question about one
+  component, and this asks the emitter's question about one module. Where two
+  declarations disagree about the signature the first one written wins, which
+  costs nothing that is not already true -- the `declare` a foreign heading
+  emits is documentary and the call site is the whole of the ABI
+  (`doc/sop.md` §7). }
+function ForeignDeclaredBefore(upTo: symListPtr): boolean;
+var e: symListPtr; found: boolean;
+begin
+  found := false;
+  if upTo^.sym^.linkKind = lnkForeign then begin
+    e := externProcs;
+    while (e <> nil) and (e <> upTo) do begin
+      if (e^.sym^.linkKind = lnkForeign) and
+         PoolSame(e^.sym^.linkItemAt, e^.sym^.linkItemLen,
+                  upTo^.sym^.linkItemAt, upTo^.sym^.linkItemLen) then
+        found := true;
+      e := e^.next
+    end
+  end;
+  ForeignDeclaredBefore := found
+end;
+
 function ForeignDeclared(at, len: integer): boolean;
 var e: symListPtr; found: boolean;
 begin
@@ -10430,6 +10464,9 @@ begin
   end;
   e := externProcs;
   while e <> nil do begin
+    if ForeignDeclaredBefore(e) then
+      { one linker symbol, one `declare` in this module (ADR-0263) }
+    else begin
     write(ircode, 'declare ');
     { ADR-0123: a foreign function whose result is an optional answers a
       pointer, which the call site unpacks -- so the declaration says what C
@@ -10475,7 +10512,8 @@ begin
         if IsMemory(e^.sym^.stype) then write(ircode, ', ptr');
       PutParamTypes(e^.sym^.params, false)
     end;
-    writeln(ircode, ')');
+    writeln(ircode, ')')
+    end;
     e := e^.next
   end
 end;

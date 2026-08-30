@@ -8,6 +8,14 @@ Accepted. Fixes a defect present since ADR-0121, recorded in `doc/sop.md` §7
 since ADR-0128 and left there because "it belongs to the FFI rather than to the
 type".
 
+**Narrowed by
+[ADR-0263](0263-one-linker-symbol-per-component-not-per-program.md).** The rule
+is AP 6.7.7.11's and that clause scopes it to **one program-component**, where
+this check was over the whole compilation — so a program could not bind a C
+function that any module it imported happened to bind privately. What this
+record was really protecting against, two `declare`s of one global in one
+module, is handled at emission now, which is the only place it can arise.
+
 ## Context
 
 ADR-0121 lets a program name a linker symbol:

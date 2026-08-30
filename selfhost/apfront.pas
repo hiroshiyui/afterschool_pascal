@@ -17841,7 +17841,23 @@ begin
     heading against the routine it names (doc/sop.md §7), so a second heading
     is a second unchecked claim about one symbol and buys nothing that calling
     the first one does not. }
-  else begin
+  { AP 6.7.7.11 scopes this to **one program-component**, and until ADR-0263
+    the list was the whole compilation's -- so a program could not bind a C
+    function that any module it imported happened to bind *privately*, and the
+    diagnostic named a routine the program cannot see and did not write.
+
+    The clause is right and the check was wrong. A foreign declaration in an
+    imported component contributes nothing to this component's module: the
+    client calls the module's Pascal routine by its linkage name, and the
+    foreign call is inside the module's own object. Two objects each carrying
+    `declare @strlen` is what every C program does. Measured rather than
+    argued -- a client importing a module that binds `strlen` emits no
+    reference to it at all.
+
+    `pdFileIdx` is 0 for the component being translated and the import's index
+    while its source is being read (ADR-0210), so this is the clause's own
+    scope written out. }
+  else if d^.pdFileIdx = 0 then begin
     prior := ForeignNamed(d^.pdExtAt, d^.pdExtLen);
     if prior <> nil then begin
       ErrorAt(d^.line, d^.col);

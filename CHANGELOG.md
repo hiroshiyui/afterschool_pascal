@@ -72,6 +72,12 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **A program could not bind a C function that a module it imported had bound
+  privately** (ADR-0263). AP 6.7.7.11 scopes "one linker symbol, one
+  `external` declaration" to a single program-component; the compiler enforced
+  it over the whole compilation, so importing `PasIO` took `read` and `write`
+  away from you, and `PasNet` took the socket calls. The diagnostic named the
+  module's own routine, which your program cannot see.
 - **A file variable bound by `bind` leaked its name.** The name was freed only
   when *replaced*, so a bound file going out of scope lost one — once per
   bind, and the language server binds once per keystroke.

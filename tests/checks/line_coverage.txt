@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 446
-instrumented 18131
+instrumented 18152
 
 accept 0/4
 accumulate 0/84
@@ -105,7 +105,7 @@ checkedresulttype 0/21
 checkedwidth 0/14
 checkexports 0/28
 checkexpr 12/263
-checkforeignheading 0/130
+checkforeignheading 0/131
 checkgoto 0/9
 checkhandlebirth 0/6
 checkimports 0/86
@@ -254,7 +254,7 @@ emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
 emitexpr 6/51
-emitexterns 0/59
+emitexterns 0/60
 emitfbin 0/7
 emitfinis 0/5
 emitfor 0/111
@@ -359,11 +359,13 @@ foldintop 2/33
 foldrealbinary 5/50
 foldsubstr 0/13
 foreigndeclared 1/7
+foreigndeclaredbefore 0/8
 foreignnamed 0/7
 foreignslicecomponent 0/1
 foreignstringformal 0/1
 foreigntype 0/1
 forgetarms 0/8
+forgetformals 0/7
 forgetlist 0/3
 forgetresolved 4/20
 frameat 0/12
@@ -401,7 +403,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/156
+instantiategeneric 0/160
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
