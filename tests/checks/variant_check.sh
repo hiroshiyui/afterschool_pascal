@@ -103,6 +103,26 @@ fi
 # The corpus. One language, so a source is handed over as it is -- which is
 # also why this now reaches sources the mode rule used to sort into three
 # groups and compile three ways.
+#
+# What git ignores is not part of it, and the reason is the *count*: this gate
+# prints how many sources it compiled and two documents quote that number, so
+# it has to mean the same thing on every machine. It did not. A checkout that
+# still has the retired BSI suite on disk (ADR-0232 gitignored it) finds 224
+# more sources here than a clean clone does -- and every one of them is
+# conforming ISO 7185 that this compiler cannot compile at all, so they cost
+# time and add nothing. A second build tree would do the same. Untracked
+# sources that are *not* ignored stay in scope: a case added and not yet
+# staged is exactly what a sweep should reach.
+sources="$work/sources.txt"
+find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" \
+     -name '*.pas' | sort > "$sources"
+if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+  # check-ignore exits 1 when nothing matched, which is the ordinary case.
+  git -C "$root" check-ignore --stdin < "$sources" > "$work/ignored.txt" || true
+  grep -Fxv -f "$work/ignored.txt" "$sources" > "$work/kept.txt" || true
+  mv "$work/kept.txt" "$sources"
+fi
+
 checked=0
 trapped=0
 while IFS= read -r src; do
@@ -120,8 +140,7 @@ while IFS= read -r src; do
     grep -hs '^runtime error: variant:' "$work/dump.err" | head -3 >&2
     trapped=$((trapped + 1))
   fi
-done < <(find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" \
-              -name '*.pas' | sort)
+done < "$sources"
 
 if (( checked < 500 )); then
   echo "variant-check: only $checked sources were compiled, and the corpus is" \
