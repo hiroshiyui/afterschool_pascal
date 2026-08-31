@@ -11,7 +11,7 @@ When performing release engineering, always follow these steps:
    rm -rf build-rel
    cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
    cmake --build build-rel -j
-   ctest --test-dir build-rel --output-on-failure
+   ctest --test-dir build-rel -j"$(nproc)" --output-on-failure
    ```
    No `LLVM_DIR`: nothing links libLLVM since ADR-0085. What the build needs is
    `clang` on PATH to assemble the IR the seed and the compiler emit, and

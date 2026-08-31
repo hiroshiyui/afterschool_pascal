@@ -303,12 +303,20 @@ have, and it is separate because the two have never competed for the same
 hours: every gate, oracle and sweep in this tree serves correctness, and
 almost nothing serves the loop a person actually sits in.
 
-Five items, in the order I would take them. Every number below was measured on
-2026-08-31 and the command that produced it is named, because the first
-version of this chapter quoted seven figures taken incidentally while building
-the language server and **six of them were wrong within two releases** — the
-suite's duration by a factor of three. A figure here is a reading with a date
-on it, and re-reading it is cheaper than trusting it.
+Five items, in the order I would take them, and **all five are now closed** —
+four by building something and the fifth by discovering that it had never been
+open. What is left of the chapter is what each closing found, which is worth
+more than the list was.
+
+Every number below was measured on 2026-08-31, or on 2026-09-01 where the last
+item re-took one, and the command that produced it is named — because the
+first version of this chapter quoted seven figures taken incidentally while
+building the language server and **six of them were wrong within two
+releases**, the suite's duration by a factor of three. A figure here is a
+reading with a date on it, and re-reading it is cheaper than trusting it.
+**That rule is not enough on its own**, which is the last item's finding: its
+figure had a date and was re-taken twice, and was still wrong, because what
+was never checked was whether the *command* beside it was the one anybody ran.
 
 - **There is a formatter now** (ADR-0279), and it was the largest gap by
   developer-time. `pascalc --format` writes a source back out with a layout of
@@ -566,16 +574,49 @@ on it, and re-reading it is cheaper than trusting it.
   `tokMax` admits. That one is a §7 row rather than a fix — it is a
   performance property, not a crash, and no block a person writes is near it.
 
-- **The suite is 262 seconds, and sixteen cases are 234 of them.** The other
-  758 take about 28 seconds between them, so this is not a suite that is slow;
-  it is a suite of gates with a suite attached. `selfhost-codegen` — the
-  stage-2-equals-stage-3 fixed point — is 63.6 s, `sanitizers` 49.8 s and
-  `fpc-differential` 44.4 s, which is 60% of the wall clock in three cases,
-  and each of the three is a whole second corpus run by construction rather
-  than an accident of implementation. This remains the item on the list I am
-  least sure repays the effort, and the correction sharpens rather than
-  softens that: the number was wrong by a factor of three and nobody noticed,
-  which is the evidence that nobody is waiting on it.
+- **The suite was never slow; the instructions were** (ADR-0281). This item
+  said 262 seconds and named the three gates that were 60% of it, and every
+  sentence of it was true of a configuration **nothing uses**. It was measured
+  with `ctest --test-dir build --output-on-failure`, which is what `CLAUDE.md`,
+  `README.md`, this file and four of the skills told a reader to run;
+  `.github/workflows/ci.yml` has passed `-j"$(nproc)"` in every job since
+  `a544d67` wrote the workflow on 2026-08-14. So the suite has been run in
+  parallel on every push for the life of the workflow and serially by every
+  person following the documentation, and nobody had compared the two.
+
+  290 s serially, **86 s at `-j12`**, 93 s with `--schedule-random` on top —
+  all 795 green in each, which is the answer to the question the item was
+  really asking. The shuffled run is the one worth having: order is not a thing
+  this suite depends on.
+
+  **What makes it safe is not luck**, and two of the three mechanisms were put
+  there by someone thinking about concurrency without saying so. Every harness
+  here works in a directory it created for the run — 31 of the 48 call `mktemp
+  -d`, `mkdtemp` or `TemporaryDirectory`, and the other 17 are read-only
+  analysers. A port is asked for and not assumed: the socket cases `Listen(srv,
+  'localhost', '0')` and `tls.sh` scans a range for one that will take a
+  server. And `lsp/run.sh` gives each server its own `TMPDIR`, with a comment
+  saying why. One harness did not hold the property and now does —
+  `format_check.py`, ADR-0279's, the newest here, which is how a convention
+  stops being one.
+
+  **The obvious repair is a regression**, and that is the lesson rather than
+  the number. Three gates are internally parallel with `os.cpu_count()` workers
+  and declare nothing, so `-j12` oversubscribes twelvefold through each;
+  declaring `PROCESSORS` was written, measured at **107 s against 86**, and
+  reverted. The wall clock is set by `sanitizers` and `selfhost-codegen`, which
+  are *internally serial* — the fixed point is six compilations of the compiler
+  in a dependency chain — and the oversubscribing gates are exactly what keeps
+  the other ten cores busy while those two run. The floor is about 71 s, being
+  the two poles overlapping plus the five seconds `benchmark` spends alone
+  because its answer is a duration. 86 is within 20% of a floor no scheduling
+  change can move.
+
+  So the item closes at a flag, and the thing it was least sure repaid the
+  effort turned out to cost one line in seven documents. What it should have
+  doubted was not the value of the work but **the measurement**: this chapter
+  opens by saying that a figure here is a reading with a date on it, and this
+  one had a date and the wrong command.
 
 **What the list is not.** None of these is a language feature and none of them
 changes what the compiler accepts, which is why they sit apart from every

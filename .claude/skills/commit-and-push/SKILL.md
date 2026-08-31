@@ -5,7 +5,7 @@ description: Stage, commit, and (when a remote exists) push changes with a well-
 
 When committing and pushing changes, always follow these steps:
 
-1. **Verify tests pass** — run `ctest --test-dir build --output-on-failure` before committing (rebuild first if sources changed: `cmake --build build -j`). A red bar must not be committed. If a test is being deliberately disabled or its expected output changed, call that out in the commit body along with why the *new* expectation is the correct one.
+1. **Verify tests pass** — run `ctest --test-dir build -j"$(nproc)" --output-on-failure` before committing (rebuild first if sources changed: `cmake --build build -j`). A red bar must not be committed. If a test is being deliberately disabled or its expected output changed, call that out in the commit body along with why the *new* expectation is the correct one.
 
    Remember that a new `tests/*.pas` pair only becomes a test after re-running `cmake` — a green bar that never ran your new case is not a green bar.
 

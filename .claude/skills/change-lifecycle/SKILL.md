@@ -111,11 +111,11 @@ When landing a change, always follow these steps:
    case, and CI carries `model-drift` (a CodeGen change with no `verify/`
    change and no `Model-unchanged:` trailer) and `unoptimised` (the corpus at
    `-O0`). Run the last one locally before pushing a CodeGen change —
-   `AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build` — rather than learning
+   `AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build -j"$(nproc)"` — rather than learning
    it from CI:
 
    ```sh
-   ctest --test-dir build --output-on-failure      # 609 cases
+   ctest --test-dir build -j"$(nproc)" --output-on-failure   # 795 cases, 86 s
    python3 verify/verify.py --pascalc tools/pascalcc --crosscheck
    selfhost/irtest.sh build/bin/pascalc            # stage 2 = stage 3
    selfhost/producttest.sh build/bin/pascalc build/lib

@@ -114,7 +114,7 @@ rather than a missed pass. Known shapes to look for:
 
 Before recommending (or applying) an optimization, the bar is:
 
-- **`ctest --test-dir build --output-on-failure` is green**, including the cases
+- **`ctest --test-dir build -j"$(nproc)" --output-on-failure` is green**, including the cases
   that pin Pascal semantics.
 - **The IR still verifies** — `verifyModule` runs on every compile, so a green
   suite already covers this, but a codegen change should also be read once at

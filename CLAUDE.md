@@ -64,7 +64,7 @@ what `seed/*.ll` accepts, or the seed is refreshed first.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang; no C++, no LLVM
 cmake --build build -j
 
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -j"$(nproc)" --output-on-failure   # 86 s; 290 s without -j
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
 tests/run_test.sh tools/pascalcc tests/control.pas   # without ctest
 selfhost/irtest.sh build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
@@ -76,6 +76,21 @@ tests/checks/seed_current.sh                # is the committed seed this source'
 tools/pascalcc tests/hello.pas -o /tmp/hello && /tmp/hello
 tools/pascalcc -S tests/hello.pas -o /dev/stdout   # inspect IR
 ```
+
+**Run the suite in parallel** (ADR-0281). It is 290 s serially and 86 s at
+`-j12`, and CI has passed `-j"$(nproc)"` on every push since `a544d67` wrote
+the workflow on 2026-08-14 — so the serial number this tree quoted for years described a
+configuration nothing actually used. What makes it safe is one property held by
+every harness here: **each works in a directory it created for the run**, and a
+port is asked for rather than assumed — `tests/dialect/`'s servers listen on
+`'0'` and `tls.sh` scans for a free one. Two things follow that are easy to get
+wrong. `benchmark` is `RUN_SERIAL` because its answer is a *duration*, and
+that is the only case here whose correctness depends on what else is running.
+And **declaring `PROCESSORS` makes it slower** — the obvious fix, measured at
+107 s: the wall clock is set by `sanitizers` and `selfhost-codegen`, which are
+internally serial, and the three gates that oversubscribe with
+`os.cpu_count()` workers are exactly what keeps the other ten cores busy while
+those two run.
 
 **There is one compiler, and it does not link.** `build/bin/pascalc` is the
 three program-components linked together, and it writes IR and stops — no

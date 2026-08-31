@@ -46,6 +46,7 @@ in this tree is formatted by it (doc/sop.md §7).
 
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # A floor, for variant-check's reason: an instrument that measures nothing
@@ -96,8 +97,16 @@ def main() -> int:
         ["git", "ls-files", "*.pas"], cwd=root, capture_output=True, text=True
     ).stdout.split()
 
-    work = build / "format-check"
-    work.mkdir(parents=True, exist_ok=True)
+    # A directory of its own, and not a fixed path under the build tree. The
+    # suite is run in parallel (ADR-0281) and what makes that safe is that
+    # every harness here works in a directory it created for the run; a fixed
+    # path is safe only for as long as nothing else ever wants the same name,
+    # which is a property of the *rest* of the tree rather than of this file.
+    with tempfile.TemporaryDirectory(prefix="format-check.") as tmp:
+        return sweep(pascalc, root, sources, Path(tmp))
+
+
+def sweep(pascalc: Path, root: Path, sources: list, work: Path) -> int:
     formatted = work / "formatted.pas"
     again = work / "again.pas"
 

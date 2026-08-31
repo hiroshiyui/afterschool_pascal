@@ -25,7 +25,7 @@ features can land in rather than a destination.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -j"$(nproc)" --output-on-failure
 ```
 
 Requires `cmake`, a `make` and `clang` on PATH, and **nothing of LLVM's** — no development files, no `LLVM_DIR`. `clang` is wanted

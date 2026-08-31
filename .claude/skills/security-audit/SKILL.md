@@ -57,7 +57,7 @@ When performing a security audit, always follow these steps:
    ```sh
    cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
-   cmake --build build-asan -j && ctest --test-dir build-asan --output-on-failure
+   cmake --build build-asan -j && ctest --test-dir build-asan -j"$(nproc)" --output-on-failure
    ```
    Then compile and run the corpus with the sanitizers reaching the *generated*
    program as well:

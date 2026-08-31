@@ -299,6 +299,17 @@ per-case timeout — a program there may open a socket, and a readiness defect
 makes a server block rather than print the wrong thing. Put a new case wherever
 its subject belongs.
 
+**The suite is run in parallel** — `ctest --test-dir build -j"$(nproc)"`, 86 s
+against 290 (ADR-0281) — so a case has one obligation beyond printing the right
+thing: **it must not depend on a name another case could want.** An ordinary
+`tests/*.pas` case gets that for free, `tests/run_test.sh` and
+`tools/pascalcc` each working in a directory they made. A new *harness* has to
+do it itself, and a case that wants a port asks for one rather than picking a
+number — the socket cases `Listen(srv, 'localhost', '0')` and read back what
+they were given. Nothing checks either, which is a row in `doc/sop.md` §7: a
+grep can see that a private directory was created and not that everything was
+written inside it.
+
 * `name.out` — expected stdout. The program must compile and exit 0.
 * `name.err` — expected stderr, for a program that is *supposed* to fail: one
   that should be rejected at compile time, or that should stop on a runtime
