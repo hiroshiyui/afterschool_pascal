@@ -29,6 +29,14 @@ part that never changes was the first 2,000 lines a reader met.
 | [Cross-platform support](#cross-platform-support-measured) | what the x86-64 lock turned out to be, measured over twenty-five targets |
 | [The text model](#the-text-model) | AP 6.4.15 in four increments, and where its oracle story ends |
 | [The oracles turned on themselves](#the-oracles-turned-on-themselves) | eight gates that check another gate's blind spot, five of them checking a *document* |
+| [The compiler becomes three program-components](#the-compiler-becomes-three-program-components) | ADR-0233 — why one source file stopped being the answer, and why the count is three rather than two |
+| [A second processor answers the corpus](#a-second-processor-answers-the-corpus) | Free Pascal under `-Miso`, the last of the roadmap's tasks, taken because the option was shrinking |
+| [The language server](#the-language-server-and-the-bound-it-found-before-it-ran) | the one client big enough to answer a usability question, and what it found before it ran |
+| [A second transport over one program](#a-second-transport-over-one-program) | TLS, kept in the form the proposal had, with what actually happened marked where the two differ |
+| [The three questions the roadmap closed after version 3](#the-three-questions-the-roadmap-closed-after-version-3) | three of the four struck, in the form they had when they were |
+| [Version 3](#version-3--what-it-took-and-what-it-left) | four proposals, three records, one that dissolved, and the one left open |
+| [What a daily program could not reach for](#what-a-daily-program-could-not-reach-for-and-now-can) | the roadmap chapter of eight estimates, moved whole when the last closed, and its own error rate |
+| [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | the roadmap's five tooling items, moved the same way — four built and the fifth never open |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -4032,10 +4040,12 @@ and the shared scratch file would have gone with it.
 ### The language server's findings, as they were recorded
 
 The section above narrates the first of these. This is the register itself,
-moved out of `doc/roadmap.md` as each entry closed — fifteen of the
-twenty-one, each with what closing it found. Six are still open and stay
-there; a finding recorded and left is a finding wasted, which is what the
-register is for.
+moved out of `doc/roadmap.md` as each entry closed, each with what closing it
+found. The ones still open stay in the roadmap, which is where the count of
+both lives: it stood here as *fifteen of the twenty-one* while that page said
+twenty-six and nine, and a number written down in four places is a number that
+will disagree with itself. A finding recorded and left is a finding wasted,
+which is what the register is for.
 
 There is deliberate overlap with the prose above: that is the story of the
 first week, and these are the entries in the words they were written in, which
@@ -4049,8 +4059,8 @@ limit that looked generous beside a test case and turned out not to be a limit
 a *program* could live inside, and it had to be fixed before the server could
 be compiled at all.
 
-The shape of the whole list is the argument for the chapter. **Five of the
-twenty-one are bounds** — 8 imports, 24 arguments, a 63-character key, a
+The shape of the whole list is the argument for the chapter. **Five of them
+are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
 thing in the tree was a test case. One is not a gap at all: the protocol asked
@@ -4975,3 +4985,377 @@ which leaves this chapter with nothing open in it at all:
   for one.
 
 ---
+
+## What would make this easier to work on
+
+`doc/roadmap.md` carried a chapter of this name from version 3.1.0 until
+version 3.2.0's successor, when the fifth and last of its items closed. It is
+moved here whole, for the reason the chapter above was: a list with nothing
+open in it is a record and not a queue.
+
+It was the one chapter on that page proposed **without a client demanding
+it** — every other entry there answers ADR-0116's test, and these five
+answered a person rather than a program. The page said so at the time and
+called it a weaker warrant. What the five closings say about that warrant is
+worth more than the list:
+
+**Four were built and the fifth had never been open.** The formatter
+(ADR-0279, ADR-0280) was the largest and behaved like an ordinary feature. The
+profile (ADR-0270, ADR-0271) found that the lexer cost five times the parser,
+which nobody would have guessed, and that the change anyone reaches for first
+was worth 2.6% where the one nobody thinks of was worth 31%. The warnings
+(ADR-0272, ADR-0277, ADR-0278) found twelve dead declarations, five deliberate
+dead statements and one `done` flag standing where an `else` belonged. The
+four blind spots were closed by ADR-0261, ADR-0269, ADR-0274 and ADR-0275, and
+the fuzzing one **found no crash**, which is the unusual outcome.
+
+**The fifth is the one to carry.** *The suite is 262 seconds* was true of a
+configuration nothing used: it was measured serially while CI had run
+`-j"$(nproc)"` on every push since the workflow was written, and the answer
+was a flag worth 3.4× (ADR-0281). The chapter opens by insisting that a figure
+here is a reading with a date on it — and this figure had a date, had been
+re-measured twice, and was still wrong, because nobody had checked whether the
+*command* beside it was one anybody ran. A date on a number is not enough; the
+number has to be of the thing being decided about.
+
+**And two of the five items were re-scoped by their own measurement rather
+than by an argument.** `--dump-uses --at line:col` was asked for and the
+measurement closed it the other way — the flag saves no compiler time, and
+narrowing the query would have cost ADR-0252's cache, measured at five hovers
+going from 795 ms to 159 (ADR-0276). The `protected var` warning was probed,
+found 81 real sites, and was **not built**, because §6.6.3.6's congruity makes
+the fix illegal for a routine passed as a procedural parameter and no single
+component can know whether an exported one ever is.
+
+What follows is the chapter as it stood when the last item closed.
+
+### The chapter as it stood
+
+
+The chapter above is about what a *program* written in this language cannot
+reach for. This one is about what someone *working on the compiler* does not
+have, and it is separate because the two have never competed for the same
+hours: every gate, oracle and sweep in this tree serves correctness, and
+almost nothing serves the loop a person actually sits in.
+
+Five items, in the order I would take them, and **all five are now closed** —
+four by building something and the fifth by discovering that it had never been
+open. What is left of the chapter is what each closing found, which is worth
+more than the list was.
+
+Every number below was measured on 2026-08-31, or on 2026-09-01 where the last
+item re-took one, and the command that produced it is named — because the
+first version of this chapter quoted seven figures taken incidentally while
+building the language server and **six of them were wrong within two
+releases**, the suite's duration by a factor of three. A figure here is a
+reading with a date on it, and re-reading it is cheaper than trusting it.
+**That rule is not enough on its own**, which is the last item's finding: its
+figure had a date and was re-taken twice, and was still wrong, because what
+was never checked was whether the *command* beside it was the one anybody ran.
+
+- **There is a formatter now** (ADR-0279), and it was the largest gap by
+  developer-time. `pascalc --format` writes a source back out with a layout of
+  its own: the same tokens in the same order, the same comments in the same
+  places, and nothing else the same.
+
+  **The language server had done the hard half without meaning to.** ADR-0258
+  makes the parser report where every statement begins and ends and ADR-0253
+  does the same for every declaration, so the structure was emitted already;
+  what was missing was *trivia*, the lexer consuming a comment and never making
+  it a token. That is what the increment built, and the shape of it is the part
+  worth carrying: **a position is recorded and never text.** The corpus holds
+  1 881 326 characters of commentary against the 449 278 the pool has free, so
+  this chapter's own warning was that trivia would go in the one array whose
+  headroom is measured — and it goes in no array at all. Whatever wants the
+  characters reads the source a second time through a cursor, which is also the
+  only way to recover an *identifier's* text: the pool holds the folded
+  spelling, and a formatter that lowercased every name would be worse than
+  none.
+
+  It is recorded **only when something asks** — `--format`, `--dump-trivia` and
+  `--dump-limits` — so an ordinary compilation writes no table, checks no bound
+  and cannot fail for a reason it could not fail for before.
+
+  **The verification is the interesting half.** `format-check` makes three
+  claims over every tracked source and the first is the whole semantic one: the
+  token stream must be unchanged but for positions, and that is not a sample of
+  what could go wrong, because the parser sees the token stream and nothing
+  else. Two sources with the same token stream compile to the same program by
+  construction. The comments must be unchanged word for word and still stand
+  before the same tokens, which is the only claim that catches a dropped or
+  reordered comment. And formatting the output again must return it byte for
+  byte, which is the claim about the *rules* and not about a run of them. 774
+  of 783 sources pass all three; the nine the lexer rejects have no token
+  stream to preserve.
+
+  What none of the three says is that the output is *well* laid out. There is
+  no oracle for that, `tests/dumps/format.pas` is the substitute, and
+  **nothing in this tree is formatted by it** — the tree has no agreed Pascal
+  style and this does not create one.
+
+  **The first of the three things it was meant to pay for is built**
+  (ADR-0280): the server answers `textDocument/formatting` by running
+  `--format` over the scratch file it already writes, and returns one edit over
+  the whole document rather than a diff — the formatter's output is a whole
+  file by construction and nothing in it says which part of the input any part
+  came from. A source the lexer rejects is answered with no edits, which is
+  what an editor expects of a formatter that could not read the file.
+
+  Two remain. `textDocument/rangeFormatting` needs a formatter that can be
+  asked about *part* of a file, which means telling the token-stream printer
+  where to start its indent from — a question about the enclosing structure
+  that only a parse can answer. And a `style:` gate for the Pascal of the kind
+  `git clang-format` gives the C is a policy this tree has not chosen.
+
+- **The compiler has been profiled once, and the answer was a surprise.**
+  The baseline this item asked for is ADR-0270's `benchmark`, and the profile
+  it produces needs no profiler: each `--dump-*` stops at the stage it names,
+  so four measurements and three subtractions separate the stages. Over
+  `selfhost/apfront.pas` — 24 206 lines, plus the 4 295 of ApTypes its
+  translation reads — a 378 ms compile is
+
+  | stage | ms | share | after ADR-0271 |
+  | --- | --- | --- | --- |
+  | lexing | 99 | 26.2% | 66 ms, 19.3% |
+  | parsing | 19 | 5.1% | 19 ms, 5.5% |
+  | Sema | 90 | 23.9% | 89 ms, 26.0% |
+  | the code generator | 169 | 44.9% | 169 ms, 49.2% |
+
+  **The lexer cost five times the parser**, which nobody would have guessed,
+  and the fourth column is what came of measuring it. `LookupKeyword`
+  recomputed the padded length of all forty-five word-symbols for every
+  identifier in a source — a fact fixed when the table is built — and
+  precomputing it took a third off lexing and 16% off a compile of
+  `compiler.pas`. The **split** is the part to carry: the padding trim was 31%
+  of lexing, and stopping the scan at the match, which is the change anyone
+  reaches for first, was 2.6%. Guessing would have got that backwards.
+
+  What the gate commits is *proportions* and not milliseconds, so a slow
+  machine moves nothing; it catches a stage made about a third slower and says
+  which one, and it cannot see a compiler slowed uniformly everywhere.
+
+  **The other half of this item asked for `--dump-uses --at line:col`, and the
+  measurement closed it the other way** (ADR-0276). Over `apfront.pas` the
+  dump is 170 ms piped and 170 ms discarded — writing and transferring
+  1 601 668 bytes is *within noise*, because the 170 ms is Sema and the flag
+  stops there instead of running the code generator, which is why it is half
+  of a 345 ms compile. So `--at` saves no compiler time at all.
+
+  What it would save is the server's parse of 38 569 lines into 259-byte slots
+  and the ~10 MB that holds. What it would **cost** is ADR-0252's cache: the
+  dump is kept per document exactly so the second question is free, and a
+  query narrowed to one position cannot be. This item's premise — *nobody
+  chose that; it is what "dump everything" costs* — was wrong. It was chosen,
+  and measured at five hovers on `apfront.pas` going from 795 ms to 159.
+
+  If the memory becomes the complaint the answer is a tighter cache — the
+  longest `use` line in this tree is 62 characters and each is held in 259
+  bytes — and not a per-position query. **Measuring it found something else
+  instead**: the server stopped on any document of a million bytes or more,
+  and `selfhost/apfront.pas` is 992 056 bytes.
+
+- **A diagnostic can now be something other than an error, and one is**
+  (ADR-0272). `WarnAt` stands beside `ErrorAt` and the only difference is
+  `errorSeen` — same format, same stream, same exit status — so the category
+  *this compiles and is probably wrong* exists where it did not.
+
+  The first is **a local variable declared and never used**, and it found
+  twelve dead declarations in this compiler on its first run, six of them in
+  one `var` line. Across the rest of the corpus it is 24 warnings in 11 files
+  of 765, which is the volume that says a flag to turn warnings off has no
+  caller yet.
+
+  It also cost a sidecar and uncovered a hole. `name.warn` had to be invented
+  because neither `.out` nor `.err` can hold a remark made by a *successful*
+  compilation, and its second half — a case without one must produce **none** —
+  is what stops a warning added later from appearing on dozens of green cases.
+  The hole is `diagnostic-coverage`'s, and it is in the entry below.
+
+  **The second is a statement after one that leaves** (ADR-0277), and it was
+  the smallest of the four that remained: the other three are questions about
+  what a *body* does over all its paths, and this one is a property of a
+  statement-sequence. Five statements leave — `goto`, `halt`, `exit`, `break`
+  and `continue` — and it is deliberately not a flow analysis, an if whose two
+  arms both leave being a lattice over the whole tree rather than a test on a
+  tag.
+
+  It found **five dead statements in the 779 tracked sources**, in four files,
+  and every one is deliberate: `tests/goto.pas`, `tests/dialect/exit.pas`,
+  `tests/extended/required.pas` and `tests/dialect/components/exit_counter.pas`
+  each exist in part to prove that what follows a transfer does not run. So it
+  bought three `.warn` sidecars, which is the gate working, and no fix.
+
+  What it found that was not dead code is **the hole this item's own first
+  entry left**: no source under `tests/dumps/` warned at all, so dropping the
+  `warnOn` guard from *either* warning left all 790 cases green.
+  `tests/dumps/warnings.pas` is now a program the compiler would warn about
+  twice, and its golden fails for either.
+
+  **The third is a function that writes its result on one path and not
+  another** (ADR-0278). §6.7.2 requires a function-block to write its result at
+  least once and the compiler already reported a body that never did; nothing
+  asked whether the one assignment stands where every path reaches it. A
+  sequence answers yes as soon as one statement does, an if needs **both** arms,
+  and a case needs every arm and the completer unless it has none — §6.9.3.5
+  stops the program when no label matches, so a path that returns took an arm.
+  A `goto`, §6.8.2.2's *nested* assignment and §6.7.2's
+  result-variable-specification each silence it, and each is a case the walk
+  cannot decide rather than one it decides in the program's favour.
+
+  It found **one** thing in 779 sources and it was in this compiler:
+  `ResolveRestricted` carried a `done: boolean` between two if-statements where
+  the second was the first's `else`. Every path did write the result and the
+  correlation between the flag and the assignments is not in the tree. Two more
+  sites were found and answered by the analysis rather than by an exception —
+  `repeat … until false`, which is never left by falling out of it, is now a
+  yes; and a `for` with constant bounds is deliberately not folded, because
+  doing that soundly needs a scan for `break` and one `.warn` sidecar is a
+  cheaper true statement than a second analysis.
+
+  **The fourth was measured and is not built.** A `var` parameter never written
+  through would be spelled `protected var`, and the probe found 111 sites in 53
+  files — of which §6.4.1's own `Protectable`, a predicate the compiler already
+  owns, strikes 30, a file or a pointer being unprotectable, so without it the
+  warning would have advised what the compiler refuses. Of the 81 left, 32 are
+  in the compiler, the server and the library and every one is right. What
+  stops it is that **the fix is not always legal and no component can tell**:
+  §6.6.3.6's congruity compares the formal-parameter-lists with `protected` in
+  them, so a routine passed as a procedural parameter cannot take the word —
+  `selfhost/badsema/procparams.pas`'s `ByRef` is that case here — and whether
+  an *exported* routine is ever passed that way is a whole-program question.
+  The sound version warns only for a routine neither exported nor passed as a
+  procedural actual in its own component, which needs warnings deferred to the
+  end of a compilation rather than written where they are found; that is a
+  change to ADR-0272's discipline and wants a record of its own.
+
+  **One remains sayable and unsaid**, and it is the one this list already
+  doubted: an unused import, which is *not* obviously a mistake here, §6.2.3.6
+  commencing a supplying module before the program-block, so importing purely
+  for a `to begin do` part is meaningful and the warning would need to know
+  better.
+
+- **Four blind spots, and all four are closed.** This bullet is struck
+  through; what is left of it is the record of what each closing found, which
+  is worth more than the list was:
+
+  *A branch was invisible, and ADR-0274 closed it.* This item asked for "a
+  counter per arm", and that was the wrong shape: the arms already have
+  counters, being statements. The defect was the **identity** — one line — and
+  it hid three ordinary constructs, not one. Two statements on a line collapse
+  into a single counter; a decision with no else-part has nothing on its false
+  side to count at all; and a short-circuit operator's right operand is an
+  expression, so no statement counter for it exists in the first place.
+  `--coverage` now emits a second counter on each edge of every decision the
+  *source* writes — an if, a while, a repeat and each `and`/`or` — keyed on
+  line **and column**.
+
+  The denominator nobody knew is **5050 decisions, 10 100 directions, of which
+  9247 are taken** — 91.6%, against 97.9% of statements. And the overlap is the
+  number that says whether the instrument was worth building: **784 of the 853
+  untaken directions sit on lines statement coverage calls covered**, and not
+  one of those decisions was unreached. Every one was evaluated, and only ever
+  went one way. 92% of what this finds, nothing else here could express.
+
+  Two things were learned in the building and are worth carrying. The untaken
+  direction needs a block **of its own** in three of the four cases — a while's
+  exit is where `break` lands, a repeat's body is entered before the first test,
+  a short-circuit's join is reached from the evaluated side — and sharing one
+  gives a wrong answer that looks like a working instrument. And a ratchet
+  cannot see a *miswired* counter: making both edges of an if report the same
+  direction collapses the pair, drops the denominator from 10 100 to 6995 and
+  reports an **improvement**. What catches that reads the IR rather than the
+  sweep, and is the half of the gate that fails in both directions.
+
+  *A dump's exit status was read by nothing, and ADR-0269 closed it.* The
+  coverage sweep drove `--dump-all` over every source and read the lines
+  reached, never the child's status, which is how `--dump-sema` crashed on
+  every program declaring a fallible-type for three days and 714 green cases.
+  `sweep()` now reports every invocation the compiler did not survive — a
+  signal, or `runtime error:` on standard error, which is what separates a
+  trap from the exit 1 a third of this corpus is written to produce — and
+  mutating `Tokenize` to store 3 into a `1..2` names 1426 of 1435 invocations
+  where the whole suite was green before. The row had named its own fix and
+  sat for five records.
+
+  *The third was that nothing runs the runtime under a sanitizer, and
+  ADR-0261 closed it.* `sanitizers` is a ctest case and a CI job: the corpus
+  again under AddressSanitizer, UndefinedBehaviorSanitizer and LeakSanitizer,
+  over a second `libpasrt.a` built with the same flags — 286 programs clean.
+  It is the most expensive gate here after the fixed point, at 49.8 s. **It
+  had never passed on CI until 2026-08-30**, `debian:trixie` and
+  `ubuntu:24.04` shipping a `clang` without compiler-rt, so every
+  `-fsanitize=address` link failed and the harness counted 516 silent skips;
+  its own floor caught it, `libclang-rt-dev` fixed it, and the harness now
+  prints the first build failure rather than only a count.
+
+  *Nothing fuzzed the front end, and ADR-0275 closed it.* Every corpus here is
+  hand-written and so tests what someone thought of; a hand-written lexer and
+  parser over **fixed buffers** (ADR-0012) is the canonical target for the
+  other kind. `fuzz` truncates real sources at every byte, generates one input
+  per fixed buffer and per depth limit, and mutates the corpus from a fixed
+  seed — fixed, so that what runs in the suite is a regression corpus of
+  hostile inputs and not a search, `--long` being the search.
+
+  **It found no crash**, over 3128 inputs in the suite and 41 628 in a
+  campaign, and a first fuzzing run finding nothing is the unusual outcome.
+  What it did find were two things a generator sees and a person does not. An
+  **argument standing in for a case**: `too many tokens` and `out of string
+  space` were excluded from `diagnostic-coverage` as "capacity limits, not
+  diagnostics about a program being compiled", and both carry a file, a line
+  and a column — they had no golden because no case had ever reached one, and
+  reaching one takes 300 KB of semicolons or 1.2 MB of distinct identifiers.
+  And a **quadratic**: `Declare` scans the scope, so *n* declarations in one
+  block cost *n²*, which is 14 seconds for 32 000 and about 80 for the 75 000
+  `tokMax` admits. That one is a §7 row rather than a fix — it is a
+  performance property, not a crash, and no block a person writes is near it.
+
+- **The suite was never slow; the instructions were** (ADR-0281). This item
+  said 262 seconds and named the three gates that were 60% of it, and every
+  sentence of it was true of a configuration **nothing uses**. It was measured
+  with `ctest --test-dir build --output-on-failure`, which is what `CLAUDE.md`,
+  `README.md`, this file and four of the skills told a reader to run;
+  `.github/workflows/ci.yml` has passed `-j"$(nproc)"` in every job since
+  `a544d67` wrote the workflow on 2026-08-14. So the suite has been run in
+  parallel on every push for the life of the workflow and serially by every
+  person following the documentation, and nobody had compared the two.
+
+  290 s serially, **86 s at `-j12`**, 93 s with `--schedule-random` on top —
+  all 795 green in each, which is the answer to the question the item was
+  really asking. The shuffled run is the one worth having: order is not a thing
+  this suite depends on.
+
+  **What makes it safe is not luck**, and two of the three mechanisms were put
+  there by someone thinking about concurrency without saying so. Every harness
+  here works in a directory it created for the run — 31 of the 48 call `mktemp
+  -d`, `mkdtemp` or `TemporaryDirectory`, and the other 17 are read-only
+  analysers. A port is asked for and not assumed: the socket cases `Listen(srv,
+  'localhost', '0')` and `tls.sh` scans a range for one that will take a
+  server. And `lsp/run.sh` gives each server its own `TMPDIR`, with a comment
+  saying why. One harness did not hold the property and now does —
+  `format_check.py`, ADR-0279's, the newest here, which is how a convention
+  stops being one.
+
+  **The obvious repair is a regression**, and that is the lesson rather than
+  the number. Three gates are internally parallel with `os.cpu_count()` workers
+  and declare nothing, so `-j12` oversubscribes twelvefold through each;
+  declaring `PROCESSORS` was written, measured at **107 s against 86**, and
+  reverted. The wall clock is set by `sanitizers` and `selfhost-codegen`, which
+  are *internally serial* — the fixed point is six compilations of the compiler
+  in a dependency chain — and the oversubscribing gates are exactly what keeps
+  the other ten cores busy while those two run. The floor is about 71 s, being
+  the two poles overlapping plus the five seconds `benchmark` spends alone
+  because its answer is a duration. 86 is within 20% of a floor no scheduling
+  change can move.
+
+  So the item closes at a flag, and the thing it was least sure repaid the
+  effort turned out to cost one line in seven documents. What it should have
+  doubted was not the value of the work but **the measurement**: this chapter
+  opens by saying that a figure here is a reading with a date on it, and this
+  one had a date and the wrong command.
+
+**What the list is not.** None of these is a language feature and none of them
+changes what the compiler accepts, which is why they sit apart from every
+other chapter on this page. They are also the first items here proposed
+without a client demanding them — ADR-0116's test is a demand, and the demand
+in each case is a person rather than a program. That is a weaker warrant than
+this page usually requires, and it is stated rather than hidden.
