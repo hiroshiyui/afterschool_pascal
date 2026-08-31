@@ -1,0 +1,31 @@
+# The messages tests/checks/fuzz.py's bounds family requires, one per line.
+#
+# It is a `.err` golden with no case beside it, and that is deliberate: two of
+# these are reachable only by a source too big to commit -- 300 KB of
+# semicolons for the token buffer, 1.2 MB of distinct identifiers for the
+# string pool -- so fuzz.py generates the input and this file records what the
+# compiler must say about it. What makes it a golden rather than a note is
+# that diagnostic_coverage.py globs `tests/**/*.err`, so a message named here
+# is a message named by a golden.
+#
+# Both directions are checked. fuzz.py fails if this file and its own table
+# disagree, so neither can drift; regenerate with
+#
+#     python3 tests/checks/fuzz.py --write-golden
+#
+# Until ADR-0275 the first two lines below were *excluded* from
+# diagnostic-coverage, as "capacity limits, not diagnostics about a program
+# being compiled and no golden by design". Both carry a file, a line and a
+# column, and the compiler writes them about a program it was handed. The
+# exclusion was an argument standing in for a case.
+
+nesting is too deep: this compiler accepts 1000 levels
+nesting is too deep: this compiler accepts 1000 levels
+nesting is too deep: this compiler accepts 1000 levels
+nesting is too deep: this compiler accepts 1000 levels
+too many tokens: this compiler accepts 300000
+out of string space: this compiler keeps 1000000 characters
+identifier is too long: this compiler keeps 255 characters
+string literal is too long: this compiler keeps 255 characters
+unterminated comment
+unterminated string literal

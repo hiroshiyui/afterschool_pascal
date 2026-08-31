@@ -283,3 +283,4 @@ the alternatives that were rejected and why.
 | [0272](0272-a-diagnostic-that-is-not-an-error.md) | A diagnostic that is not an error | Accepted |
 | [0273](0273-a-regex-cannot-read-a-pascal-string.md) | A regex cannot read a Pascal string, and the diagnostic gate was one | Accepted |
 | [0274](0274-a-branch-is-not-a-statement.md) | A branch is not a statement, and 784 of them were invisible | Accepted |
+| [0275](0275-input-nobody-wrote-on-purpose.md) | Input nobody wrote on purpose | Accepted |

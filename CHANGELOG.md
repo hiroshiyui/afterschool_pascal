@@ -49,6 +49,18 @@ appears below in the release where it still existed.
   first is generated from the bounds rather than written, and the second is
   the compiler's branch rather than the program's.
 
+- **A fuzzing gate** (ADR-0275). `tests/checks/fuzz.py` truncates real sources
+  at every byte, generates one input per fixed buffer and per depth limit, and
+  mutates the corpus from a fixed seed. It found no crash -- 3128 inputs in
+  the suite and 41 628 in a campaign -- which is the result: the claim that
+  this compiler survives hostile input was made by nothing before it.
+
+- **`too many tokens` and `out of string space` are counted as diagnostics
+  again.** Both were excluded from the coverage gate as "capacity limits, not
+  diagnostics about a program being compiled". Both carry a file, a line and a
+  column, and neither had a golden because no case had ever reached one.
+  Nothing about the compiler changed; what changed is that they are now named.
+
 ### Changed
 
 - **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing

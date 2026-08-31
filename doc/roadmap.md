@@ -401,9 +401,9 @@ on it, and re-reading it is cheaper than trusting it.
   the gate working rather than an obstacle, and is the reason to add them in
   small batches.
 
-- **One blind spot the gates cannot see, and three that closed.** What is
-  left is a fuzzer, and it is not a row in `doc/sop.md` §7 because nothing has
-  ever claimed it:
+- **Four blind spots, and all four are closed.** This bullet is struck
+  through; what is left of it is the record of what each closing found, which
+  is worth more than the list was:
 
   *A branch was invisible, and ADR-0274 closed it.* This item asked for "a
   counter per arm", and that was the wrong shape: the arms already have
@@ -453,12 +453,28 @@ on it, and re-reading it is cheaper than trusting it.
   `ubuntu:24.04` shipping a `clang` without compiler-rt, so every
   `-fsanitize=address` link failed and the harness counted 516 silent skips;
   its own floor caught it, `libclang-rt-dev` fixed it, and the harness now
-  prints the first build failure rather than only a count. **Fuzzing is still
-  open**, and is now the whole of what this bullet asks for: a hand-written
-  lexer and parser over **fixed buffers** (ADR-0012) is the canonical target,
-  and `selfhost/torture.pas` and `selfhost/badparse/` are hand-written
-  corpora — ADR-0067's *a claim no test names is a claim nothing checks*,
-  applied to crash-resistance instead of to conformance.
+  prints the first build failure rather than only a count.
+
+  *Nothing fuzzed the front end, and ADR-0275 closed it.* Every corpus here is
+  hand-written and so tests what someone thought of; a hand-written lexer and
+  parser over **fixed buffers** (ADR-0012) is the canonical target for the
+  other kind. `fuzz` truncates real sources at every byte, generates one input
+  per fixed buffer and per depth limit, and mutates the corpus from a fixed
+  seed — fixed, so that what runs in the suite is a regression corpus of
+  hostile inputs and not a search, `--long` being the search.
+
+  **It found no crash**, over 3128 inputs in the suite and 41 628 in a
+  campaign, and a first fuzzing run finding nothing is the unusual outcome.
+  What it did find were two things a generator sees and a person does not. An
+  **argument standing in for a case**: `too many tokens` and `out of string
+  space` were excluded from `diagnostic-coverage` as "capacity limits, not
+  diagnostics about a program being compiled", and both carry a file, a line
+  and a column — they had no golden because no case had ever reached one, and
+  reaching one takes 300 KB of semicolons or 1.2 MB of distinct identifiers.
+  And a **quadratic**: `Declare` scans the scope, so *n* declarations in one
+  block cost *n²*, which is 14 seconds for 32 000 and about 80 for the 75 000
+  `tokMax` admits. That one is a §7 row rather than a fix — it is a
+  performance property, not a crash, and no block a person writes is near it.
 
 - **The suite is 262 seconds, and sixteen cases are 234 of them.** The other
   758 take about 28 seconds between them, so this is not a suite that is slow;

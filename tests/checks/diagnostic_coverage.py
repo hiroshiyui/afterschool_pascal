@@ -38,16 +38,23 @@ import pathlib
 import re
 import sys
 
-# --help text, the driver's own messages and the two capacity limits are not
-# diagnostics about a program being compiled and have no golden by design.
-# Without this the sweep prints thirty lines of usage text and reads as thirty
-# gaps -- and a check that cries wolf gets ignored, which is worse than no
-# check. The filter is therefore part of the tool, not a convenience.
+# --help text and the driver's own messages are not diagnostics about a
+# program being compiled and have no golden by design. Without this the sweep
+# prints thirty lines of usage text and reads as thirty gaps -- and a check
+# that cries wolf gets ignored, which is worse than no check. The filter is
+# therefore part of the tool, not a convenience.
+#
+# It used to hold `out of string space` and `too many tokens` as well, on the
+# same argument. That was wrong (ADR-0275): both carry a file, a line and a
+# column and the compiler writes them about a program it was handed, and the
+# reason neither had a golden is that no case had ever reached them. Each is
+# reachable only by a source too big to commit, so tests/checks/fuzz.py
+# generates one and tests/checks/fuzz_bounds.err is the golden that names
+# them. The exclusion was an argument standing in for a case.
 NOT_A_DIAGNOSTIC = re.compile(
     r"^ {4,}"                                  # --help, which is indented
     r"|^\s*(-|clang out|It writes|not link|output, and|assembling"
-    r"|tools/pascalcc|usage:|Afterschool|pascalc:|pascalc \("
-    r"|out of string space|too many tokens)"
+    r"|tools/pascalcc|usage:|Afterschool|pascalc:|pascalc \()"
 )
 
 # A message shorter than this is a fragment shared by several diagnostics --

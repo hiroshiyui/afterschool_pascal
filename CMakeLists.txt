@@ -435,13 +435,33 @@ endif()
 #
 # A ratchet rather than an allowlist, and the weaker instrument for it: a
 # per-line argument is not writable at this scale. doc/sop.md §7 carries the
-# row saying so.
+# row saying so. Since ADR-0274 it gates a second ratchet over the same sweep:
+# which *branches* the corpus takes both ways, which is what a counter keyed
+# on a line cannot say.
 if(Python3_FOUND)
   add_test(NAME line-coverage
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/line_coverage.py
                    ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
   set_tests_properties(line-coverage PROPERTIES
+                       SKIP_RETURN_CODE 77
+                       TIMEOUT 900)
+endif()
+
+# Input nobody wrote on purpose (ADR-0275). Every other corpus here is
+# hand-written and therefore tests what someone thought of; this one truncates
+# real sources at every byte, generates one input per fixed buffer and per
+# depth limit, and mutates the corpus a fixed number of times from a fixed
+# seed. The seed is fixed on purpose: what runs here is a regression suite of
+# hostile inputs, not a search, because a fuzzer that fails randomly on
+# someone else's commit is a fuzzer people learn to ignore. `--long N` is the
+# search and is run by hand.
+if(Python3_FOUND)
+  add_test(NAME fuzz
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/fuzz.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(fuzz PROPERTIES
                        SKIP_RETURN_CODE 77
                        TIMEOUT 900)
 endif()
