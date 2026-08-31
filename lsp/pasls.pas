@@ -2268,7 +2268,17 @@ begin
     { The one place the two transports differ on the way in. }
     if transport = tpMcp then e := JsonlRead(reader, body)
     else e := LspRead(reader, body);
-    if e <> errNone then begin
+    if e = errFull then begin
+      { A document larger than the buffer can hold. The frame's bytes have all
+        been consumed either way, so the stream is where the next header
+        begins and this is one message lost rather than a session -- which is
+        the difference between a server that says so and one that stops
+        (ADR-0276). It used to be neither: the buffer wrote one past its array
+        and the program halted on any document of a million bytes or more,
+        which `selfhost/apfront.pas` is 8000 short of. }
+      Note('a message was larger than this server can hold, and was skipped')
+    end
+    else if e <> errNone then begin
       { The end of the input is how a client that was killed reaches us, and
         it is not a failure: an editor that goes away without saying `exit` is
         the ordinary way an editing session ends. }

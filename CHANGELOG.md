@@ -61,6 +61,23 @@ appears below in the release where it still existed.
   column, and neither had a golden because no case had ever reached one.
   Nothing about the compiler changed; what changed is that they are now named.
 
+### Fixed
+
+- **The language server no longer stops on a large document** (ADR-0276).
+  `PasContainer`'s vector clamped a growth request at `CapMax` and then wrote
+  the element anyway, one past its array, so any document of a million bytes
+  or more halted the server -- and `selfhost/apfront.pas` is 992 056 bytes,
+  1 017 200 as a JSON string. `VecPush` now writes nothing it has no room for,
+  `VecReserve` asks whether the vector would actually be bigger (it copied the
+  whole vector on every push at the ceiling), and `VecFull` and
+  `JsonCharsFull` are how a caller asks. A message that does not fit is
+  reported as `errFull` and skipped, with the session intact.
+
+- **`CapMax` is 16 000 000, not 1 000 000.** The old bound was round and had
+  never been compared against anything; the new one is 15.7 times the largest
+  message this tree can produce, and it is stated in elements with the
+  measurement beside it.
+
 ### Changed
 
 - **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing

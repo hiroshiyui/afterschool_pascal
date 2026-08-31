@@ -47,7 +47,7 @@ export PasJson = (JsonKind, jsNull, jsFalse, jsTrue, jsNumber, jsString,
                   JsonDepthMax, NameMax, LineMax,
 
                   JsonCharsNew, JsonCharsFree, JsonCharsAdd, JsonCharsAddLine,
-                  JsonCharsLen, JsonCharsAt, JsonCharsInto,
+                  JsonCharsLen, JsonCharsAt, JsonCharsInto, JsonCharsFull,
 
                   JsonParse, JsonParseChars, JsonFree,
 
@@ -67,7 +67,9 @@ const
   { A key is a key. `errFull` rather than a silent truncation past this. }
   NameMax = 255;
   { What a caller hands in and takes out in one piece. A document larger than
-    this goes through `JsonChars`, which has no bound. }
+    this goes through `JsonChars`, which is bounded by PasContainer's CapMax
+    and says so: `JsonCharsFull` is how a caller asks, and until ADR-0276 this
+    comment claimed there was no bound and a buffer past it trapped. }
   LineMax = 255;
   { Nesting, so a hostile document cannot exhaust the stack -- the parser is
     recursive descent and this is the compiler's own answer (ADR-0020) at a
@@ -129,6 +131,12 @@ procedure JsonCharsAdd(var b: JsonChars; c: char);
 procedure JsonCharsAddLine(var b: JsonChars; s: JsonLine);
 
 function JsonCharsLen(var b: JsonChars): integer;
+
+{ Has this buffer reached the largest extent it can have, so that the next
+  character would be dropped? A caller assembling someone else's bytes -- a
+  message body, a document -- asks this and reports `errFull`, which is this
+  module's rule everywhere else a bound is met (ADR-0276). }
+function JsonCharsFull(var b: JsonChars): boolean;
 
 { The i'th byte, 1-based. Out of range is the caller's error and traps, as an
   array subscript does. }
@@ -243,6 +251,11 @@ var i: integer;
 begin
   for i := 1 to length(s) do
     VecPush(JsonChars, b, s[i])
+end;
+
+function JsonCharsFull;
+begin
+  JsonCharsFull := VecFull(JsonChars, b)
 end;
 
 function JsonCharsLen;

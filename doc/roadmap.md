@@ -313,7 +313,7 @@ on it, and re-reading it is cheaper than trusting it.
 - **There is no formatter, and it is the largest gap by developer-time.**
   `tools/` holds `pascalcc` and nothing else; `.clang-format` covers the C,
   which is four files, and nothing covers the 40 821 lines of Pascal that are
-  the compiler, the 10 507 in the thirty-one library modules, or the 765
+  the compiler, the 10 507 in the thirty-one library modules, or the 779
   tracked corpus sources. Hand-alignment drift is already recorded as a
   *reason a whole-tree clang-format is refused* for the C, and the Pascal has
   no equivalent claim either way.
@@ -363,16 +363,25 @@ on it, and re-reading it is cheaper than trusting it.
   machine moves nothing; it catches a stage made about a third slower and says
   which one, and it cannot see a compiler slowed uniformly everywhere.
 
-  **The other half of this item is still open.** A hover costs 1 599 325 bytes
-  and 38 519 lines of dump to answer one question, which the server then scans
-  linearly. Nobody chose that; it is what "dump everything" costs when the
-  caller wants one line. `--dump-uses --at line:col` would make it a lookup,
-  and `--dump-stmts` has the same shape at a quarter the size — 423 152 bytes
-  and 15 388 lines for a fold or an expansion at one position. The profile
-  above says what that would buy: `--dump-uses` stops after Sema and still
-  pays 55% of a full compile, so the dump *itself* is not where the time is —
-  which is an argument for `--at` narrowing the **server's** scan and the
-  compiler's write, and not for expecting the compile to get faster.
+  **The other half of this item asked for `--dump-uses --at line:col`, and the
+  measurement closed it the other way** (ADR-0276). Over `apfront.pas` the
+  dump is 170 ms piped and 170 ms discarded — writing and transferring
+  1 601 668 bytes is *within noise*, because the 170 ms is Sema and the flag
+  stops there instead of running the code generator, which is why it is half
+  of a 345 ms compile. So `--at` saves no compiler time at all.
+
+  What it would save is the server's parse of 38 569 lines into 259-byte slots
+  and the ~10 MB that holds. What it would **cost** is ADR-0252's cache: the
+  dump is kept per document exactly so the second question is free, and a
+  query narrowed to one position cannot be. This item's premise — *nobody
+  chose that; it is what "dump everything" costs* — was wrong. It was chosen,
+  and measured at five hovers on `apfront.pas` going from 795 ms to 159.
+
+  If the memory becomes the complaint the answer is a tighter cache — the
+  longest `use` line in this tree is 62 characters and each is held in 259
+  bytes — and not a per-position query. **Measuring it found something else
+  instead**: the server stopped on any document of a million bytes or more,
+  and `selfhost/apfront.pas` is 992 056 bytes.
 
 - **A diagnostic can now be something other than an error, and one is**
   (ADR-0272). `WarnAt` stands beside `ErrorAt` and the only difference is

@@ -47,16 +47,26 @@ module PasContainer;
 
 export PasContainer = (Vec, Map, MapKey, KeyMax, CapMax,
                        VecInit, VecFree, VecPush, VecPop, VecGet, VecSet,
-                       VecLen, VecCap, VecClear, VecReserve,
+                       VecLen, VecCap, VecClear, VecReserve, VecFull,
                        MapInit, MapFree, MapPut, MapGet, MapHas, MapDelete,
                        MapCount, MapSlots, MapLiveAt, MapKeyAt,
                        StrHash, StrEq, Slot, Claimed);
 
 const
-  { The largest extent `new` is asked for. A request above it is clamped
-    rather than trapped, because a library that halts is a library that
-    cannot be tested -- `PasVector`'s rule, kept. }
-  CapMax = 1000000;
+  { The largest extent `new` is asked for, in **elements** -- an element's
+    size is the caller's, this being a generic. A request above it is clamped
+    rather than trapped, because a library that halts is a library that cannot
+    be tested -- `PasVector`'s rule, kept, and `PasStrVec` states its own
+    number in bytes because it knows its element.
+
+    It was 1 000 000 and that was never measured against anything (ADR-0276).
+    `JsonChars` is a `Vec(char)`, so the ceiling was a megabyte of document --
+    and `selfhost/apfront.pas` is 992 056 bytes, which is 1 017 200 once it is
+    a JSON string, so the language server could not open the largest source in
+    the tree it was written for. Sixteen million is 15.7 times that message
+    and 16 MB of `char`; a caller pushing sixteen million *records* is a
+    runaway, and `VecFull` is how it finds out. }
+  CapMax = 16000000;
   KeyMax = 63;
 
   { What `StrHash` reduces its running sum by. Not a capacity -- a caller's
@@ -124,6 +134,16 @@ procedure VecSet(Ptr: type; var v: Ptr; i: integer; x: type of v^.a[1]);
 function VecLen(Ptr: type; var v: Ptr): integer;
 
 function VecCap(Ptr: type; var v: Ptr): integer;
+
+{ Is this vector at `CapMax`, where a push has nowhere to go?
+
+  Not `VecLen = VecCap`, which is true of an ordinary vector about to double
+  and says nothing. This is the *ceiling*: `Claimed` clamps a request at
+  CapMax, so a vector already that large cannot grow and `VecPush` into it
+  does nothing. A caller whose input is someone else's -- a document buffer,
+  a message body -- asks this and reports, rather than discovering the loss in
+  what it reads back (ADR-0276). }
+function VecFull(Ptr: type; var v: Ptr): boolean;
 
 { Length to nought. The storage is kept, so pushing again does not reallocate. }
 procedure VecClear(Ptr: type; var v: Ptr);
@@ -262,7 +282,12 @@ end;
 procedure VecReserve;
 var fresh: Ptr; i: integer;
 begin
-  if want > v^.cap then begin
+  { `Claimed(want)` and not `want`, because a request above CapMax comes back
+    clamped: asking `want > v^.cap` at the ceiling was true of every request,
+    so a vector already that large reallocated and copied a million elements
+    on **every** push and a 2 MB document never finished arriving. What is
+    being asked is whether the vector would actually be bigger (ADR-0276). }
+  if Claimed(want) > v^.cap then begin
     new(fresh, Claimed(want));
     fresh^.n := v^.n;
     for i := 1 to v^.n do fresh^.a[i] := v^.a[i];
@@ -275,8 +300,26 @@ procedure VecPush;
 begin
   { Doubling, so `n` pushes cost O(n) altogether. }
   if v^.n = v^.cap then VecReserve(Ptr, v, v^.cap * 2);
-  v^.n := v^.n + 1;
-  v^.a[v^.n] := x
+  { `Claimed` clamps at CapMax, so a reserve at the ceiling hands back a
+    vector of the same capacity and this element has nowhere to go. It used to
+    be written anyway, and `v^.a[v^.n]` then indexed one past the array -- a
+    **trap**, in a library whose policy where CapMax is declared is to clamp
+    rather than halt. It cost the language server every document of a million
+    bytes or more, and `selfhost/apfront.pas` is 992 056 (ADR-0276).
+
+    A full vector now keeps what it has and `VecFull` is how a caller asks. }
+  if v^.n < v^.cap then begin
+    v^.n := v^.n + 1;
+    v^.a[v^.n] := x
+  end
+end;
+
+function VecFull;
+begin
+  { Both halves: a vector at the ceiling with room still in it accepts the
+    next element like any other, and only one that is *also* at its own length
+    has nowhere to put it. }
+  VecFull := (v^.n >= v^.cap) and (v^.cap >= CapMax)
 end;
 
 function VecPop;

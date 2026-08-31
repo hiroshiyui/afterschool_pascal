@@ -12,6 +12,7 @@
 #                     --pascalcc tools/pascalcc
 case_ranges 0
 complex 0
+container_ceiling 0
 defer 0
 dynbounds_subrange 0
 fallible 0

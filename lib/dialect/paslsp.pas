@@ -44,8 +44,9 @@ export PasLsp = (LspBufMax, LspHeadMax, LspHeader, LspReader,
 import PasError; PasIO; PasJson;
 
 const
-  { One read's worth. A message body may be any size -- it goes into a
-    `JsonChars`, which grows -- and this bounds only how much arrives at once. }
+  { One read's worth. A message body goes into a `JsonChars`, which grows to
+    PasContainer's CapMax and no further, so this bounds only how much arrives
+    at once and `errFull` is what says the body itself did not fit. }
   LspBufMax = 8192;
   { A header line. The specification has two headers and neither is long; a
     longer line is `errFull` rather than a silent truncation, because a
@@ -85,7 +86,10 @@ procedure LspOpen(var r: LspReader; fd: integer);
   the input, which is how a server's loop ends and is not a failure;
   `errSyntax` for a frame that is not one -- a missing or unreadable
   `Content-Length`, or an input that stops inside a body; `errFull` for a
-  header line longer than `LspHeadMax`; `errIO` where the read was refused. }
+  header line longer than `LspHeadMax`, or a **body** larger than `JsonChars`
+  can hold -- and in that second case every promised byte has still been
+  consumed, so a caller may report this frame and read the next (ADR-0276);
+  `errIO` where the read was refused. }
 function LspRead(var r: LspReader; var body: JsonChars): ErrorCode;
 
 { Write one message: the header, the blank line, and the body's bytes. }
@@ -316,15 +320,23 @@ begin
         { The input ended inside the body: the count was a promise. }
         e := errSyntax
   end;
+  { A body larger than `JsonChars` can hold. Every byte the header promised
+    has still been *consumed*, so the stream is where the next header begins
+    and a caller may skip this message and carry on -- which is the whole
+    reason this is reported rather than left to look like malformed JSON
+    (ADR-0276). It used to be neither: the buffer wrote one past its array and
+    the program stopped. }
+  if (e = errNone) and (JsonCharsLen(body) < n) then e := errFull;
   LspRead := e
 end;
 
 function JsonlRead;
-var e: ErrorCode; c: char; going, any: boolean;
+var e: ErrorCode; c: char; going, any, full: boolean;
 begin
   e := errNone;
   going := true;
   any := false;
+  full := false;
   while going do
     if not NextByte(r, c, e) then begin
       going := false;
@@ -344,8 +356,15 @@ begin
         the message's either: dropped, so a sender that writes CRLF is read
         the same as one that does not. }
       JsonCharsAdd(body, c);
-      any := true
+      any := true;
+      { A line longer than `JsonChars` can hold. Unlike the framed transport
+        there is no count to compare against, so the buffer is asked directly
+        -- and the loop goes on to the newline anyway, so that the *next* line
+        is a message and not this one's tail (ADR-0276). Recorded in a flag
+        rather than in `e`, which `NextByte` is free to write to. }
+      if JsonCharsFull(body) then full := true
     end;
+  if (e = errNone) and full then e := errFull;
   JsonlRead := e
 end;
 
