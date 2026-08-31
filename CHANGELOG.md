@@ -13,6 +13,25 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-09-01
+
+The release that closed `doc/roadmap.md`'s *What would make this easier to work
+on*. Both of that page's "what is missing" chapters are now records in
+`doc/history.md`, and this one is the tooling half: a formatter, a profile, a
+diagnostic that is not an error, four blind spots in the gates, and a suite
+that took too long.
+
+**Three of those five landed as things a user sees** — `pascalc --format`,
+`--dump-trivia`, and warnings, the first diagnostics this compiler has ever
+written that do not fail a compilation. The other two were internal and one of
+them was not open at all: the suite had been measured serially while CI had run
+it in parallel since the workflow was written, and the answer was a flag worth
+3.4× (ADR-0281).
+
+Nothing is removed and no valid program compiles differently. What *is* new is
+that a program which compiled in silence may now print a warning; the Changed
+section below says who notices.
+
 ### Added
 
 - **A diagnostic can be a warning** (ADR-0272). Every diagnostic this compiler
@@ -108,6 +127,16 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **A program that compiled silently may now print warnings.** Nothing about
+  what it *does* changes -- the emitted IR, the exit status and the program's
+  own output are all untouched -- but a compilation that wrote nothing may now
+  write `file:line:col: warning: ...`. A build script that treats any compiler
+  output as failure is the one thing that notices. Every `--dump` flag
+  suppresses them, so a tool reading a dump's fixed grammar is unaffected.
+
+- **A `--dump` flag suppresses warnings.** Each dump has a reader parsing a
+  fixed grammar and a warning is not part of any of their answers.
+
 - **`ResolveRestricted` no longer carries a `done` flag.** The two
   if-statements it stood between are now one if and its `else`, which is what
   the flag meant. No behaviour changes; it is the one thing the warning above
@@ -129,11 +158,6 @@ appears below in the release where it still existed.
   never been compared against anything; the new one is 15.7 times the largest
   message this tree can produce, and it is stated in elements with the
   measurement beside it.
-
-### Changed
-
-- **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing
-  a fixed grammar and a warning is not part of any of their answers.
 
 ## [3.2.0] - 2026-08-30
 
@@ -3040,6 +3064,8 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.3.0
+[3.2.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.2.0
 [3.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.1.0
 [3.0.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.1
 [3.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.0

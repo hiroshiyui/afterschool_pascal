@@ -2053,8 +2053,8 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 733 cases under `ctest`, the compiler compiled with itself to a
-fixed point and built a second way through `llc`, 319 scenarios written against
+Beside that: 795 cases under `ctest`, the compiler compiled with itself to a
+fixed point and built a second way through `llc`, 356 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,
 and each of the eleven programs the two answer differently is recorded with the
