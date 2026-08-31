@@ -400,15 +400,34 @@ on it, and re-reading it is cheaper than trusting it.
   is what stops a warning added later from appearing on dozens of green cases.
   The hole is `diagnostic-coverage`'s, and it is in the entry below.
 
-  **Four remain sayable and unsaid**: an unused import — which is *not*
+  **The second is a statement after one that leaves** (ADR-0277), and it was
+  the smallest of the four that remained: the other three are questions about
+  what a *body* does over all its paths, and this one is a property of a
+  statement-sequence. Five statements leave — `goto`, `halt`, `exit`, `break`
+  and `continue` — and it is deliberately not a flow analysis, an if whose two
+  arms both leave being a lattice over the whole tree rather than a test on a
+  tag.
+
+  It found **five dead statements in the 779 tracked sources**, in four files,
+  and every one is deliberate: `tests/goto.pas`, `tests/dialect/exit.pas`,
+  `tests/extended/required.pas` and `tests/dialect/components/exit_counter.pas`
+  each exist in part to prove that what follows a transfer does not run. So it
+  bought three `.warn` sidecars, which is the gate working, and no fix.
+
+  What it found that was not dead code is **the hole this item's own first
+  entry left**: no source under `tests/dumps/` warned at all, so dropping the
+  `warnOn` guard from *either* warning left all 790 cases green.
+  `tests/dumps/warnings.pas` is now a program the compiler would warn about
+  twice, and its golden fails for either.
+
+  **Three remain sayable and unsaid**: an unused import — which is *not*
   obviously a mistake here, §6.2.3.6 commencing a supplying module before the
   program-block, so importing purely for a `to begin do` part is meaningful and
   the warning would need to know better; a `var` parameter never written
-  through, where the dialect's own `protected var` is the thing to suggest; a
-  function whose result is assigned on one path and not another; and a
-  statement after an unconditional `goto` or `exit`. Each buys a case, which is
-  the gate working rather than an obstacle, and is the reason to add them in
-  small batches.
+  through, where the dialect's own `protected var` is the thing to suggest; and
+  a function whose result is assigned on one path and not another. Each buys a
+  case, which is the gate working rather than an obstacle, and is the reason to
+  add them in small batches.
 
 - **Four blind spots, and all four are closed.** This bullet is struck
   through; what is left of it is the record of what each closing found, which

@@ -1,0 +1,140 @@
+=== tokens
+12 1 kw program
+12 9 ident warnings
+12 17 op (
+12 18 ident output
+12 24 op )
+12 25 op ;
+14 1 kw procedure
+14 11 ident both
+14 15 op ;
+15 1 kw var
+15 5 ident used
+15 9 op ,
+15 11 ident forgotten
+15 20 op :
+15 22 ident integer
+15 29 op ;
+16 1 kw begin
+17 3 ident used
+17 8 op :=
+17 11 int 1
+17 12 op ;
+18 3 ident writeln
+18 10 op (
+18 11 ident used
+18 15 op :
+18 16 int 1
+18 17 op )
+18 18 op ;
+19 3 ident exit
+19 7 op ;
+20 3 ident writeln
+20 10 op (
+20 11 str [after the exit]
+20 27 op )
+21 1 kw end
+21 4 op ;
+23 1 kw begin
+24 3 ident both
+25 1 kw end
+25 4 op .
+26 1 eof
+=== ast
+program warnings
+  params
+    name output @12:18
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+    procs
+      proc both @14:1
+        params
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+            var
+              names
+                name used @15:5
+                name forgotten @15:11
+              type
+                named integer @15:22
+          procs
+          body
+            compound @16:1
+              assign @17:3
+                var used @17:3
+                int 1 @17:11
+              writeln @18:3
+                arg w -
+                  var used @18:11
+                  int 1 @18:16
+              proccall exit @19:3
+                args
+              writeln @20:3
+                arg - -
+                  str [after the exit] @20:11
+    body
+      compound @23:1
+        proccall both @24:3
+          args
+=== sema
+program warnings
+  params
+    name output @12:18
+  frames
+    frame warnings level 0
+      var output #0 : text (stdout 0)
+    frame both level 1
+      var used #0 : integer
+      var forgotten #1 : integer
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+    procs
+      proc both @14:1
+        params
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+            var
+              names
+                name used @15:5
+                name forgotten @15:11
+              type
+                named integer @15:22 = integer
+          procs
+          body
+            compound @16:1
+              assign @17:3
+                var used @17:3 -> both/0 : integer
+                int 1 @17:11 : integer
+              writeln @18:3
+                file
+                  var output @18:3 -> warnings/0 : text
+                arg w -
+                  var used @18:11 -> both/0 : integer
+                  int 1 @18:16 : integer
+              proccall exit -> standard 20 @19:3
+                args
+              writeln @20:3
+                file
+                  var output @20:3 -> warnings/0 : text
+                arg - -
+                  str [after the exit] @20:11 : packed array [1..14] of char
+    body
+      compound @23:1
+        proccall both -> proc both @24:3
+          args

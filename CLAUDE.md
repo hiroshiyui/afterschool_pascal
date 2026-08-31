@@ -199,9 +199,22 @@ a name that did not resolve records no use and five variables in
 `tests/dialect/slice_escape.pas` were called unused underneath the five errors
 that are the point of the file; and it is written only for `curFile = mainFile`,
 because Sema checks a whole imported component and the compiler otherwise warned
-about ApFront once per importer. The one warning today is **a local variable
-declared and never used**, which found twelve dead declarations in this compiler
-on its first run.
+about ApFront once per importer. **All three guards are now pinned by
+`tests/dumps/warnings.pas`** (ADR-0277), which is a program the compiler would
+warn about twice: until it existed no source under `tests/dumps/` warned at
+all, so dropping `warnOn` from either warning left all 790 cases green.
+
+There are **two** warnings. **A local variable declared and never used** found
+twelve dead declarations in this compiler on its first run. **A statement after
+one that leaves** (ADR-0277) is the second: `goto`, `halt`, `exit`, `break` and
+`continue` are the five that leave, a labelled statement is looked *through*,
+and it is a question about a **statement-sequence** — §6.9.2.1 gives one to a
+compound-statement, a repeat-statement and §6.9.3.5's completer and to nothing
+else, so the arm of an if has nothing after it to be unreachable. Deliberately
+not a flow analysis: an if whose two arms both leave is a lattice over the
+statement tree, and what is claimed is the *unconditional* transfer. It found
+five dead statements in the 779 tracked sources and all five are deliberate,
+which is what bought three `.warn` sidecars.
 
 ### The representation, in brief
 

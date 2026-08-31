@@ -1,0 +1,9 @@
+function: 10
+trailing: before the exit
+loop: body 2
+case: otherwise
+case: reached by its label
+repeat: 1
+repeat: reached by its label
+main: reached by its label
+halting

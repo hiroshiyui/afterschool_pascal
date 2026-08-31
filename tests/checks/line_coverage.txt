@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 18754
+instrumented 18778
 
 accept 0/4
 accumulate 0/84
@@ -91,9 +91,9 @@ check 0/1
 checkarguments 6/235
 checkarrayvalue 2/60
 checkbinary 6/165
-checkblock 0/26
+checkblock 0/29
 checkcall 12/275
-checkcase 0/82
+checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
 checkdeclarations 1/67
@@ -135,7 +135,7 @@ checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/11
 checkstdproc 19/367
-checkstmt 2/245
+checkstmt 2/247
 checkstringargs 0/13
 checkstructvalue 0/39
 checktake 0/20
@@ -756,6 +756,7 @@ tokenize 0/15
 toreal 0/7
 transferable 0/14
 transferargs 0/10
+transfers 0/5
 typeargument 0/6
 typeend 0/4
 typelength 0/1
@@ -767,6 +768,7 @@ variantstorageat 0/13
 version 0/1
 walkfiles 0/127
 warnat 0/2
+warnunreachable 0/13
 warnunusedlocals 0/13
 widenordinal 0/8
 writebinding 0/5

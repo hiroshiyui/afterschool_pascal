@@ -461,3 +461,24 @@ Determine:nodeKind:1 chains 3 of 64
 # `type-parameter type` for an unconstrained one, so its tcNone arm is
 # reached on every dump of a generic.
 WriteCatAdmits:typeCat:1 names 4 of 5
+
+# --- the statements that leave -------------------------------------------
+#
+# `Transfers` asks whether control reaches what is written after a statement,
+# and the answer is yes for every node kind but three: 6.9.2.4's goto,
+# nkLabeled -- which is looked *through*, `1: exit` being an exit -- and
+# nkProcCall, whose `pcStd` then decides between 6.7.5.7's halt, AP 6.7.5.9's
+# exit, AP 6.7.5.10's break, AP 6.7.5.11's continue and the ordinary call
+# that returns.
+#
+# The trailing else is therefore the answer and not a fall-through: an
+# assignment, a compound, an if, a loop, a with, a case and a defer all
+# continue to the next statement, and the ones that *may* not -- an if whose
+# two arms both leave, a case every arm of which does -- are deliberately not
+# claimed here, that being a lattice over the whole statement tree rather
+# than a test on a tag (ADR-0277).
+#
+# A nodeKind added to the enumeration belongs in this chain only if it is a
+# statement that unconditionally leaves the block or the loop it is in, which
+# is the question the number moving should make a reader ask.
+Transfers:nodeKind:1 chains 3 of 64

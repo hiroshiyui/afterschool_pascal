@@ -311,7 +311,10 @@ its subject belongs.
   must produce no warning** — because otherwise a warning added later would
   appear on dozens of cases and every one of them would stay green.
   `diagnostic-coverage` reads these alongside `.err` and `.dump`, so a warning
-  is held to the same rule an error is.
+  is held to the same rule an error is. There are two warnings today: a local
+  variable declared and never used, and a statement written after one that
+  leaves (ADR-0277). Both are suppressed by every `--dump` flag, which is what
+  `tests/dumps/warnings.pas` exists to pin.
 * `name.in` — fed to the program's standard input. Without it stdin is
   `/dev/null`, so a program that reads sees end-of-file rather than waiting for
   a terminal. Two writable scratch paths are always passed as arguments, so a

@@ -28,6 +28,16 @@ appears below in the release where it still existed.
   or to anything at all once an error has been reported. It found twelve dead
   declarations in the compiler's own source on its first run.
 
+- **A statement after one that leaves is reported** (ADR-0277). The second
+  warning. Five statements leave -- `goto`, `halt`, `exit`, `break` and
+  `continue` -- and a statement written after one of them in the same
+  statement-sequence is named `this statement cannot be reached`. A labelled
+  statement is looked *through* and is where a run of dead statements ends; a
+  run is reported once; and the empty statement a doubled separator leaves
+  behind is never named. It is not a flow analysis: an if whose two arms both
+  leave is not claimed. Five dead statements exist in the 779 tracked sources
+  and all five are deliberate.
+
 - **`name.warn`**, a test sidecar for what a *successful* compilation said --
   neither `name.out` nor `name.err` can hold that. A case without one must
   produce no warning.

@@ -16,8 +16,8 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 853
-instrumented 10100
-decisions 5050
+instrumented 10130
+decisions 5065
 
 accept 0/4
 accumulate 1/32
@@ -651,6 +651,7 @@ tokenize 0/12
 toreal 0/6
 transferable 4/20
 transferargs 0/2
+transfers 0/12
 typeargument 2/10
 typeend 0/2
 underlying 0/2
@@ -659,6 +660,7 @@ variantselector 1/18
 variantstorageat 2/10
 walkfiles 5/42
 warnat 1/2
+warnunreachable 0/18
 warnunusedlocals 1/24
 widenordinal 0/4
 writeboundname 0/2

@@ -5471,6 +5471,75 @@ begin
     end
 end;
 
+{ Does control leave here without reaching what follows? Five statements do:
+  6.9.2.4's goto, 6.7.5.7's halt, and the dialect's exit, break and continue
+  (AP 6.7.5.9, AP 6.7.5.10, AP 6.7.5.11). A labelled statement is looked
+  *through* -- `1: exit` is still an exit -- and the label itself is what makes
+  the statement reachable again, which the caller reads separately.
+
+  Deliberately not a flow analysis. An if whose two arms both leave, or a case
+  every arm of which does, makes what follows unreachable just as surely, and
+  answering that needs a lattice over the whole statement tree; what is
+  claimed here is the *unconditional* transfer, which is one node kind and one
+  field.
+
+  `s` is a statement and never nil, and neither is the `lbStmt` the labelled
+  arm recurses on: the only caller refuses to run once anything has been
+  reported, so the tree it walks is one the parser finished. A nil test here
+  would be a branch no compiling program can take, which is what
+  `line-coverage` says about the one that used to be here. }
+function Transfers(s: nodePtr): boolean;
+begin
+  if s^.kind = nkLabeled then Transfers := Transfers(s^.lbStmt)
+  else if s^.kind = nkGoto then Transfers := true
+  else if s^.kind = nkProcCall then
+    Transfers := (s^.pcStd = spHalt) or (s^.pcStd = spExit)
+                 or (s^.pcStd = spBreak) or (s^.pcStd = spContinue)
+  else Transfers := false
+end;
+
+{ A statement written after one that leaves (ADR-0272's category applied a
+  second time). It is a *statement-sequence* question and nothing smaller:
+  6.9.2.1 makes only a compound-statement, a repeat-statement and 6.9.3.5's
+  case-statement-completer hold one, and the arm of an if or the body of a
+  while is a single statement with nothing after it to be unreachable. Three
+  shapes, four callers: a block's statement-part is a compound-statement that
+  CheckBlock walks itself rather than through CheckStmt's arm for one.
+
+  Three things it must not do. It must not warn about an **empty** statement,
+  which a doubled separator writes -- `exit; ;` puts one exactly where a dead
+  statement would stand, and reporting it is a complaint about punctuation.
+  (The `;` before an `end` is a different thing: the parser leaves no node
+  behind for that one at all.) It must treat a **labelled** statement as
+  reachable, that being the whole point of a label -- 6.9.1 b) lets a goto
+  reach one at the top level of the sequence it is in, so `goto 2; 1: x` says
+  what it means. And it must report a run of unreachable statements **once**:
+  naming every one of them is a paragraph about a single mistake.
+
+  Called after the sequence is walked and not before, because `pcStd` is
+  assigned by CheckStdProc -- until Sema has looked at it, an `exit` is an
+  ordinary procedure-statement with a name in it. }
+procedure WarnUnreachable(first: nodePtr);
+var p: nodePtr; live, said: boolean;
+begin
+  if warnOn and not errorSeen and (curFile = mainFile) then begin
+    live := true;
+    said := false;
+    p := first;
+    while p <> nil do begin
+      if p^.kind = nkLabeled then live := true;
+      if live then said := false
+      else if not said and (p^.kind <> nkEmpty) then begin
+        WarnAt(p^.line, p^.col);
+        writeln('this statement cannot be reached');
+        said := true
+      end;
+      if Transfers(p) then live := false;
+      p := p^.next
+    end
+  end
+end;
+
 { 6.2.2.4's field-identifier, which is the one applied occurrence in this
   language whose defining-point is not a symbol's. 6.4.3.3 makes a record a
   region and gives every field-identifier a defining-point in it, but nothing
@@ -16521,6 +16590,7 @@ begin
       CheckStmt(arm);
       arm := arm^.next
     end;
+    WarnUnreachable(c^.csOtherwise);
     stmtPath := saved
   end;
   sel := c^.csSelector^.ntype;
@@ -17215,6 +17285,7 @@ begin
           CheckStmt(sub);
           sub := sub^.next
         end;
+        WarnUnreachable(s^.cpBody);
         stmtPath := saved
       end;
 
@@ -17640,6 +17711,7 @@ begin
           CheckStmt(sub);
           sub := sub^.next
         end;
+        WarnUnreachable(s^.rpBody);
         loopDepth := loopDepth - 1;
         stmtPath := saved;
         CheckExpr(s^.rpCond);
@@ -21264,7 +21336,7 @@ begin
 end;
 
 procedure CheckBlock;
-var d: nodePtr; outerPath: stmtPathPtr; outerLoops: integer;
+var d, body: nodePtr; outerPath: stmtPathPtr; outerLoops: integer;
 begin
   { 6.2.1 puts the import-part at the head of every block. }
   CheckImports(b^.blImports, owner);
@@ -21301,8 +21373,10 @@ begin
     statements, exactly as its statement-path does not (AP 6.7.5.10). }
   outerLoops := loopDepth;
   loopDepth := 0;
+  body := nil;
   if b^.blBody <> nil then begin
-    d := b^.blBody^.cpBody;
+    body := b^.blBody^.cpBody;
+    d := body;
     while d <> nil do begin
       CheckStmt(d);
       d := d^.next
@@ -21311,6 +21385,16 @@ begin
   stmtPath := outerPath;
   loopDepth := outerLoops;
   ResolveGotos;
+  { After ResolveGotos, not merely after the walk: an undefined label is an
+    error and a warning is a remark about a program that compiles. The
+    statement-part of a block is a compound-statement, but it is walked here
+    rather than through CheckStmt's own arm for one, so it needs the call of
+    its own -- which is why the first probe of this warning saw the one inside
+    a repeat-statement and neither of the two at the top of a block. `body`
+    is taken inside the test above rather than repeated here: a second
+    `b^.blBody <> nil` would be a second branch nothing can take, that one
+    having been an untaken direction since before this warning existed. }
+  WarnUnreachable(body);
   { After the statement part, because that is where the uses are (ADR-0272). }
   WarnUnusedLocals(owner)
 end;
