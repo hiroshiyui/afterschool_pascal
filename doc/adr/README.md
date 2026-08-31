@@ -288,3 +288,4 @@ the alternatives that were rejected and why.
 | [0277](0277-a-statement-after-one-that-leaves.md) | A statement after one that leaves | Accepted |
 | [0278](0278-a-result-written-on-one-path.md) | A result written on one path | Accepted |
 | [0279](0279-a-comment-is-not-a-token.md) | A comment is not a token, and now it is not lost either | Accepted |
+| [0280](0280-the-editor-asks-the-compiler-to-format.md) | The editor asks the compiler to format | Accepted |

@@ -1,0 +1,29 @@
+# textDocument/formatting (ADR-0279): the document written back out by
+# `pascalc --format`, as one edit over the whole of it.
+#
+# Three things this session pins. The reply is a *single* TextEdit and not a
+# diff, because what the formatter writes is a whole file and nothing in it
+# says which part of the input it came from. Its range ends one line past
+# the document, which every client clamps and which is right however the
+# last line ends. And a source the lexer *rejects* is answered with no edits
+# at all -- leaving a buffer alone is what an editor expects of a formatter
+# that could not read the file.
+
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": null, "capabilities": {}}}
+
+# documentFormattingProvider is in the capabilities above; the client may ask.
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file:///scratch/tidy.pas", "languageId": "pascal", "version": 1, "text": "program tidy(output);\n{ a comment above }\nvar i,j:integer;\nbegin\n i:=1; j:=2;\n if i<j then writeln('less') else writeln('not');\n writeln(i+j:1) { beside }\nend.\n"}}}
+
+{"jsonrpc": "2.0", "id": 2, "method": "textDocument/formatting", "params": {"textDocument": {"uri": "file:///scratch/tidy.pas"}, "options": {"tabSize": 2, "insertSpaces": true}}}
+
+# A source with a token the lexer cannot finish: no edits, and the buffer
+# stays as the user left it.
+{"jsonrpc": "2.0", "method": "textDocument/didChange", "params": {"textDocument": {"uri": "file:///scratch/tidy.pas", "version": 2}, "contentChanges": [{"text": "program tidy(output);\nvar s: string;\nbegin s := '"}]}}
+
+{"jsonrpc": "2.0", "id": 3, "method": "textDocument/formatting", "params": {"textDocument": {"uri": "file:///scratch/tidy.pas"}, "options": {"tabSize": 2, "insertSpaces": true}}}
+
+# A document nobody opened: an empty array, not an error and not silence.
+{"jsonrpc": "2.0", "id": 4, "method": "textDocument/formatting", "params": {"textDocument": {"uri": "file:///scratch/never-opened.pas"}, "options": {"tabSize": 2, "insertSpaces": true}}}
+
+{"jsonrpc": "2.0", "id": 5, "method": "shutdown"}
+{"jsonrpc": "2.0", "method": "exit"}

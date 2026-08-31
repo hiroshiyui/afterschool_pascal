@@ -45,6 +45,8 @@
 #                     writes the lines it ran to $PASCOV_LINES
 #     --dump-<what>   any of `pascalc`'s dumps. The answer is its standard
 #                     output and nothing is assembled or linked
+#     --format        write the source back out with the compiler's own
+#                     layout. Standard output again, and nothing is linked
 #     -h, --help      write this list and stop
 #     <file>.o        an object to link, from a component compiled with -c
 #
@@ -173,9 +175,12 @@ while [[ $# -gt 0 ]]; do
     --import-path) [[ $# -ge 2 ]] || die "--import-path needs a directory"
                    paths+=(--import-path "$2"); shift 2 ;;
     --coverage)    covflag=(--coverage); shift ;;
-    # ADR-0239's --dump-symbols and the seven flags beside it. Passed through
-    # to `pascalc` and nothing else happens: see below.
-    --dump-*)      dumps+=("$1"); shift ;;
+    # ADR-0239's --dump-symbols and the flags beside it, and ADR-0279's
+    # --format. Passed through to `pascalc` and nothing else happens: see
+    # below. `--format` is not a dump and is in the same list for the same
+    # reason -- what it writes is the compiler's standard output and no IR.
+    --dump-*|--format)
+                   dumps+=("$1"); shift ;;
     --help|-h)     sed -n '/^# >>> usage$/,/^# <<< usage$/p' "$0" |
                      sed '1d; $d; s/^#\( \|$\)//'
                    exit 0 ;;
@@ -197,8 +202,8 @@ if [[ -n $installed_lib ]]; then
 fi
 [[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
 
-# A --dump flag asks the *compiler* a question and the answer is its standard
-# output. Nothing this script adds -- the assembler, the linker, the runtime --
+# A --dump flag, and --format, ask the *compiler* for something and the answer
+# is its standard output. Nothing this script adds -- the assembler, the linker, the runtime --
 # has anything to do with one, and a flag that stops at a stage writes no IR at
 # all, so the `wrote no IR` check below would refuse a correct run. The dump is
 # passed through rather than folded into this script's stderr the way a
@@ -207,7 +212,10 @@ fi
 # It exists because `lsp/pasls.pas` answers documentSymbol out of
 # --dump-symbols and a user may just as well name this script in
 # PASLS_COMPILER as name `pascalc` -- and did, and got an empty outline back
-# with `pascalcc: unknown option` in a stream nothing was reading.
+# with `pascalcc: unknown option` in a stream nothing was reading. `--format`
+# arrived the same way and was caught the same way: the server's own session
+# suite drives it through this script, and the first run of it answered with
+# no edits at all (ADR-0279).
 if [[ ${#dumps[@]} -gt 0 ]]; then
   "$pascalc" ${target:+"$target"} "${dumps[@]}" \
     "${covflag[@]+"${covflag[@]}"}" "$source_file" \

@@ -128,13 +128,18 @@ the harness and compared byte for byte (ADR-0236). **It speaks two protocols**
 (ADR-0241): the same binary answers MCP over stdio when given `--mcp`, one
 message to a line instead of `Content-Length`, with two tools built on
 `--dump-symbols` and on a compilation. A session says which by a `name.mcp`
-marker. It answers six questions about a document — the diagnostics, the
+marker. It answers seven questions about a document — the diagnostics, the
 outline (ADR-0239), go-to-definition and hover, which are one question asked
-twice and come from one `--dump-uses` (ADR-0246), and folding and selection
+twice and come from one `--dump-uses` (ADR-0246), folding and selection
 expansion, which are a second such pair and come from one `--dump-stmts`
-(ADR-0258) — and they do not cost the same: the outline and the two extent
-answers stop after the parse and need no `--import`, where the diagnostics and
-the two `use` answers run Sema and do. **Nothing waits on a compile that is
+(ADR-0258), and **formatting**, which comes from `--format` (ADR-0280) — and
+they do not cost the same: the outline and the two extent answers stop after
+the parse and need no `--import`, where the diagnostics and the two `use`
+answers run Sema and do. Formatting is the only one whose answer is a
+*program* rather than a report, which is why its command redirects standard
+output to a file of its own instead of folding it into standard error the way
+every other one does: a diagnostic mixed into the text would be written
+straight into the user's buffer. **Nothing waits on a compile that is
 already stale**: the server drains the messages that have arrived and keeps
 only the last `didChange` per document, which took four queued edits of a
 22 900-line source from 780 ms to 340 (ADR-0257). The corpus sweeps reach it

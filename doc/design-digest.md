@@ -3928,6 +3928,24 @@ nothing else. What it would lose, mechanism by mechanism:
   parser reports where it stamps, which is ADR-0246's principle and ADR-0230's
   argument against a walker; the order is completion order and the format
   carries no depth, containment being decidable from the ranges.
+- **A document is formatted by the compiler and replaced whole** (ADR-0280).
+  `textDocument/formatting` runs `--format` over the scratch file the server
+  already writes and answers with a single `TextEdit`, not a diff: computing a
+  minimal set means comparing two texts, and what the formatter writes is a
+  whole file with nothing in it saying which part of the input any part came
+  from. Two details are the ones to carry. Its command is the only one here
+  that does **not** fold standard error into standard output -- everywhere else
+  that folding is what makes `pascalc` and `pascalcc` both work, and here the
+  compiler's standard output is the *program*, so a diagnostic mixed into it
+  would be written into the user's buffer. And the range ends at line 0 of the
+  line *after* the document, which is at or past the end however the last line
+  ends and which every client clamps: the exact end would mean measuring the
+  last line in the negotiated encoding, and `LineOf` bounds a line at
+  `DiagLine`'s capacity, which the corpus exceeds by an order of magnitude.
+  `tools/pascalcc` had to learn `--format` for the same reason it had to learn
+  `--dump-symbols`, and it was found the same way: the session suite drives the
+  server through the script, and the first run answered with no edits and
+  `pascalcc: unknown option` in a stream nothing was reading.
 - **A change nobody will see the answer to is not compiled** (ADR-0257). A
   keystroke carries the whole document, so the server drains what has
   *arrived* — never waits, which would be a policy about typing speed — and

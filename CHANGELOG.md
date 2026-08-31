@@ -36,6 +36,13 @@ appears below in the release where it still existed.
   with a comment missing from it. Nothing in this repository is formatted by
   it.
 
+- **The language server formats a document** (ADR-0280).
+  `textDocument/formatting` runs `pascalc --format` over the buffer and answers
+  with one edit over the whole of it. A source the lexer rejects, or one with
+  more comments than the formatter can keep in order, is answered with no edits
+  and the buffer is left alone. `tools/pascalcc` passes `--format` through to
+  the compiler and links nothing, as it already did for the dump flags.
+
 - **`pascalc --dump-trivia`** writes every comment a source holds, with its
   position and the token it precedes. It stops after the lexer, which is one
   stage earlier than any other dump that stops.

@@ -302,7 +302,7 @@ tree.
 
 `lsp/` holds a Language Server Protocol server, written in this language and
 using this library. It publishes the compiler's diagnostics for every file you
-open or edit, without your having to save one, and answers five requests
+open or edit, without your having to save one, and answers six requests
 besides:
 
 | Request | What you get |
@@ -312,9 +312,13 @@ besides:
 | `hover` | what a name is, and its type |
 | `foldingRange` | the gutter arrows beside every `begin`, `if` and loop |
 | `selectionRange` | expand-selection, outward through nested statements |
+| `formatting` | the document laid out by `pascalc --format` |
 
 The outline and the two extent answers work on a document that **does not
 compile yet**, which is when they are most wanted: they stop after the parse.
+Formatting is the one that will not: a document whose tokens the compiler
+cannot read is answered with no edits at all, and your buffer is left as you
+left it.
 And a burst of keystrokes costs one compilation rather than one each — a
 change with a newer change already queued behind it is not compiled, since
 nobody would ever see the answer.

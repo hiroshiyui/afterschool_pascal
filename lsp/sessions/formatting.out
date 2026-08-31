@@ -1,0 +1,15 @@
+Content-Length: 300
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 121
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/tidy.pas","diagnostics":[]}}Content-Length: 324
+
+{"jsonrpc":"2.0","id":2,"result":[{"range":{"start":{"line":0,"character":0},"end":{"line":9,"character":0}},"newText":"program tidy(output);\n{ a comment above }\nvar\n  i, j: integer;\nbegin\n  i := 1;\n  j := 2;\n  if i < j then\n    writeln('less')\n  else\n    writeln('not');\n  writeln(i + j:1) { beside }\nend.\n"}]}Content-Length: 270
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/tidy.pas","diagnostics":[{"range":{"start":{"line":2,"character":11},"end":{"line":2,"character":11}},"severity":1,"source":"pascalc","message":"unterminated string literal"}]}}Content-Length: 36
+
+{"jsonrpc":"2.0","id":3,"result":[]}Content-Length: 36
+
+{"jsonrpc":"2.0","id":4,"result":[]}Content-Length: 38
+
+{"jsonrpc":"2.0","id":5,"result":null}

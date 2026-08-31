@@ -1,6 +1,6 @@
 Content-Length: -
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","diagnostics":[]}}Content-Length: -
 

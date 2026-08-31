@@ -9,7 +9,8 @@
 
   It answers four questions about a document: the diagnostics it publishes on
   every open and change, the outline `textDocument/documentSymbol` asks for
-  (ADR-0239), and `textDocument/definition` and `textDocument/hover`, which
+  (ADR-0239), `textDocument/formatting` (ADR-0279), and
+  `textDocument/definition` and `textDocument/hover`, which
   are one question asked twice -- what the name under this position denotes,
   and where it was written (ADR-0246). The roadmap's sentence for the first of
   them is *"a server that does nothing whatever but publishDiagnostics is
@@ -904,6 +905,9 @@ begin
     which is when it is being typed into and when both gestures are used. }
   JsonPut(caps, 'foldingRangeProvider', JsonNewBoolean(true));
   JsonPut(caps, 'selectionRangeProvider', JsonNewBoolean(true));
+  { ADR-0279: `pascalc --format` writes the whole file, so what comes back is
+    one edit over the whole document and never a diff. }
+  JsonPut(caps, 'documentFormattingProvider', JsonNewBoolean(true));
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -2167,6 +2171,141 @@ begin
       ChangedUri := UriOf(JsonMember(msg, 'params'))
 end;
 
+{ LSP's `textDocument/formatting`, answered by `pascalc --format` (ADR-0279).
+
+  **One edit over the whole document**, and not a diff. LSP admits a list of
+  edits and a client applies them all, but computing a minimal set means
+  comparing two texts, which is a second algorithm to get wrong for a gain the
+  client's own undo already provides -- and the formatter's output is a whole
+  file by construction, there being nothing in it that says which parts of the
+  input it corresponds to.
+
+  **The compiler's standard output is the *program* here**, so it goes to a
+  file of its own rather than being folded into standard error the way every
+  other command this server runs folds the two together. A diagnostic mixed
+  into the text would be written straight into the user's buffer. A non-zero
+  exit means the source did not lex or has more comments than the formatter
+  can keep in order, and the answer is then no edits at all: leaving a buffer
+  alone is what an editor expects of a formatter that cannot read the file.
+
+  A range ending one line past the last is deliberate. Position 0:0 of the
+  line after the document is at or past its end however the last line ends,
+  and a client clamps it; computing the exact end would mean measuring the
+  last line in the negotiated encoding, and `LineOf` bounds a line at
+  `DiagLine`'s capacity, which the corpus exceeds. }
+function FormatCommand(source: PathName; var cmd: CommandLine): boolean;
+begin
+  cmd := '';
+  if length(compilerCmd) + length(source) + 2 * length(scratchPath) + 48
+     > CommandMax then begin
+    Note('the compiler command line would be longer than this program holds');
+    exit(false)
+  end;
+  cmd := compilerCmd + ' --format ''' + source + ''' -o '''
+         + scratchPath + '.ll'' > ''' + scratchPath + '.fmt''';
+  FormatCommand := true
+end;
+
+{ What the formatter wrote, appended to a JSON string value. Read a character
+  at a time and flushed in pieces, because a formatted line is bounded by
+  nothing this program declares -- the widest in the corpus is 4204
+  characters, against `JsonLine`'s 255. }
+function ReadFormatted(v: JsonPtr): boolean;
+var bt: BindingType; c: char; chunk: JsonLine; name: EnvText;
+
+  procedure Flush;
+  begin
+    if length(chunk) > 0 then begin
+      JsonTextAdd(v, chunk);
+      chunk := ''
+    end
+  end;
+
+begin
+  if length(scratchPath) + 4 > MaxValue then begin
+    Note('the scratch path is too long to write the formatted text beside');
+    exit(false)
+  end;
+  name := scratchPath + '.fmt';
+  bt := binding(scratchFile);
+  if bt.bound then unbind(scratchFile);
+  bt.name := name;
+  bind(scratchFile, bt);
+  if not binding(scratchFile).bound then begin
+    unbind(scratchFile);
+    Note('the compiler wrote nothing at ' + name);
+    exit(false)
+  end;
+  reset(scratchFile);
+  chunk := '';
+  while not eof(scratchFile) do begin
+    while not eoln(scratchFile) do begin
+      read(scratchFile, c);
+      if length(chunk) >= LineMax - 1 then Flush;
+      chunk := chunk + c
+    end;
+    readln(scratchFile);
+    if length(chunk) >= LineMax - 1 then Flush;
+    chunk := chunk + chr(10)
+  end;
+  Flush;
+  unbind(scratchFile);
+  ReadFormatted := true
+end;
+
+procedure Formatting(id: JsonPtr; params: JsonPtr);
+var reply, result, edit, rng, a, b, text: JsonPtr;
+    uri: DocUri;
+    at, i, n, lines: integer;
+    d: Document;
+    cmd: CommandLine;
+    r: RunResult;
+begin
+  reply := NewResponse(id);
+  result := JsonNewArray;
+  uri := UriOf(params);
+  at := IndexOf(uri);
+  if at <> 0 then begin
+    d := VecGet(DocVec, Document, docs, at);
+    if WriteScratch(d.text) and FormatCommand(scratchPath, cmd) then begin
+      r := Run(cmd);
+      if not r.ok then
+        Note('could not run the compiler: ' + ErrorText(r.cause))
+      else if r.val <> 0 then
+        { The source does not lex, or holds more comments than the formatter
+          can keep in order. Either way it says so on its own stream and the
+          buffer is left alone. }
+      else begin
+        text := JsonNewText('');
+        if ReadFormatted(text) then begin
+          lines := 1;
+          n := JsonCharsLen(d.text);
+          for i := 1 to n do
+            if JsonCharsAt(d.text, i) = chr(10) then lines := lines + 1;
+          a := JsonNewObject;
+          JsonPut(a, 'line', JsonNewInteger(0));
+          JsonPut(a, 'character', JsonNewInteger(0));
+          b := JsonNewObject;
+          JsonPut(b, 'line', JsonNewInteger(lines));
+          JsonPut(b, 'character', JsonNewInteger(0));
+          rng := JsonNewObject;
+          JsonPut(rng, 'start', a);
+          JsonPut(rng, 'end', b);
+          edit := JsonNewObject;
+          JsonPut(edit, 'range', rng);
+          JsonPut(edit, 'newText', text);
+          JsonAppend(result, edit)
+        end
+        else
+          JsonFree(text)
+      end
+    end
+  end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
 procedure Dispatch(msg: JsonPtr);
 var method: JsonLine;
     id, params: JsonPtr;
@@ -2189,6 +2328,7 @@ begin
   else if method = 'textDocument/hover' then Hover(id, params)
   else if method = 'textDocument/foldingRange' then Folding(id, params)
   else if method = 'textDocument/selectionRange' then Selection(id, params)
+  else if method = 'textDocument/formatting' then Formatting(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

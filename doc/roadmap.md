@@ -350,10 +350,19 @@ on it, and re-reading it is cheaper than trusting it.
   **nothing in this tree is formatted by it** — the tree has no agreed Pascal
   style and this does not create one.
 
-  Two of the three things it was meant to pay for are still unbuilt: the
-  server's `textDocument/formatting` and `rangeFormatting`, and a `style:`
-  gate for the Pascal of the kind `git clang-format` gives the C. The compiler
-  half is what either would call.
+  **The first of the three things it was meant to pay for is built**
+  (ADR-0280): the server answers `textDocument/formatting` by running
+  `--format` over the scratch file it already writes, and returns one edit over
+  the whole document rather than a diff — the formatter's output is a whole
+  file by construction and nothing in it says which part of the input any part
+  came from. A source the lexer rejects is answered with no edits, which is
+  what an editor expects of a formatter that could not read the file.
+
+  Two remain. `textDocument/rangeFormatting` needs a formatter that can be
+  asked about *part* of a file, which means telling the token-stream printer
+  where to start its indent from — a question about the enclosing structure
+  that only a parse can answer. And a `style:` gate for the Pascal of the kind
+  `git clang-format` gives the C is a policy this tree has not chosen.
 
 - **The compiler has been profiled once, and the answer was a surprise.**
   The baseline this item asked for is ADR-0270's `benchmark`, and the profile

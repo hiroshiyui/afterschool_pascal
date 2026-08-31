@@ -6,6 +6,9 @@ Date: 2026-08-31
 
 Accepted, 2026-08-31.
 
+The last paragraph of the consequences below names `textDocument/formatting` as
+not built. **ADR-0280 built it**, in the same session.
+
 ## Context
 
 `doc/roadmap.md`'s "What would make this easier to work on" opened with the
