@@ -420,14 +420,48 @@ on it, and re-reading it is cheaper than trusting it.
   `tests/dumps/warnings.pas` is now a program the compiler would warn about
   twice, and its golden fails for either.
 
-  **Three remain sayable and unsaid**: an unused import — which is *not*
-  obviously a mistake here, §6.2.3.6 commencing a supplying module before the
-  program-block, so importing purely for a `to begin do` part is meaningful and
-  the warning would need to know better; a `var` parameter never written
-  through, where the dialect's own `protected var` is the thing to suggest; and
-  a function whose result is assigned on one path and not another. Each buys a
-  case, which is the gate working rather than an obstacle, and is the reason to
-  add them in small batches.
+  **The third is a function that writes its result on one path and not
+  another** (ADR-0278). §6.7.2 requires a function-block to write its result at
+  least once and the compiler already reported a body that never did; nothing
+  asked whether the one assignment stands where every path reaches it. A
+  sequence answers yes as soon as one statement does, an if needs **both** arms,
+  and a case needs every arm and the completer unless it has none — §6.9.3.5
+  stops the program when no label matches, so a path that returns took an arm.
+  A `goto`, §6.8.2.2's *nested* assignment and §6.7.2's
+  result-variable-specification each silence it, and each is a case the walk
+  cannot decide rather than one it decides in the program's favour.
+
+  It found **one** thing in 779 sources and it was in this compiler:
+  `ResolveRestricted` carried a `done: boolean` between two if-statements where
+  the second was the first's `else`. Every path did write the result and the
+  correlation between the flag and the assignments is not in the tree. Two more
+  sites were found and answered by the analysis rather than by an exception —
+  `repeat … until false`, which is never left by falling out of it, is now a
+  yes; and a `for` with constant bounds is deliberately not folded, because
+  doing that soundly needs a scan for `break` and one `.warn` sidecar is a
+  cheaper true statement than a second analysis.
+
+  **The fourth was measured and is not built.** A `var` parameter never written
+  through would be spelled `protected var`, and the probe found 111 sites in 53
+  files — of which §6.4.1's own `Protectable`, a predicate the compiler already
+  owns, strikes 30, a file or a pointer being unprotectable, so without it the
+  warning would have advised what the compiler refuses. Of the 81 left, 32 are
+  in the compiler, the server and the library and every one is right. What
+  stops it is that **the fix is not always legal and no component can tell**:
+  §6.6.3.6's congruity compares the formal-parameter-lists with `protected` in
+  them, so a routine passed as a procedural parameter cannot take the word —
+  `selfhost/badsema/procparams.pas`'s `ByRef` is that case here — and whether
+  an *exported* routine is ever passed that way is a whole-program question.
+  The sound version warns only for a routine neither exported nor passed as a
+  procedural actual in its own component, which needs warnings deferred to the
+  end of a compilation rather than written where they are found; that is a
+  change to ADR-0272's discipline and wants a record of its own.
+
+  **One remains sayable and unsaid**, and it is the one this list already
+  doubted: an unused import, which is *not* obviously a mistake here, §6.2.3.6
+  commencing a supplying module before the program-block, so importing purely
+  for a `to begin do` part is meaningful and the warning would need to know
+  better.
 
 - **Four blind spots, and all four are closed.** This bullet is struck
   through; what is left of it is the record of what each closing found, which

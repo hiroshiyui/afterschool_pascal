@@ -6605,6 +6605,207 @@ begin
   else ConstOrdinal := s.intVal
 end;
 
+{ Is this the constant `false`? Asked of a repeat-statement's condition and
+  nowhere else: a loop that can never be left by its own test is left only by
+  a transfer, and every transfer out of a function-block is either an exit
+  that writes the result or a goto that stops this analysis entirely. }
+function ConstantlyFalse(e: nodePtr): boolean;
+var v: symbol;
+begin
+  ConstantlyFalse := false;
+  { A repeat-statement always has a condition and 6.9.3.10 has already
+    required it to be boolean, so neither a nil test nor a type test here
+    would be a branch any program can take. }
+  if EvalConst(e, v) then ConstantlyFalse := ConstOrdinal(v) = 0
+end;
+
+{ Does *every* path through this statement write the function's result?
+  6.7.2 requires a function-block to write its result at least once and this
+  compiler reports a body that never does; what nothing asked until ADR-0278
+  is whether the one assignment stands where every path reaches it -- an
+  `if` with no else-part, or one arm of two, leaves the result whatever the
+  frame slot happened to hold.
+
+  A tree walk over the statements, and the three shapes that answer yes are
+  the three that must:
+
+  - a statement-sequence answers yes as soon as one of its statements does;
+  - an if-statement needs **both** arms, and so answers no outright when
+    there is no else-part;
+  - a case-statement needs every arm *and* the completer, unless it has no
+    completer at all -- 6.9.3.5 stops the program when no label matches, so a
+    path that returns is a path that took an arm.
+
+  A `halt` answers yes for that second reason and not because it writes
+  anything: 6.7.5.7 ends the program, so no path through it returns to read
+  the result. `exit(e)` writes the result and leaves, which is AP 6.7.5.9's
+  husk -- Sema moved the assignment into pcExit, so the walk finds it there
+  and needs to know nothing about the procedure.
+
+  Everything else answers no, and the two that look like exceptions are not:
+  a while-statement and a for-statement may run their body zero times, and a
+  repeat-statement's body is left by `break` as well as by its condition. }
+function WritesResult(s: nodePtr; res: symPtr): boolean;
+var sub, r: nodePtr; all: boolean;
+begin
+  WritesResult := false;
+  { `s` is a statement and never nil, as `Transfers` is asked about one: every
+    recursion below is either guarded or reads a field a finished tree always
+    fills, and the only caller refuses to run once anything has been reported.
+    RootDesignator answers nil for nil alone, so it does not need one either. }
+  case s^.kind of
+      nkAssign: begin
+        r := RootDesignator(s^.asTarget);
+        WritesResult := (r^.kind = nkVar) and (r^.vrSym = res)
+      end;
+      nkProcCall:
+        if s^.pcStd = spHalt then WritesResult := true
+        else if s^.pcExit <> nil then WritesResult := WritesResult(s^.pcExit, res);
+      nkCompound: begin
+        sub := s^.cpBody;
+        while sub <> nil do begin
+          if WritesResult(sub, res) then begin
+            WritesResult := true;
+            sub := nil
+          end
+          else sub := sub^.next
+        end
+      end;
+      nkIf:
+        if s^.ifElse <> nil then
+          WritesResult := WritesResult(s^.ifThen, res)
+                          and WritesResult(s^.ifElse, res);
+      nkCase: begin
+        all := true;
+        sub := s^.csArms;
+        while sub <> nil do begin
+          if not WritesResult(sub^.caBody, res) then all := false;
+          sub := sub^.next
+        end;
+        { A completer holds a statement-sequence, and one of its statements
+          writing the result is enough -- the same rule a compound has, and
+          not a rule of its own. `csHasOtherwise` is not asked: an `otherwise`
+          followed by nothing is 6.9.2.1's empty statement and not a nil
+          completer, so the walk below answers no for it without a test of its
+          own, and a nil completer means there was no `otherwise` at all. }
+        if s^.csOtherwise <> nil then begin
+          sub := s^.csOtherwise;
+          r := nil;
+          while sub <> nil do begin
+            if WritesResult(sub, res) then r := sub;
+            sub := sub^.next
+          end;
+          if r = nil then all := false
+        end;
+        WritesResult := all
+      end;
+      { A repeat-statement's body running at least once is not enough on its
+        own -- AP 6.7.5.10's break leaves it from anywhere inside -- but a
+        loop whose condition is the constant `false` is never left by falling
+        out of it at all, so every path that returns took an exit and the
+        walk found that exit itself. `repeat ... until false` is the shape
+        `lib/dialect/pastls.pas`'s ReadLine is written in, and without this it
+        is the analysis reporting its own blind spot as a defect. }
+      nkRepeat:  WritesResult := ConstantlyFalse(s^.rpCond);
+      nkWith:    WritesResult := WritesResult(s^.wtBody, res);
+      nkLabeled: WritesResult := WritesResult(s^.lbStmt, res);
+      otherwise
+  end
+end;
+
+{ Is there anything in here this walk cannot follow? Two things, and each
+  makes the answer above unsound rather than merely incomplete.
+
+  A **goto** turns the statement tree into a graph: a jump forward past an
+  assignment, or backward over one, is a path the walk does not see, in either
+  direction. And 6.8.2.2 lets a procedure *nested inside* the function write
+  its result -- "the function-block ... shall contain the assignment-statement"
+  is containment and not identity -- so a function whose only assignment is
+  made by a nested block writes nothing this walk can find. The second is
+  asked as "did the walk find an assignment at all", which is why this
+  reports `found` rather than testing for a nested one directly. }
+procedure ScanResultBody(s: nodePtr; res: symPtr;
+                         var jump, found: boolean);
+var sub, r: nodePtr;
+
+  procedure Seq(first: nodePtr);
+  var p: nodePtr;
+  begin
+    p := first;
+    while p <> nil do begin
+      ScanResultBody(p, res, jump, found);
+      p := p^.next
+    end
+  end;
+
+begin
+  if s <> nil then
+    case s^.kind of
+      nkGoto: jump := true;
+      nkAssign: begin
+        r := RootDesignator(s^.asTarget);
+        if r^.kind = nkVar then
+          if r^.vrSym = res then found := true
+      end;
+      nkProcCall:  ScanResultBody(s^.pcExit, res, jump, found);
+      nkCompound:  Seq(s^.cpBody);
+      nkIf: begin
+        ScanResultBody(s^.ifThen, res, jump, found);
+        ScanResultBody(s^.ifElse, res, jump, found)
+      end;
+      nkWhile:     ScanResultBody(s^.whBody, res, jump, found);
+      nkRepeat:    Seq(s^.rpBody);
+      nkFor:       ScanResultBody(s^.frBody, res, jump, found);
+      nkWith:      ScanResultBody(s^.wtBody, res, jump, found);
+      nkLabeled:   ScanResultBody(s^.lbStmt, res, jump, found);
+      nkDefer:     ScanResultBody(s^.dfStmt, res, jump, found);
+      nkCase: begin
+        sub := s^.csArms;
+        while sub <> nil do begin
+          ScanResultBody(sub^.caBody, res, jump, found);
+          sub := sub^.next
+        end;
+        Seq(s^.csOtherwise)
+      end;
+      otherwise
+    end
+end;
+
+{ ADR-0272's third warning: a function whose result is written on one path and
+  not another. It is a remark and not an error because 6.7.2 is satisfied --
+  the block does contain an assignment -- and what is wrong is where it
+  stands.
+
+  Four things silence it, and each is a case the walk cannot decide rather
+  than one it decides in the program's favour: a `goto` anywhere in the body;
+  no assignment found in the body at all, which means 6.8.2.2's nested one; a
+  function whose result-type was already reported wrong; and 6.7.2's
+  **result-variable-specification**, `function f: T = r`, which is the one
+  spelling that gives the result a name a statement can write down -- and so
+  the one where 6.9.4's other threats apply, a `read` into the result and a
+  var argument among them. Without a name there is no way to write the result
+  but an assignment-statement and AP 6.7.5.9's `exit(e)`, which is exactly
+  what the walk models. }
+procedure WarnPartialResult(sym: symPtr; body: nodePtr; l, c: integer);
+var jump, found: boolean;
+begin
+  if warnOn and not errorSeen and (curFile = mainFile) and (sym <> nil) then
+    if (sym^.kind = skFunc) and not sym^.resultTypeBad
+       and (sym^.resultVar <> nil) and not sym^.resultNamed then begin
+      jump := false;
+      found := false;
+      ScanResultBody(body, sym^.resultVar, jump, found);
+      if found and not jump then
+        if not WritesResult(body, sym^.resultVar) then begin
+          WarnAt(l, c);
+          write('function ''');
+          WritePool(sym^.at, sym^.len);
+          writeln(''' does not write its result on every path')
+        end
+    end
+end;
+
+
 { 6.7.2.2 makes an integer overflow an error, and one the *compiler* can see is
   a diagnostic rather than a trap: the value would otherwise reach a type
   declaration as a wrapped number. There is no wider type here to compute in
@@ -11033,7 +11234,7 @@ end;
   equivalence already makes it distinct from the type it restricts, and no rule
   about identity had to be touched. }
 function ResolveRestricted(d: nodePtr): typePtr;
-var s: symPtr; named, t: typePtr; done: boolean;
+var s: symPtr; named, t: typePtr;
 begin
   { A required type-identifier is an ordinary symbol in the outermost scope
     (6.2.2.10), so the lookup below answers for it as it does for any other
@@ -11042,8 +11243,6 @@ begin
     name's alias onto whatever comes back, so a `restricted integer` that fell
     to the error path renamed the shared `integer` singleton and every later
     `integer` printed as the restricted name. }
-  named := nil;
-  done := false;
   s := LookupName(d^.rtQualAt, d^.rtQualLen, d^.rtAt, d^.rtLen,
                   d^.line, d^.col);
   if s = nil then begin
@@ -11055,20 +11254,17 @@ begin
       WritePool(d^.rtAt, d^.rtLen);
       writeln('''')
     end;
-    ResolveRestricted := intType;
-    done := true
+    ResolveRestricted := intType
   end
   else if (s^.kind <> skType) or (s^.stype = nil) then begin
     ErrorAt(d^.line, d^.col);
     write('''restricted'' must name a type, and ''');
     WritePool(d^.rtAt, d^.rtLen);
     writeln(''' is not one');
-    ResolveRestricted := intType;
-    done := true
+    ResolveRestricted := intType
   end
-  else
+  else begin
     named := s^.stype;
-  if not done then begin
     { Every type has an underlying-type -- its own, when it is not restricted --
       so a second wrapper over one underlying-type would have nothing to tell it
       from the first. }
@@ -19172,6 +19368,13 @@ begin
             WritePool(sym^.resAt, sym^.resLen);
             writeln('''')
           end;
+
+      { And where the block *does* write the result, whether every path
+        through it does (ADR-0278). Reported at the heading rather than at a
+        statement, because what is wrong is the shape of the body and no one
+        line of it is the mistake. CheckProcBody is reached only where there
+        is a body, so no test for one belongs here. }
+      WarnPartialResult(sym, d^.pdBody^.blBody, d^.line, d^.col);
 
       currentProc := outer;
       if sym^.isTask then taskBody := nil

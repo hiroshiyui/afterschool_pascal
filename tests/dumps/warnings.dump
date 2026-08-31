@@ -1,49 +1,80 @@
 === tokens
-12 1 kw program
-12 9 ident warnings
-12 17 op (
-12 18 ident output
-12 24 op )
-12 25 op ;
-14 1 kw procedure
-14 11 ident both
-14 15 op ;
-15 1 kw var
-15 5 ident used
-15 9 op ,
-15 11 ident forgotten
-15 20 op :
-15 22 ident integer
-15 29 op ;
-16 1 kw begin
-17 3 ident used
-17 8 op :=
-17 11 int 1
-17 12 op ;
-18 3 ident writeln
-18 10 op (
-18 11 ident used
-18 15 op :
-18 16 int 1
-18 17 op )
-18 18 op ;
-19 3 ident exit
-19 7 op ;
-20 3 ident writeln
-20 10 op (
-20 11 str [after the exit]
-20 27 op )
-21 1 kw end
-21 4 op ;
-23 1 kw begin
-24 3 ident both
-25 1 kw end
-25 4 op .
-26 1 eof
+13 1 kw program
+13 9 ident warnings
+13 17 op (
+13 18 ident output
+13 24 op )
+13 25 op ;
+15 1 kw procedure
+15 11 ident both
+15 15 op ;
+16 1 kw var
+16 5 ident used
+16 9 op ,
+16 11 ident forgotten
+16 20 op :
+16 22 ident integer
+16 29 op ;
+17 1 kw begin
+18 3 ident used
+18 8 op :=
+18 11 int 1
+18 12 op ;
+19 3 ident writeln
+19 10 op (
+19 11 ident used
+19 15 op :
+19 16 int 1
+19 17 op )
+19 18 op ;
+20 3 ident exit
+20 7 op ;
+21 3 ident writeln
+21 10 op (
+21 11 str [after the exit]
+21 27 op )
+22 1 kw end
+22 4 op ;
+24 1 kw function
+24 10 ident maybe
+24 15 op (
+24 16 ident n
+24 17 op :
+24 19 ident integer
+24 26 op )
+24 27 op :
+24 29 ident integer
+24 36 op ;
+25 1 kw begin
+26 3 kw if
+26 6 ident n
+26 8 op >
+26 10 int 0
+26 12 kw then
+26 17 ident maybe
+26 23 op :=
+26 26 ident n
+27 1 kw end
+27 4 op ;
+29 1 kw begin
+30 3 ident both
+30 7 op ;
+31 3 ident writeln
+31 10 op (
+31 11 ident maybe
+31 16 op (
+31 17 int 1
+31 18 op )
+31 19 op :
+31 20 int 1
+31 21 op )
+32 1 kw end
+32 4 op .
+33 1 eof
 === ast
 program warnings
   params
-    name output @12:18
+    name output @13:18
   block
     imports
     labels
@@ -51,7 +82,7 @@ program warnings
     types
     vars
     procs
-      proc both @14:1
+      proc both @15:1
         params
         block
           imports
@@ -61,39 +92,73 @@ program warnings
           vars
             var
               names
-                name used @15:5
-                name forgotten @15:11
+                name used @16:5
+                name forgotten @16:11
               type
-                named integer @15:22
+                named integer @16:22
           procs
           body
-            compound @16:1
-              assign @17:3
-                var used @17:3
-                int 1 @17:11
-              writeln @18:3
+            compound @17:1
+              assign @18:3
+                var used @18:3
+                int 1 @18:11
+              writeln @19:3
                 arg w -
-                  var used @18:11
-                  int 1 @18:16
-              proccall exit @19:3
+                  var used @19:11
+                  int 1 @19:16
+              proccall exit @20:3
                 args
-              writeln @20:3
+              writeln @21:3
                 arg - -
-                  str [after the exit] @20:11
+                  str [after the exit] @21:11
+      func maybe @24:1
+        params
+          group
+            names
+              name n @24:16
+            type
+              named integer @24:19
+        result
+          named integer @24:29
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @25:1
+              if @26:3
+                binary gt @26:8
+                  var n @26:6
+                  int 0 @26:10
+                assign @26:17
+                  var maybe @26:17
+                  var n @26:26
     body
-      compound @23:1
-        proccall both @24:3
+      compound @29:1
+        proccall both @30:3
           args
+        writeln @31:3
+          arg w -
+            call maybe @31:11
+              args
+                int 1 @31:17
+            int 1 @31:20
 === sema
 program warnings
   params
-    name output @12:18
+    name output @13:18
   frames
     frame warnings level 0
       var output #0 : text (stdout 0)
     frame both level 1
       var used #0 : integer
       var forgotten #1 : integer
+    frame maybe level 1
+      param n #0 : integer
+      var maybe$result #1 : integer
   block
     imports
     labels
@@ -101,7 +166,7 @@ program warnings
     types
     vars
     procs
-      proc both @14:1
+      proc both @15:1
         params
         block
           imports
@@ -111,30 +176,63 @@ program warnings
           vars
             var
               names
-                name used @15:5
-                name forgotten @15:11
+                name used @16:5
+                name forgotten @16:11
               type
-                named integer @15:22 = integer
+                named integer @16:22 = integer
           procs
           body
-            compound @16:1
-              assign @17:3
-                var used @17:3 -> both/0 : integer
-                int 1 @17:11 : integer
-              writeln @18:3
+            compound @17:1
+              assign @18:3
+                var used @18:3 -> both/0 : integer
+                int 1 @18:11 : integer
+              writeln @19:3
                 file
-                  var output @18:3 -> warnings/0 : text
+                  var output @19:3 -> warnings/0 : text
                 arg w -
-                  var used @18:11 -> both/0 : integer
-                  int 1 @18:16 : integer
-              proccall exit -> standard 20 @19:3
+                  var used @19:11 -> both/0 : integer
+                  int 1 @19:16 : integer
+              proccall exit -> standard 20 @20:3
                 args
-              writeln @20:3
+              writeln @21:3
                 file
-                  var output @20:3 -> warnings/0 : text
+                  var output @21:3 -> warnings/0 : text
                 arg - -
-                  str [after the exit] @20:11 : packed array [1..14] of char
+                  str [after the exit] @21:11 : packed array [1..14] of char
+      func maybe @24:1
+        params
+          group
+            names
+              name n @24:16
+            type
+              named integer @24:19 = integer
+        result
+          named integer @24:29 = integer
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @25:1
+              if @26:3
+                binary gt @26:8 : boolean
+                  var n @26:6 -> maybe/0 : integer
+                  int 0 @26:10 : integer
+                assign @26:17
+                  var maybe @26:17 -> maybe/1 : integer
+                  var n @26:26 -> maybe/0 : integer
     body
-      compound @23:1
-        proccall both -> proc both @24:3
+      compound @29:1
+        proccall both -> proc both @30:3
           args
+        writeln @31:3
+          file
+            var output @31:3 -> warnings/0 : text
+          arg w -
+            call maybe @31:11 -> func maybe : integer
+              args
+                int 1 @31:17 : integer
+            int 1 @31:20 : integer

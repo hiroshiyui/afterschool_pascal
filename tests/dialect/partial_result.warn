@@ -1,0 +1,9 @@
+<source>:42:1: warning: function 'half' does not write its result on every path
+<source>:48:1: warning: function 'tag_' does not write its result on every path
+<source>:58:1: warning: function 'initial' does not write its result on every path
+<source>:68:1: warning: function 'firstof' does not write its result on every path
+<source>:79:1: warning: function 'lastof' does not write its result on every path
+<source>:86:1: warning: function 'untilbig' does not write its result on every path
+<source>:96:1: warning: function 'early' does not write its result on every path
+<source>:103:1: warning: function 'bare' does not write its result on every path
+<source>:121:1: warning: function 'oneof' does not write its result on every path

@@ -204,9 +204,9 @@ about ApFront once per importer. **All three guards are now pinned by
 warn about twice: until it existed no source under `tests/dumps/` warned at
 all, so dropping `warnOn` from either warning left all 790 cases green.
 
-There are **two** warnings. **A local variable declared and never used** found
-twelve dead declarations in this compiler on its first run. **A statement after
-one that leaves** (ADR-0277) is the second: `goto`, `halt`, `exit`, `break` and
+There are **three** warnings. **A local variable declared and never used**
+found twelve dead declarations in this compiler on its first run. **A statement
+after one that leaves** (ADR-0277) is the second: `goto`, `halt`, `exit`, `break` and
 `continue` are the five that leave, a labelled statement is looked *through*,
 and it is a question about a **statement-sequence** — §6.9.2.1 gives one to a
 compound-statement, a repeat-statement and §6.9.3.5's completer and to nothing
@@ -215,6 +215,20 @@ not a flow analysis: an if whose two arms both leave is a lattice over the
 statement tree, and what is claimed is the *unconditional* transfer. It found
 five dead statements in the 779 tracked sources and all five are deliberate,
 which is what bought three `.warn` sidecars.
+
+**A function that writes its result on one path and not another** (ADR-0278) is
+the third. §6.7.2 requires a function-block to write its result at least once
+and the compiler reported a body that never did; what nothing asked is whether
+the one assignment stands where every path reaches it. A sequence answers yes
+as soon as one statement does, an if needs **both** arms, and a case needs
+every arm *and* the completer — unless it has none, §6.9.3.5 stopping the
+program when no label matches. `halt` answers yes because no path through it
+returns; `exit(e)` answers yes through ADR-0044's husk; a `repeat … until
+false` answers yes because falling out of it is not a path. It is silenced by a
+`goto`, by §6.8.2.2's *nested* assignment, and by §6.7.2's
+result-variable-specification, which is the one spelling §6.9.4's other threats
+can name. It found **one** thing in the corpus, in this compiler: a `done`
+flag standing where an `else` belonged.
 
 ### The representation, in brief
 

@@ -286,3 +286,4 @@ the alternatives that were rejected and why.
 | [0275](0275-input-nobody-wrote-on-purpose.md) | Input nobody wrote on purpose | Accepted |
 | [0276](0276-a-clamp-nobody-honoured.md) | A clamp nobody honoured, and a bound nobody measured | Accepted |
 | [0277](0277-a-statement-after-one-that-leaves.md) | A statement after one that leaves | Accepted |
+| [0278](0278-a-result-written-on-one-path.md) | A result written on one path | Accepted |

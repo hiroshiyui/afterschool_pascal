@@ -6,9 +6,10 @@
   ADR-0272 learned the rule from --dump-dispatch -- a dump has a reader
   parsing a fixed grammar and an unannounced line is a parse error in
   something with no reason to expect one -- and then pinned it nowhere. This
-  program is what pins it: it declares a local nothing names and writes a
-  statement after an exit, so an unguarded warning would put two lines into
-  the stream this case compares byte for byte. }
+  program is what pins it: it declares a local nothing names, writes a
+  statement after an exit, and has a function that writes its result on one
+  path and not another, so an unguarded warning would put three lines into the
+  stream this case compares byte for byte. }
 program warnings(output);
 
 procedure both;
@@ -20,6 +21,12 @@ begin
   writeln('after the exit')
 end;
 
+function maybe(n: integer): integer;
 begin
-  both
+  if n > 0 then maybe := n
+end;
+
+begin
+  both;
+  writeln(maybe(1):1)
 end.

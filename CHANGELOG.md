@@ -38,6 +38,15 @@ appears below in the release where it still existed.
   leave is not claimed. Five dead statements exist in the 779 tracked sources
   and all five are deliberate.
 
+- **A function that writes its result on one path and not another is
+  reported** (ADR-0278). The third warning. 6.7.2 requires a function-block to
+  write its result at least once and a body that never does is an error; this
+  is the body where the one assignment stands somewhere not every path reaches
+  -- an `if` with no else-part, one arm of two, a `case` arm that writes
+  nothing, a loop that may run no times. `halt` and `exit(e)` are understood,
+  and so is `repeat ... until false`. A `goto`, an assignment made by a nested
+  procedure, and 6.7.2's result-variable-specification each silence it.
+
 - **`name.warn`**, a test sidecar for what a *successful* compilation said --
   neither `name.out` nor `name.err` can hold that. A case without one must
   produce no warning.
@@ -70,6 +79,13 @@ appears below in the release where it still existed.
   diagnostics about a program being compiled". Both carry a file, a line and a
   column, and neither had a golden because no case had ever reached one.
   Nothing about the compiler changed; what changed is that they are now named.
+
+### Changed
+
+- **`ResolveRestricted` no longer carries a `done` flag.** The two
+  if-statements it stood between are now one if and its `else`, which is what
+  the flag meant. No behaviour changes; it is the one thing the warning above
+  found in 779 sources.
 
 ### Fixed
 

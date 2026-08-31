@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 393
-instrumented 18778
+uncovered 392
+instrumented 18842
 
 accept 0/4
 accumulate 0/84
@@ -121,7 +121,7 @@ checkmutualsupply 0/24
 checknewtuple 0/32
 checkpendingimplementations 0/8
 checkprocargument 0/46
-checkprocbody 0/47
+checkprocbody 0/48
 checkread 3/71
 checkreceive 0/27
 checkrecordvalue 0/92
@@ -159,6 +159,7 @@ conformantformal 0/10
 congruous 0/29
 constaccessnode 2/39
 constaddress 0/24
+constantlyfalse 0/2
 constordinal 0/4
 constrealfinite 1/3
 constrealval 0/7
@@ -689,7 +690,7 @@ resolveoptional 0/20
 resolvependingpointers 0/26
 resolvepointer 0/28
 resolverecord 0/19
-resolverestricted 7/36
+resolverestricted 6/31
 resolveset 1/22
 resolveslice 0/14
 resolvesubrange 7/74
@@ -712,6 +713,7 @@ schemaisbusy 0/6
 schematicformal 0/3
 sel 0/51
 selectedsize 0/14
+seq 0/25
 setindex 0/47
 setuniverse 0/21
 setvaluetypeof 0/13
@@ -768,6 +770,7 @@ variantstorageat 0/13
 version 0/1
 walkfiles 0/127
 warnat 0/2
+warnpartialresult 0/11
 warnunreachable 0/13
 warnunusedlocals 0/13
 widenordinal 0/8
@@ -788,6 +791,7 @@ writeordinalname 1/25
 writepool 0/2
 writepoolir 0/2
 writepos 0/1
+writesresult 0/30
 writesymkind 8/13
 writesymref 4/23
 writetokenname 15/81
