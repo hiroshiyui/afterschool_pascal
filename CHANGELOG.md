@@ -28,6 +28,25 @@ appears below in the release where it still existed.
   or to anything at all once an error has been reported. It found twelve dead
   declarations in the compiler's own source on its first run.
 
+- **`pascalc --format`** (ADR-0279) writes a source back out with a layout of
+  the compiler's own: the same tokens in the same order, the same comments in
+  the same places, and nothing else the same. It works from the token stream,
+  keeps to a 79-column margin where a space already stands, never splits a
+  token and never reflows a comment, and refuses rather than printing a file
+  with a comment missing from it. Nothing in this repository is formatted by
+  it.
+
+- **`pascalc --dump-trivia`** writes every comment a source holds, with its
+  position and the token it precedes. It stops after the lexer, which is one
+  stage earlier than any other dump that stops.
+
+- **The lexer records 6.1.8's comments** rather than discarding them -- but
+  only when `--format`, `--dump-trivia` or `--dump-limits` asks. An ordinary
+  compilation is unchanged in every respect, including what it can fail on. A
+  source with more than 20 000 comments still compiles; what is refused is the
+  request to format it. `--dump-limits` reports the count as a third array
+  beside the pool and the tokens.
+
 - **A statement after one that leaves is reported** (ADR-0277). The second
   warning. Five statements leave -- `goto`, `halt`, `exit`, `break` and
   `continue` -- and a statement written after one of them in the same

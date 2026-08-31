@@ -29,3 +29,4 @@ identifier is too long: this compiler keeps 255 characters
 string literal is too long: this compiler keeps 255 characters
 unterminated comment
 unterminated string literal
+this source has more than 20000 comments, which is more than --format can keep in order

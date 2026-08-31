@@ -568,8 +568,9 @@ much of each a compilation used, so the limits can be read off a real program
 rather than guessed at (ADR-0148):
 
 ```
-pool 491964 of 1000000
-tokens 144756 of 300000
+pool 558579 of 1000000
+tokens 190765 of 300000
+comments 1423 of 20000
 ```
 
 Those figures are this compiler's own source, which is the largest Pascal in
@@ -577,6 +578,15 @@ this repository. One way into the pool does *not* report: `PoolPut`, which
 builds the two names Sema needs rather than reads, drops a character instead of
 diagnosing when the pool is full. It is reachable only once the pool is within
 a name's length of full and is registered in `doc/sop.md` §7.
+
+**The third bound is not a limit on a program** (ADR-0279). §6.1.8's comments
+are recorded, rather than discarded, only when `--format`, `--dump-trivia` or
+`--dump-limits` asks for them, so an ordinary compilation has no such table
+and cannot fail for want of one. A source with more than 20 000 comments
+compiles exactly as it did; what is refused is the *request*, as
+`this source has more than 20000 comments, which is more than --format can
+keep in order` — because a file printed with a comment silently missing from
+it would be worse than no answer at all.
 
 **Nesting deeper than 1000 levels is refused** (ADR-0020) —
 parentheses, statements, type denoters, blocks, or the depth of the tree an

@@ -164,12 +164,15 @@ one half without the other checks a tag the other half never stored and reports
 an unsafe read as safe. That is what the tag is for; there is one language now,
 so what it catches is a stale `.o`.
 
-`-S` is an alias for `--emit-llvm`. Six dump flags write a stage and stop —
-`--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all` for all three,
-`--dump-symbols`, which writes every name the source declares with its kind,
-the position of that name and how deeply it nests, and `--dump-imports`, which
-writes the program-components the source needs in the order they must be
-activated. The last two stop after the *parse* on purpose: the first is what a
+`-S` is an alias for `--emit-llvm`. Seven dump flags write a stage and stop —
+`--dump-tokens`, `--dump-trivia`, `--dump-ast`, `--dump-sema`, `--dump-all`
+for the first, third and fourth, `--dump-symbols`, which writes every name the
+source declares with its kind, the position of that name and how deeply it
+nests, and `--dump-imports`, which writes the program-components the source
+needs in the order they must be activated. `--dump-trivia` stops after the
+**lexer**, one stage earlier than any of the others, because §6.1.8's comments
+are lexical and nothing after the scanner has ever seen one. The two before it
+stop after the *parse* on purpose: the first is what a
 tool asks when it wants a document's outline, and an outline is wanted for a
 file that does not yet compile; the second is what `pascalcc` asks so it knows
 what to translate and link, resolution giving the compiler an interface and not
@@ -205,11 +208,37 @@ use 9 3 4 0 7 11 4 procedure ?
 $ pascalc --dump-limits big.pas -o /dev/null
 pool 491964 of 1000000
 tokens 144756 of 300000
+comments 812 of 20000
+
+$ pascalc --dump-trivia prog.pas -o /dev/null
+trivia 1 1 1 22 1 { a leading comment }
+trivia 3 20 3 40 7 { beside a declaration }
+complete 2
 
 $ pascalc --dump-dispatch prog.pas -o /dev/null
 case subset:colour:1 names 3 of 5 at 44:3 missing amber cyan
 unused mode idle
 ```
+
+**`--format` writes the program back out**, with a layout of the compiler's
+own: the same tokens in the same order, the same comments in the same places,
+and nothing else the same. It reads the token stream rather than the tree, so
+it decides only what goes *between* two tokens; it keeps to a 79-column margin
+where a space already stands, splits no token and reflows no comment; and it
+refuses, rather than printing a file with a comment missing from it, when a
+source has more comments than it can keep in order. It writes to standard
+output and takes no `-o`, deliberately: a formatter that could overwrite its
+input is one bad exit away from an empty source file.
+
+```
+$ pascalc --format messy.pas > tidy.pas
+```
+
+Every Pascal source in this repository is formatted on every test run and
+required to produce the same tokens, the same comments and the same text a
+second time — which is the whole claim, the parser seeing the token stream and
+nothing else. **None of them is checked in formatted**: there is no agreed
+Pascal style here and this does not create one.
 
 A case-statement whose selector matches no label stops the program, so a
 constant left off one is a crash rather than a wrong answer — `names N of M` is

@@ -350,9 +350,11 @@ Two smaller corpora have harnesses of their own, because what they compare is
 not what a compiled program wrote:
 
 * **`tests/dumps/`** compares what the *compiler* writes to standard output
-  under `--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all`,
-  `--dump-layout`, `--dump-predicates`, `--dump-symbols`, `--dump-stmts`,
-  `--dump-imports` and `--dump-uses`. Sidecars are `name.dump` (the golden), `name.flags` (which
+  under `--dump-tokens`, `--dump-trivia`, `--dump-ast`, `--dump-sema`,
+  `--dump-all`, `--dump-layout`, `--dump-predicates`, `--dump-symbols`,
+  `--dump-stmts`, `--dump-imports` and `--dump-uses` -- and under `--format`,
+  which is not a dump but writes a program to standard output and is compared
+  the same way (ADR-0279). Sidecars are `name.dump` (the golden), `name.flags` (which
   flag, `--dump-all` by default), `name.components` (§6.13's other
   program-components, one path per line relative to the case, each passed as
   an `--import`) and `name.status` (the exit status the case expects, when it

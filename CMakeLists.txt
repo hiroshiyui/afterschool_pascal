@@ -392,6 +392,22 @@ if(Python3_FOUND)
   set_tests_properties(buffer-headroom PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
+# Does `pascalc --format` preserve the program it was given? (ADR-0279) Three
+# claims over every tracked Pascal source: the token stream is unchanged but
+# for positions -- which is the whole semantic claim, the parser seeing the
+# tokens and nothing else -- the comments are unchanged word for word and
+# still stand before the same tokens, and formatting the output again returns
+# it byte for byte. What none of the three says is that the output is well
+# laid out; there is no oracle for that, which is also why nothing in this
+# tree is formatted by it. Skips (77) when pascalc has not been built.
+if(Python3_FOUND)
+  add_test(NAME format-check
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/format_check.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(format-check PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ...and how long the compiler takes, which nothing here had ever asked
 # (ADR-0270). A millisecond is a fact about the machine that took it, so what
 # is committed is a set of *proportions* -- four stage shares of one compile,

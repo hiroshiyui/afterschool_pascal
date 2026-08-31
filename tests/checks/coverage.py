@@ -206,6 +206,24 @@ def corpus(root):
             jobs.append((src, flags + ["--dump-all"],
                          job[2] if len(job) > 2 else {}))
 
+    # ...and a third time under --format (ADR-0279). The same sentence as the
+    # paragraph above, met again: the harness that drives the formatter is
+    # tests/checks/format_check.py, which runs it over every tracked source on
+    # every run, so without this every layout rule in it would report as
+    # unreached while an oracle reached them all. It goes over the whole
+    # corpus and not a sample because a construct no source here holds is a
+    # rule no source here reaches, which is the argument for sweeping anything
+    # at all. --dump-trivia comes with it: the two share the source cursor and
+    # the trivia table, and it is the flag a caller debugging the formatter
+    # reaches for.
+    for job in list(jobs):
+        src, flags = job[0], job[1]
+        if src is not None and not any(f.startswith("--dump") for f in flags) \
+                and "--format" not in flags:
+            extra = job[2] if len(job) > 2 else {}
+            jobs.append((src, flags + ["--format"], extra))
+            jobs.append((src, flags + ["--dump-trivia"], extra))
+
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
     # producttest.sh, verify.py -- drive the compiler in ways no glob finds.

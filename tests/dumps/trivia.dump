@@ -1,0 +1,11 @@
+trivia 1 1 3 64 1 { 6.1.8's comments, which the lexer discarded until ADR-0279 and now records   when something asks. This case is the dump of them, so what it exercises is   the *shapes a comment takes* and not what any of them says. }
+trivia 5 1 6 17 7 (* a star-paren comment, which 6.1.8's NOTE 1 says may be closed by a brace    and is here }
+trivia 7 1 9 52 7 { ...and the other way round, which is the same production read the same way:   which delimiter closes a commentary does not depend on which opened it, and   ADR-0073 is the record of that being got wrong *)
+trivia 11 17 11 56 12 { trailing a declaration, on its line }
+trivia 13 3 13 55 12 { standing on a line of its own, after a blank one }
+trivia 16 7 16 24 17 { after a begin }
+trivia 18 13 18 37 28 { inside an expression }
+trivia 19 3 19 19 34 { two in a row }
+trivia 20 3 20 29 34 { and the second of them }
+trivia 22 3 22 21 38 { before the end }
+complete 10

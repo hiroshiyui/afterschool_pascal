@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 852
-instrumented 10188
-decisions 5094
+uncovered 861
+instrumented 10608
+decisions 5304
 
 accept 0/4
 accumulate 1/32
@@ -139,7 +139,7 @@ checkwriteargs 4/34
 claimboundsslot 0/2
 closefiles 0/12
 collecttagtests 7/34
-compile 0/88
+compile 0/98
 computeactivemodules 0/4
 confarraytype 0/4
 confbound 0/2
@@ -212,6 +212,7 @@ dumpsymrecord 0/2
 dumpsymtype 1/8
 dumpsymvariants 0/4
 dumptokens 0/2
+dumptrivia 1/2
 dumptypeexpr 4/30
 dumpvariantpart 0/8
 dynamicextent 1/14
@@ -327,6 +328,22 @@ findmodule 0/6
 finishreal 0/2
 firstformal 1/2
 fixedcomponent 1/2
+fmtbinarypos 0/16
+fmtctlpopto 0/2
+fmtctlpush 1/2
+fmtdepth 0/2
+fmtenddecl 1/6
+fmtflush 0/12
+fmtglue 0/52
+fmthasblock 4/26
+fmtownsanof 0/6
+fmtpop 0/2
+fmtpretrivia 0/32
+fmtpush 0/2
+fmttoken 0/180
+fmttrivia 0/16
+fmtwantatleast 0/2
+fmtwidthof 0/4
 foldintop 5/30
 foldrealbinary 3/22
 foldsubstr 0/10
@@ -340,6 +357,7 @@ forgetarms 0/4
 forgetformals 0/6
 forgetlist 0/2
 forgetresolved 0/6
+formatsource 1/4
 frameat 0/2
 frameglobal 0/4
 frameof 0/2
@@ -463,6 +481,7 @@ lower 0/4
 makeconstreal 2/10
 mentions 5/18
 moduledigest 0/6
+more 0/8
 msgtext 1/4
 nameforlinkage 2/16
 narrowbound 1/4
@@ -492,7 +511,7 @@ packedcomponent 3/18
 padstofixedstring 2/18
 parameterof 1/6
 parseactualparameters 0/6
-parseargs 6/110
+parseargs 6/122
 parsearraytype 0/4
 parseblock 0/36
 parseboundident 0/4
@@ -580,6 +599,7 @@ readone 3/16
 readresolvedcomponents 0/2
 realtoolarge 5/44
 recordcomponentof 2/18
+recording 0/2
 recordthreat 0/14
 redefinedfamily 1/6
 refill 0/10
@@ -622,8 +642,11 @@ selectedsize 0/10
 seq 0/10
 setindex 0/6
 setvaluetypeof 0/14
-skiptriviaandcomments 0/26
+skiptriviaandcomments 1/30
 sourcedir 2/6
+srcbefore 0/4
+srccopy 0/10
+srcto 0/2
 stampend 0/6
 stampfield 0/2
 standardfileref 0/14

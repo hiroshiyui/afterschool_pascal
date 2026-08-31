@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 392
-instrumented 18842
+uncovered 395
+instrumented 19149
 
 accept 0/4
 accumulate 0/84
@@ -149,7 +149,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/24
 collecttagtests 0/31
-compile 0/50
+compile 0/52
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -212,7 +212,7 @@ dumpgroup 0/39
 dumpgrouplist 0/4
 dumpimports 0/25
 dumplayout 0/19
-dumplimits 0/2
+dumplimits 0/3
 dumpmodule 0/46
 dumpmoduleparts 0/10
 dumpmodulesafter 0/9
@@ -232,6 +232,7 @@ dumpsymrecord 0/6
 dumpsymtype 0/10
 dumpsymvariants 0/9
 dumptokens 0/27
+dumptrivia 0/8
 dumptypeexpr 2/128
 dumpusefiles 0/3
 dumpvariantpart 0/29
@@ -365,6 +366,26 @@ findmodule 0/6
 finishreal 0/7
 firstformal 0/3
 fixedcomponent 0/2
+fmtbinarypos 0/1
+fmtctlbase 0/1
+fmtctlpopto 0/3
+fmtctlpush 0/4
+fmtdepth 0/3
+fmtenddecl 0/3
+fmtflush 0/7
+fmtglue 0/10
+fmthasblock 0/14
+fmtnewline 0/3
+fmtownsanof 0/1
+fmtpop 0/4
+fmtpretrivia 0/5
+fmtpush 0/6
+fmtput 0/3
+fmttoken 0/119
+fmttopkind 0/1
+fmttrivia 0/20
+fmtwantatleast 0/1
+fmtwidthof 0/3
 foldintop 2/33
 foldrealbinary 5/50
 foldsubstr 0/13
@@ -378,6 +399,7 @@ forgetarms 0/8
 forgetformals 0/7
 forgetlist 0/3
 forgetresolved 4/20
+formatsource 2/32
 frameat 0/12
 frameglobal 0/8
 frameof 0/2
@@ -517,6 +539,7 @@ makeconstreal 0/15
 makeconststr 0/6
 mentions 0/13
 moduledigest 0/9
+more 0/18
 msgend 0/3
 msgstart 0/2
 msgtext 0/5
@@ -561,7 +584,7 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/128
+parseargs 10/133
 parsearraytype 0/17
 parseblock 0/50
 parseboundident 0/12
@@ -666,6 +689,7 @@ readtranslatedcomponents 0/6
 realtoolarge 1/32
 recordcomponentof 0/14
 recordgenericbody 0/6
+recording 0/1
 recordlayout 0/1
 recordthreat 0/6
 redefinedfamily 0/17
@@ -717,10 +741,14 @@ seq 0/25
 setindex 0/47
 setuniverse 0/21
 setvaluetypeof 0/13
-skiptriviaandcomments 0/22
+skiptriviaandcomments 1/31
 sliceof 0/4
 sourcedir 0/5
 span 0/5
+srcbefore 0/3
+srccopy 0/6
+srcrewind 0/1
+srcto 0/2
 stampend 0/10
 stampfield 0/17
 standardfileref 0/18
@@ -763,7 +791,7 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/53
+usage 0/57
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
@@ -780,7 +808,7 @@ writeboundname 0/2
 writecatadmits 0/5
 writecatname 0/6
 writecontext 5/79
-writedistincttypenote 0/38
+writedistincttypenote 0/41
 writekeyword 0/2
 writekwword 0/3
 writelabelwhat 1/5

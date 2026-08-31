@@ -240,6 +240,23 @@ var
     type of each kind (ADR-0194). Needs nothing of the source but is a dump
     like the others, so it runs the whole pipeline and reports after it. }
   dumpPredsOpt: boolean;
+  { --dump-trivia: 6.1.8's comments, which the lexer discarded until ADR-0279.
+    It stops after the **lexer**, which is one stage earlier than any other
+    dump that stops: a comment is lexical and nothing after the scanner has
+    ever seen one, so neither the parse nor Sema could change the answer. It
+    exists on its own because the trivia is a fact about the source worth
+    being able to ask for, and because a formatter that got a comment wrong
+    would otherwise be debuggable only by reading its output. }
+  dumpTriviaOpt: boolean;
+  { --format: the source written back out with a layout of this compiler's own
+    (ADR-0279). Not a dump -- what it writes is a *program* and not a report
+    about one -- but it stops where a dump does and for the same reason: it
+    needs the tokens and the comments and nothing a later stage knows.
+
+    It is deliberately not `-o`: a formatter that could overwrite its input
+    is one bad exit away from an empty source file, and a shell redirection
+    says what is being replaced where a reader can see it. }
+  formatOpt: boolean;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
     tested on. }
@@ -455,6 +472,10 @@ begin
   writeln('                  a type of each kind');
   writeln('  --dump-imports  write the program-components this source needs,');
   writeln('                  in the order they must be activated, and stop');
+  writeln('  --format        write this source back out with the');
+  writeln('                  compiler''s own layout, and stop');
+  writeln('  --dump-trivia   write every comment this source holds, with');
+  writeln('                  its position and the token it precedes, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
   writeln('                  its kind, position and nesting, and stop');
   writeln('  --dump-stmts    write where every statement of this source');
@@ -501,6 +522,8 @@ begin
   dumpSemaOpt := false;
   dumpAllOpt := false;
   dumpLimitsOpt := false;
+  dumpTriviaOpt := false;
+  formatOpt := false;
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
@@ -539,6 +562,8 @@ begin
       dumpSemaOpt := true
     end
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
+    else if EQ(a, '--dump-trivia') then dumpTriviaOpt := true
+    else if EQ(a, '--format') then formatOpt := true
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
@@ -652,7 +677,14 @@ begin
   warnOn := not (dumpTokensOpt or dumpAstOpt or dumpSemaOpt or dumpAllOpt
                  or dumpSymbolsOpt or dumpStmtsOpt or dumpUsesOpt
                  or dumpImportsOpt or dumpDispatchOpt or dumpPredsOpt
-                 or dumpLayoutOpt or dumpLimitsOpt);
+                 or dumpLayoutOpt or dumpLimitsOpt or dumpTriviaOpt
+                 or formatOpt);
+
+  { The lexer keeps 6.1.8's comments only where something asked (ADR-0279).
+    --dump-limits is in this list and not merely in the one above, because
+    measuring how full the two trivia bounds were left is the whole of what
+    that flag is for and it can measure nothing that was never filled. }
+  keepTrivia := dumpTriviaOpt or dumpLimitsOpt or formatOpt;
 
   { The default output is the source with its extension replaced, which is the
     one piece of name arithmetic here. A source with no dot gets .ll appended
@@ -11913,7 +11945,11 @@ end;
 procedure DumpLimits;
 begin
   writeln('pool ', poolLen:1, ' of ', poolMax:1);
-  writeln('tokens ', tokCount:1, ' of ', tokMax:1)
+  writeln('tokens ', tokCount:1, ' of ', tokMax:1);
+  { Filled only because this flag sets `keepTrivia` (ADR-0279): on any other
+    run it would be 0 of its bound and the answer would be a fact about the
+    flags rather than about the source. }
+  writeln('comments ', triviaCount:1, ' of ', triviaMax:1)
 end;
 
 { The four questions the chain half asks of a shape the tree does not hold
@@ -12285,6 +12321,10 @@ begin
   pos := mainTokBase;
   Tokenize;
   if dumpTokensOpt then DumpTokens;
+  if dumpTriviaOpt then DumpTrivia;
+  { After the trivia dump and not before it, so `--format --dump-trivia` reads
+    as the report and then the program. Both rewind the source cursor. }
+  if formatOpt and not errorSeen then FormatSource;
   { A dump flag stops at the stage it names, which is how the C++ driver
     behaves -- and the only way a stage can be dumped for a program the next
     stage would reject. This source is Extended Pascal, which has no early
@@ -12294,7 +12334,7 @@ begin
     pipeline with every section shown, and `--dump-limits` is not a stop for
     the same reason by a different route -- it shows no section at all and
     needs every stage to have run before its question has an answer. }
-  go := not (dumpTokensOpt and not whole);
+  go := not ((dumpTokensOpt or dumpTriviaOpt or formatOpt) and not whole);
 
   { --- parse -------------------------------------------------------------- }
   if go then begin

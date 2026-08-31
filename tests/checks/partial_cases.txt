@@ -482,3 +482,46 @@ WriteCatAdmits:typeCat:1 names 4 of 5
 # statement that unconditionally leaves the block or the loop it is in, which
 # is the question the number moving should make a reader ask.
 Transfers:nodeKind:1 chains 3 of 64
+
+# --- the formatter's two questions about a token --------------------------
+#
+# ADR-0279's `--format` reads the token stream and decides what goes between
+# two tokens. Two of its questions are if-chains over tokenKind and neither is
+# a dispatch that could leave a constant out.
+#
+# `FmtWidthOf` asks how wide a token is written, which is a subtraction --
+# 6.1.10 gives every token an extent and ADR-0258 records it -- for every
+# constant but the two the scanner *joins*: `and then` and `or else` are one
+# token each whose extent covers only the first word (ADR-0038), so they are
+# the exception and the trailing else is the rule. A token kind added to the
+# enumeration belongs here only if it is a second such join, which is the
+# question this number moving should make a reader ask.
+FmtWidthOf:tokenKind:1 chains 2 of 80
+#
+# `FmtHasBlock` scans a procedure- or function-heading to its terminating `;`,
+# and the four constants are the bracket pair twice over: what it is counting
+# is paren depth, so that a `;` inside a parameter list does not end the
+# heading. Every other token kind is passed over, which is not a fall-through
+# but the whole of the scan.
+FmtHasBlock:tokenKind:1 chains 4 of 80
+
+# --- an enumeration nothing dispatches on ---------------------------------
+#
+# `fmtOpener` says what an `end` or an `until` is closing, and every one of its
+# seven constants is *compared* rather than dispatched on: the formatter asks
+# `FmtTopKind = opRecord` to tell a variant-part from a case-statement and
+# `= opRoutine` to know a body's end from a block's, and there is nothing a
+# case-statement over it would be for -- the answers are not seven arms, they
+# are two tests and a pop.
+#
+# A constant added here is therefore not a case-statement's problem. What it
+# *is* is a new kind of thing an `end` can close, and the place that has to
+# learn about it is the `end` arm of FmtToken, which pops trailing opVariant
+# and opOtherwise frames before the one it came for.
+fmtOpener:opBegin unused
+fmtOpener:opRecord unused
+fmtOpener:opCase unused
+fmtOpener:opVariant unused
+fmtOpener:opOtherwise unused
+fmtOpener:opRepeat unused
+fmtOpener:opRoutine unused

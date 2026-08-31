@@ -51,7 +51,8 @@ export ApFront = (
   source, Tokenize, ParseProgram, AppendSym, IsInvocable, ResultTypeOf,
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
-  At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent);
+  At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent, DumpTrivia,
+  FormatSource);
 
 import StandardOutput; ApTypes;
 
@@ -164,6 +165,28 @@ procedure At(l, c: integer);
   compiled, so it still means that. }
 procedure DumpTokens;
 
+{ Every comment this source holds, one to a line, as
+  `trivia <line> <col> <endline> <endcol> <before> <text>` -- the position of
+  the opening delimiter, one past the closing one, the index of the token it
+  precedes, and the commentary with its delimiters (ADR-0279).
+
+  A newline inside a comment is written as a space, because a dump is one
+  record to a line and a reader that had to rejoin them would be parsing the
+  commentary. What a caller wanting the exact text does is what the formatter
+  does: read it out of the arena. `before` counts from the source's own first
+  token, so it means the same thing whatever was imported ahead of it.
+
+  A last line says whether the trivia is complete, and it is not decoration:
+  a formatter that printed a file with a comment silently missing from it
+  would be the worst thing this feature could do. }
+procedure DumpTrivia;
+
+{ The source written back out with a layout of its own: the same tokens in the
+  same order, the same comments in the same places, and nothing else the same
+  (ADR-0279). Refuses, rather than printing a short file, when the source has
+  more comments than the trivia table holds. }
+procedure FormatSource;
+
 procedure DumpProgram;
 
 { Every name this source declares, with its kind, its position and its depth,
@@ -191,6 +214,16 @@ var
     45 calls. }
   kwLen: array [1..kwCount] of integer;
   tok: array [1..tokMax] of token;
+
+  { 6.1.8's comments of the source being translated, in the order they were
+    written, as positions (ADR-0279). Filled only when `keepTrivia`, so an
+    ordinary compile touches it not at all.
+
+    Recording stops at the bound rather than reporting there, because the
+    diagnostic belongs to whatever asked for the trivia and not to the
+    scanner -- ADR-0012's rule about a full buffer, applied where the buffer
+    is optional and the compilation does not need it. }
+  trivia: array [1..triviaMax] of comment;
 
   progAt, progLen: integer;
   { Where the program name was written. Nothing needed it while the only
@@ -675,6 +708,14 @@ end;
   NOTE 2 is the consequence: an opening star-paren cannot occur in a
   commentary, because there is no way to write one that does not also end the
   comment. ADR-0073. }
+{ Is this source's comments being recorded at all? Two conditions, and the
+  second is the one to remember: an *imported* component's comments belong to
+  nobody, since what asks for trivia reads one file. }
+function Recording: boolean;
+begin
+  Recording := keepTrivia and not readingImports
+end;
+
 procedure SkipTriviaAndComments;
 var sl, sc: integer; done, brace: boolean;
 begin
@@ -703,7 +744,20 @@ begin
       else begin
         Advance;
         Advance
-      end
+      end;
+      { Recorded after the closing delimiter, so `line` and `col` are one past
+        it. }
+      if Recording then
+        if triviaCount < triviaMax then begin
+          triviaCount := triviaCount + 1;
+          trivia[triviaCount].line := sl;
+          trivia[triviaCount].col := sc;
+          trivia[triviaCount].endLine := line;
+          trivia[triviaCount].endCol := col;
+          trivia[triviaCount].before := tokCount + 1
+        end
+        else
+          triviaFull := true
     end
     else
       done := true
@@ -24027,6 +24081,758 @@ end;
   --import's are kept in front of these so a generic in a component can be
   read again. What a token dump has always meant is the source being
   compiled, so it still means that. }
+{ ------------------------------------------------- the character sink ---- }
+
+{ Everything --format and --dump-trivia write goes through here, so that one
+  place knows how far along a line the cursor is and how many line breaks
+  stand behind it. Both are what the layout below is decided from, and a
+  routine writing straight to `output` leaves them stale -- which is what the
+  first draft of this did: every line came out run together, with the
+  indentation in the middle of it. }
+var
+  fmtCol, fmtNL: integer;
+
+procedure FmtNewline;
+begin
+  writeln;
+  fmtCol := 0;
+  fmtNL := fmtNL + 1
+end;
+
+{ One character, which is never a line break: a token never spans a line
+  (ADR-0258), a dump folds the newlines inside a comment to spaces, and the
+  formatter's own copy of a comment calls `FmtNewline` for them itself. So
+  there is nothing here to test for. }
+procedure FmtPut(c: char);
+begin
+  write(c);
+  fmtCol := fmtCol + 1;
+  fmtNL := 0
+end;
+
+{ ----------------------------------------------- the source, read again -- }
+
+{ Nothing here holds the characters a token or a comment was written with. The
+  pool holds an identifier's *folded* spelling, which a formatter must not
+  print, and no arena holds commentary at all (ADR-0279) -- so what wants the
+  text opens the source a second time and walks it.
+
+  A cursor and not a buffer: the window `Peek`/`Advance` already maintain is
+  exactly what is needed, positions only ever move forward, and a source with
+  a very long line costs nothing. `StartFile` puts it back at 1:1, which is
+  safe here because every caller has finished lexing. }
+procedure SrcRewind;
+begin
+  StartFile
+end;
+
+{ Is the cursor still before (l, c)? Every walk here moves forward only, so
+  `line` never passes `l` and the end-of-file test is the safety net and not a
+  case: one routine for all three callers, because three copies of this
+  condition were three copies of a comparison nobody could have got wrong
+  twice in the same way. }
+function SrcBefore(l, c: integer): boolean;
+begin
+  if AtEof then SrcBefore := false
+  else if line <> l then SrcBefore := line < l
+  else SrcBefore := col < c
+end;
+
+{ Discard characters until the cursor is at (l, c). }
+procedure SrcTo(l, c: integer);
+begin
+  while SrcBefore(l, c) do
+    Advance
+end;
+
+{ Write the characters from the cursor up to but not including (l, c). `fold`
+  turns every newline, return and tab into one space, which is what a dump
+  needs -- one record to a line -- and what a formatter must not do to a
+  comment somebody laid out. }
+procedure SrcCopy(l, c: integer; fold: boolean);
+var ch: char;
+begin
+  while SrcBefore(l, c) do begin
+    ch := Peek(0);
+    if fold and ((ch = chr(newline)) or (ch = chr(creturn))
+                 or (ch = chr(tab))) then
+      FmtPut(' ')
+    else
+      FmtPut(ch);
+    Advance
+  end
+end;
+
+procedure DumpTrivia;
+var i: integer;
+begin
+  SrcRewind;
+  for i := 1 to triviaCount do begin
+    write('trivia ', trivia[i].line:1, ' ', trivia[i].col:1, ' ',
+          trivia[i].endLine:1, ' ', trivia[i].endCol:1, ' ',
+          trivia[i].before - mainTokBase + 1:1, ' ');
+    SrcTo(trivia[i].line, trivia[i].col);
+    SrcCopy(trivia[i].endLine, trivia[i].endCol, true);
+    writeln
+  end;
+  if triviaFull then writeln('incomplete')
+  else writeln('complete ', triviaCount:1)
+end;
+
+
+{ ---------------------------------------------------------- the formatter }
+
+{ `pascalc --format` writes the source back out with a layout of its own: the
+  same tokens in the same order, the same comments in the same places, and
+  nothing else the same (ADR-0279).
+
+  **It works from the token stream and not from the tree.** A printer over the
+  AST would have to write out every type-denoter and every expression form the
+  language has, and would lose whatever the parser normalises away; a printer
+  over the tokens decides only what goes *between* two of them. What that
+  costs is that structure has to be recovered from the tokens, which is the
+  two stacks below -- a dozen word-symbols rather than sixty node kinds.
+
+  **The text comes from the source and not from the pool.** An identifier is
+  interned folded, so a formatter reading the pool would lowercase every name
+  in the program; the cursor above reads the characters that were written. The
+  one exception is `and then` and `or else`, which the scanner joins into a
+  single token whose extent covers its first word only (ADR-0038) -- and the
+  whitespace inside an operator is exactly what a formatter settles, so those
+  two are written out rather than copied.
+
+  **Nothing here is applied to this repository.** The tree has no agreed
+  Pascal style and this does not create one: what `format-check` requires is
+  that formatting preserves the program, not that anyone's file looks like
+  this. }
+
+const
+  fmtWidth = 2;   { spaces per level }
+  { The right margin, kept where anything can be done about it. Nothing here
+    reflows a comment and nothing splits a token, so it is where a *space*
+    becomes a line break and not a promise. }
+  fmtMargin = 79;
+
+type
+  { What an `end` or an `until` closes.
+
+    opVariant and opOtherwise are closed by somebody else's `end`: 6.4.3.3's
+    variant-part has none of its own -- the record's closes it -- and
+    6.9.3.5's completer sits inside the case-statement's. So `end` pops those
+    first and then one more.
+
+    opRoutine is the odd one and adds no indent of its own. It marks a
+    procedure- or function-declaration whose block is open, so that a
+    *nested* heading knows how deep it stands and so that the `end` of a body
+    gives that depth back. }
+  fmtOpener = (opBegin, opRecord, opCase, opVariant, opOtherwise, opRepeat,
+               opRoutine);
+  fmtFrame = record
+    kind: fmtOpener;
+    add: integer;      { the indent this opener contributed }
+    { The control stack as it stood when this opened. A `;` releases the
+      single-statement indents of *its own* block and no further: the `;`
+      after a case-statement's first arm does not end the `while` the case
+      statement is the body of, and zeroing a counter there is what put every
+      arm after the first at the wrong depth. }
+    ctlBase: integer
+  end;
+
+var
+  { 0 nothing owed, 1 a space, 2 a line break, 3 a blank line. Raised and never
+    lowered between two items, so the strongest reason wins and no rule has to
+    know what another asked for. }
+  fmtWant: integer;
+  fmtInd, fmtParen: integer;
+  { Continuation lines owed by a line that ran past the margin. One level, not
+    one per nesting: indenting by paren depth would move a wrapped export-list
+    to the right of the margin it is trying to respect. Given back at the next
+    break a rule asks for. }
+  fmtCont: integer;
+  { From 0, and frame 0 is a sentinel rather than a bound: `FmtTopKind` and
+    `FmtCtlBase` are asked before anything is open -- a `case` in a program
+    the parser would reject, a `;` at the outermost level -- and a test in
+    each of them would be a branch no well-formed source can take. opBegin is
+    the sentinel because it is the one kind neither reader acts on. }
+  fmtStack: array [0..maxBlockDepth] of fmtFrame;
+  fmtTop: integer;
+  { The indent each open `then`, `do` or `else` added, for an arm that is not
+    a compound-statement. A stack and not a counter because `else` releases
+    exactly one of them -- its own `then`'s -- and `else if ... then begin`
+    adds none, so no arithmetic on a depth can find the right one. }
+  fmtCtl: array [1..maxBlockDepth] of integer;
+  fmtCtlTop: integer;
+  { How many procedure- and function-blocks are open. A routine's own
+    declarations and body sit one level *out* from this, and a heading
+    declared inside it sits at it -- which is the whole of Pascal's nested
+    procedure layout and is not a nesting indent, so it is a number of its own
+    rather than a push on the stack above. }
+  fmtRoutine: integer;
+  fmtLift: integer;
+  { A constant, type, variable or label declaration part is indented like a
+    block and closed by no token of its own, so what ends it is the next thing
+    that can only follow one. `fmtDeclTop` is the stack depth it opened at,
+    because `type t = record ... end` puts an `end` inside a part the `end`
+    does not close. }
+  fmtInDecl: boolean;
+  fmtDeclTop: integer;
+  { Whether the last token written was a sign rather than an operator, whether
+    a `case` is still waiting for its `of`, and whether a comment was the last
+    thing written. All three are answers about what came before, which is why
+    they are state and not parameters. }
+  fmtSign, fmtSawCase, fmtAfterComment: boolean;
+  { Whether the module-heading is still open. 6.11.1 puts a procedure- and
+    function-heading there with no block after it, which is the one
+    declaration that looks exactly like a nested routine and is not one. }
+  fmtInModuleHead: boolean;
+
+procedure FmtWantAtLeast(k: integer);
+begin
+  if k > fmtWant then fmtWant := k
+end;
+
+{ The column the next line starts at: the block structure, the continuation,
+  and the routine depth -- which a routine's own tokens stand one level out
+  from and a heading declared inside it does not. }
+function FmtDepth: integer;
+var base: integer;
+begin
+  base := fmtRoutine - 1;
+  if base < 0 then base := 0;
+  FmtDepth := fmtInd + fmtCont + base + fmtLift
+end;
+
+{ Pay what is owed, and indent if that left the cursor at the start of a line.
+  Indentation is written here and nowhere else, which is what lets a comment be
+  copied out of the source verbatim: its interior lines pass through `FmtPut`
+  without ever being touched. }
+procedure FmtFlush;
+var k: integer;
+begin
+  if fmtWant >= 2 then begin
+    if fmtCol > 0 then FmtNewline;
+    while fmtNL < fmtWant - 1 do FmtNewline
+  end
+  else if (fmtWant = 1) and (fmtCol > 0) then FmtPut(' ');
+  fmtWant := 0;
+  if fmtCol = 0 then
+    for k := 1 to FmtDepth * fmtWidth do FmtPut(' ')
+end;
+
+procedure FmtPush(o: fmtOpener; add: integer);
+begin
+  if fmtTop < maxBlockDepth then begin
+    fmtTop := fmtTop + 1;
+    fmtStack[fmtTop].kind := o;
+    fmtStack[fmtTop].add := add;
+    fmtStack[fmtTop].ctlBase := fmtCtlTop
+  end;
+  fmtInd := fmtInd + add
+end;
+
+{ Give back the single-statement indents down to a base. }
+procedure FmtCtlPopTo(base: integer);
+begin
+  while fmtCtlTop > base do begin
+    fmtInd := fmtInd - fmtCtl[fmtCtlTop];
+    fmtCtlTop := fmtCtlTop - 1
+  end
+end;
+
+procedure FmtCtlPush(add: integer);
+begin
+  if fmtCtlTop < maxBlockDepth then begin
+    fmtCtlTop := fmtCtlTop + 1;
+    fmtCtl[fmtCtlTop] := add
+  end;
+  fmtInd := fmtInd + add
+end;
+
+{ The control stack of whatever block is open, which is what a `;` releases. }
+function FmtCtlBase: integer;
+begin
+  FmtCtlBase := fmtStack[fmtTop].ctlBase
+end;
+
+procedure FmtPop;
+begin
+  if fmtTop > 0 then begin
+    FmtCtlPopTo(fmtStack[fmtTop].ctlBase);
+    fmtInd := fmtInd - fmtStack[fmtTop].add;
+    fmtTop := fmtTop - 1
+  end
+end;
+
+function FmtTopKind: fmtOpener;
+begin
+  FmtTopKind := fmtStack[fmtTop].kind
+end;
+
+{ A declaration part is given back before whatever ends it, and only at the
+  depth it opened at. }
+procedure FmtEndDecl;
+begin
+  if fmtInDecl and (fmtTop = fmtDeclTop) then begin
+    fmtInDecl := false;
+    if fmtInd > 0 then fmtInd := fmtInd - 1
+  end
+end;
+
+{ Where a `+` or a `-` is a sign and not an operator: after anything that is
+  not the end of an operand. }
+function FmtBinaryPos(p: tokenKind): boolean;
+begin
+  FmtBinaryPos := (p = tkIdent) or (p = tkInt) or (p = tkReal)
+                  or (p = tkInt64) or (p = tkStr) or (p = tkRParen)
+                  or (p = tkRBracket) or (p = tkCaret) or (p = tkNil)
+end;
+
+{ Whether these two tokens are written with nothing between them. One function
+  of the pair rather than a property of each, because half of it is about the
+  pair: `(` is glued to an identifier and separated from a word-symbol, which
+  is what tells an actual-parameter-list from a parenthesised expression. }
+function FmtGlue(p, c: tokenKind): boolean;
+begin
+  FmtGlue := false;
+  { nothing may come before these }
+  if (c = tkComma) or (c = tkSemi) or (c = tkColon) or (c = tkRParen)
+     or (c = tkRBracket) or (c = tkPeriod) or (c = tkDotDot) or (c = tkCaret)
+     or (c = tkQuery) or (c = tkBang) then
+    FmtGlue := true;
+  { nor after these }
+  if (p = tkLParen) or (p = tkLBracket) or (p = tkPeriod) or (p = tkDotDot)
+     or (p = tkCaret) then
+    FmtGlue := true;
+  { a sign binds to what it signs }
+  if fmtSign then FmtGlue := true;
+  { an actual-parameter-list or a subscript, against a parenthesised
+    expression or an index-type: `writeln(x)` and `a[i]`, but `if (a)` and
+    `array [1..3]` }
+  if (c = tkLParen) or (c = tkLBracket) then
+    if (p = tkIdent) or (p = tkRParen) or (p = tkRBracket) or (p = tkCaret)
+       or (p = tkStr) then
+      FmtGlue := true;
+  { 6.9.3.1's field-width, written against its colon }
+  if (p = tkColon) and (c = tkInt) and (fmtParen > 0) then FmtGlue := true
+end;
+
+{ How wide this token is written. The source records one past a token's last
+  character and no token spans a line (ADR-0258), so it is a subtraction --
+  except for the two operators the scanner joins, whose extent covers their
+  first word only (ADR-0038). }
+function FmtWidthOf(i: integer): integer;
+begin
+  if tok[i].kind = tkAndThen then FmtWidthOf := 8
+  else if tok[i].kind = tkOrElse then FmtWidthOf := 7
+  else FmtWidthOf := tok[i].endCol - tok[i].col
+end;
+
+{ A word-symbol that introduces an `of` of its own, so the one coming is not a
+  case-statement's. }
+function FmtOwnsAnOf(k: tokenKind): boolean;
+begin
+  FmtOwnsAnOf := (k = tkArray) or (k = tkSet) or (k = tkFile) or (k = tkPacked)
+end;
+
+{ Does this procedure- or function-declaration have a block after it? Three
+  ways it does not, and each is a declaration that looks exactly like the
+  start of a nested routine: 6.6.1's `forward`, ADR-0121's `external`, and
+  6.11.1's heading in a module's export-part. The first two are read off the
+  directive after the heading's `;` -- both are identifiers and not
+  word-symbols, so this is a lookup and not a token test -- and the third is
+  answered by where we are.
+
+  Getting it wrong costs an indent and never a token: a routine wrongly
+  thought to have a body indents everything after it until the next `end`. }
+function FmtHasBlock(i: integer): boolean;
+var j, d: integer;
+begin
+  if fmtInModuleHead then FmtHasBlock := false
+  else begin
+    j := i;
+    d := 0;
+    while (j < tokCount) and not ((d = 0) and (tok[j].kind = tkSemi)) do begin
+      if (tok[j].kind = tkLParen) or (tok[j].kind = tkLBracket) then
+        d := d + 1
+      else if (tok[j].kind = tkRParen) or (tok[j].kind = tkRBracket) then
+        if d > 0 then d := d - 1;
+      j := j + 1
+    end;
+    FmtHasBlock := true;
+    if j < tokCount then
+      if tok[j + 1].kind = tkIdent then
+        if PoolIs(tok[j + 1].at, tok[j + 1].len, 'forward  ')
+           or PoolIs(tok[j + 1].at, tok[j + 1].len, 'external ') then
+          FmtHasBlock := false
+  end
+end;
+
+{ The declaration part this token ends, given back *before* the comments that
+  stand in front of it. Which side of the trivia a dedent happens on is which
+  side of it the comment lands on, and the two answers differ: a comment above
+  a `function` heading introduces the function and belongs at the function's
+  indent, while a comment above an `end` is the last thing inside the block
+  and belongs at the block's. So a declaration part is closed here and a
+  compound-statement is closed after. }
+procedure FmtPreTrivia(i: integer);
+var k, n: tokenKind;
+begin
+  k := tok[i].kind;
+  if i < tokCount then n := tok[i + 1].kind else n := tkEof;
+  if fmtParen = 0 then
+    if (k = tkVar) or (k = tkConst) or (k = tkType) or (k = tkLabel)
+       or (k = tkProcedure) or (k = tkFunction) or (k = tkProgram)
+       or (k = tkModule) or (k = tkImport) or (k = tkExport) or (k = tkBegin)
+       or ((k = tkTo) and ((n = tkBegin) or (n = tkEnd))) then
+      FmtEndDecl
+end;
+
+{ The layout, one token at a time. `p` is the token before and `n` the one
+  after -- one token of lookahead, which is what `then begin` and `else if`
+  need and all that anything here needs. }
+procedure FmtToken(i, lastLine: integer);
+var k, p, n, was: tokenKind; sign, heading, drop: boolean; w, j: integer;
+begin
+  drop := false;
+  k := tok[i].kind;
+  if i > mainTokBase then p := tok[i - 1].kind else p := tkEof;
+  { There is always one after: the end-of-file token is never brought here,
+    FormatSource passing over it once its comments have been written. }
+  n := tok[i + 1].kind;
+  heading := (fmtParen = 0) and ((k = tkProcedure) or (k = tkFunction));
+
+  { A blank line the programmer wrote is the one piece of the old layout that
+    survives: it is the only whitespace in a Pascal source carrying an
+    intention no rule here could reconstruct. Every *other* line break is
+    decided below and none is preserved. }
+  if tok[i].line > lastLine + 1 then FmtWantAtLeast(3);
+
+  { --- before ------------------------------------------------------------ }
+  if fmtParen = 0 then
+    if (k = tkEnd) and (p <> tkTo) then begin
+      FmtEndDecl;
+      while (fmtTop > 0) and ((FmtTopKind = opVariant)
+                              or (FmtTopKind = opOtherwise)) do
+        FmtPop;
+      if fmtTop > 0 then begin
+        was := tkEnd;
+        if FmtTopKind = opBegin then was := tkBegin;
+        FmtPop;
+        { A body's `end` gives back the routine's depth as well as the
+          compound-statement's -- but the `end` itself is still the routine's
+          own token and stands at the routine's indent, so the depth is given
+          back *after* it is written. }
+        if (was = tkBegin) and (fmtTop > 0) and (FmtTopKind = opRoutine) then
+        begin
+          FmtPop;
+          drop := true
+        end
+      end
+      else if fmtInModuleHead then
+        fmtInModuleHead := false;
+      FmtWantAtLeast(2)
+    end
+    else if k = tkUntil then begin
+      FmtPop;
+      FmtWantAtLeast(2)
+    end
+    else if (k = tkElse) or (k = tkOtherwise) then begin
+      { Exactly one arm is released, and only if the `then` opened one:
+        `else if c then begin` opens none at all. }
+      if (k = tkElse) and (fmtCtlTop > FmtCtlBase) then
+        FmtCtlPopTo(fmtCtlTop - 1);
+      FmtWantAtLeast(2)
+    end
+    else if k = tkBegin then begin
+      FmtEndDecl;
+      if (p = tkThen) or (p = tkDo) or (p = tkElse) or (p = tkOtherwise)
+         or (p = tkColon) or (p = tkTo) then
+        FmtWantAtLeast(1)
+      else
+        FmtWantAtLeast(2)
+    end
+    else if (k = tkVar) or (k = tkConst) or (k = tkType) or (k = tkLabel) then
+    begin
+      FmtEndDecl;
+      FmtWantAtLeast(2)
+    end
+    else if heading or (k = tkProgram) or (k = tkModule) or (k = tkImport)
+            or (k = tkExport) then begin
+      FmtEndDecl;
+      FmtWantAtLeast(3)
+    end
+    else if k = tkRepeat then
+      FmtWantAtLeast(2)
+    { 6.11.4's module-initialization and module-finalization, the one place a
+      `to` begins something rather than bounding a for-statement. }
+    else if (k = tkTo) and ((n = tkBegin) or (n = tkEnd)) then begin
+      FmtEndDecl;
+      FmtWantAtLeast(3)
+    end;
+
+  { A comment written immediately above this token introduces it, so whatever
+    blank line was asked for belongs above the comment and has been paid
+    there. }
+  if fmtAfterComment and (tok[i].line = lastLine + 1) and (fmtWant > 2) then
+    fmtWant := 2;
+  fmtAfterComment := false;
+
+  { A break a rule asked for ends any continuation: what follows is a new
+    statement, declaration or line of a block, and starts at its own indent. }
+  if fmtWant >= 2 then fmtCont := 0;
+
+  { --- the token --------------------------------------------------------- }
+  sign := ((k = tkPlus) or (k = tkMinus)) and not FmtBinaryPos(p);
+  if (fmtWant = 0) and (fmtCol > 0) and not FmtGlue(p, k) then
+    FmtWantAtLeast(1);
+  { The margin, enforced only where a space already stands: a token is never
+    split and a comment is never reflowed, so a line with no space left in it
+    stays long. What is measured is the token *and everything glued to it* --
+    breaking before `nameRec` when the `,` after it will not fit either is a
+    margin honoured by one character. }
+  if fmtWant = 1 then begin
+    w := FmtWidthOf(i);
+    j := i;
+    while (j < tokCount) and FmtGlue(tok[j].kind, tok[j + 1].kind) do begin
+      j := j + 1;
+      w := w + FmtWidthOf(j)
+    end;
+    if (fmtCol + 1 + w > fmtMargin) and (fmtCol > FmtDepth * fmtWidth) then
+    begin
+      fmtCont := 1;
+      fmtWant := 2
+    end
+  end;
+  { A nested heading stands one level in from the routine holding it, which
+    its own declarations and body do not. }
+  if heading and (fmtRoutine > 0) then fmtLift := 1;
+  FmtFlush;
+  fmtLift := 0;
+  if k = tkAndThen then begin
+    write('and then');
+    fmtCol := fmtCol + 8;
+    fmtNL := 0
+  end
+  else if k = tkOrElse then begin
+    write('or else');
+    fmtCol := fmtCol + 7;
+    fmtNL := 0
+  end
+  else begin
+    SrcTo(tok[i].line, tok[i].col);
+    SrcCopy(tok[i].line, tok[i].endCol, false)
+  end;
+  fmtSign := sign;
+
+  { --- after ------------------------------------------------------------- }
+  if drop then fmtRoutine := fmtRoutine - 1;
+  if k = tkCase then fmtSawCase := true
+  else if FmtOwnsAnOf(k) then fmtSawCase := false
+  else if k = tkModule then fmtInModuleHead := true;
+
+  if fmtParen = 0 then
+    if k = tkSemi then begin
+      FmtCtlPopTo(FmtCtlBase);
+      FmtWantAtLeast(2)
+    end
+    else if heading then begin
+      if FmtHasBlock(i) then begin
+        FmtPush(opRoutine, 0);
+        fmtRoutine := fmtRoutine + 1
+      end
+    end
+    else if (k = tkBegin) and (p <> tkTo) then begin
+      FmtPush(opBegin, 1);
+      FmtWantAtLeast(2)
+    end
+    else if k = tkRecord then begin
+      FmtPush(opRecord, 1);
+      FmtWantAtLeast(2)
+    end
+    else if k = tkRepeat then begin
+      FmtPush(opRepeat, 1);
+      FmtWantAtLeast(2)
+    end
+    else if (k = tkOf) and fmtSawCase then begin
+      fmtSawCase := false;
+      if FmtTopKind = opRecord then FmtPush(opVariant, 1)
+      else FmtPush(opCase, 1);
+      FmtWantAtLeast(2)
+    end
+    else if k = tkOtherwise then begin
+      FmtPush(opOtherwise, 1);
+      FmtWantAtLeast(2)
+    end
+    else if (k = tkThen) or (k = tkDo) then begin
+      if n = tkBegin then FmtCtlPush(0)
+      else begin
+        FmtCtlPush(1);
+        FmtWantAtLeast(2)
+      end
+    end
+    else if k = tkElse then begin
+      if (n = tkBegin) or (n = tkIf) then FmtCtlPush(0)
+      else begin
+        FmtCtlPush(1);
+        FmtWantAtLeast(2)
+      end
+    end
+    else if (k = tkVar) or (k = tkConst) or (k = tkType) or (k = tkLabel) then
+    begin
+      fmtInd := fmtInd + 1;
+      fmtInDecl := true;
+      fmtDeclTop := fmtTop;
+      FmtWantAtLeast(2)
+    end;
+
+  if (k = tkLParen) or (k = tkLBracket) then fmtParen := fmtParen + 1
+  else if (k = tkRParen) or (k = tkRBracket) then
+    if fmtParen > 0 then fmtParen := fmtParen - 1
+end;
+
+{ One comment, copied out of the source and moved sideways with the code it
+  belongs to. Its first line goes where the layout puts it; every line after
+  that keeps the shape it was written with, shifted by however far the opening
+  delimiter moved. Nothing is reflowed -- a comment is prose and this has no
+  business rewrapping it -- but a comment that moves two levels deeper would
+  otherwise keep its old left edge and read as if it belonged to something
+  else. }
+procedure FmtComment(t: integer);
+var delta, lead, k: integer; ch: char; inside: boolean;
+
+  function More: boolean;
+  begin
+    More := SrcBefore(trivia[t].endLine, trivia[t].endCol)
+  end;
+
+begin
+  delta := (fmtCol + 1) - trivia[t].col;
+  SrcTo(trivia[t].line, trivia[t].col);
+  inside := More;
+  while inside do begin
+    ch := Peek(0);
+    if ch = chr(newline) then begin
+      FmtNewline;
+      Advance;
+      { Neither of these needs `More` beside it. A comment's last line ends
+        with its closing delimiter, so a newline inside one is always followed
+        by another character of the same comment -- and an *unterminated* one
+        is an error, which this whole routine is guarded by. }
+      lead := 0;
+      while Peek(0) = ' ' do begin
+        lead := lead + 1;
+        Advance
+      end;
+      { A line with nothing on it stays empty: indenting it would leave
+        trailing blanks, which is the one thing a formatter must never
+        write. }
+      if Peek(0) <> chr(newline) then
+        for k := 1 to lead + delta do FmtPut(' ')
+    end
+    else begin
+      FmtPut(ch);
+      Advance
+    end;
+    inside := More
+  end
+end;
+
+{ The comments standing before token `i`. A comment on the same source line as
+  the item before it *trails* that item and stays on the line whatever break
+  was owed -- and the break is owed again afterwards, which is what `held`
+  carries. Anything else goes on a line of its own, and a blank line before it
+  in the source is kept for the reason a blank line anywhere is. }
+procedure FmtTrivia(i: integer; var tv, lastLine: integer);
+var held: integer; trail: boolean;
+begin
+  while (tv <= triviaCount) and (trivia[tv].before <= i) do begin
+    held := fmtWant;
+    { A comment trails what it was written beside -- unless there is no room
+      left on the line for it, in which case it goes on the next one and stays
+      there, a second run over the same file finding it already on a line of
+      its own. Only a comment written on one line can be measured this way;
+      one spanning several is left where it was. }
+    trail := trivia[tv].line = lastLine;
+    if trail and (trivia[tv].endLine = trivia[tv].line) then
+      if fmtCol + 1 + (trivia[tv].endCol - trivia[tv].col) > fmtMargin then
+        trail := false;
+    if trail then begin
+      fmtWant := 1;
+      FmtFlush
+    end
+    else begin
+      if trivia[tv].line > lastLine + 1 then FmtWantAtLeast(3)
+      else FmtWantAtLeast(2);
+      { A comment on a line of its own starts at the block's indent and not at
+        the continuation of whatever ran long above it. }
+      fmtCont := 0;
+      FmtFlush
+    end;
+    FmtComment(tv);
+    if trail then fmtWant := held
+    else begin
+      fmtWant := held;
+      FmtWantAtLeast(2)
+    end;
+    lastLine := trivia[tv].endLine;
+    fmtAfterComment := true;
+    tv := tv + 1
+  end
+end;
+
+procedure FormatSource;
+var i, tv, lastLine: integer;
+begin
+  if triviaFull then begin
+    { ADR-0012's rule, and the one place here where a full buffer is not a
+      compilation failing: the trivia table is filled only because --format
+      asked for it, so what fails is the request. A file printed with a
+      comment silently missing from it would be the worst thing this could
+      do. }
+    ErrorAt(1, 1);
+    writeln('this source has more than ', triviaMax:1,
+            ' comments, which is more than --format can keep in order')
+  end
+  else begin
+    fmtCol := 0;
+    { Two, so that a blank line owed before the first thing written is a blank
+      line already paid for. }
+    fmtNL := 2;
+    fmtWant := 0;
+    fmtInd := 0;
+    fmtParen := 0;
+    fmtCont := 0;
+    fmtTop := 0;
+    fmtStack[0].kind := opBegin;
+    fmtStack[0].add := 0;
+    fmtStack[0].ctlBase := 0;
+    fmtCtlTop := 0;
+    fmtRoutine := 0;
+    fmtLift := 0;
+    fmtInDecl := false;
+    fmtDeclTop := 0;
+    fmtSign := false;
+    fmtSawCase := false;
+    fmtAfterComment := false;
+    fmtInModuleHead := false;
+    SrcRewind;
+    tv := 1;
+    lastLine := 0;
+    for i := mainTokBase to tokCount do begin
+      FmtPreTrivia(i);
+      FmtTrivia(i, tv, lastLine);
+      if tok[i].kind <> tkEof then begin
+        FmtToken(i, lastLine);
+        lastLine := tok[i].line
+      end
+    end;
+    { A file always ends in a newline, and unconditionally: the last token of
+      a program is its `.`, so the cursor is never already at the start of a
+      line here and a test for it would be one no source can take. }
+    FmtNewline
+  end
+end;
+
 procedure DumpTokens;
 var i: integer;
 begin

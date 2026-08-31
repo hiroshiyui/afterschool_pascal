@@ -84,7 +84,7 @@ def limits():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
-def survived(pascalc, src, out):
+def survived(pascalc, src, out, flags=()):
     """None if the compiler survived, else why it did not.
 
     A diagnostic and a non-zero exit are *fine* -- most of this input is
@@ -94,7 +94,7 @@ def survived(pascalc, src, out):
     reason: an exit status cannot tell a rejection from a crash, a third of
     this compiler's corpus being written to exit 1 (ADR-0269)."""
     try:
-        r = subprocess.run([str(pascalc), str(src), "-o", str(out)],
+        r = subprocess.run([str(pascalc), *flags, str(src), "-o", str(out)],
                            capture_output=True, timeout=TIMEOUT,
                            preexec_fn=limits)
     except subprocess.TimeoutExpired:
@@ -107,14 +107,14 @@ def survived(pascalc, src, out):
     return None
 
 
-def message(pascalc, src, out):
+def message(pascalc, src, out, flags=()):
     """What the compiler said, or a reason it said nothing usable. Its
     diagnostics go to `output` (ADR-0083), no standard Pascal program having a
     second stream, so this reads standard output."""
-    why = survived(pascalc, src, out)
+    why = survived(pascalc, src, out, flags)
     if why is not None:
         return None, why
-    r = subprocess.run([str(pascalc), str(src), "-o", str(out)],
+    r = subprocess.run([str(pascalc), *flags, str(src), "-o", str(out)],
                        capture_output=True, timeout=TIMEOUT, preexec_fn=limits)
     first = r.stdout.decode("utf-8", "replace").splitlines()
     return (first[0] if first else ""), None
@@ -140,20 +140,27 @@ def seeds(root):
 # is included -- `tokMax` moving is a change to this gate and should be.
 
 def bounds():
+    """(name, source, the message it must produce, the flags to produce it).
+
+    All but one are reached by an ordinary compilation. The exception is the
+    trivia table, which the lexer fills only when something asked for it
+    (ADR-0279) -- so the input that overruns it is a program the compiler
+    compiles without complaint, and what fails is the request.
+    """
     deep = 1200                       # maxDepth is 1000
     return [
         ("expression nesting",
          "program p(output);\nbegin\n  writeln("
          + "(" * deep + "1" + ")" * deep + ")\nend.\n",
-         "nesting is too deep: this compiler accepts 1000 levels"),
+         "nesting is too deep: this compiler accepts 1000 levels", ()),
         ("statement nesting",
          "program p(output);\nbegin\n" + "begin\n" * deep
          + "end\n" * deep + "end.\n",
-         "nesting is too deep: this compiler accepts 1000 levels"),
+         "nesting is too deep: this compiler accepts 1000 levels", ()),
         ("type-denoter nesting",
          "program p(output);\ntype t = " + "array [1..2] of " * deep
          + "integer;\nbegin end.\n",
-         "nesting is too deep: this compiler accepts 1000 levels"),
+         "nesting is too deep: this compiler accepts 1000 levels", ()),
         # A flat operator chain, which is what the depth counter is bounded
         # against separately: it is one level for the parser and `deep` of
         # them for Sema and CodeGen, so the spine-building loops count their
@@ -161,31 +168,40 @@ def bounds():
         ("operator chain",
          "program p(output);\nvar x: integer;\nbegin\n  x := "
          + "+".join(["1"] * deep) + "\nend.\n",
-         "nesting is too deep: this compiler accepts 1000 levels"),
+         "nesting is too deep: this compiler accepts 1000 levels", ()),
         ("token buffer",
          "program p(output);\nvar x: integer;\nbegin\n"
          + "  x := 1;\n" * 80000 + "  x := 2\nend.\n",
-         "too many tokens: this compiler accepts 300000"),
+         "too many tokens: this compiler accepts 300000", ()),
         # Distinct spellings, because the pool is what holds them and a name
         # written twice costs it nothing.
         ("string pool",
          "program p(output);\nvar\n"
          + "".join(f"  v{i:0>198d}: integer;\n" for i in range(6000))
          + "begin end.\n",
-         "out of string space: this compiler keeps 1000000 characters"),
+         "out of string space: this compiler keeps 1000000 characters", ()),
         ("identifier length",
          "program p(output);\nvar " + "a" * 300 + ": integer;\nbegin end.\n",
-         "identifier is too long: this compiler keeps 255 characters"),
+         "identifier is too long: this compiler keeps 255 characters", ()),
         ("string literal length",
          "program p(output);\nbegin\n  writeln('" + "x" * 300
          + "')\nend.\n",
-         "string literal is too long: this compiler keeps 255 characters"),
+         "string literal is too long: this compiler keeps 255 characters", ()),
         ("unterminated comment",
          "program p(output);\nbegin end.\n{" + "x" * 4000,
-         "unterminated comment"),
+         "unterminated comment", ()),
         ("unterminated literal",
          "program p(output);\nbegin writeln('" + "x" * 100 + "\nend.\n",
-         "unterminated string literal"),
+         "unterminated string literal", ()),
+        # 6.1.8's comments, which are recorded only under --format and
+        # --dump-trivia and so are the one bound here that an ordinary
+        # compilation cannot reach. Twenty thousand and one of the shortest
+        # comment there is.
+        ("comment table",
+         "program p(output);\n" + "{}" * 20001 + "begin end.\n",
+         "this source has more than 20000 comments, which is more than "
+         "--format can keep in order",
+         ("--format",)),
     ]
 
 
@@ -274,15 +290,15 @@ def write_golden(root, wants):
 def run_family(pascalc, work, inputs, jobs):
     """(name, bytes, expected-prefix-or-None) -> list of complaints."""
     def one(item):
-        idx, (name, data, want) = item
+        idx, (name, data, want, flags) = item
         src = work / f"m{idx}.pas"
         out = work / f"m{idx}.ll"
         src.write_bytes(data if isinstance(data, bytes) else data.encode())
         if want is None:
-            why = survived(pascalc, src, out)
+            why = survived(pascalc, src, out, flags)
             got = None
         else:
-            got, why = message(pascalc, src, out)
+            got, why = message(pascalc, src, out, flags)
         keep = why is not None or (want is not None and
                                    (got is None or want not in got))
         if not keep:
@@ -322,7 +338,7 @@ def main():
         print(f"fuzz: no compiler at {pascalc} -- build first", file=sys.stderr)
         return SKIP
 
-    wants = [w for _, _, w in bounds()]
+    wants = [w for _, _, w, _ in bounds()]
     if args.write_golden:
         print(f"fuzz: wrote {write_golden(root, wants)}")
         return 0
@@ -354,14 +370,14 @@ def main():
     # corpus source exceeds by much, then coarser. Exhaustive where it is
     # cheap and thinning where it is not.
     control = (root / "tests" / "control.pas").read_bytes()
-    trunc = [("truncation", control[:i], None)
+    trunc = [("truncation", control[:i], None, ())
              for i in range(0, len(control) + 1)]
     torture = (root / "selfhost" / "torture.pas").read_bytes()
-    trunc += [("truncation", torture[:i], None)
+    trunc += [("truncation", torture[:i], None, ())
               for i in range(0, len(torture) + 1, 7)]
 
-    fixed = [(n, s, w) for n, s, w in bounds()]
-    muts = [("mutation", mutate(rng, rng.choice(pool), pool), None)
+    fixed = list(bounds())
+    muts = [("mutation", mutate(rng, rng.choice(pool), pool), None, ())
             for _ in range(mutants)]
 
     jobs = os.cpu_count() or 4

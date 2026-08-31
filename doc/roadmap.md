@@ -310,31 +310,50 @@ the language server and **six of them were wrong within two releases** — the
 suite's duration by a factor of three. A figure here is a reading with a date
 on it, and re-reading it is cheaper than trusting it.
 
-- **There is no formatter, and it is the largest gap by developer-time.**
-  `tools/` holds `pascalcc` and nothing else; `.clang-format` covers the C,
-  which is four files, and nothing covers the 40 821 lines of Pascal that are
-  the compiler, the 10 507 in the thirty-one library modules, or the 779
-  tracked corpus sources. Hand-alignment drift is already recorded as a
-  *reason a whole-tree clang-format is refused* for the C, and the Pascal has
-  no equivalent claim either way.
+- **There is a formatter now** (ADR-0279), and it was the largest gap by
+  developer-time. `pascalc --format` writes a source back out with a layout of
+  its own: the same tokens in the same order, the same comments in the same
+  places, and nothing else the same.
 
-  **The language server did the hard half without meaning to.** ADR-0258 makes
-  the parser report where every statement begins and ends, and ADR-0253 does
-  the same for every declaration — so the structure a printer needs is
-  already emitted. What is missing is *trivia*: the lexer consumes a comment
-  and never makes it a token, which is why three separate records here say "a
-  comment is not a token". A formatter needs the tokens **and** the comments
-  between them, and that is the whole of the work.
+  **The language server had done the hard half without meaning to.** ADR-0258
+  makes the parser report where every statement begins and ends and ADR-0253
+  does the same for every declaration, so the structure was emitted already;
+  what was missing was *trivia*, the lexer consuming a comment and never making
+  it a token. That is what the increment built, and the shape of it is the part
+  worth carrying: **a position is recorded and never text.** The corpus holds
+  1 881 326 characters of commentary against the 449 278 the pool has free, so
+  this chapter's own warning was that trivia would go in the one array whose
+  headroom is measured — and it goes in no array at all. Whatever wants the
+  characters reads the source a second time through a cursor, which is also the
+  only way to recover an *identifier's* text: the pool holds the folded
+  spelling, and a formatter that lowercased every name would be worse than
+  none.
 
-  It would pay three times over: `textDocument/formatting` and
-  `rangeFormatting` in the server, a `style:` gate for the Pascal of the kind
-  `git clang-format` gives the C, and the prerequisite for any later
-  refactoring tool. The cost to watch is ADR-0126's: trivia goes in the one
-  array whose headroom is measured, and `buffer-headroom` reports the pool at
-  550 722 of 1 000 000 with ApFront the worst, and the tokens at 188 586 of
-  300 000 with the *program* the worst — 44.9% and 37.1% free. Measure before
-  believing an estimate; the last reading written here named ApFront for both
-  and was 63 000 tokens light.
+  It is recorded **only when something asks** — `--format`, `--dump-trivia` and
+  `--dump-limits` — so an ordinary compilation writes no table, checks no bound
+  and cannot fail for a reason it could not fail for before.
+
+  **The verification is the interesting half.** `format-check` makes three
+  claims over every tracked source and the first is the whole semantic one: the
+  token stream must be unchanged but for positions, and that is not a sample of
+  what could go wrong, because the parser sees the token stream and nothing
+  else. Two sources with the same token stream compile to the same program by
+  construction. The comments must be unchanged word for word and still stand
+  before the same tokens, which is the only claim that catches a dropped or
+  reordered comment. And formatting the output again must return it byte for
+  byte, which is the claim about the *rules* and not about a run of them. 774
+  of 783 sources pass all three; the nine the lexer rejects have no token
+  stream to preserve.
+
+  What none of the three says is that the output is *well* laid out. There is
+  no oracle for that, `tests/dumps/format.pas` is the substitute, and
+  **nothing in this tree is formatted by it** — the tree has no agreed Pascal
+  style and this does not create one.
+
+  Two of the three things it was meant to pay for are still unbuilt: the
+  server's `textDocument/formatting` and `rangeFormatting`, and a `style:`
+  gate for the Pascal of the kind `git clang-format` gives the C. The compiler
+  half is what either would call.
 
 - **The compiler has been profiled once, and the answer was a surprise.**
   The baseline this item asked for is ADR-0270's `benchmark`, and the profile

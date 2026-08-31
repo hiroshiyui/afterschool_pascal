@@ -44,7 +44,8 @@ export ApTypes = (
   strMax, realDigits, vgNone, vgRead, vgWrite, kwWidth, bindNameCap,
   dateLen, timeLen, apVersion, maxImports, argMax, wordWidth, msgWidth,
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, nul,
-  tab, newline, creturn, poolMax, tokMax, maxDepth, maxBlockDepth,
+  tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
+  keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
   taskSetSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
@@ -248,6 +249,22 @@ const
     the headroom gate exists to report long before; doc/sop.md §7 carries it. }
   poolMax  = 1000000; { characters of identifier and literal text }
   tokMax   = 300000;
+  { 6.1.8's comments, recorded rather than consumed, and recorded only when
+    something asked (ADR-0279). They are the half a formatter needs that the
+    token stream does not carry.
+
+    **What is recorded is a position and never text.** Nothing here holds the
+    characters of a comment: the corpus has 1 881 326 of them against the
+    449 278 the pool has free, and a second arena would be 2 MB of store for
+    something one file at a time needs. Whatever wants the text reads the
+    source again -- which is also the only way to recover an *identifier's*
+    text, the pool holding the folded spelling and a formatter that lowercased
+    every name being worse than none.
+
+    The largest source in this tree is `selfhost/apfront.pas` at 1423
+    comments, which is what this bound is fourteen times over.
+    `--dump-limits` reports it and `buffer-headroom` watches it. }
+  triviaMax = 20000;  { comments in one source }
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { Blocks nest inside that limit and never beyond it, because ParseBlock
     counts one -- which it did not until a security audit wrote 1001 nested
@@ -406,6 +423,22 @@ type
       word-symbols of ISO 7185, and the scanner builds them by joining two
       tokens rather than by looking a spelling up. }
     tkAndThen, tkOrElse);
+
+  { 6.1.8's comment, recorded rather than discarded. A comment is not a token
+    and three records here say so, which is why this is a second table and not
+    a token kind: nothing after the lexer may see one, or every production in
+    the parser would have to skip it.
+
+    `before` is the index of the token this comment precedes -- tokCount + 1
+    when it was scanned -- and is the whole of the attachment rule. Whether a
+    comment *trails* the token before it or stands on a line of its own is
+    derivable from the positions and is derived rather than stored, as is
+    whether a blank line came before it. }
+  comment = record
+    line, col: integer;        { the opening delimiter }
+    endLine, endCol: integer;  { one past the closing delimiter }
+    before: integer
+  end;
 
   token = record
     kind: tokenKind;
@@ -2259,6 +2292,29 @@ var
     `write`/`writeln` after the prefix and a prefix that suppressed itself
     would leave the message behind. }
   warnOn: boolean;
+  { Whether the lexer records 6.1.8's comments rather than discarding them
+    (ADR-0279). False on an ordinary compile, and that is the design and not
+    an optimisation: a comment is needed by nothing that compiles, so a
+    translation that was not asked for one writes no arena, checks no bound
+    and cannot fail for a reason it could not fail for before. `--format`,
+    `--dump-trivia` and `--dump-limits` set it -- the last because measuring
+    the bound is the whole of what that flag is for.
+
+    An imported component's comments are recorded by nothing: what asks for
+    them formats one file. }
+  keepTrivia: boolean;
+  { How many comments this source holds, and whether they all fitted. They
+    live here rather than beside their table for the reason `poolLen` and
+    `tokCount` do: the driver reports them and ApFront's interface is narrow
+    by design (ADR-0079).
+
+    `triviaFull` is what a reader asks instead of comparing the counter with
+    the bound itself. A source with more comments than the table holds has
+    trivia that is *incomplete* -- and printing a file with a comment silently
+    missing from it is the worst thing a formatter could do, so the answer
+    there is a refusal and not a shorter file. }
+  triviaCount: integer;
+  triviaFull: boolean;
   dumpLayoutOpt: boolean;
   dumpDispatchOpt: boolean;
   dispatchHead, dispatchTail: dispatchPtr;
@@ -4333,6 +4389,9 @@ to begin do
     msgOut := false;
     StrClear(msgBuf);
     readingImports := false;
+    keepTrivia := false;
+    triviaCount := 0;
+    triviaFull := false;
     curFile := '';
     curImportIdx := 0;
     notingUses := false;

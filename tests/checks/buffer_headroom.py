@@ -36,7 +36,16 @@ found with **107 tokens** of headroom left out of 140000 -- 0.08%.
 ADR-0095 closed with "nothing measures the headroom", and that sentence is why
 it happened a second time. This is the measurement.
 
-**Both arrays are measured, and the pool needed a flag to be.** ADR-0126 could
+**Three arrays now, and the third is only ever filled by this flag.**
+ADR-0279 made the lexer record 6.1.8's comments, and record them only where
+something asked; `--dump-limits` is one of the things that asks, precisely so
+that the bound it added can be measured here. On any other run it is 0 of its
+capacity, which would be a fact about the flags and not about the source. It
+also differs from the first two in what a full one *means*: the pool and the
+token table failing is a compilation failing, and the trivia table failing is
+a formatter refusing, the compilation being unaffected.
+
+**Both of the first two are measured, and the pool needed a flag to be.** ADR-0126 could
 count the tokens from `--dump-tokens`, which writes one line per token and
 cannot write a second because a Pascal string-literal contains no newline
 (6.1.7) -- so the line count *is* the token count, exactly, from a flag that
@@ -70,7 +79,8 @@ THRESHOLD = 0.80
 # What --dump-limits reports, and the constant in the source that declares each
 # capacity. Adding an array to the flag without adding it here measures one
 # fewer than the compiler offers; adding it here without the flag fails loudly.
-ARRAYS = [("pool", "poolMax"), ("tokens", "tokMax")]
+ARRAYS = [("pool", "poolMax"), ("tokens", "tokMax"),
+          ("comments", "triviaMax")]
 
 REPORT = re.compile(r"^([a-z]+) (\d+) of (\d+)$")
 
