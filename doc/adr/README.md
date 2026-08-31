@@ -290,3 +290,4 @@ the alternatives that were rejected and why.
 | [0279](0279-a-comment-is-not-a-token.md) | A comment is not a token, and now it is not lost either | Accepted |
 | [0280](0280-the-editor-asks-the-compiler-to-format.md) | The editor asks the compiler to format | Accepted |
 | [0281](0281-the-suite-was-never-slow.md) | The suite was never slow; the instructions were | Accepted |
+| [0282](0282-a-gate-is-not-exercised-until-ci-has-run-it.md) | A gate is not exercised until CI has run it | Accepted |

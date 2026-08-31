@@ -16,6 +16,10 @@ ratio share:codegen 0.492
 ratio scale:apfront 15.491
 ratio scale:compiler 12.163
 
+# The architecture these proportions were taken on, and the one they
+# mean anything about. Compared, unlike the milliseconds below.
+arch x86_64
+
 # Milliseconds, for a reader. NOT compared -- they are a fact about
 # the machine below and not about this compiler. A change that slows
 # every stage in proportion moves these and no ratio above, which is

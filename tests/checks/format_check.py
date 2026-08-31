@@ -85,6 +85,42 @@ def strip_positions(text, keep_from, squeeze=False):
     return out
 
 
+# Walked, and then filtered through git only if git answers. Asking
+# `git ls-files` outright is what this harness did until it reached CI, where
+# it exits 128 in a container whose checkout git calls dubiously owned -- the
+# sweep then read an empty list, in all four jobs, and `clause_citations.py`
+# had already recorded that hazard in a comment before this file was written.
+# The floor below is what turned it into a failure rather than a green gate
+# sweeping nothing, which is the whole reason a floor is there.
+#
+# The four roots are `variant_check.sh`'s, for its reason: what git *ignores*
+# is not part of this, because the count is printed and has to mean the same
+# thing on every machine -- a checkout still holding the retired BSI suite
+# (ADR-0232 gitignored it) has 224 more sources on disk than a clean clone.
+# Naming roots rather than walking from the top also keeps `.claude/worktrees`
+# out, a background agent's worktree being a whole second copy of every source
+# inside the checkout. An untracked source that is not ignored stays in scope:
+# a case added and not yet staged is exactly what a sweep should reach.
+ROOTS = ("tests", "selfhost", "lib", "lsp")
+
+
+def pascal_sources(root: Path) -> list:
+    found = sorted(str(p.relative_to(root))
+                   for r in ROOTS for p in (root / r).rglob("*.pas"))
+    if not found:
+        return found
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--stdin"],
+        input="\n".join(found), capture_output=True, text=True)
+    # check-ignore exits 1 when nothing matched, which is the ordinary case,
+    # and 128 where git will not speak for this checkout at all. Only the
+    # first is a list to subtract.
+    if ignored.returncode in (0, 1):
+        drop = set(ignored.stdout.split())
+        found = [f for f in found if f not in drop]
+    return found
+
+
 def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
     build = Path(sys.argv[sys.argv.index("--build") + 1]) if "--build" in sys.argv else root / "build"
@@ -93,9 +129,7 @@ def main() -> int:
         print(f"format-check: {pascalc} is missing -- skipping")
         return 77
 
-    sources = subprocess.run(
-        ["git", "ls-files", "*.pas"], cwd=root, capture_output=True, text=True
-    ).stdout.split()
+    sources = pascal_sources(root)
 
     # A directory of its own, and not a fixed path under the build tree. The
     # suite is run in parallel (ADR-0281) and what makes that safe is that
