@@ -1,0 +1,3 @@
+<source>:35:20: warning: 'a' is never written through, so it could be protected
+<source>:64:21: warning: 'a' is never written through, so it could be protected
+<source>:97:21: warning: 'a' is never written through, so it could be protected

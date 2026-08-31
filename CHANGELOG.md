@@ -13,6 +13,35 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A `var` parameter nothing writes through is reported** (ADR-0283). The
+  fourth warning, and the first whose answer is a property of the whole
+  compilation rather than of one routine. 6.7.3.1 spells such a parameter
+  `protected var`, and the advice is exact rather than a guess: 6.5.1 forbids a
+  statement to threaten a protected variable-identifier, 6.9.4 lists the six
+  ways to threaten one, and the compiler already recorded every one of them --
+  so "never threatened" is precisely the condition under which adding the word
+  still compiles. A file or a pointer is never advised, 6.4.1 making it
+  unprotectable.
+
+  It is **not** advised where the word would be illegal, which is why it is
+  written at the end of the compilation: a routine passed as a procedural
+  actual cannot take it, since 6.6.3.6 compares the parameter lists with
+  `protected` in them and the call may be written after the routine; and
+  whether an *exported* routine is passed that way is a question no single
+  component can answer.
+
+### Changed
+
+- **54 parameters of the compiler, the library and the language server are now
+  `protected var`.** They are the warning's own first finding, and three were
+  groups like `var l, r, v: str` split into `protected var l, r: str; var v:
+  str`, which had been claiming all three were writable when one was. Nothing
+  about what any of them does changes -- `protected` is a Sema-only property
+  and the code generator never reads it -- but a future change that writes
+  through one of them is now a compilation error naming the clause.
+
 ## [3.3.0] - 2026-09-01
 
 The release that closed `doc/roadmap.md`'s *What would make this easier to work

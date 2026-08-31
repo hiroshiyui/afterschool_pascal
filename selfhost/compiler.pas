@@ -411,7 +411,7 @@ end;
   spelling that is not one of them -- `--target=` then reports and names what is
   admitted, because a target whose layout has not been compared against LlSize
   and LlAlign would be answered wrongly rather than refused. }
-function TargetIndex(var name: nameStr): integer;
+function TargetIndex(protected var name: nameStr): integer;
 begin
   if EQ(name, 'x86_64-pc-linux-gnu') then TargetIndex := tgtX86
   { Both spellings, because they name one machine and a reader will type
@@ -700,7 +700,7 @@ end;
 { Bind a file variable to a name the command line gave. 6.7.5.6's bind is the
   only way a program names a file while it is running, and this compiler could
   not have been written without it: every name below was computed. }
-procedure BindTo(var f: bindText; var n: nameStr);
+procedure BindTo(var f: bindText; protected var n: nameStr);
 var b: BindingType;
 begin
   b := binding(f);
@@ -1210,7 +1210,7 @@ begin
   AppendInt(v, id)
 end;
 
-procedure PutOp(var v: str);
+procedure PutOp(protected var v: str);
 var k: integer;
 begin
   for k := 1 to v.len do
@@ -1573,7 +1573,7 @@ end;
 { ADR-0123: the address of an optional's flag (0) or of the value it answers
   for (1). One routine for both, because the only difference is the index and
   a second copy would be free to disagree about the layout. }
-procedure OptionalPart(var base: str; t: typePtr; index: integer; var v: str);
+procedure OptionalPart(protected var base: str; t: typePtr; index: integer; var v: str);
 begin
   Def(v);
   write(ircode, 'getelementptr inbounds ');
@@ -1583,7 +1583,7 @@ begin
   writeln(ircode, ', i32 0, i32 ', index:1)
 end;
 
-procedure EmitTrapIf(var cond: str; msg: integer);
+procedure EmitTrapIf(protected var cond: str; msg: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1599,7 +1599,7 @@ end;
 
 { The same shape, for a trap whose message cannot be written here: the runtime
   formats it out of values only the running program has. }
-procedure EmitTrapIndex(var cond, lo, hi: str);
+procedure EmitTrapIndex(protected var cond, lo, hi: str);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1622,7 +1622,7 @@ end;
   what a program wrote and the more useful of the two; a bound evaluated at the
   block's commencement has no spelling to name, so this names its value -- the
   same trade EmitTrapIndex makes, and made here for the same reason. }
-procedure EmitTrapRange(var cond, lo, hi: str);
+procedure EmitTrapRange(protected var cond, lo, hi: str);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1648,7 +1648,7 @@ end;
   arm that calls it cannot be reached at all. Kept because relaxing that guard
   -- so two schematic char arrays may be compared -- is a feature, and this is
   the check it would need. }
-procedure EmitTrapLength(var cond, left, right: str);
+procedure EmitTrapLength(protected var cond, left, right: str);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1669,8 +1669,8 @@ end;
 { The same shape again, for 6.4.6 d): the schema and the discriminant are named
   where the program is compiled and their values are known only where it runs,
   so the message is assembled out of two string constants and two integers. }
-procedure EmitTrapDisc(var cond: str; schemaMsg, discMsg: integer;
-                       var l, r: str);
+procedure EmitTrapDisc(protected var cond: str; schemaMsg, discMsg: integer;
+                       protected var l, r: str);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1762,7 +1762,7 @@ begin
   DeferBase := k
 end;
 
-procedure DeferRecord(p: symPtr; var frame: str; var v: str);
+procedure DeferRecord(p: symPtr; protected var frame: str; var v: str);
 begin
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
@@ -1783,7 +1783,7 @@ begin
   TaskSetBase := k
 end;
 
-procedure TaskSetSlot(p: symPtr; var frame: str; var v: str);
+procedure TaskSetSlot(p: symPtr; protected var frame: str; var v: str);
 begin
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
@@ -1805,7 +1805,7 @@ begin
   write(ircode, '@p', p^.irId:1, '.task')
 end;
 
-procedure DeferFlag(p: symPtr; var frame: str; k: integer; var v: str);
+procedure DeferFlag(p: symPtr; protected var frame: str; k: integer; var v: str);
 begin
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
@@ -1823,7 +1823,7 @@ end;
 
 { The jump record is the field after the last variable. Only called for a
   procedure whose nlLabels is non-empty. }
-procedure JumpRecord(p: symPtr; var frame: str; var v: str);
+procedure JumpRecord(p: symPtr; protected var frame: str; var v: str);
 begin
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
@@ -1979,7 +1979,7 @@ end;
 
 { The address of a heap variable's tuple, given the variable's own address.
   Empty for every type whose tuple is somewhere a symbol can name. }
-procedure HeaderOf(t: typePtr; var base: str; var v: str);
+procedure HeaderOf(t: typePtr; protected var base: str; var v: str);
 begin
   if (t = nil) or not t^.heapTuple then
     StrClear(v)
@@ -1995,7 +1995,7 @@ end;
   empty for every other type -- a schematic formal and a variable with
   non-constant discriminants both keep theirs where a symbol can name it, and
   AddressOfSym reaches those by the walk every enclosing variable makes. }
-procedure BoundValue(t: typePtr; high: boolean; var header: str; var v: str);
+procedure BoundValue(t: typePtr; high: boolean; protected var header: str; var v: str);
 var disc: symPtr; addr, raw: str; d: discValPtr; done: boolean;
 begin
   if high then disc := t^.hiDisc else disc := t^.loDisc;
@@ -2061,7 +2061,7 @@ end;
   one discriminant, so it is a number where the type was written with one and
   the descriptor's when an actual brought it -- the same two answers every
   dynamic bound has (ADR-0040). }
-procedure StringCapacity(t: typePtr; var hdr: str; var v: str);
+procedure StringCapacity(t: typePtr; protected var hdr: str; var v: str);
 begin
   if t^.hiDisc = nil then begin
     if t^.hi < 0 then OpInt(0, v) else OpInt(t^.hi, v)
@@ -2070,7 +2070,7 @@ begin
     BoundValue(t, true, hdr, v)
 end;
 
-procedure DynLength(t: typePtr; var header: str; var v: str);
+procedure DynLength(t: typePtr; protected var header: str; var v: str);
 var lo, hi, extent: str;
 begin
   if (t^.loDisc = nil) and (t^.hiDisc = nil) then
@@ -2200,7 +2200,7 @@ end;
   TagFieldAt answers -1 for each, there being no field to compare against.
   That is a hole in the safety claim rather than an oversight, and it is
   written down in doc/sop.md 7. }
-procedure EmitVariantGuard(var rec: str; t: typePtr; prefix: numPtr;
+procedure EmitVariantGuard(protected var rec: str; t: typePtr; prefix: numPtr;
                            armIndex, guard: integer);
 var tagIdx, msg: integer;
     arms, arm, other: variantPtr; tt: typePtr; r: rangePtr;
@@ -2331,7 +2331,7 @@ begin
   end
 end;
 
-procedure FieldAddress(var rec: str; t: typePtr; f: fieldPtr; var v: str;
+procedure FieldAddress(protected var rec: str; t: typePtr; f: fieldPtr; var v: str;
                        guard: integer);
 var cur, p: str; prefix, step: numPtr;
 begin
@@ -2919,7 +2919,7 @@ end;
   which a subrange never has. So `type t = 1..m; q = ^t` allocates four bytes
   with no tuple in front of them and `ptr^ := k` is checked against the block's
   own descriptor, which is where its bounds have been all along. }
-procedure CheckedForSubrange(var v: str; target: typePtr);
+procedure CheckedForSubrange(protected var v: str; target: typePtr);
 var below, above, bad, lo, hi, hdr, val: str; sign, dynamic: boolean;
     msg: integer;
 begin
@@ -3228,7 +3228,7 @@ end;
   that. It is one `and` against the base type's universe: the check a set
   constructor cannot make for itself, because a constructor does not know what
   it is being assigned to. }
-procedure CheckedForSetBase(var v: str; target: typePtr);
+procedure CheckedForSetBase(protected var v: str; target: typePtr);
 var universe, notU, stray, bad, zero: str; msg: integer;
 begin
   if IsSet(target) and (target^.elem <> nil) then
@@ -3269,7 +3269,7 @@ end;
 
 { A value entering a variable of `target`: the subrange check and the set check
   are the same idea for two kinds of type, so call sites ask once. }
-procedure CheckedForStore(var v: str; target: typePtr);
+procedure CheckedForStore(protected var v: str; target: typePtr);
 begin
   CheckedForSubrange(v, target);
   CheckedForSetBase(v, target)
@@ -3482,7 +3482,7 @@ end;
 { The set operators, all of them one instruction on the bit vector: union is
   `or`, intersection is `and`, difference is `and not`, and inclusion is
   "nothing left over" (ISO 7185 6.7.2.3, 6.7.2.5). }
-procedure EmitSetBinary(e: nodePtr; var l, r, v: str);
+procedure EmitSetBinary(e: nodePtr; protected var l, r: str; var v: str);
 var notR, left, zero, ones: str;
 begin
   case e^.bnOp of
@@ -3569,7 +3569,7 @@ end;
 
 { An argument list has to be complete before the call line can be written, so
   the operands are collected as they are emitted. }
-procedure AppendOpnd(var head, tail: opndPtr; var v: str; asPtr: boolean;
+procedure AppendOpnd(var head, tail: opndPtr; protected var v: str; asPtr: boolean;
                      t: typePtr);
 var o: opndPtr;
 begin
@@ -4290,7 +4290,8 @@ begin
   else write(ircode, '-2147483648')
 end;
 
-procedure EmitCheckedArith(which: char; var l, r, v: str; msg: integer;
+procedure EmitCheckedArith(which: char; protected var l, r: str; var v: str;
+                           msg: integer;
                            wide: boolean);
 var pair, ovf, isMin, bad: str;
 begin
@@ -4344,7 +4345,7 @@ begin
   EmitTrapIf(bad, msg)
 end;
 
-procedure GuardNonZero(var r: str; msg: integer; wide: boolean);
+procedure GuardNonZero(protected var r: str; msg: integer; wide: boolean);
 var zero: str;
 begin
   Def(zero);
@@ -4361,7 +4362,7 @@ end;
   constant divisor -- which is what makes the two answers the same answer.
   Before this, `const c = 5 mod -3` was a diagnostic and the same expression
   over a variable quietly computed 1. }
-procedure GuardPositive(var r: str; msg: integer; wide: boolean);
+procedure GuardPositive(protected var r: str; msg: integer; wide: boolean);
 var nonpos: str;
 begin
   Def(nonpos);
@@ -4377,7 +4378,7 @@ end;
   IEEE would answer with an infinity, which is not a value of the real-type.
   The complex division uses this too, on c*c + d*d -- that number is zero
   exactly when the divisor is, so one comparison serves rather than two. }
-procedure GuardRealNonZero(var r: str; msg: integer);
+procedure GuardRealNonZero(protected var r: str; msg: integer);
 var zero: str;
 begin
   Def(zero);
@@ -4389,7 +4390,7 @@ end;
 
 { 6.6.6.2 (D.34): "for sqrt(x), it is an error if x is negative". Without the
   check the answer is a NaN, which is not a value of the real-type either. }
-procedure GuardSqrtArg(var x: str; msg: integer);
+procedure GuardSqrtArg(protected var x: str; msg: integer);
 var bad: str;
 begin
   Def(bad);
@@ -4402,7 +4403,7 @@ end;
 { 6.6.6.2 (D.33): "for ln(x), it is an error if x is not greater than zero" --
   so zero as well as negative, where sqrt admits zero. That one value is the
   whole difference between this procedure and the one above it. }
-procedure GuardLnArg(var x: str; msg: integer);
+procedure GuardLnArg(protected var x: str; msg: integer);
 var bad: str;
 begin
   Def(bad);
@@ -4416,7 +4417,7 @@ end;
   the integer type. The bounds are the exactly-representable powers of two just
   outside the range, and the comparisons are *ordered*, so a NaN fails both and
   traps rather than converting to something unspecified. }
-procedure CheckedFpToInt(var x, v: str; msg: integer);
+procedure CheckedFpToInt(protected var x: str; var v: str; msg: integer);
 var gt, lt, ok, bad: str;
 begin
   Def(gt);
@@ -4988,8 +4989,8 @@ end;
 { The same three rules, given the value as a pointer and a length rather than
   as an expression -- which is what 6.7.5.5's writestr has, since its value was
   produced by the runtime and no expression in the tree denotes it. }
-procedure EmitStringStoreValue(var dst: str; t: typePtr; var sd, sl: str;
-                               var hdr: str);
+procedure EmitStringStoreValue(protected var dst: str; t: typePtr; protected var sd, sl: str;
+                               protected var hdr: str);
 var cap: str;
 begin
   { AP 6.4.15.5: a text is the one target whose store is not a copy. The bytes
@@ -5046,8 +5047,8 @@ begin
   end
 end;
 
-procedure EmitStringStore(var dst: str; t: typePtr; src: nodePtr;
-                          var hdr: str);
+procedure EmitStringStore(protected var dst: str; t: typePtr; src: nodePtr;
+                          protected var hdr: str);
 var sd, sl: str;
 begin
   EmitString(src, sd, sl);
@@ -6780,7 +6781,7 @@ end;
 { Copy one whole array or record from an address already in hand. `read` from
   a file whose component is structured needs this form: what it copies from is
   the buffer variable, which is a runtime call rather than a designator. }
-procedure EmitCopyAt(var dst: str; t: typePtr; var src: str);
+procedure EmitCopyAt(protected var dst: str; t: typePtr; protected var src: str);
 var align: integer;
 begin
   align := LlAlign(t);
@@ -6791,7 +6792,7 @@ begin
   writeln(ircode, ', i64 ', LlSize(t):1, ', i1 false)')
 end;
 
-procedure EmitCopy(var dst: str; t: typePtr; src: nodePtr);
+procedure EmitCopy(protected var dst: str; t: typePtr; src: nodePtr);
 var s: str;
 begin
   EmitAddress(src, s);
@@ -6918,7 +6919,7 @@ end;
   expression however many components it is *for*, so it is emitted once and
   then copied -- evaluating it once per component would call a function in it
   once per component. }
-procedure CopyComponent(var dst, src: str; t: typePtr);
+procedure CopyComponent(protected var dst, src: str; t: typePtr);
 var v: str;
 begin
   if IsMemory(t) then
@@ -6940,7 +6941,7 @@ begin
   end
 end;
 
-procedure ArrayElement(var base: str; arr: typePtr; index: integer;
+procedure ArrayElement(protected var base: str; arr: typePtr; index: integer;
                        var v: str);
 begin
   Def(v);
@@ -6955,7 +6956,7 @@ end;
   written over it, which is what makes "any component not mapped to by an
   element" need no complement to be computed -- the ranges are disjoint, so
   every component ends up holding the value the standard says it holds. }
-procedure EmitArrayValue(e: nodePtr; var into: str);
+procedure EmitArrayValue(e: nodePtr; protected var into: str);
 var arr, comp: typePtr; el: nodePtr; r: rangePtr; src, dst: str;
     pass, first, i: integer; wanted: boolean;
 begin
@@ -7365,7 +7366,7 @@ end;
   is the one thing about it the standard decides and the runtime is never told
   which standard it was compiled for. It also keeps -1 usable as the "no width
   given" sentinel: no width that reaches the runtime is ever negative. }
-procedure CheckedWidth(var v: str; isPrec: boolean);
+procedure CheckedWidth(protected var v: str; isPrec: boolean);
 var least, msg: integer; leastOp, bad: str;
 begin
   least := 0;
@@ -7387,7 +7388,7 @@ end;
 { The write-parameters of the text form (6.10.3), emitted into whichever file
   is given -- the one the statement named, or 6.7.5.5's auxiliary variable when
   this is a writestr. Nothing here knows which. }
-procedure EmitWriteArgs(s: nodePtr; var fh: str);
+procedure EmitWriteArgs(s: nodePtr; protected var fh: str);
 var v, width, prec, addr, slen, shdr, sdata: str;
     a: nodePtr; b: typePtr;
 begin
@@ -7592,7 +7593,7 @@ end;
 
 { The variables of the text form (6.10.1), filled from whichever file is given
   -- the one the statement named, or 6.7.5.5's auxiliary variable. }
-procedure EmitReadArgs(s: nodePtr; var fh: str);
+procedure EmitReadArgs(s: nodePtr; protected var fh: str);
 var slot, v, wide, rhdr, rcap: str; a: nodePtr; t: typePtr;
     needStore: boolean;
 begin
@@ -7848,7 +7849,7 @@ begin
   end
 end;
 
-procedure EmitNewTuple(s: nodePtr; domain: typePtr; var slot: str);
+procedure EmitNewTuple(s: nodePtr; domain: typePtr; protected var slot: str);
 var d: symListPtr; value_: nodePtr; v, size, raw, block, vr, nohdr: str;
     k, head: integer; cell, next: discValPtr;
 begin

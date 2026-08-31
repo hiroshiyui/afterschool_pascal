@@ -214,7 +214,7 @@ function ExtPoll(var fds: array of integer; var got: array of integer;
                  timeoutMs: integer): integer;
   external 'pasx_socket_poll';
 
-function Opened(var s: Socket; status: integer): ErrorCode;
+function Opened(protected var s: Socket; status: integer): ErrorCode;
 begin
   if s <> nil then Opened := errNone
   else if status = 1 then Opened := errAbsent

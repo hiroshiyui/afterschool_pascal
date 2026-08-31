@@ -1,0 +1,1 @@
+<source>:51:36: warning: 'nm' is never written through, so it could be protected

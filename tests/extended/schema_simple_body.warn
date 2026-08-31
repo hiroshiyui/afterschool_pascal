@@ -1,0 +1,1 @@
+<source>:40:20: warning: 'k' is never written through, so it could be protected

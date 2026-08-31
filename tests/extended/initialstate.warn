@@ -1,0 +1,1 @@
+<source>:58:34: warning: 'r' is never written through, so it could be protected

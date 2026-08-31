@@ -1174,6 +1174,13 @@ type
       the clause's six sites and nowhere else, so this is that list rather than
       a second reading of it (ADR-0134). }
     wasThreatened: boolean;
+    { AP 6.7.3.1 (ADR-0283): this routine was named as a procedural or
+      functional *actual*. 6.6.3.6 makes the formal-parameter-lists
+      congruous including `protected`, so a routine that travels this way
+      cannot gain the word without breaking every heading it is matched
+      against -- which is why the fourth warning is a whole-component
+      answer and not a per-routine one. Sema-only; CodeGen never reads it. }
+    passedAsProc: boolean;
     { The result-variable-specification's identifier as the *source* spells it.
       resultVar's own name is that spelling with `$result` appended, which the
       program deliberately cannot write, so the binding needs this instead.

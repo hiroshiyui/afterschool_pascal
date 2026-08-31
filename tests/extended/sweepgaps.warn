@@ -1,0 +1,1 @@
+<source>:77:22: warning: 'g' is never written through, so it could be protected

@@ -385,6 +385,10 @@ var
     rather than CodeGen's, because what it decides is what the language accepts
     -- CodeGen reports no user-facing errors. }
   foreignDecls, foreignDeclTail: symListPtr;
+  { ADR-0283: the `var` parameters of this file that nothing wrote through,
+    in the order they were found. Judged after CheckMutualSupply, because
+    whether the word may be added is a question about the whole component. }
+  unwritten, unwrittenTail: symListPtr;
   { AP 6.4.12.2: the call CheckCall is about to check is the whole right side
     of an assignment to a handle variable, the one position a handle-valued
     call may stand in. Set by the assignment arm for that node and consumed by
@@ -636,7 +640,7 @@ end;
   widening it would repad every literal in the file for one word, and 10206
   already forced the same split on the required identifiers, which is why
   PoolIsWide exists beside PoolIs. }
-function StrIsWide(var s: str; word: msgLit): boolean;
+function StrIsWide(protected var s: str; word: msgLit): boolean;
 var n, k: integer; same: boolean;
 begin
   n := msgWidth;
@@ -659,7 +663,7 @@ begin
   for k := 1 to n do write(kwText[i][k])
 end;
 
-function LookupKeyword(var s: str): tokenKind;
+function LookupKeyword(protected var s: str): tokenKind;
 var i, k, n: integer; found: tokenKind; same: boolean;
 begin
   found := tkIdent;
@@ -865,7 +869,7 @@ end;
   Pascal has no negative literal -- a sign is an operator (6.7.1) -- so this
   need only bound the magnitude, and -maxint64..maxint64 is symmetric for the
   same reason -maxint..maxint is. }
-function Int64TooLarge(var text: str): boolean;
+function Int64TooLarge(protected var text: str): boolean;
 var i, n: integer; over: boolean;
 const limit = '9223372036854775807';
 begin
@@ -888,7 +892,7 @@ begin
   end
 end;
 
-function RealTooLarge(var text: str): boolean;
+function RealTooLarge(protected var text: str): boolean;
 var i, digits, exponent: integer;
     anySignificant, fractionSignificant, negative: boolean;
 begin
@@ -5091,6 +5095,7 @@ begin
   s^.resLen := 0;
   s^.assignedResult := false;
   s^.wasThreatened := false;
+  s^.passedAsProc := false;
   s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
@@ -6840,6 +6845,130 @@ end;
   var argument among them. Without a name there is no way to write the result
   but an assignment-statement and AP 6.7.5.9's `exit(e)`, which is exactly
   what the walk models. }
+{ ADR-0283. The fourth warning of ADR-0272's list, and the first whose answer
+  is not knowable where the question is asked.
+
+  6.7.3.1 spells a variable parameter that a body never writes through
+  `protected var`, and the compiler already owns the exact test for whether
+  the word may be added: 6.5.1 forbids a statement to threaten a
+  variable-access closest-containing a protected variable-identifier, 6.9.4
+  lists what threatens one, and `wasThreatened` is set at every one of those
+  six sites and nowhere else. So `not wasThreatened` is not a heuristic about
+  what the body seems to do -- it is precisely the condition under which
+  adding `protected` still compiles.
+
+  What is *not* knowable here is whether adding it is legal in the rest of the
+  program. 6.6.3.6 makes a procedural parameter's congruity compare the
+  formal-parameter-lists with `protected` in them, so a routine passed as a
+  procedural actual cannot take the word without refusing the call that passes
+  it -- and that call may be written later in the file than the routine, or in
+  another block entirely. An *exported* routine is worse: 6.11.1 puts its
+  heading in an interface, and whether some importer passes it that way is a
+  question this component cannot answer at all, so an exported routine is
+  never advised.
+
+  Hence the candidate is recorded where it is found and judged when the whole
+  component has been seen. `RunSema` calls the second half after
+  `CheckMutualSupply`, which is the last thing it does. }
+procedure NoteUnwrittenVarParams(sym: symPtr);
+var q: symListPtr; s: symPtr; c: symListPtr;
+begin
+  { `sym` is tested and `q^.sym` is not, and the difference was measured
+    rather than assumed: `line-coverage` takes both directions of the first --
+    CheckProcBody does reach here with none -- and only one of the second, a
+    list built by `AppendSym` never holding a nil. }
+  if warnOn and not errorSeen and (sym <> nil) and (curFile = mainFile) then begin
+    q := sym^.params;
+    while q <> nil do begin
+      s := q^.sym;
+      if (s^.kind = skVarParam) and not s^.isProtected
+         and not s^.wasThreatened and (s^.declLine > 0) then
+        if Protectable(s^.stype) then begin
+          new(c);
+          c^.sym := s;
+          c^.next := nil;
+          if unwrittenTail = nil then unwritten := c
+                                 else unwrittenTail^.next := c;
+          unwrittenTail := c
+        end;
+      q := q^.next
+    end
+  end
+end;
+
+{ 6.11.1: is this routine a constituent of some interface? An exported routine
+  is one whose heading an importer matches against, so nothing this component
+  can see settles whether the word is addable. }
+function ExportedRoutine(s: symPtr): boolean;
+var i: ifacePtr; c: constitPtr; found: boolean;
+begin
+  found := false;
+  i := interfaces;
+  while (i <> nil) and not found do begin
+    c := i^.items;
+    while (c <> nil) and not found do begin
+      if c^.sym = s then found := true;
+      c := c^.next
+    end;
+    i := i^.next
+  end;
+  ExportedRoutine := found
+end;
+
+{ The deferred half. Written after every per-site warning rather than among
+  them, which is what deferring costs: the candidates are sorted among
+  themselves so the order is the source's, but a whole-component answer cannot
+  be interleaved with answers given a block at a time.
+
+  A selection sort over a list that holds one entry per unwritten parameter of
+  the file being compiled -- 130 for the largest source in this tree -- which
+  is small enough that the shape of the loop matters less than its being
+  obviously right. }
+procedure WarnUnwrittenVarParams;
+var c, best, prev, bestPrev, rest: symListPtr; s, owner: symPtr;
+begin
+  if warnOn and not errorSeen then begin
+    rest := unwritten;
+    while rest <> nil do begin
+      { the earliest remaining candidate, by declaration position }
+      best := rest;
+      bestPrev := nil;
+      prev := rest;
+      c := rest^.next;
+      while c <> nil do begin
+        if (c^.sym^.declLine < best^.sym^.declLine)
+           or ((c^.sym^.declLine = best^.sym^.declLine)
+               and (c^.sym^.declCol < best^.sym^.declCol)) then begin
+          best := c;
+          bestPrev := prev
+        end;
+        prev := c;
+        c := c^.next
+      end;
+      if bestPrev = nil then rest := best^.next
+      else begin
+        bestPrev^.next := best^.next;
+        { rest is unchanged: best was not its head }
+      end;
+
+      s := best^.sym;
+      { The owner is never nil and no test for one belongs here: a candidate is
+        recorded only from `CheckProcBody`, which is reached only where a
+        routine has a body, and a routine with a body has a frame -- so its
+        parameters came from `AddFrameVar`, the arm that sets the owner. A nil
+        test would be a branch no compiling program can take, which is what
+        `line-coverage` said about the one `Transfers` used to have. }
+      owner := s^.owner;
+      if not owner^.passedAsProc and not ExportedRoutine(owner) then begin
+        WarnAt(s^.declLine, s^.declCol);
+        write('''');
+        WritePool(s^.at, s^.len);
+        writeln(''' is never written through, so it could be protected')
+      end
+    end
+  end
+end;
+
 procedure WarnPartialResult(sym: symPtr; body: nodePtr; l, c: integer);
 var jump, found: boolean;
 begin
@@ -12425,6 +12554,11 @@ begin
         nkField already carries for "the whole selection denotes one symbol";
         ProcActualSym is the one place the two are asked as one question. }
       if viaIface then a^.fdQualified := sym else a^.vrSym := sym;
+      { And this routine now travels as a value, which is what stops the
+        fourth warning advising `protected` on one of its parameters: the
+        congruity below compares the lists *with* `protected` in them, so a
+        word added to this heading would refuse this very call (ADR-0283). }
+      sym^.passedAsProc := true;
       { ISO 7185 6.6.3.6. The lists are compared rather than the types,
         because a procedural parameter has no type to write down: the heading
         *is* the type. }
@@ -19429,6 +19563,7 @@ begin
         line of it is the mistake. CheckProcBody is reached only where there
         is a body, so no test for one belongs here. }
       WarnPartialResult(sym, d^.pdBody^.blBody, d^.line, d^.col);
+      NoteUnwrittenVarParams(sym);
 
       currentProc := outer;
       if sym^.isTask then taskBody := nil
@@ -22418,6 +22553,8 @@ begin
   nextLabelId := 0;
   foreignDecls := nil;
   foreignDeclTail := nil;
+  unwritten := nil;
+  unwrittenTail := nil;
   handleClosers := nil;
   handleBirth := false;
   takeOk := false;
@@ -22512,7 +22649,11 @@ begin
   CheckPendingImplementations;
   ComputeActiveModules;
   CheckMutualSupply
-  end
+  end;
+  { The deferred half, outside the branch, because a component with no
+    main-program-block records candidates exactly as one with a block
+    does (ADR-0283). }
+  WarnUnwrittenVarParams
 end;
 
 { ---------------------------------------------------------------- the dump }

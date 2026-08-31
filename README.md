@@ -85,14 +85,23 @@ still runs. `pascalc` itself no longer knows the flag.
 the same stream — `file:line:col: warning: message` — and **does not fail the
 compilation**: the exit status is unchanged and the program is still compiled,
 so anything already reading a diagnostic reads one without being taught to.
-There are three, and each is about a program that is legal and probably not
+There are four, and each is about a program that is legal and probably not
 what was meant:
 
 - a **local variable declared and never used**;
 - a **statement after one that leaves** — after a `goto`, `halt`, `exit`,
   `break` or `continue`, so it cannot run;
 - a **function that writes its result on one path and not another**, where the
-  standard requires only that it be written somewhere.
+  standard requires only that it be written somewhere;
+- a **`var` parameter nothing writes through**, which could be spelled
+  `protected var` and then say so to every caller.
+
+The last of those is not advised where adding the word would be *illegal*: a
+routine passed as a procedural parameter cannot take it, since §6.6.3.6
+compares the parameter lists with `protected` in them, and an exported routine
+cannot be judged from one component at all. Those two answers need the whole
+file, so that warning is written at the end of the compilation rather than
+beside the declaration.
 
 A warning is written only for the file named on the command line, never for an
 imported component, and never once an error has been reported — a name that did

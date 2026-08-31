@@ -324,16 +324,21 @@ real sites and was still not built, because §6.6.3.6's congruity makes the fix
 illegal for a routine passed as a procedural parameter and no one component
 can know whether an exported one ever is.
 
-**What is left of the chapter is three named things**, each recorded where it
-was declined rather than left as an estimate here:
+**What is left of the chapter is two named things** — it was three until
+ADR-0283 — each recorded where it was declined rather than left as an estimate
+here:
 
-- **A warning for a `var` parameter never written through.** The measurement
-  is in ADR-0278's record and stands: 111 sites, 30 struck by `Protectable`,
-  32 of the remaining 81 in this compiler and every one right. The sound
-  version warns only for a routine neither exported nor passed as a procedural
-  actual in its own component, which needs warnings **deferred to the end of a
-  compilation** rather than written where they are found — a change to
-  ADR-0272's discipline that wants a record of its own.
+- ~~**A warning for a `var` parameter never written through.**~~ **Built**
+  (ADR-0283), and the estimate above it was wrong in the direction this
+  chapter's own lesson predicts. It said 111 sites and 81 after `Protectable`;
+  the deferral it asked for was built exactly as described, and then the
+  *number* turned out to be a fixed point rather than a count. §6.5.1 exempts a
+  protected formal from being threatened, so protecting one parameter stops its
+  callers' arguments from being threatened and exposes the next layer: one pass
+  over this tree reports 130 and seven passes report zero, having added
+  `protected` **54 times**. A one-shot count under-reports by a factor of five.
+  Every round rebuilt clean, which is the evidence the advice was right — the
+  word is enforced, so a wrong claim is a compilation error.
 - **`textDocument/rangeFormatting`.** The formatter starts at column zero;
   being asked about *part* of a file means telling the printer where its
   indent begins, which is a question about the enclosing structure that only a

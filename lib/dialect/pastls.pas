@@ -537,7 +537,7 @@ begin
 end;
 
 { `buf[from..to]` as a line, once the terminator has been accounted for. }
-function Take(var c: Connection; var line: string; count: integer): boolean;
+function Take(protected var c: Connection; var line: string; count: integer): boolean;
 var i: integer;
 begin
   if count > line.capacity then exit(false);

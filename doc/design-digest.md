@@ -3949,6 +3949,26 @@ nothing else. What it would lose, mechanism by mechanism:
   what is claimed is the *unconditional* transfer. It found one thing in 779
   sources: a `done` flag in `ResolveRestricted` standing where an `else`
   belonged.
+- **A warning may be deferred to the end of a compilation, and one is**
+  (ADR-0283). The fourth warning names a `var` parameter nothing writes
+  through, which §6.7.3.1 spells `protected var`. The *analysis* was already
+  there — §6.5.1 forbids threatening a protected variable-identifier, §6.9.4
+  lists the six ways, and `wasThreatened` is set at all six — so
+  `not wasThreatened` is exactly when the word may be added, and `Protectable`
+  answers §6.4.1's refusal of a file or a pointer. What is new is *when* it is
+  answered: a routine passed as a procedural actual cannot take the word
+  (§6.6.3.6 compares the lists with `protected` in them) and the call may be
+  written after the routine, while an exported one cannot be judged from a
+  single component at all. So `NoteUnwrittenVarParams` records a **symbol** —
+  not formatted text, so nothing is buffered — and `WarnUnwrittenVarParams`
+  judges the list after `CheckMutualSupply`, sorted by declaration position,
+  because a nested body is checked before the block that declares it. **The
+  mechanism is a fixed point**: §6.5.1 exempts a protected formal from being
+  threatened, so protecting one parameter unthreatens its callers' arguments —
+  one pass over this tree reports 130 and seven passes report zero, having
+  added the word 54 times. The test that fails when it is undone is
+  `tests/dialect/protected_hint.pas`, whose two mutations name `Passed` (the
+  guard) and the four written-through shapes (the analysis).
 - **A comment is not a token, and a position is recorded rather than text**
   (ADR-0279). §6.1.8's comments are consumed by the lexer, so a formatter had
   nothing to put back. The lexer now records each comment's start, end and the

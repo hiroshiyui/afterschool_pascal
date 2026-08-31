@@ -224,7 +224,7 @@ about ApFront once per importer. **All three guards are now pinned by
 warn about twice: until it existed no source under `tests/dumps/` warned at
 all, so dropping `warnOn` from either warning left all 790 cases green.
 
-There are **three** warnings. **A local variable declared and never used**
+There are **four** warnings. **A local variable declared and never used**
 found twelve dead declarations in this compiler on its first run. **A statement
 after one that leaves** (ADR-0277) is the second: `goto`, `halt`, `exit`, `break` and
 `continue` are the five that leave, a labelled statement is looked *through*,
@@ -249,6 +249,28 @@ false` answers yes because falling out of it is not a path. It is silenced by a
 result-variable-specification, which is the one spelling §6.9.4's other threats
 can name. It found **one** thing in the corpus, in this compiler: a `done`
 flag standing where an `else` belonged.
+
+**A `var` parameter nothing writes through** (ADR-0283) is the fourth, and the
+first whose answer is a property of the **component** rather than of the
+routine. §6.7.3.1 spells it `protected var`, and the advice is *exact* rather
+than a guess: §6.5.1 forbids a statement to threaten a protected
+variable-identifier, §6.9.4 lists the six ways, and `wasThreatened` is set at
+every one of them — so `not wasThreatened` is precisely the condition under
+which adding the word still compiles. `Protectable` is asked too, §6.4.1
+refusing a file or a pointer. Two guards need the whole component and are why
+it is **deferred**: a routine passed as a procedural actual cannot take the
+word (§6.6.3.6 compares the lists *with* `protected` in them, and the call may
+be written later than the routine), and an exported one cannot be judged here
+at all. So candidates are recorded in `CheckProcBody` and emitted after
+`CheckMutualSupply`, sorted by declaration position — a nested body is checked
+before the block that declares it, so recording order is not source order.
+**It is a fixed point and not a list**, which is the finding: §6.5.1 exempts a
+*protected* formal from being threatened, so protecting one parameter stops its
+callers' arguments from being threatened and exposes the next layer. A one-shot
+count says 130; iterating took seven rounds, **54 parameters gained the word**,
+and the tree now reports zero. Every round rebuilt clean, which is the evidence
+— `protected` is enforced, so a wrong claim is a compilation error and 54 were
+accepted.
 
 ### The representation, in brief
 

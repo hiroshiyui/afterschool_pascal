@@ -1,0 +1,4 @@
+<source>:46:21: warning: 'b' is never written through, so it could be protected
+<source>:63:20: warning: 'b' is never written through, so it could be protected
+<source>:75:20: warning: 'm' is never written through, so it could be protected
+<source>:89:20: warning: 'm' is never written through, so it could be protected

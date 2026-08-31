@@ -110,7 +110,7 @@ const
     compiler admits; the tests below ask `< 0` and never the number. }
   NewLine = 10;
 
-function Opened(var s: Stream): ErrorCode;
+function Opened(protected var s: Stream): ErrorCode;
 begin
   if s = nil then Opened := errIO
   else Opened := errNone

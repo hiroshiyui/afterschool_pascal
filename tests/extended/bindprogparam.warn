@@ -1,0 +1,1 @@
+<source>:63:25: warning: 'b' is never written through, so it could be protected
