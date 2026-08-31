@@ -240,19 +240,30 @@ for x86-64 — but it needs no editing to be used elsewhere: `clang` overrides
 the two header lines with the host's, and the compiler that comes out passes
 the whole suite.
 
-`--coverage` compiles a program that records which of its own statements ran.
-Set `PASCOV_LINES` when running it and the line numbers are appended there, one
-per line, for every statement the run reached:
+`--coverage` compiles a program that records which of its own statements ran
+and which way each of its decisions went. Set `PASCOV_LINES` and
+`PASCOV_BRANCHES` when running it: the line numbers are appended to the first,
+one per line, for every statement the run reached, and `line col direction` to
+the second for every edge it took — 1 where the condition was true, 0 where it
+was false, and for a `repeat` that is the iteration which ends rather than the
+one which runs:
 
 ```sh
 tools/pascalcc --coverage prog.pas -o prog
-PASCOV_LINES=prog.cov ./prog
+PASCOV_LINES=prog.cov PASCOV_BRANCHES=prog.br ./prog
 ```
 
+A decision is an if-statement, a while-statement, a repeat-statement or a
+short-circuit `and`, `or`, `and then` or `or else` — the four places the source
+writes a condition. A `for` statement's test is generated from its bounds and
+every runtime check is the compiler's branch rather than the program's, so
+neither carries a counter.
+
 What was *instrumented* is in the IR the same compilation wrote — one
-`call void @pas_cov_hit(i32 <line>)` per statement — so the two halves of a
-coverage figure come from one artefact and cannot disagree about which lines
-were executable.
+`call void @pas_cov_hit(i32 <line>)` per statement and one
+`call void @pas_cov_branch(i32 <line>, i32 <col>, i32 <dir>)` per edge — so the
+two halves of a coverage figure come from one artefact and cannot disagree
+about what was executable.
 
 The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
 set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build

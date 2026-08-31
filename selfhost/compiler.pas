@@ -245,10 +245,12 @@ var
     tested on. }
   targetIx: integer;
   { --coverage: emit a call to pas_cov_hit before every statement, carrying the
-    line it begins on (ADR-0104). What is *executable* is decided here and
-    nowhere else -- the runtime counts what it is told and the denominator is
-    read back out of the emitted IR, so the two halves of a coverage figure
-    come from one artefact and cannot disagree about what was instrumented. }
+    line it begins on (ADR-0104), and a call to pas_cov_branch on each edge of
+    every decision the source writes (ADR-0274). What is *executable* is
+    decided here and nowhere else -- the runtime counts what it is told and
+    the denominator is read back out of the emitted IR, so the two halves of a
+    coverage figure come from one artefact and cannot disagree about what was
+    instrumented. }
   covOpt: boolean;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   { Which way the designator being addressed is used (ADR-0118). vgWrite only
@@ -459,8 +461,10 @@ begin
   writeln('                  begins and ends, and stop');
   writeln('  --dump-uses     check as usual, then write every name this');
   writeln('                  source uses and where it was declared');
-  writeln('  --coverage      emit statement counters; the program then');
-  writeln('                  writes the lines it ran to PASCOV_LINES');
+  writeln('  --coverage      emit statement and branch counters; the');
+  writeln('                  program then writes the lines it ran to');
+  writeln('                  PASCOV_LINES and the branch directions it');
+  writeln('                  took to PASCOV_BRANCHES');
   writeln('  --version       write the version and stop');
   writeln('  -h, --help      write this list and stop');
   writeln;
@@ -4408,30 +4412,68 @@ begin
   writeln(ircode, ' to i32')
 end;
 
+{ --coverage's second dimension (ADR-0274). One call on each edge of every
+  decision the *source* writes, carrying where the decision stands and which
+  way it went -- 1 for the condition true, 0 for false, and for a repeat that
+  is the iteration that ends rather than the one that runs.
+
+  A statement counter cannot answer this. EmitStmt writes one call per
+  statement keyed on its *line*, so `if c then a else b` on one line is
+  covered when either arm runs, and `if c then a` with no else has no
+  statement at all on its false side. The column is what separates two
+  decisions written on one line, which is why the identity is a pair.
+
+  The four callers each have to give the untaken direction a block of its
+  own, and none of them may share one that anything else can reach: a while's
+  exit block is where AP 6.7.5.10's break lands, and a repeat's body block is
+  entered once before the first test. A counter placed in either would report
+  a direction that was never taken. }
+procedure CovBranch(n: nodePtr; dir: integer);
+begin
+  if covOpt and (n <> nil) then
+    if n^.line > 0 then
+      writeln(ircode, '  call void @pas_cov_branch(i32 ', n^.line:1,
+              ', i32 ', n^.col:1, ', i32 ', dir:1, ')')
+end;
+
 { `and` and `or` short-circuit, which is what makes a guarded test such as
   `while (i <= n) and (a[i] <> x)` safe to write (ADR-0010). Extended Pascal's
   `and then` and `or else` (6.8.3.3) *require* that, so the one lowering serves
   all four -- the difference between them is a promise to the programmer, not
   a difference in the code. }
 procedure EmitShortCircuit(e: nodePtr; var v: str);
-var lhs, rhs: str; isAnd: boolean; rhsB, endB, lhsEnd, rhsEnd: integer;
+var lhs, rhs: str; isAnd: boolean;
+    rhsB, endB, skipB, lhsEnd, rhsEnd: integer;
 begin
   isAnd := (e^.bnOp = opAnd) or (e^.bnOp = opAndThen);
   EmitExpr(e^.bnLhs, lhs);
   lhsEnd := curBlock;
   rhsB := NewBlock;
   endB := NewBlock;
+  { The skipped direction reaches the join directly, so under --coverage it
+    needs a block to be counted in -- and the phi's incoming label moves with
+    it, that edge now arriving from the counter rather than from wherever the
+    left operand finished (ADR-0274). }
+  if covOpt then skipB := NewBlock else skipB := endB;
   write(ircode, '  br i1 ');
   PutOp(lhs);
   if isAnd then
-    writeln(ircode, ', label %L', rhsB:1, ', label %L', endB:1)
+    writeln(ircode, ', label %L', rhsB:1, ', label %L', skipB:1)
   else
-    writeln(ircode, ', label %L', endB:1, ', label %L', rhsB:1);
+    writeln(ircode, ', label %L', skipB:1, ', label %L', rhsB:1);
 
   StartBlock(rhsB);
+  CovBranch(e, 1);
   EmitExpr(e^.bnRhs, rhs);
   rhsEnd := curBlock;
   writeln(ircode, '  br label %L', endB:1);
+
+  if covOpt then begin
+    StartBlock(skipB);
+    CovBranch(e, 0);
+    writeln(ircode, '  br label %L', endB:1);
+    lhsEnd := skipB
+  end;
 
   StartBlock(endB);
   Def(v);
@@ -8425,7 +8467,11 @@ var cond: str; thenB, elseB, endB: integer;
 begin
   EmitExpr(s^.ifCond, cond);
   thenB := NewBlock;
-  if s^.ifElse <> nil then elseB := NewBlock else elseB := 0;
+  { An if with no else-part has nothing on its false side to count, which is
+    half of what a statement counter cannot see -- so --coverage gives that
+    direction a block whether the program wrote one or not (ADR-0274).
+    EmitStmt answers nil with nothing, so the block holds only the counter. }
+  if (s^.ifElse <> nil) or covOpt then elseB := NewBlock else elseB := 0;
   endB := NewBlock;
   write(ircode, '  br i1 ');
   PutOp(cond);
@@ -8433,11 +8479,13 @@ begin
   if elseB <> 0 then writeln(ircode, elseB:1) else writeln(ircode, endB:1);
 
   StartBlock(thenB);
+  CovBranch(s, 1);
   EmitStmt(s^.ifThen);
   writeln(ircode, '  br label %L', endB:1);
 
   if elseB <> 0 then begin
     StartBlock(elseB);
+    CovBranch(s, 0);
     EmitStmt(s^.ifElse);
     writeln(ircode, '  br label %L', endB:1)
   end;
@@ -8446,7 +8494,8 @@ begin
 end;
 
 procedure EmitWhile(s: nodePtr);
-var cond: str; condB, bodyB, endB, mark, savedBrk, savedCnt: integer;
+var cond: str;
+    condB, bodyB, endB, exitB, mark, savedBrk, savedCnt: integer;
 begin
   condB := NewBlock;
   bodyB := NewBlock;
@@ -8461,11 +8510,16 @@ begin
   mark := strTemps;
   EmitExpr(s^.whCond, cond);
   if strTemps > mark then ReleaseStrTemps;
+  { The exit block is where AP 6.7.5.10's break lands as well, so the false
+    direction cannot be counted there: a loop only ever left by a break would
+    report a condition that never became false (ADR-0274). }
+  if covOpt then exitB := NewBlock else exitB := endB;
   write(ircode, '  br i1 ');
   PutOp(cond);
-  writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
+  writeln(ircode, ', label %L', bodyB:1, ', label %L', exitB:1);
 
   StartBlock(bodyB);
+  CovBranch(s, 1);
   savedBrk := breakBlock;
   savedCnt := contBlock;
   breakBlock := endB;
@@ -8475,11 +8529,18 @@ begin
   contBlock := savedCnt;
   writeln(ircode, '  br label %L', condB:1);
 
+  if covOpt then begin
+    StartBlock(exitB);
+    CovBranch(s, 0);
+    writeln(ircode, '  br label %L', endB:1)
+  end;
+
   StartBlock(endB)
 end;
 
 procedure EmitRepeat(s: nodePtr);
-var cond: str; bodyB, contB, endB, mark, savedBrk, savedCnt: integer;
+var cond: str;
+    bodyB, contB, endB, doneB, againB, mark, savedBrk, savedCnt: integer;
     sub: nodePtr;
 begin
   bodyB := NewBlock;
@@ -8513,9 +8574,23 @@ begin
     for the same reason (ADR-0111). The body's own statements do not cover it:
     a body that concatenates nothing writes no release at all. }
   if strTemps > mark then ReleaseStrTemps;
+  { Neither destination may carry the counter as it stands: the exit block is
+    also where a break lands, and the body block is entered once before the
+    first test, so a repeat that runs a single iteration would report both
+    directions taken (ADR-0274). }
+  if covOpt then begin doneB := NewBlock; againB := NewBlock end
+  else begin doneB := endB; againB := bodyB end;
   write(ircode, '  br i1 ');
   PutOp(cond);
-  writeln(ircode, ', label %L', endB:1, ', label %L', bodyB:1);
+  writeln(ircode, ', label %L', doneB:1, ', label %L', againB:1);
+  if covOpt then begin
+    StartBlock(doneB);
+    CovBranch(s, 1);
+    writeln(ircode, '  br label %L', endB:1);
+    StartBlock(againB);
+    CovBranch(s, 0);
+    writeln(ircode, '  br label %L', bodyB:1)
+  end;
   StartBlock(endB)
 end;
 
@@ -10723,6 +10798,8 @@ begin
   { Only under --coverage, so an ordinary module names nothing it does not use
     and every program's IR is exactly what it was before the flag existed. }
   if covOpt then writeln(ircode, 'declare void @pas_cov_hit(i32)');
+  if covOpt then
+    writeln(ircode, 'declare void @pas_cov_branch(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
   writeln(ircode,

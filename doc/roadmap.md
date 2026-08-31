@@ -401,15 +401,37 @@ on it, and re-reading it is cheaper than trusting it.
   the gate working rather than an obstacle, and is the reason to add them in
   small batches.
 
-- **Two blind spots the gates cannot see, and two that closed.** What is
-  left is a branch and a fuzzer; `doc/sop.md` §7 records the first, and the
-  second is not a row there because nothing has ever claimed it:
+- **One blind spot the gates cannot see, and three that closed.** What is
+  left is a fuzzer, and it is not a row in `doc/sop.md` §7 because nothing has
+  ever claimed it:
 
-  *A branch is invisible.* `line-coverage` counts a **statement**, so
-  `if c then a else b` on one line is covered when either arm runs. The
-  ratchet stands at 456 uncovered of 18 700 — a statement denominator, and
-  nobody knows the branch one. `pascalc --coverage` already emits a counter
-  per statement; a counter per arm is the same mechanism.
+  *A branch was invisible, and ADR-0274 closed it.* This item asked for "a
+  counter per arm", and that was the wrong shape: the arms already have
+  counters, being statements. The defect was the **identity** — one line — and
+  it hid three ordinary constructs, not one. Two statements on a line collapse
+  into a single counter; a decision with no else-part has nothing on its false
+  side to count at all; and a short-circuit operator's right operand is an
+  expression, so no statement counter for it exists in the first place.
+  `--coverage` now emits a second counter on each edge of every decision the
+  *source* writes — an if, a while, a repeat and each `and`/`or` — keyed on
+  line **and column**.
+
+  The denominator nobody knew is **5050 decisions, 10 100 directions, of which
+  9247 are taken** — 91.6%, against 97.9% of statements. And the overlap is the
+  number that says whether the instrument was worth building: **784 of the 853
+  untaken directions sit on lines statement coverage calls covered**, and not
+  one of those decisions was unreached. Every one was evaluated, and only ever
+  went one way. 92% of what this finds, nothing else here could express.
+
+  Two things were learned in the building and are worth carrying. The untaken
+  direction needs a block **of its own** in three of the four cases — a while's
+  exit is where `break` lands, a repeat's body is entered before the first test,
+  a short-circuit's join is reached from the evaluated side — and sharing one
+  gives a wrong answer that looks like a working instrument. And a ratchet
+  cannot see a *miswired* counter: making both edges of an if report the same
+  direction collapses the pair, drops the denominator from 10 100 to 6995 and
+  reports an **improvement**. What catches that reads the IR rather than the
+  sweep, and is the half of the gate that fails in both directions.
 
   *A dump's exit status was read by nothing, and ADR-0269 closed it.* The
   coverage sweep drove `--dump-all` over every source and read the lines

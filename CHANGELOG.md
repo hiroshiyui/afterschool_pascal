@@ -38,6 +38,17 @@ appears below in the release where it still existed.
   and 1 where it wrote an error. It had recognised only errors, and would have
   silently dropped every warning.
 
+- **`--coverage` measures branches as well as statements** (ADR-0274). Beside
+  the existing counter per statement, one counter is now emitted on each edge
+  of every decision the source writes -- an if-statement, a while-statement, a
+  repeat-statement, and each short-circuit `and`, `or`, `and then` or
+  `or else`. A run appends the directions it took to `$PASCOV_BRANCHES` as
+  `line col direction`, keyed on line **and column** because two decisions may
+  be written on one line. Nothing changes for a program compiled without the
+  flag. A `for` statement's test and every runtime check are outside it: the
+  first is generated from the bounds rather than written, and the second is
+  the compiler's branch rather than the program's.
+
 ### Changed
 
 - **A `--dump` flag now suppresses warnings.** Each dump has a reader parsing

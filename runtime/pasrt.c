@@ -107,6 +107,97 @@ void pas_cov_hit(int line) {
   if (line > pas_cov_high) pas_cov_high = line;
 }
 
+/* --- branch coverage, the other half of `pascalc --coverage` (ADR-0274) ---
+ *
+ * A statement counter cannot see a branch. `if c then a else b` written on one
+ * line is covered when *either* arm runs, and `if c then a` with no else has
+ * no statement at all on its false side -- so a decision that has only ever
+ * gone one way reads as covered by every instrument above.
+ *
+ * The compiler therefore emits a second call at each decision the *source*
+ * writes -- an if, a while, a repeat, and each short-circuit `and` or `or` --
+ * once on each of the two edges, carrying where the decision stands and which
+ * way it went. The denominator is again read back out of the IR, so the two
+ * halves come from one artefact: every site emits exactly two calls, and a
+ * direction nothing reported is a direction nothing took.
+ *
+ * A hash set rather than a table indexed by line, because two decisions may be
+ * written on one line -- which is the whole complaint this answers -- so the
+ * column is part of the identity and nothing usefully bounds it. The key packs
+ * the three into one word; a line is at least 1 wherever the compiler emits a
+ * call, so 0 is free to mean an empty slot. */
+static unsigned long long *pas_br_key;
+static int pas_br_cap;                  /* a power of two, or 0 */
+static int pas_br_used;
+static int pas_br_armed;
+
+#define PAS_BR_MIX 1099511628211ULL     /* FNV's prime, used as a multiplier */
+
+static void pas_br_dump(void) {
+  const char *path = getenv("PASCOV_BRANCHES");
+  FILE *f;
+  int i;
+
+  if (!path || !pas_br_key) return;
+  f = fopen(path, "a");
+  if (!f) return;
+  for (i = 0; i < pas_br_cap; i++)
+    if (pas_br_key[i])
+      fprintf(f, "%d %d %d\n", (int)(pas_br_key[i] >> 32),
+              (int)((pas_br_key[i] >> 1) & 0x7fffffffULL),
+              (int)(pas_br_key[i] & 1ULL));
+  fclose(f);
+}
+
+/* Rehashed rather than grown in place: the slot a key lands in is a function
+ * of the capacity, so every key moves. Returns 0 on failure, and every caller
+ * then does nothing -- a measurement must never break the program it measures,
+ * which is pas_cov_hit's rule for a failed realloc. */
+static int pas_br_grow(void) {
+  int want = pas_br_cap ? pas_br_cap * 2 : 1024;
+  unsigned long long *tab = calloc((size_t)want, sizeof *tab);
+  unsigned long long k;
+  size_t h;
+  int i;
+
+  if (!tab) return 0;
+  for (i = 0; i < pas_br_cap; i++) {
+    k = pas_br_key[i];
+    if (!k) continue;
+    h = (size_t)((k * PAS_BR_MIX) >> 32) & (size_t)(want - 1);
+    while (tab[h]) h = (h + 1) & (size_t)(want - 1);
+    tab[h] = k;
+  }
+  free(pas_br_key);
+  pas_br_key = tab;
+  pas_br_cap = want;
+  return 1;
+}
+
+void pas_cov_branch(int line, int col, int dir) {
+  unsigned long long k;
+  size_t h;
+
+  if (line <= 0) return;
+  if (pas_br_used * 2 >= pas_br_cap)
+    if (!pas_br_grow()) return;
+  if (!pas_br_armed) {
+    pas_br_armed = 1;
+    atexit(pas_br_dump);
+  }
+
+  k = ((unsigned long long)(unsigned)line << 32)
+      | ((unsigned long long)(unsigned)col << 1)
+      | (unsigned long long)(dir & 1);
+  h = (size_t)((k * PAS_BR_MIX) >> 32) & (size_t)(pas_br_cap - 1);
+  while (pas_br_key[h]) {
+    if (pas_br_key[h] == k) return;
+    h = (h + 1) & (size_t)(pas_br_cap - 1);
+  }
+  pas_br_key[h] = k;
+  pas_br_used++;
+}
+
 /// The same message the compiler writes for an array whose bounds it knows,
 /// for one whose bounds arrive with the actual (ISO/IEC 10206:1991 §6.7.3.3).
 /// A schematic formal parameter is compiled once for every tuple, so the text

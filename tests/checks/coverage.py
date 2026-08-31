@@ -231,6 +231,16 @@ def corpus(root):
     jobs.append((root / "selfhost" / "compiler.pas",
                  components.imports(root) + ["--dump-limits"]))
 
+    # ADR-0104's --coverage, and since ADR-0274 its branch counters too. The
+    # same argument as the three jobs above, met a fourth time: the harness
+    # that drives this flag is tests/checks/line_coverage.py, which builds an
+    # instrumented compiler with it on every run -- so every covOpt arm in the
+    # code generator was reported unreached while an oracle reached them all.
+    # It is driven over a source with an if, a while, a repeat and a
+    # short-circuit operator in it, because the four decision kinds are four
+    # separate arms and a program without one leaves it unreached.
+    jobs.append((root / "tests" / "control.pas", ["--coverage"]))
+
     # ADR-0156's --target=, both ways. The accepting arm is driven over an
     # ordinary program because what it changes is two lines of the module the
     # code generator writes; the refusing arm is a driver message, which

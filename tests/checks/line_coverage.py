@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Which *statements* of the compiler the corpus runs.
+"""Which *statements* of the compiler the corpus runs, and which *branches*
+it takes both ways.
 
 coverage.py measures procedures and ADR-0103 says what that cannot see: a
 procedure entered once counts, so the `case` arm nobody reaches is invisible.
@@ -28,6 +29,19 @@ Both halves come from one artefact. The *denominator* is read back out of the
 IR the compiler just wrote (`call void @pas_cov_hit(i32 N)`), and the numerator
 is what the runtime reported, so the two cannot disagree about what was
 instrumented -- there is no separate notion of an executable line to drift.
+
+**Two dimensions, one sweep** (ADR-0274). A statement counter cannot see a
+branch: `if c then a else b` written on one line is covered when *either* arm
+runs, and `if c then a` with no else has no statement at all on its false
+side. So `--coverage` also emits a call on each edge of every decision the
+source writes, and this reads both files the run produced. It is one sweep
+because the sweep is the expensive half -- three instrumented compilers over
+the whole corpus -- and asking a second question of a run already being made
+costs nothing.
+
+Two ratchets, though, and separately argued for: a statement lost and a
+direction lost are different regressions, and a file holding both would let
+one hide behind the other's slack.
 
     python3 tests/checks/line_coverage.py --report        # the breakdown
     python3 tests/checks/line_coverage.py --report --by-procedure
@@ -60,8 +74,11 @@ import coverage  # noqa: E402  -- one definition of "the corpus", shared
 
 SKIP = 77
 HIT = re.compile(r"call void @pas_cov_hit\(i32 (\d+)\)")
+BR = re.compile(
+    r"call void @pas_cov_branch\(i32 (\d+), i32 (\d+), i32 (\d+)\)")
 NAMED = re.compile(r"^; ([a-z_][a-z_0-9]*) (\d+)$", re.MULTILINE)
 RATCHET = "line_coverage.txt"
+BRANCH_RATCHET = "branch_coverage.txt"
 
 
 def build(root, build_dir, work):
@@ -118,36 +135,43 @@ def build(root, build_dir, work):
 
 
 def sweep(exe, jobs, work):
-    """Run the corpus and collect the lines it reached.
+    """Run the corpus and collect the lines it reached and the branch
+    directions it took.
 
     `work` must be a directory of this sweep's own. `--coverage` **appends** to
     $PASCOV_LINES, so three sweeps sharing one directory give the second one
     the first's lines and the third both -- and `& mine` does not filter them
     out, the three components' line numbers being the same numbers. That is a
     silent inflation, and it showed itself as a comment-only commit moving the
-    ratchet by 17."""
+    ratchet by 17. $PASCOV_BRANCHES is appended to for the same reason and
+    carries the same hazard."""
     work.mkdir(parents=True, exist_ok=True)
 
     def one(idx_job):
         idx, (src, flags, extra) = idx_job
         out = work / f"L{idx}.txt"
+        brs = work / f"B{idx}.txt"
         argv = [str(exe), *flags]
         if src is not None:
             argv += [str(src), "-o", str(work / f"o{idx}.ll")]
         try:
             subprocess.run(argv, capture_output=True, timeout=600,
                            env=dict(os.environ, PASCOV_LINES=str(out),
-                                    **extra))
+                                    PASCOV_BRANCHES=str(brs), **extra))
         except subprocess.TimeoutExpired:
             print(f"line-coverage: {src} timed out", file=sys.stderr)
-        return out
+        return out, brs
 
-    ran = set()
+    ran, took = set(), set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as ex:
-        for out in ex.map(one, enumerate(jobs)):
+        for out, brs in ex.map(one, enumerate(jobs)):
             if out.exists():
                 ran.update(int(x) for x in out.read_text().split())
-    return ran
+            if brs.exists():
+                for rec in brs.read_text().splitlines():
+                    line, col, direction = rec.split()
+                    took.add((int(line), int(col), int(direction)))
+    return ran, took
 
 
 def procedures(ir):
@@ -171,8 +195,43 @@ def attribute(lines, procs):
     return out
 
 
-def read_ratchet(root):
-    path = root / "tests" / "checks" / RATCHET
+def unpaired(edges):
+    """The decisions whose two edges are not one of each direction.
+
+    Every site emits exactly one call for the true edge and one for the false
+    one, so this is empty by construction -- and it is checked because the
+    ratchet cannot see it fail. Miswiring a counter so that both edges report
+    the same direction collapses the pair into one key: the *denominator*
+    falls, uncovered falls with it, and the gate reports an improvement.
+    Changing `CovBranch(s, 0)` to `CovBranch(s, 1)` in EmitIf is that mutation,
+    and it took the denominator from 10100 to 6995 with a green run.
+
+    Read out of the IR alone: what it asks is a property of what the compiler
+    *wrote*, not of what the corpus ran, so no case can be added to satisfy
+    it and none can hide it."""
+    sites = collections.defaultdict(set)
+    for comp, line, col, direction in edges:
+        sites[(comp, line, col)].add(direction)
+    return sorted(k for k, dirs in sites.items() if dirs != {0, 1})
+
+
+def attribute_branches(keys, procs):
+    """The same bisect as attribute(), over (component, line, col, direction).
+
+    A direction is written `line:col` and then the way the decision never
+    went -- T for a condition never true, F for one never false."""
+    starts = [(q[0], q[1]) for q in procs]
+    import bisect
+    out = collections.defaultdict(list)
+    for comp, line, col, direction in sorted(keys):
+        i = bisect.bisect_right(starts, (comp, line)) - 1
+        out[procs[i][2] if i >= 0 else "(program level)"].append(
+            f"{line}:{col}{'T' if direction else 'F'}")
+    return out
+
+
+def read_ratchet(root, name=RATCHET):
+    path = root / "tests" / "checks" / name
     if not path.exists():
         return None
     for line in path.read_text().splitlines():
@@ -206,24 +265,48 @@ def main():
             return SKIP
         jobs = coverage.corpus(root)
         instrumented, ran, procs = set(), set(), []
+        edges, taken = set(), set()
         # Lines are made globally unique by the component they are in: the
         # three files overlap, and a set of bare line numbers would union
-        # ApTypes' unreached statements with ApFront's reached ones.
+        # ApTypes' unreached statements with ApFront's reached ones. A branch
+        # key carries the component for the same reason.
         for i, (subject, exe, ir_path) in enumerate(made):
             text = ir_path.read_text()
             mine = {int(n) for n in HIT.findall(text)}
             instrumented |= {(i, n) for n in mine}
+            mybr = {(int(a), int(b), int(c)) for a, b, c in BR.findall(text)}
+            edges |= {(i, *k) for k in mybr}
             procs += [(i, ln, name) for ln, name in procedures(text)]
-            hit = sweep(exe, jobs, work / subject[:-4]) & mine
-            ran |= {(i, n) for n in hit}
+            hit, went = sweep(exe, jobs, work / subject[:-4])
+            ran |= {(i, n) for n in hit & mine}
+            taken |= {(i, *k) for k in went & mybr}
 
     procs.sort()
+
+    # A floor, for variant-check's reason: an instrument that measures nothing
+    # must not pass by measuring nothing. The compiler has thousands.
+    if len(edges) < 100:
+        print(f"line-coverage: only {len(edges) // 2} decisions instrumented "
+              f"-- the compiler cannot have that few", file=sys.stderr)
+        return 1
+    odd = unpaired(edges)
+    if odd:
+        print(f"line-coverage: {len(odd)} of {len(edges) // 2} decisions do "
+              f"not emit one counter per direction", file=sys.stderr)
+        for comp, line, col in odd[:10]:
+            print(f"    {made[comp][0]}:{line}:{col}", file=sys.stderr)
+        return 1
+
     uncovered = instrumented - ran
     pct = 100.0 * len(ran) / len(instrumented) if instrumented else 0.0
+    unturned = edges - taken
+    bpct = 100.0 * len(taken) / len(edges) if edges else 0.0
 
     if args.report:
         print(f"statements: {len(ran)}/{len(instrumented)} run ({pct:.1f}%), "
               f"{len(uncovered)} never")
+        print(f"branches:   {len(taken)}/{len(edges)} taken ({bpct:.1f}%), "
+              f"{len(unturned)} never -- {len(edges) // 2} decisions")
         if args.by_procedure:
             by = attribute(uncovered, procs)
             total = attribute(instrumented, procs)
@@ -231,6 +314,13 @@ def main():
                 print(f"  {len(by[name]):5d}/{len(total[name]):-5d}  {name}"
                       f"  ({', '.join(str(x) for x in by[name][:8])}"
                       f"{' ...' if len(by[name]) > 8 else ''})")
+            print()
+            byb = attribute_branches(unturned, procs)
+            totb = attribute_branches(edges, procs)
+            for name in sorted(byb, key=lambda n: -len(byb[n])):
+                print(f"  {len(byb[name]):5d}/{len(totb[name]):-5d}  {name}"
+                      f"  ({', '.join(byb[name][:8])}"
+                      f"{' ...' if len(byb[name]) > 8 else ''})")
         return 0
 
     if args.write_ratchet:
@@ -260,32 +350,81 @@ def main():
         path.write_text("\n".join(out) + "\n")
         print(f"line-coverage: wrote {path.name} "
               f"({len(uncovered)} uncovered of {len(instrumented)})")
+
+        byb = attribute_branches(unturned, procs)
+        totb = attribute_branches(edges, procs)
+        path = root / "tests" / "checks" / BRANCH_RATCHET
+        out = [
+            "# Branch coverage of the compiler's three program-components",
+            "# over the corpus (ADR-0274).",
+            "#",
+            "# A decision is an if, a while, a repeat or a short-circuit",
+            "# `and`/`or` -- the four places the *source* writes a condition.",
+            "# Each one emits a counter on both of its edges, so the",
+            "# denominator here is twice the number of decisions, and an",
+            "# entry is a direction nothing in the corpus ever took.",
+            "#",
+            "# A ratchet, for line_coverage.txt's reason and with its weakness.",
+            "# The two are separate files because a statement lost and a",
+            "# direction lost are different regressions, and one number would",
+            "# let either hide behind the other's slack.",
+            "#",
+            "# Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet",
+            "# Doing so is a decision to argue for in the commit message.",
+            "",
+            f"uncovered {len(unturned)}",
+            f"instrumented {len(edges)}",
+            f"decisions {len(edges) // 2}",
+            "",
+        ]
+        for name in sorted(totb):
+            out.append(f"{name} {len(byb.get(name, []))}/{len(totb[name])}")
+        path.write_text("\n".join(out) + "\n")
+        print(f"line-coverage: wrote {path.name} "
+              f"({len(unturned)} never taken of {len(edges)})")
         return 0
 
     want = read_ratchet(root)
-    if want is None:
+    bwant = read_ratchet(root, BRANCH_RATCHET)
+    if want is None or bwant is None:
         print("line-coverage: no ratchet recorded; run --write-ratchet",
               file=sys.stderr)
         return 1
+
+    # Both are checked before either is reported, so a change that loses a
+    # statement *and* a direction names both rather than the first one found.
+    bad = 0
     if len(uncovered) > want:
         print(f"line-coverage: {len(uncovered)} statements never run, "
               f"was {want} -- {len(uncovered) - want} lost")
         by = attribute(uncovered, procs)
         for name in sorted(by, key=lambda n: -len(by[n]))[:10]:
             print(f"    {len(by[name]):5d}  {name}")
+        bad += 1
+    if len(unturned) > bwant:
+        print(f"line-coverage: {len(unturned)} branch directions never taken, "
+              f"was {bwant} -- {len(unturned) - bwant} lost")
+        byb = attribute_branches(unturned, procs)
+        for name in sorted(byb, key=lambda n: -len(byb[n]))[:10]:
+            print(f"    {len(byb[name]):5d}  {name}"
+                  f"  ({', '.join(byb[name][:6])})")
+        bad += 1
+    if bad:
         print("\nAdd a case, or -- if this is deliberate -- regenerate with "
               "--write-ratchet and say why in the commit message. "
               "See doc/sop.md §5.")
         return 1
 
-    if len(uncovered) < want:
-        print(f"line-coverage: {len(uncovered)}/{len(instrumented)} "
-              f"({pct:.1f}% run) -- {want - len(uncovered)} better than "
-              f"recorded; regenerate with --write-ratchet")
+    if len(uncovered) < want or len(unturned) < bwant:
+        print(f"line-coverage: {len(uncovered)}/{len(instrumented)} statements "
+              f"and {len(unturned)}/{len(edges)} directions never reached "
+              f"-- {want - len(uncovered)} and {bwant - len(unturned)} better "
+              f"than recorded; regenerate with --write-ratchet")
         return 0
 
     print(f"line-coverage: {len(ran)}/{len(instrumented)} statements run "
-          f"({pct:.1f}%), {len(uncovered)} never -- unchanged")
+          f"({pct:.1f}%) and {len(taken)}/{len(edges)} branch directions "
+          f"taken ({bpct:.1f}%) -- unchanged")
     return 0
 
 

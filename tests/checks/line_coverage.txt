@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 456
-instrumented 18700
+uncovered 393
+instrumented 18754
 
 accept 0/4
 accumulate 0/84
@@ -89,10 +89,10 @@ chainnames 0/4
 chainrecof 0/3
 check 0/1
 checkarguments 6/235
-checkarrayvalue 7/60
+checkarrayvalue 2/60
 checkbinary 6/165
-checkblock 0/25
-checkcall 24/275
+checkblock 0/26
+checkcall 12/275
 checkcase 0/82
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -106,7 +106,7 @@ checkedfptoint 0/23
 checkedresulttype 0/21
 checkedwidth 0/14
 checkexports 0/28
-checkexpr 12/269
+checkexpr 6/269
 checkforeignheading 0/131
 checkgoto 0/9
 checkhandlebirth 0/6
@@ -114,7 +114,7 @@ checkimports 0/86
 checkinitialstate 0/24
 checklabeled 0/21
 checklabelpart 0/34
-checkmodule 4/52
+checkmodule 0/52
 checkmoduleblock 4/52
 checkmoduleheading 2/39
 checkmutualsupply 0/24
@@ -123,7 +123,7 @@ checkpendingimplementations 0/8
 checkprocargument 0/46
 checkprocbody 0/47
 checkread 3/71
-checkreceive 5/27
+checkreceive 0/27
 checkrecordvalue 0/92
 checkrelease 0/14
 checkresultassign 4/37
@@ -134,7 +134,7 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/11
-checkstdproc 23/367
+checkstdproc 19/367
 checkstmt 2/245
 checkstringargs 0/13
 checkstructvalue 0/39
@@ -175,6 +175,7 @@ containsrestricted 0/12
 convertfor 0/3
 copycomponent 1/15
 copytype 0/24
+covbranch 0/3
 curcol 0/1
 curline 0/1
 declare 0/24
@@ -186,7 +187,7 @@ deferbase 0/3
 deferflag 0/4
 deferrecord 0/4
 deferstmtof 0/4
-definekeyword 0/2
+definekeyword 0/6
 designatorbindable 0/18
 determine 0/11
 determinearg 0/4
@@ -254,7 +255,7 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/145
+emitdeclares 0/147
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
@@ -272,7 +273,7 @@ emitframetype 0/17
 emitglobals 0/11
 emitgoto 0/10
 emithandletest 0/11
-emitif 0/16
+emitif 0/18
 emitin 0/51
 emitint64text 0/4
 emitlabeled 1/6
@@ -290,14 +291,14 @@ emitread 0/49
 emitreadargs 0/65
 emitrealtext 0/16
 emitrecordvalue 0/41
-emitrepeat 0/25
+emitrepeat 0/34
 emitset 0/63
 emitsetbinary 0/61
-emitshortcircuit 0/21
+emitshortcircuit 0/28
 emitslicevalue 0/87
 emitspawn 0/76
 emitstdproc 2/206
-emitstmt 1/38
+emitstmt 0/38
 emitstore 0/34
 emitstring 0/197
 emitstringcompare 11/33
@@ -319,7 +320,7 @@ emittry 0/18
 emittuplecheck 0/25
 emitunary 2/21
 emitusercall 0/145
-emitwhile 0/21
+emitwhile 0/27
 emitwith 6/55
 emitwrite 0/48
 emitwriteargs 12/92
@@ -381,7 +382,7 @@ frameglobal 0/8
 frameof 0/2
 frameslot 0/10
 framevarat 0/6
-genericfromschema 5/98
+genericfromschema 2/98
 genericshape 0/10
 giveresultslot 0/1
 groupfieldname 0/8
@@ -503,8 +504,8 @@ lookslikesubrange 0/23
 lookup 0/5
 lookupbuiltin 0/56
 lookupinscope 0/6
-lookupkeyword 0/17
-lookupname 8/30
+lookupkeyword 0/16
+lookupname 4/30
 lookupquiet 0/11
 lookupraw 0/6
 lookupuser 0/4
@@ -530,7 +531,7 @@ nestwith 0/8
 newblock 0/2
 newnode 0/87
 newresultslot 0/7
-newsymbol 0/95
+newsymbol 0/96
 newtype 0/41
 nextformal 0/4
 nonvarying 3/42
@@ -540,7 +541,7 @@ notedeclarationsto 0/6
 notedefining 0/7
 noteexportedinterface 0/6
 notehandlecloser 0/6
-noteuse 0/6
+noteuse 0/8
 noteusefield 0/5
 notinghere 0/4
 offer 0/38
@@ -559,10 +560,10 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/127
+parseargs 10/128
 parsearraytype 0/17
 parseblock 0/50
-parseboundident 1/12
+parseboundident 0/12
 parsecase 0/38
 parsecaselabel 0/8
 parsecomponent 0/22
@@ -604,7 +605,7 @@ parsesimpleexpr 1/29
 parsestatement 0/32
 parsestructuredvalue 0/29
 parseterm 0/22
-parsetypedenoter 6/153
+parsetypedenoter 0/153
 parsetypeexpr 0/7
 parsetypepart 0/21
 parsevariantpart 0/59
@@ -681,18 +682,18 @@ resolvearray 0/25
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
-resolvehandle 2/33
+resolvehandle 0/33
 resolveinquiry 1/41
 resolvename 0/12
 resolveoptional 0/20
 resolvependingpointers 0/26
 resolvepointer 0/28
 resolverecord 0/19
-resolverestricted 13/36
+resolverestricted 7/36
 resolveset 1/22
 resolveslice 0/14
 resolvesubrange 7/74
-resolvetype 7/74
+resolvetype 6/74
 resolvevariantpart 1/145
 resultnameclash 0/7
 resulttypeof 0/5
@@ -759,19 +760,21 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/51
+usage 0/53
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
 version 0/1
 walkfiles 0/127
+warnat 0/2
+warnunusedlocals 0/13
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
 writecatadmits 0/5
 writecatname 0/6
-writecontext 8/79
+writecontext 5/79
 writedistincttypenote 0/38
 writekeyword 0/2
 writekwword 0/3
