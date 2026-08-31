@@ -81,6 +81,25 @@ answer is not folded into stderr the way a diagnostic is.
 `--std=<name>` is accepted and ignored, so a build script written for version 2
 still runs. `pascalc` itself no longer knows the flag.
 
+**Not every diagnostic is an error.** A warning is written in the same shape on
+the same stream — `file:line:col: warning: message` — and **does not fail the
+compilation**: the exit status is unchanged and the program is still compiled,
+so anything already reading a diagnostic reads one without being taught to.
+There are three, and each is about a program that is legal and probably not
+what was meant:
+
+- a **local variable declared and never used**;
+- a **statement after one that leaves** — after a `goto`, `halt`, `exit`,
+  `break` or `continue`, so it cannot run;
+- a **function that writes its result on one path and not another**, where the
+  standard requires only that it be written somewhere.
+
+A warning is written only for the file named on the command line, never for an
+imported component, and never once an error has been reported — a name that did
+not resolve records no use, so everything after the first error would be
+misdescribed. Every `--dump-` flag suppresses them, because a dump has a reader
+parsing a fixed grammar.
+
 The compiler underneath takes the same flags, and reads them the only way a
 Pascal program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8
 makes `binding(p).name` the argument it was bound to, so it asks its own

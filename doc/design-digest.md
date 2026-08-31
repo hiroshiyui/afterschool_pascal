@@ -3928,6 +3928,44 @@ nothing else. What it would lose, mechanism by mechanism:
   parser reports where it stamps, which is ADR-0246's principle and ADR-0230's
   argument against a walker; the order is completion order and the format
   carries no depth, containment being decidable from the ranges.
+- **A diagnostic can be something other than an error, and three are**
+  (ADR-0272, ADR-0277, ADR-0278). `WarnAt` stands beside `ErrorAt` and **the
+  only difference is that it does not set `errorSeen`** — same format, same
+  stream, same exit status, and no `errorCount` either, that name being a
+  schema's domain in §6.4.7. Three guards govern every warning and each was
+  learned by its absence: `warnOn`, cleared by every `--dump` flag, because a
+  dump has a reader parsing a fixed grammar and `kind-exhaustive` stopped on
+  the first warning ever written; `not errorSeen`, because a name that did not
+  resolve records no use and five variables were called unused underneath the
+  five errors that were the point of the file; and `curFile = mainFile`,
+  because Sema checks a whole imported component and the compiler otherwise
+  warned about ApFront once per importer. `tests/dumps/warnings.pas` pins all
+  three — until it existed no source under `tests/dumps/` warned at all, so
+  dropping `warnOn` left 790 cases green. The three warnings are an unused
+  local (twelve dead declarations in this compiler on the first run), a
+  statement after one of the five that leave, and a function writing its result
+  on one path and not another — the last deliberately **not** a flow analysis,
+  an if whose two arms both leave being a lattice over the statement tree where
+  what is claimed is the *unconditional* transfer. It found one thing in 779
+  sources: a `done` flag in `ResolveRestricted` standing where an `else`
+  belonged.
+- **A comment is not a token, and a position is recorded rather than text**
+  (ADR-0279). §6.1.8's comments are consumed by the lexer, so a formatter had
+  nothing to put back. The lexer now records each comment's start, end and the
+  index of the token it precedes — **never its characters** — and whatever wants
+  those re-reads the source through a cursor, which is also the only way to
+  recover an identifier's spelling, the pool holding the folded one. It is
+  recorded only when `--format`, `--dump-trivia` or `--dump-limits` asks, so an
+  ordinary compilation fills no table and cannot fail for a reason it could not
+  fail for before. `--format` prints from the token stream with a **control
+  stack** rather than an indent counter: an `else` releases exactly one hanging
+  indent, a `;` releases only its own block's, and a routine's tokens stand one
+  level out from a heading declared inside it — which needs to know whether a
+  heading has a block, and `forward`, `external` and a module export-part
+  heading all look like one and have none. The test that fails when the
+  mechanism is undone is `format-check`, whose first claim is the whole
+  semantic one: the token stream must be unchanged but for positions, which is
+  not a sample, the parser seeing the token stream and nothing else.
 - **A document is formatted by the compiler and replaced whole** (ADR-0280).
   `textDocument/formatting` runs `--format` over the scratch file the server
   already writes and answers with a single `TextEdit`, not a diff: computing a

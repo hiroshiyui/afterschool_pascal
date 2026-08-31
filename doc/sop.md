@@ -127,7 +127,7 @@ A change is often two classes. ADR-0102's was A and D: it changed a lowering
     §6.8.1, which is the goto-target rule in the first and Expressions —
     General in the second*". Nothing enforces this (§7).
   - **The number is checked to exist** by `clause-citations` (ADR-0164), which
-    is the half that *can* be mechanical: over the citations in the tree — 9344 across 1537 files as this is written, and the gate prints the pair — it asks whether
+    is the half that *can* be mechanical: over the citations in the tree — 10 307 across 1661 files as this is written, and the gate prints the pair — it asks whether
     each names a clause of some standard. It cannot ask whether it names the
     right one — that is what B1 above is for, and what `langspec-audit` exists
     to attack. A clause number written anywhere in this tree counts as a
@@ -452,6 +452,40 @@ documentation set on the same pass rather than only this file.
   with no lowering in them, both needed the trailer, and one increment earlier
   in the same week was pushed without it. The row was right, and reading it is
   what put the trailer on these two.
+
+**The numbers re-run on 2026-09-01, and only the numbers.** Not an end-to-end
+read of every row — this was the narrower sweep the skill that governs these
+audits names as its own structural blind spot: *step 2 audits what a document
+says about the code, and a document quoting a gate is a different question.*
+Every count in `CLAUDE.md`, this file, `README.md` and `doc/developer-guide.md`
+that a gate reports was checked by **running the gate**, seventeen commits
+after the last such sweep. Five had moved and one was simply wrong:
+
+- `variant-check` 779 sources / 3144 guards → **785 / 3185**;
+  `clause-citations` 9344 across 1537 files → **10 307 across 1661**;
+  `format-check` 774 of 783 → **776 of 785**; `predicate-kinds` 39 predicates
+  → **40**, and `doc/developer-guide.md` had it as **36**, two documents
+  disagreeing about one gate's own answer.
+- **`line-coverage`'s pair was not stale, it was miscast.** *784 of the 853
+  directions never taken* is a **finding** ADR-0274 measured once, written in
+  the present tense beside two ratchets that move with the corpus — which now
+  answer 9747 of 10 608. It is now dated as a measurement, which is the repair;
+  updating the numbers would have destroyed the finding.
+- **And one claim that no arithmetic would have caught.** `CLAUDE.md` said
+  every testable clause of the dialect spec is cited *but for the three AP
+  5.5 d) names*. `run.py --coverage` says **114 of 118**, and the four are
+  6.7.7.6.1, 6.11, 6.13.1 and 6.13.2 — a different count *and* a different
+  identity, the last two being the clauses `stale-component` exists for and so
+  held by a harness rather than by a scenario. The sentence had a specific,
+  checkable, wrong referent, which is the shape ADR-0072 named for clause
+  numbers met once more.
+
+**A count is now stated in one place where it was stated in four.** The
+language server's findings were *twenty-one, fifteen closed, six open* in this
+file's sibling documents and *twenty-six, seventeen, nine* in the section that
+is actually maintained. Rather than syncing four copies, three of them now
+point at the one that is kept — a fact stated twice is a fact that will
+disagree with itself, and this one had, in three places at the same snapshot.
 
 **ADR-0233's rows, added on implementation** (2026-08-28). The compiler became
 three §6.13 program-components, which **narrowed** the linking row below rather

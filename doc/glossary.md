@@ -455,6 +455,21 @@ another (ADR-0009).
 **Sema.** Semantic analysis: scopes, name resolution, type rules, type-denoter
 resolution, constant folding. Owns the type arena `types_`.
 
+**Trivia.** What the lexer consumes and does not turn into a token — here,
+§6.1.8's comments. The word is the compiler-tooling one and not Pascal's; a
+standard has no name for this because a standard has no reason to keep it. What
+is recorded is a **position and never text**: a start, an end, and the index of
+the token the comment stands before. Whatever wants the characters re-reads the
+source, which is also the only way to recover an identifier's spelling, the
+pool holding the folded one (ADR-0279).
+
+**Warning.** A diagnostic that does not fail the compilation — `WarnAt` beside
+`ErrorAt`, same format, same stream, same exit status, and **the only
+difference is that it does not set `errorSeen`** (ADR-0272). Not "a lesser
+error": the category is *this compiles and is probably not what was meant*, and
+it did not exist here until a compiler that had implemented two standards
+completely still had no way to say so.
+
 **Husk.** What a parser node becomes when Sema has decided the construct is
 something else. Five constructs the parser cannot tell apart and Sema can,
 because it can look the name up — a qualified name against a field selection, a
