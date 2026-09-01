@@ -408,6 +408,23 @@ if(Python3_FOUND)
   set_tests_properties(format-check PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
+# ...and whether the compiler still has nothing to say about this tree's own
+# source (ADR-0286). A test case is held to the four warnings by its `.warn`
+# sidecar, in both directions; selfhost/, lib/ and lsp/ have no sidecars, and
+# every harness that compiles them reads the exit status rather than what the
+# compiler said -- so a warning there goes to a build log and nothing fails.
+# Two claims: every implementation source compiles with not one byte on
+# either stream, and every source named as deliberately broken still is, so
+# that a source which breaks cannot become a source that is skipped. Skips
+# (77) when pascalc has not been built.
+if(Python3_FOUND)
+  add_test(NAME warning-free
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/warning_free.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(warning-free PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ...and how long the compiler takes, which nothing here had ever asked
 # (ADR-0270). A millisecond is a fact about the machine that took it, so what
 # is committed is a set of *proportions* -- four stage shares of one compile,

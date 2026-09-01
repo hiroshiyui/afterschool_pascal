@@ -2088,7 +2088,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 798 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 799 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 356 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,
