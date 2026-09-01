@@ -52,7 +52,7 @@ trap 'rm -rf "$work"' EXIT
 # an ordinary program that took longer to build.
 san="-fsanitize=address,undefined -fno-omit-frame-pointer"
 mkdir -p "$work/lib"
-for u in pasrt pasrt_posix pasrt_unicode; do
+for u in pasrt pasrt_posix pasrt_unicode pasrt_task; do
   # shellcheck disable=SC2086
   if ! clang $san -O1 -I"$root/runtime" -c "$root/runtime/$u.c" \
        -o "$work/$u.o" 2>"$work/cc.txt"; then
@@ -62,7 +62,7 @@ for u in pasrt pasrt_posix pasrt_unicode; do
   fi
 done
 ar rcs "$work/lib/libpasrt.a" "$work"/pasrt.o "$work"/pasrt_posix.o \
-       "$work"/pasrt_unicode.o || exit 1
+       "$work"/pasrt_unicode.o "$work"/pasrt_task.o || exit 1
 
 # Every case the catalogue says ends with something outstanding. Read once.
 declare -A outstanding=()
@@ -71,7 +71,15 @@ while read -r name n; do
   [[ ${n:-0} -gt 0 ]] && outstanding[$name]=$n
 done <"$root/tests/checks/heap_balance.txt"
 
-clean=0; skipped=0; failed=0; known=0; reported=0
+# **Three reasons to skip, and they are not the same news.** For as long as
+# this gate existed the tally said `233 skipped` and a reader could not tell a
+# case with no `.out` -- which is nothing to run and is honest -- from one that
+# *failed to link*, which is coverage silently lost. 47 of that 233 were the
+# second kind. They are counted apart now so the number that matters is on its
+# own: `unbuilt` should be 0, and a run where it is not has stopped watching
+# something it used to watch.
+clean=0; failed=0; known=0; reported=0
+noout=0; needsargs=0; unbuilt=0
 for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
            "$root"/tests/dialect/*.pas; do
   [[ -f $src ]] || continue
@@ -79,21 +87,58 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
   dir=$(dirname "$src")
   # A case with no `.out` is one that is meant to fail, and what it prints is a
   # diagnostic rather than a run.
-  [[ -f $dir/$name.out ]] || { skipped=$((skipped + 1)); continue; }
+  [[ -f $dir/$name.out ]] || { noout=$((noout + 1)); continue; }
 
-  argv=()
+  # **A component named with --import needs an object, and this did not supply
+  # one.** `pascalcc` translates and links whatever `--dump-imports` reports
+  # *except* what the caller already named -- "its object is the caller's to
+  # supply, and tests/run_test.sh supplies one" -- and this harness named them
+  # and supplied nothing, so every case with a `.components` sidecar failed at
+  # the link and was counted as a **skip**. 47 of them, silently: the whole of
+  # `lib/` and `lib/dialect/` reached the only memory-safety oracle here
+  # through no case at all. So the components are compiled here the way
+  # run_test.sh compiles them -- each translated with the ones before it, in
+  # the dependency order §6.13 gives -- and the objects go to the link.
+  argv=(); objs=(); compfail=
+  paths=()
+  if [[ -f $dir/$name.importpath ]]; then
+    while IFS= read -r line; do
+      [[ -n $line ]] && paths+=(--import-path "$dir/$line")
+    done <"$dir/$name.importpath"
+  fi
+  import_env=()
+  if [[ -f $dir/$name.importenv ]]; then
+    import_env=("AFTERSCHOOL_PASCAL_PATH=$(sed -e "s|<dir>|$dir|g" \
+                                               "$dir/$name.importenv" | head -1)")
+  fi
   if [[ -f $dir/$name.components ]]; then
-    while read -r rel; do
-      [[ -n $rel ]] && argv+=(--import "$dir/$rel")
+    cn=0
+    while read -r rel _; do
+      [[ -n $rel ]] || continue
+      cn=$((cn + 1))
+      if ! env "${import_env[@]+"${import_env[@]}"}" \
+             AFTERSCHOOL_PASCAL_CFLAGS="$san" \
+             AFTERSCHOOL_PASCAL_RUNTIME="$work/lib" \
+             PASCALC="$pascalc" \
+             "$pascalcc" "${argv[@]+"${argv[@]}"}" \
+             "${paths[@]+"${paths[@]}"}" -c "$dir/$rel" \
+             -o "$work/c$cn.o" >"$work/build.txt" 2>&1; then
+        compfail=yes; break
+      fi
+      argv+=(--import "$dir/$rel")
+      objs+=("$work/c$cn.o")
     done <"$dir/$name.components"
   fi
   opt=-O1
   [[ -f $dir/$name.opt ]] && opt=$(<"$dir/$name.opt")
 
-  if ! AFTERSCHOOL_PASCAL_CFLAGS="$san" \
+  if [[ -n $compfail ]] ||
+     ! env "${import_env[@]+"${import_env[@]}"}" \
+       AFTERSCHOOL_PASCAL_CFLAGS="$san" \
        AFTERSCHOOL_PASCAL_RUNTIME="$work/lib" \
        PASCALC="$pascalc" \
-       "$pascalcc" "$opt" "${argv[@]+"${argv[@]}"}" "$src" \
+       "$pascalcc" "$opt" "${argv[@]+"${argv[@]}"}" \
+       "${paths[@]+"${paths[@]}"}" "$src" "${objs[@]+"${objs[@]}"}" \
        -o "$work/prog" >"$work/build.txt" 2>&1; then
     # **Say why, once.** A program that will not build is counted as a skip,
     # and the tally at the end refuses a run that reached nothing -- which is
@@ -111,7 +156,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
       head -10 "$work/build.txt" >&2
       echo "sanitize: (further build failures are counted, not printed)" >&2
     fi
-    skipped=$((skipped + 1)); continue
+    unbuilt=$((unbuilt + 1)); continue
   fi
 
   in=/dev/null
@@ -123,7 +168,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
   # does not supply. Its own `.out` is what run_test.sh compares; here it is a
   # skip and is counted as one.
   if grep -q "needs a file name as argument" "$work/err.txt"; then
-    skipped=$((skipped + 1)); continue
+    needsargs=$((needsargs + 1)); continue
   fi
 
   # **The two `runtime error:` messages are not the same message**, and telling
@@ -163,7 +208,13 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
 done
 
 echo "sanitize: $clean clean, $known catalogued, $failed flagged,"\
-     "$skipped skipped"
+     "$((noout + needsargs + unbuilt)) skipped"\
+     "($noout with no .out, $needsargs wanting file names, $unbuilt unbuilt)"
+if (( unbuilt > 0 )); then
+  echo "sanitize: $unbuilt case(s) with a golden did not build, and a case" \
+       "that cannot be linked is coverage lost rather than a case with" \
+       "nothing to run -- see the first one printed above" >&2
+fi
 if (( clean < 100 )); then
   echo "sanitize: only $clean programs ran, and the corpus is larger than that" \
        "-- a run that reaches nothing passes for the same reason a clean one" \

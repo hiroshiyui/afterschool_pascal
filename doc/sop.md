@@ -508,6 +508,55 @@ would fail on every internal one -- and that is the design question rather
 than the mechanism. Not built here; recorded so the next reader does not
 conclude from four repairs that the class is closed.
 
+**A fifth shape, found on 2026-09-01 by a `security-audit` pass: a gate that
+prints a claim it never evaluated.** Not a stale number and not an untold
+document -- a check whose *subject* is silently empty, so it passes by asking
+nothing and says so in a sentence a reader takes for a measurement. Two of
+them, in one afternoon, and both were green on every run since they were
+written:
+
+- **`runtime-isoc` never bounded the concurrency unit's headers.** Pass 5
+  compared each `#include` against `$ISO_HEADERS` -- **a variable assigned
+  nowhere in the script**, the other four passes spelling it `iso_headers` and
+  holding base names *without* the `.h`. Under `set -u` the reference killed
+  the subshell it stood in, so `task_extra` came back empty whatever the file
+  included, and the summary went on calling `runtime/pasrt_task.c` *bounded by
+  `<pthread.h>` alone* as a fact. Adding `<sys/mman.h>` to it left the gate
+  **green and silent**; the only visible trace was one line of unread stderr.
+  ADR-0186 makes that list the whole of what a port has to satisfy, so the
+  claim was load-bearing and unchecked.
+- **`sanitizers` could not link 47 of the cases it counted.** `pascalcc`
+  translates every component `--dump-imports` reports *except* what the caller
+  named with `--import` -- "its object is the caller's to supply" -- and this
+  harness named them and supplied none, so every case with a `.components`
+  sidecar failed at the **link** and was counted as a *skip*. The runtime's
+  fourth translation unit was missing from the gate's own `libpasrt.a` too
+  (ADR-0268 added `runtime/pasrt_task.c` after ADR-0261 wrote the list), so
+  `tests/dialect/concurrency.pas` could not link either. 288 of 346 runnable
+  programs were reaching the only memory-safety oracle here, and the whole of
+  `lib/` and `lib/dialect/` was reaching it through **no case at all**. Both
+  are repaired -- 288 clean becomes **334**, and the 187 remaining skips are
+  exactly the 175 cases with no `.out` plus the 12 wanting file names on a
+  command line. The argument is the mutation: under-allocating a channel's
+  buffer by one element is an ASan heap-buffer-overflow the repaired gate
+  **flags**, and that the gate as it stood **passed** -- 288 clean, 0 flagged,
+  exit 0, with a heap overflow live in the runtime.
+
+The shape is `format-check`'s (ADR-0282) met twice more, and the lesson is
+narrower than "test the tests": **a gate that reports a count is checkable and
+a gate that reports a property is not.** `sanitize.sh` prints its four
+tallies, and the skip number had been 233 in plain sight for as long as the
+gate existed. What no reader could see is that a skip meant *did not link*
+rather than *has no `.out`*. A denominator a gate cannot fall below is the
+cheap answer -- this one has a floor of 100 and 288 cleared it comfortably --
+and the repair is to make the harness say **why** it skipped, since the three
+reasons were one number and only two of them are honest. It now reports
+`187 skipped (175 with no .out, 12 wanting file names, 0 unbuilt)`, and says
+in words that a case which cannot be linked is coverage lost rather than a
+case with nothing to run. **`unbuilt` is the number to read**: removing the
+fourth translation unit again makes it 1 and prints the reason, where the old
+tally moved from 233 to 234 and said nothing.
+
 **A count is now stated in one place where it was stated in four.** The
 language server's findings were *twenty-one, fifteen closed, six open* in this
 file's sibling documents and *twenty-six, seventeen, nine* in the section that

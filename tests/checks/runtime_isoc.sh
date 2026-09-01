@@ -330,14 +330,23 @@ if [[ ! -f $task_src ]]; then
        "moved, this check moved with it (ADR-0268)" >&2
   exit 1
 fi
-task_allowed="pthread.h"
+# The base name, and `$iso_headers` in the spelling the rest of this script
+# uses: it is lower-case and holds names *without* the `.h`, which is what
+# passes 3 and 4 compare against. This read `$ISO_HEADERS` -- a variable
+# assigned nowhere -- and compared it against names *with* the suffix, so under
+# `set -u` the reference killed the subshell, `task_extra` came back empty
+# whatever the file included, and the summary below went on calling this unit
+# "bounded by <pthread.h> alone" as a fact. Adding <sys/mman.h> to
+# runtime/pasrt_task.c left the gate green and silent.
+task_allowed="pthread"
 task_extra=$(grep -oE '^[[:space:]]*#[[:space:]]*include[[:space:]]*<[^>]+>' \
                "$task_src" |
              grep -oE '<[^>]+>' | tr -d '<>' | sort -u |
              while read -r hh; do
-               case " $ISO_HEADERS $task_allowed pasrt.h " in
-                 *" $hh "*) ;;
-                 *) echo "$hh" ;;
+               base=${hh%.h}
+               case " $iso_headers $task_allowed " in
+                 *" $base "*) ;;
+                 *) echo "<$hh>" ;;
                esac
              done)
 if [[ -n $task_extra ]]; then
