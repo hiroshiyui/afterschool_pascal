@@ -174,6 +174,19 @@ said the printer had to be *told* where its indent begins, which only a parse
 can answer; the printer accumulates that depth itself as it walks the token
 stream, and the whole feature is a gate on two routines (ADR-0284).
 
+**And the lesson is not about this page.** ADR-0286 is the third instance and
+it was found in `doc/sop.md` §7, which is a register of what is *not* checked
+and so is the one document here whose rows are supposed to be uncomfortable.
+A row there said nothing holds ADR-0283's zero, and gave a reason for
+declining a gate: the count is a fixed point rather than a number, so a gate
+would have to iterate to convergence. Iterating is what **reaching** zero
+needed; holding it needs one sweep. The gate is 1.2 seconds, and removing one
+`protected` from the compiler's own source leaves 798 of 798 cases green — so
+the row was right about the gap and wrong about the cost, which is the same
+shape twice over. **A reason written beside a declined item is an estimate
+like any other**, wherever it is written, and this page's own rule applies to
+it: it is a report or it is a guess.
+
 **An item can be re-scoped by measuring it rather than by arguing about it.**
 `--dump-uses --at line:col` was asked for and the measurement closed it the
 other way: the flag saves no compiler time, and narrowing the query would have
@@ -615,7 +628,11 @@ proportions and not the absolute**: the denominator is every field of every
 frame the compiler emits for its own source, so it moves with each declaration
 added to any of the three program-components. **The gate prints its own count
 and this sentence does not**, that number having been quoted here and gone
-stale in two days: it said 4999 and the gate says 8955.
+stale in two days: it said 4999 and the gate then said 8955. **And this
+sentence went stale in its turn**, which is the argument rather than an
+embarrassment -- 8955 stood here while `CLAUDE.md` said 9320 and the gate, run
+on 2026-09-01, says **10 346**. Two documents answered differently about one
+gate and neither was right. Run it.
 
 **The split is why, and not by adding a declaration.** A module emits the
 frame *type* of every frame it can index, which includes the frames of the
