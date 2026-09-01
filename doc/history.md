@@ -39,6 +39,7 @@ part that never changes was the first 2,000 lines a reader met.
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | the roadmap's five tooling items, moved the same way — four built and the fifth never open |
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the FFI and container residue, and the prior it arrived at: ask whether the address can be retired at the call |
 | [The concurrency row and the four cheaper answers](#the-concurrency-row-and-the-four-cheaper-answers) | the cell that became an essay — measure the cost before naming the mechanism, four times over and once against itself |
+| [The four decisions the goal forced](#the-four-decisions-the-goal-forced) | ADR-0109's four, and the thing they have in common: not one decided the question its row was written to pose |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -6089,3 +6090,60 @@ differential can only ever check the ISO 7185 core, because nobody else
 implements this dialect — and it was taken for that reason (ADR-0234). It
 checks 103 of 244 cases with a golden today and will check fewer next
 release.
+
+---
+
+## The four decisions the goal forced
+
+ADR-0109 set the project's only remaining goal and named four decisions that
+would have to be made to reach it. `doc/roadmap.md` carried them as a table
+from then until 2026-09-01, when the last was answered and the table stopped
+being a queue.
+
+**Not one of the four decided the question its row was written to pose**, and
+that — rather than the four answers — is what the table is kept for.
+
+- **The memory-safety model** was posed as a fork: ARC or borrow-checking. It
+  was answered in two halves and *neither half took the fork*. Lifetime turned
+  out to be already here, being what a file variable has been since 1982
+  (ADR-0151) — except that the sentence quantifies over a **variable**, and one
+  created by `new` is held by nothing, which is what `owned ^T` fixed
+  (ADR-0181). Aliasing was **withdrawn as posed** (ADR-0201): neither candidate
+  can reach `^T`, ADR-0117's containment having fixed what an ISO program's
+  only reference type means; the dialect's answer for the three affine kinds is
+  refusal; and the one alias that does exist cannot escape, because Pascal has
+  no address-of and `new` is the only producer of a pointer. **Unformable
+  rather than checked**, which is stronger and free.
+- **The text model** was offered a choice between *a wider character type or a
+  text type*, and it was not a choice: widening `char` stops `set of char`
+  compiling under ADR-0028's 256-value cap. What was built is a value with a
+  declared capacity, normalised on construction.
+- **The memory model** was recorded as unstarted and blocked on the safety
+  model. The safety model narrowed it rather than unblocking it — ADR-0201's
+  construct is share-nothing, so there is no shared mutable state for a memory
+  model to be about — and then **building the construct answered what was
+  left** (ADR-0268). What a value crossing between two threads guarantees is
+  that it was copied.
+- **How far the C++ reference front end follows** was answered by **deletion**
+  (ADR-0232). It was frozen at the conformance surface, `difftest` skipped
+  every dialect source, and when the surface went it had nothing left to
+  compare.
+
+The fourth is the only one that left a live consequence, and it is not in this
+chapter: nothing now compares this front end with a second answer, which is
+[the roadmap's open question §1](roadmap.md#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+and `doc/sop.md` §7's largest entry.
+
+### The table as it stood
+
+**Four decisions the goal forces**, each to get its own record when it is
+made — and **all four are now made**, three of them by discovery rather than by
+design and the fourth by deleting the thing it was about. The table is kept
+because how each was answered is the useful part; none of it is a queue:
+
+| Decision | Where it stands |
+| --- | --- |
+| **The memory-safety model** | **Answered, in both halves and by discovery rather than by design** — four records, and not one of them decided the question the row was written to pose. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — stood here for a long time as undecidable until the fork was **withdrawn as posed** (ADR-0201). Neither candidate can reach `^T`, ADR-0117's containment fixing what an ISO program's only reference type means; the dialect's answer for the three affine kinds is refusal, given three times, so there is no second name for either candidate to govern; and the one alias that does exist — a `var` parameter bound to an owned value's referent — cannot escape, because Pascal has no address-of and `new` is the only producer of a pointer. **Unformable rather than checked**, which is stronger and free, and silent if a future feature takes it away (`doc/sop.md` §7). What was left of the fork was exactly one thing — **two threads of control**, the only sentence that breaks *a borrow cannot outlive a call because the caller is not running during it* — and ADR-0268 built it in the shape ADR-0201 designed: share-nothing, and every task a block spawned joined before that block releases anything, which is what makes the sentence true again. **Answered in full**; the concurrency row of [Where the ideas come from](roadmap.md#where-the-ideas-come-from) is where it stands, and what it left open is [What each landed feature left open](#what-each-landed-feature-left-open). |
+| **The text model** | **Done** (ADR-0189 – ADR-0193, ADR-0196, ADR-0199, AP 6.4.15). Nothing of the clause is left, and the row's own offer — *a wider character type or a text type* — turned out not to be a choice: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap. What was built instead, what it cost, and the one argued-rather-than-measured decision in it — refusing an integer index — are in [`doc/history.md`](history.md#the-text-model). **That refusal has since had its first external test** (ADR-0237): LSP counts positions in UTF-16 code units, a fourth unit this page said nothing answers in, and the count never needed the index — a scalar below U+10000 is one code unit and one at or above it is two, so the conversion is a walk over the scalar view, unchanged |
+| **The memory model** | **Answered by the construct rather than by a model** (ADR-0268). It could not be designed before the safety model, shared mutable state being where the two meet; the safety model narrowed it, ADR-0201's construct being share-nothing, and building that construct answered what was left. A task takes only transferable values and channels, may name only its own variables (AP 6.7.8.2), and is joined before the block that spawned it releases anything — so there is no shared mutable state for a memory model to be about, and what a value crossing between two threads guarantees is that it was *copied*. What is not claimed: `ThreadSanitizer` is the oracle this rests on and it is not a gate, and the missing join is caught by no case (`doc/sop.md` §7). |
+| ~~**How far the C++ reference front end follows**~~ (ADR-0108) | **Answered by deletion** (ADR-0232). It was frozen at the conformance surface — `difftest` skipped every dialect source — and when the conformance surface went, `difftest` had nothing left to compare and `src/` had no reader. Both are gone. The question the row was really about survives as [open question §1](roadmap.md#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one) and as `doc/sop.md` §7's largest entry: nothing now compares this front end with a second answer. |

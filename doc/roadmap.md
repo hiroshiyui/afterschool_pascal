@@ -19,7 +19,7 @@ nobody has decided yet.
 
 | Chapter | What it holds |
 | --- | --- |
-| [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forced — all four now answered, three by discovery rather than by design |
+| [The goal](#the-goal-adr-0109) | what this is all for — and all four areas ADR-0109 names now have an answer, which is not the same as the goal being met |
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
@@ -49,17 +49,38 @@ there is one language and no mode to be put into. What the standards still are
 is where this language came from — it contains Extended Pascal, so every clause
 reading in this tree still describes it — and not an obligation it is under.
 
-**Four decisions the goal forces**, each to get its own record when it is
-made — and **all four are now made**, three of them by discovery rather than by
-design and the fourth by deleting the thing it was about. The table is kept
-because how each was answered is the useful part; none of it is a queue:
+**All four of the areas ADR-0109 names now have an answer**, the last of them
+on 2026-08-30:
 
-| Decision | Where it stands |
+| Area | Where it is answered |
 | --- | --- |
-| **The memory-safety model** | **Answered, in both halves and by discovery rather than by design** — four records, and not one of them decided the question the row was written to pose. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — stood here for a long time as undecidable until the fork was **withdrawn as posed** (ADR-0201). Neither candidate can reach `^T`, ADR-0117's containment fixing what an ISO program's only reference type means; the dialect's answer for the three affine kinds is refusal, given three times, so there is no second name for either candidate to govern; and the one alias that does exist — a `var` parameter bound to an owned value's referent — cannot escape, because Pascal has no address-of and `new` is the only producer of a pointer. **Unformable rather than checked**, which is stronger and free, and silent if a future feature takes it away (`doc/sop.md` §7). What was left of the fork was exactly one thing — **two threads of control**, the only sentence that breaks *a borrow cannot outlive a call because the caller is not running during it* — and ADR-0268 built it in the shape ADR-0201 designed: share-nothing, and every task a block spawned joined before that block releases anything, which is what makes the sentence true again. **Answered in full**; the concurrency row of [Where the ideas come from](#where-the-ideas-come-from) is where it stands, and what it left open is [What each landed feature left open](#what-each-landed-feature-left-open). |
-| **The text model** | **Done** (ADR-0189 – ADR-0193, ADR-0196, ADR-0199, AP 6.4.15). Nothing of the clause is left, and the row's own offer — *a wider character type or a text type* — turned out not to be a choice: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap. What was built instead, what it cost, and the one argued-rather-than-measured decision in it — refusing an integer index — are in [`doc/history.md`](history.md#the-text-model). **That refusal has since had its first external test** (ADR-0237): LSP counts positions in UTF-16 code units, a fourth unit this page said nothing answers in, and the count never needed the index — a scalar below U+10000 is one code unit and one at or above it is two, so the conversion is a walk over the scalar view, unchanged |
-| **The memory model** | **Answered by the construct rather than by a model** (ADR-0268). It could not be designed before the safety model, shared mutable state being where the two meet; the safety model narrowed it, ADR-0201's construct being share-nothing, and building that construct answered what was left. A task takes only transferable values and channels, may name only its own variables (AP 6.7.8.2), and is joined before the block that spawned it releases anything — so there is no shared mutable state for a memory model to be about, and what a value crossing between two threads guarantees is that it was *copied*. What is not claimed: `ThreadSanitizer` is the oracle this rests on and it is not a gate, and the missing join is caught by no case (`doc/sop.md` §7). |
-| ~~**How far the C++ reference front end follows**~~ (ADR-0108) | **Answered by deletion** (ADR-0232). It was frozen at the conformance surface — `difftest` skipped every dialect source — and when the conformance surface went, `difftest` had nothing left to compare and `src/` had no reader. Both are gone. The question the row was really about survives as [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one) and as `doc/sop.md` §7's largest entry: nothing now compares this front end with a second answer. |
+| networking | `PasNet` — a socket is a handle and both ends are strings, so `getaddrinfo` decides what they mean and no program writes a byte order — with `Wait` over `poll`, and `PasTls` and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265) |
+| internationalisation | AP 6.4.15's text model: UTF-8 in normal form C, an element is an extended grapheme cluster, an integer index refused — and Unicode's own conformance files judge it, which is the one oracle here nobody in this project wrote (ADR-0189 – ADR-0193, ADR-0196, ADR-0199) |
+| concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
+| memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
+
+**That is not the goal met**, and the distinction is the one this page exists
+to keep making. A facility that exists is not a facility that is pleasant to
+use, and ADR-0109's test was never *does the language have it* — no standard
+governs this language, so that question has no asker — but **does a program
+someone would actually write today need it, and can it get it**. What answers
+that is somebody writing a program and finding it hard, which is what
+[What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for)
+is waiting for and what [the language server](#the-program-that-would-judge-the-language)
+was written to produce. Two of the four areas have been used in anger by
+something in this tree and two have not.
+
+**The four *decisions* the goal forced are all made too** — three of them by
+discovery rather than by design, and the fourth by deleting the thing it was
+about. Not one decided the question its row was written to pose, which is the
+part worth reading: the table, with what each answer cost, is in
+[`doc/history.md`](history.md#the-four-decisions-the-goal-forced).
+
+**One thing outlived its row.** The C++ reference front end went (ADR-0232),
+and with it the last comparison of this front end against a second answer —
+which is [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+and `doc/sop.md` §7's largest entry, and is stated there rather than here so
+that one fact does not come to disagree with itself.
 
 What is already in hand and was not built for this: modules and separate
 compilation (ADR-0053, ADR-0079) mean a library needs no new language
