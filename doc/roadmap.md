@@ -411,11 +411,18 @@ a decision nobody has asked for twice.
   does not ask; nothing else does either, which is why it survived to be met
   by the first program that needed it.
 
-**The IDE is not struck; it is later.** An editor wants a language server
-inside it, so server-first is the right order even if both are eventually
-written — and the terminal binding the IDE needs is small and obviously shaped
-(a `pasx_` binding in `runtime/pasrt_posix.c` bounded by its headers, with
-`<termios.h>` joining ADR-0186's catalogue) whenever something asks for it.
+**The IDE is not struck; it is later — and its prerequisite is now built.**
+An editor wants a language server inside it, so server-first was the right
+order even if both are eventually written. What this paragraph used to say was
+that the terminal binding the IDE needs is small and obviously shaped — a
+`pasx_` binding in `runtime/pasrt_posix.c` bounded by its headers, with
+`<termios.h>` joining ADR-0186's catalogue — *whenever something asks for it*.
+ADR-0262 built exactly that: `PasTerm` over five `pasx_term_*` routines, with
+`<termios.h>` and `<sys/ioctl.h>` joining the catalogue, and the saved
+settings living in the runtime because a program cannot hold a `struct
+termios` at all. So the estimate was right and the row is no longer waiting on
+anything. What it waits on now is a client, which is ADR-0116's bar and not a
+capability.
 
 Everything after that is unknown on purpose. **The list of what this demands is
 the product of writing it**, and enumerating it here would be designing

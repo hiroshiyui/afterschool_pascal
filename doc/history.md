@@ -24,7 +24,7 @@ part that never changes was the first 2,000 lines a reader met.
 | [Stage 2](#stage-2--isoiec-102061991) | ISO/IEC 10206:1991 — [how it arrives](#how-the-second-standard-arrives), [every feature](#the-features-in-the-order-they-landed), [what is left](#what-is-left) |
 | [Conformance sweeps](#conformance-sweeps) | what was checked rather than asserted, and what that found |
 | [The two things that were not features](#the-two-things-that-were-not-features) | a required document, and an oracle nobody here wrote |
-| [The dialect, increment by increment](#the-dialect-increment-by-increment) | thirty of them, [indexed](#the-increments-at-a-glance) |
+| [The dialect, increment by increment](#the-dialect-increment-by-increment) | forty-seven of them, [indexed](#the-increments-at-a-glance) — the first thirty with a section each, and [why the rest are a table](#the-increments-after-thirty) |
 | [What the roadmap answered](#what-the-roadmap-answered) | the questions that page carried and closed, and what each found on its first run |
 | [Cross-platform support](#cross-platform-support-measured) | what the x86-64 lock turned out to be, measured over twenty-five targets |
 | [The text model](#the-text-model) | AP 6.4.15 in four increments, and where its oracle story ends |
@@ -1290,16 +1290,23 @@ built towards it so far.
 
 ### The increments at a glance
 
-Thirty so far. What each one *is*, for someone who wants to use it, is in
+Forty-seven so far. What each one *is*, for someone who wants to use it, is in
 [README's "What it adds so far"](../README.md#what-it-adds-so-far); the
 sections below are why each was built in that order and what building it
-found. Nine of the thirty — 1, 2, 4, 11, 12, 13, 23, 26 and 27 — are library
-work rather than language work, and several of those found a compiler defect
-nothing else in the tree could reach, which is a theme the sections return
-to. One of the thirty, 24, built nothing at all: it is here because it is the
-last word on the question ADR-0151 deferred, and because withdrawing a
-question is a thing that happens to a language and has to be recorded
-somewhere.
+found. Seventeen of the forty-seven — 1, 2, 4, 11, 12, 13, 23, 26, 27, 31, 33,
+34, 38, 41, 42, 43 and 44 — are library work rather than language work, and
+several of those found a compiler defect nothing else in the tree could reach,
+which is a theme the sections return to. One of them, 24, built nothing at
+all: it is here because it is the last word on the question ADR-0151 deferred,
+and because withdrawing a question is a thing that happens to a language and
+has to be recorded somewhere.
+
+**The first thirty have a section each and the rest do not**, which is
+explained [below the table](#the-increments-after-thirty) rather than left for
+a reader to notice. This preamble said *thirty* for seventeen increments,
+which is the thing a table of this kind fails at: it is appended to by whoever
+lands an increment and read by nobody, so the sentence counting it goes stale
+silently. The count is now the row count, and the sentence says so.
 
 | # | What landed | Record |
 | --- | --- | --- |
@@ -1333,6 +1340,74 @@ somewhere.
 | 28 | `release(h)` — the closer's result, at last | ADR-0206 |
 | 29 | `break` and `continue` — one loop left early | ADR-0208 |
 | 30 | A discriminant may name a type — a container written once | ADR-0209 |
+| 31 | `PasContainer` — a growable vector and a string-keyed map, over whatever element type a program names | ADR-0211 – ADR-0213, ADR-0216 |
+| 32 | `type of` takes a whole variable-access, so a generic reads an element type off the container it was handed | ADR-0214, ADR-0215 |
+| 33 | `PasJson` — a document navigated rather than mapped | ADR-0217 |
+| 34 | `PasLsp` — a frame whose header is lines and whose body is bytes | ADR-0218 |
+| 35 | The **empty** substring, and a name bound to the null-string | ADR-0219, ADR-0220, ADR-0224 |
+| 36 | A string-valued and a real-valued constant-expression | ADR-0226, ADR-0227 |
+| 37 | `binding(f).writable` — a program may ask before it writes | ADR-0240 |
+| 38 | `PasFS.TemporaryPath` — a name no other live process will choose, with the file created | ADR-0242, ADR-0243 |
+| 39 | An import that names no file — `--import-path` and `AFTERSCHOOL_PASCAL_PATH` | ADR-0244 |
+| 40 | The **factory** — a function of this program may answer a handle, and a fallible value may be owned | ADR-0254 – ADR-0256 |
+| 41 | A map keyed by whatever a program names, and no constraint was needed | ADR-0260 |
+| 42 | `PasTerm` — the terminal, and the settings the runtime remembers | ADR-0262 |
+| 43 | `PasTls` — TLS is a module, and the only new risk is a transcription | ADR-0264 |
+| 44 | `PasHttp` and `PasHttps` — the grammar and the transport are two modules | ADR-0265 |
+| 45 | A type parameter may say what it needs | ADR-0266 |
+| 46 | `take` widens — **a handle moves** | ADR-0267 |
+| 47 | **Two threads of control** — `task`, `spawn`, `channel [n] of T`, `send`, `receive` | ADR-0268 |
+
+### The increments after thirty
+
+**Seventeen increments landed after the table stopped counting**, and this
+section is what stands where seventeen `###` sections would. That is a
+decision and not an omission, so it is worth the paragraph.
+
+The sections above were each written while the increment was live — what was
+estimated, what the estimate got wrong, what building it found — and a section
+written afterwards from its own record would say what the record says, in more
+words and with a worse claim to have been there. This file's rule is that it
+grows at the end and does not get rewritten; reconstructing seventeen
+narratives would break it in the one way that matters, by producing prose that
+reads like a contemporaneous account and is not one.
+
+**Most of them are narrated already, in chapters organised by something other
+than the increment count**, which is the real reason the table stopped being
+kept: the file outgrew its own index.
+
+- **31, 32, 41 and 45** — the generic, from a container written once to a
+  type parameter that says what it needs — continue
+  [the thirtieth increment](#the-thirtieth-increment-half-a-container-and-the-wall-was-not-where-it-was-expected),
+  which is where the wall turned out not to be.
+- **33, 34, 37 and 39** are the language server's prerequisites and its
+  compiler-side surface, in
+  [The language server](#the-language-server-and-the-bound-it-found-before-it-ran)
+  — including the five **bounds** that chapter is worth reading for, every one
+  of them chosen by counting what the largest thing in the tree needed at the
+  time, and the largest thing in the tree was a test case.
+- **40**, the factory, is in
+  [What each landed feature left open](#what-each-landed-feature-left-open):
+  it was the one item on that page with a named cost, and the estimate was
+  wrong in *both* directions at once.
+- **46 and 47**, the widened move and the two threads of control, are in
+  [The concurrency row and the four cheaper answers](#the-concurrency-row-and-the-four-cheaper-answers)
+  — the row that named its own trigger four times and was answered by
+  something cheaper each time, and was then built anyway on an instruction,
+  with the record saying in as many words that ADR-0116's bar is not met.
+
+**Four have their record and nothing else**, and each is a small, complete
+thing rather than a story: **35** and **36**, the empty substring and the two
+constant-expression folds, which are language rules with the clause in the
+record; **38**, a temporary name no other live process will choose **with the
+file created**, so it stays taken after this process has gone; **42**,
+`PasTerm`, which is the prerequisite `doc/roadmap.md` named for a text-mode
+IDE and then built before anything asked for it; and **43** and **44**, TLS
+and HTTP over it, whose interesting half is a gate rather than a feature —
+six numbers transcribed out of OpenSSL's headers that a wrong transcription
+would have made *quietly* wrong, `SSL_VERIFY_PEER` written as 0 being
+`SSL_VERIFY_NONE` with every behavioural case still green.
+
 
 ### The first increment (done)
 
