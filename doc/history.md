@@ -4513,6 +4513,26 @@ with it, unfixed and unrecorded.
 
 ### The chapter as it stood, and the argument it was made on
 
+**The IDE was withdrawn on 2026-09-01**, which closes the argument below
+rather than leaving it hanging. It was never struck when the chapter changed
+shape — the roadmap carried it as *later, not struck* for six increments — and
+what withdrew it is not a discovery but a judgement: **the language server is
+the better tool for what the IDE was wanted for**, it exists, it answers eight
+questions about a document, and it is this project's own development tooling
+over MCP. The thing the IDE was proposed to buy — a *Pascal-lineage answer
+key*, so that "this was easier in Turbo Pascal" would be a finding rather than
+a matter of taste — was real and is given up, and the argument below is worth
+reading for having named that cost before anyone knew whether it would matter.
+
+**No capability went with it.** `PasTerm` (ADR-0262) built the terminal
+binding the IDE would have needed, before anything asked for it and while the
+roadmap still listed the IDE as waiting on exactly that — five `pasx_term_*`
+routines, `<termios.h>` and `<sys/ioctl.h>` joining ADR-0186's catalogue, and
+the saved settings living in the runtime because a program cannot hold a
+`struct termios` at all. It stands as a library module like any other, and a
+program that wants a terminal has one.
+
+
 `doc/roadmap.md` carried the argument below from before the server existed
 until 2026-09-01, when the last of its narrative stopped being about anything
 open. It is moved here whole, in the tense it was written in, because the

@@ -233,7 +233,8 @@ large enough to get tired inside is *pleasant* to write in this dialect —
 where the boilerplate collects, which of the three affine kinds gets in the
 way, whether `T ! E` and `try` still read well at depth, whether a module's
 export list is a help or a chore at the fortieth import. **The argument, why a
-server rather than the text-mode IDE this chapter first proposed, and what
+server rather than the text-mode IDE this chapter first proposed — now
+withdrawn — and what
 each of its increments found are in
 [`doc/history.md`](history.md#the-language-server-and-the-bound-it-found-before-it-ran)**
 — including the one result no golden here could have produced, an
@@ -445,18 +446,14 @@ a decision nobody has asked for twice.
   does not ask; nothing else does either, which is why it survived to be met
   by the first program that needed it.
 
-**The IDE is not struck; it is later — and its prerequisite is now built.**
-An editor wants a language server inside it, so server-first was the right
-order even if both are eventually written. What this paragraph used to say was
-that the terminal binding the IDE needs is small and obviously shaped — a
-`pasx_` binding in `runtime/pasrt_posix.c` bounded by its headers, with
-`<termios.h>` joining ADR-0186's catalogue — *whenever something asks for it*.
-ADR-0262 built exactly that: `PasTerm` over five `pasx_term_*` routines, with
-`<termios.h>` and `<sys/ioctl.h>` joining the catalogue, and the saved
-settings living in the runtime because a program cannot hold a `struct
-termios` at all. So the estimate was right and the row is no longer waiting on
-anything. What it waits on now is a client, which is ADR-0116's bar and not a
-capability.
+**The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
+and by decision rather than by discovery: the language server is the better
+tool for what the IDE was wanted for, it exists, and it is in daily use here.
+The reasoning that chose a server over it is in
+[`doc/history.md`](history.md#the-chapter-as-it-stood-and-the-argument-it-was-made-on),
+and so is the withdrawal. Nothing was lost in capability — `PasTerm` built the
+terminal binding the IDE would have needed (ADR-0262), and it stands as a
+library module like any other.
 
 Everything after that is unknown on purpose. **The list of what this demands is
 the product of writing it**, and enumerating it here would be designing
