@@ -13,6 +13,30 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-09-01
+
+The release that emptied `doc/roadmap.md`'s *What would make this easier to
+work on*. Three rows closed since 3.3.0 and all three by the same method the
+chapter kept recommending to itself -- attempt the row rather than believe it.
+Two were built and the third talked the page out of itself.
+
+**The fourth warning** (ADR-0283) is the first whose answer is a property of
+the whole compilation rather than of one routine, and it is a *fixed point*
+rather than a list: protecting one parameter stops its callers' arguments from
+being threatened and exposes the next layer. One pass over this tree reports
+130 sites and seven passes report zero, having added `protected` 54 times.
+
+**`--format --range=L:H`** (ADR-0284) was recorded as needing a parse to know
+where a range's indent begins. It needs no parse: the printer accumulates that
+depth as it walks, so the lines before the range are walked without being
+written. `textDocument/rangeFormatting` follows from it.
+
+**And the `style:` gate was tried and declined** (ADR-0285). A reformat of this
+tree rewrites 42 601 lines and grows the implementation 6.8%, almost all of it
+style rather than defect. What the attempt was worth is five layout defects it
+found -- every one token-preserving, so every oracle here was green on all
+five.
+
 ### Added
 
 - **`pascalc --format --range=L:H`** (ADR-0284) writes those lines alone, with
@@ -49,6 +73,14 @@ appears below in the release where it still existed.
   component can answer.
 
 ### Changed
+
+- **A program that compiled with three warnings may now print a fourth.** As
+  in 3.3.0, nothing about what it *does* changes -- the emitted IR, the exit
+  status and the program's own output are untouched -- but a `var` parameter
+  the body never writes through is now remarked on. A build script that treats
+  any compiler output as failure is what notices. Every `--dump` flag still
+  suppresses warnings, and the new one is never written for an imported
+  component, nor once an error has been reported.
 
 - **54 parameters of the compiler, the library and the language server are now
   `protected var`.** They are the warning's own first finding, and three were
@@ -3127,6 +3159,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.4.0
 [3.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.3.0
 [3.2.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.2.0
 [3.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.1.0

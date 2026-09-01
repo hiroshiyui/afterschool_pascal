@@ -149,7 +149,7 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.stringschema = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 50)
 @v.aptypes.handleclosers = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 51)
 
-define void @m.aptypes.afterschool.21c80b1e38665009.init() {
+define void @m.aptypes.afterschool.1b47805a152d821c.init() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
@@ -208,7 +208,7 @@ L1:
   ret void
 }
 
-define void @m.aptypes.afterschool.21c80b1e38665009.fini() {
+define void @m.aptypes.afterschool.1b47805a152d821c.fini() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 22
@@ -218,7 +218,7 @@ L1:
   ret void
 }
 
-; strclear 2941
+; strclear 2948
 define void @p.aptypes.strclear(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -242,7 +242,7 @@ L3:
   ret void
 }
 
-; strappend 2950
+; strappend 2957
 define void @p.aptypes.strappend(ptr %link, ptr %a0, i8 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -311,7 +311,7 @@ L3:
   ret void
 }
 
-; put 2966
+; put 2973
 define void @p.aptypes.put(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -338,7 +338,7 @@ L4:
   ret void
 }
 
-; putlit 2973
+; putlit 2980
 define internal void @p89(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -430,7 +430,7 @@ L14:
   ret void
 }
 
-; putirlit 2985
+; putirlit 2992
 define void @p.aptypes.putirlit(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -523,7 +523,7 @@ L14:
   ret void
 }
 
-; putint 2997
+; putint 3004
 define internal void @p90(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -704,7 +704,7 @@ L30:
   ret void
 }
 
-; errorat 3030
+; errorat 3037
 define void @p.aptypes.errorat(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -792,7 +792,7 @@ L6:
   ret void
 }
 
-; warnat 3041
+; warnat 3048
 define void @p.aptypes.warnat(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -864,7 +864,7 @@ L4:
   ret void
 }
 
-; pooladd 3055
+; pooladd 3062
 define i32 @p.aptypes.pooladd(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1015,7 +1015,7 @@ L6:
   ret i32 %v80
 }
 
-; writepool 3072
+; writepool 3079
 define void @p.aptypes.writepool(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1088,7 +1088,7 @@ L9:
   ret void
 }
 
-; pooliswide 3085
+; pooliswide 3092
 define i1 @p.aptypes.pooliswide(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1247,7 +1247,7 @@ L13:
   ret i1 %v80
 }
 
-; poolis 3101
+; poolis 3108
 define i1 @p.aptypes.poolis(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1416,7 +1416,7 @@ L13:
   ret i1 %v89
 }
 
-; poolstarts 3121
+; poolstarts 3128
 define internal i1 @p91(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1585,7 +1585,7 @@ L13:
   ret i1 %v89
 }
 
-; reservedforeignname 3164
+; reservedforeignname 3171
 define i1 @p.aptypes.reservedforeignname(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2101,7 +2101,7 @@ L101:
   ret i1 %v269
 }
 
-; poolsame 3217
+; poolsame 3224
 define i1 @p.aptypes.poolsame(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2229,7 +2229,7 @@ L4:
   ret i1 %v69
 }
 
-; poolput 3235
+; poolput 3242
 define void @p.aptypes.poolput(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2278,7 +2278,7 @@ L3:
   ret void
 }
 
-; internword 3245
+; internword 3252
 define void @p.aptypes.internword(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2394,7 +2394,7 @@ L16:
   ret void
 }
 
-; internwide 3257
+; internwide 3264
 define void @p.aptypes.internwide(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2510,7 +2510,7 @@ L16:
   ret void
 }
 
-; internwide2 3271
+; internwide2 3278
 define void @p.aptypes.internwide2(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2742,7 +2742,7 @@ L39:
   ret void
 }
 
-; internresultname 3290
+; internresultname 3297
 define void @p.aptypes.internresultname(ptr %link, i32 %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2854,7 +2854,7 @@ L16:
   ret void
 }
 
-; internbindingname 3303
+; internbindingname 3310
 define void @p.aptypes.internbindingname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3050,7 +3050,7 @@ L31:
   ret void
 }
 
-; interncallresultname 3322
+; interncallresultname 3329
 define void @p.aptypes.interncallresultname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3245,7 +3245,7 @@ L31:
   ret void
 }
 
-; interntryname 3343
+; interntryname 3350
 define void @p.aptypes.interntryname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3424,7 +3424,7 @@ L29:
   ret void
 }
 
-; internwithname 3359
+; internwithname 3366
 define void @p.aptypes.internwithname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3604,7 +3604,7 @@ L29:
   ret void
 }
 
-; internboundsname 3385
+; internboundsname 3392
 define void @p.aptypes.internboundsname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3783,7 +3783,7 @@ L29:
   ret void
 }
 
-; internforname 3401
+; internforname 3408
 define void @p.aptypes.internforname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3962,7 +3962,7 @@ L29:
   ret void
 }
 
-; newtype 3430
+; newtype 3437
 define ptr @p.aptypes.newtype(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4383,7 +4383,7 @@ L79:
   ret ptr %v176
 }
 
-; base 3480
+; base 3487
 define ptr @p.aptypes.base(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4454,7 +4454,7 @@ L12:
   ret ptr %v31
 }
 
-; isinteger 3495
+; isinteger 3502
 define i1 @p.aptypes.isinteger(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4494,7 +4494,7 @@ L3:
   ret i1 %v20
 }
 
-; isreal 3502
+; isreal 3509
 define i1 @p.aptypes.isreal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4529,7 +4529,7 @@ L3:
   ret i1 %v16
 }
 
-; isint64 3508
+; isint64 3515
 define i1 @p.aptypes.isint64(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4564,7 +4564,7 @@ L3:
   ret i1 %v16
 }
 
-; iscomplex 3511
+; iscomplex 3518
 define i1 @p.aptypes.iscomplex(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4599,7 +4599,7 @@ L3:
   ret i1 %v16
 }
 
-; isvarstring 3516
+; isvarstring 3523
 define i1 @p.aptypes.isvarstring(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4634,7 +4634,7 @@ L3:
   ret i1 %v16
 }
 
-; istext 3521
+; istext 3528
 define i1 @p.aptypes.istext(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4669,7 +4669,7 @@ L3:
   ret i1 %v16
 }
 
-; isstringrep 3535
+; isstringrep 3542
 define i1 @p.aptypes.isstringrep(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4720,7 +4720,7 @@ L3:
   ret i1 %v23
 }
 
-; isoptional 3541
+; isoptional 3548
 define i1 @p.aptypes.isoptional(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4755,7 +4755,7 @@ L3:
   ret i1 %v16
 }
 
-; isfallible 3548
+; isfallible 3555
 define i1 @p.aptypes.isfallible(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4805,7 +4805,7 @@ L7:
   ret i1 %v22
 }
 
-; ishandlebirth 3551
+; ishandlebirth 3558
 define i1 @p.aptypes.ishandlebirth(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4848,7 +4848,7 @@ L3:
   ret i1 %v20
 }
 
-; isslice 3560
+; isslice 3567
 define i1 @p.aptypes.isslice(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4883,7 +4883,7 @@ L3:
   ret i1 %v16
 }
 
-; sliceof 3568
+; sliceof 3575
 define ptr @p.aptypes.sliceof(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4926,7 +4926,7 @@ L5:
   ret ptr %v20
 }
 
-; isnumeric 3577
+; isnumeric 3584
 define i1 @p.aptypes.isnumeric(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4961,7 +4961,7 @@ L5:
   ret i1 %v17
 }
 
-; isarith 3584
+; isarith 3591
 define i1 @p.aptypes.isarith(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4988,7 +4988,7 @@ L3:
   ret i1 %v13
 }
 
-; isboolean 3587
+; isboolean 3594
 define i1 @p.aptypes.isboolean(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5028,7 +5028,7 @@ L3:
   ret i1 %v20
 }
 
-; ischar 3594
+; ischar 3601
 define i1 @p.aptypes.ischar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5068,7 +5068,7 @@ L3:
   ret i1 %v20
 }
 
-; isenum 3601
+; isenum 3608
 define i1 @p.aptypes.isenum(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5108,7 +5108,7 @@ L3:
   ret i1 %v20
 }
 
-; isarray 3608
+; isarray 3615
 define i1 @p.aptypes.isarray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5143,7 +5143,7 @@ L3:
   ret i1 %v16
 }
 
-; isrecord 3611
+; isrecord 3618
 define i1 @p.aptypes.isrecord(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5178,7 +5178,7 @@ L3:
   ret i1 %v16
 }
 
-; ispointer 3614
+; ispointer 3621
 define i1 @p.aptypes.ispointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5213,7 +5213,7 @@ L3:
   ret i1 %v16
 }
 
-; isfile 3617
+; isfile 3624
 define i1 @p.aptypes.isfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5248,7 +5248,7 @@ L3:
   ret i1 %v16
 }
 
-; ishandle 3624
+; ishandle 3631
 define i1 @p.aptypes.ishandle(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5283,7 +5283,7 @@ L3:
   ret i1 %v16
 }
 
-; ischannel 3627
+; ischannel 3634
 define i1 @p.aptypes.ischannel(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5318,7 +5318,7 @@ L3:
   ret i1 %v16
 }
 
-; isowned 3636
+; isowned 3643
 define i1 @p.aptypes.isowned(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5345,7 +5345,7 @@ L3:
   ret i1 %v13
 }
 
-; isownedpointer 3641
+; isownedpointer 3648
 define i1 @p.aptypes.isownedpointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5379,7 +5379,7 @@ L3:
   ret i1 %v15
 }
 
-; isaffine 3649
+; isaffine 3656
 define i1 @p.aptypes.isaffine(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5406,7 +5406,7 @@ L3:
   ret i1 %v13
 }
 
-; istextfile 3653
+; istextfile 3660
 define i1 @p.aptypes.istextfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5440,7 +5440,7 @@ L3:
   ret i1 %v15
 }
 
-; isnil 3657
+; isnil 3664
 define i1 @p.aptypes.isnil(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5475,7 +5475,7 @@ L3:
   ret i1 %v16
 }
 
-; isset 3660
+; isset 3667
 define i1 @p.aptypes.isset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5510,7 +5510,7 @@ L3:
   ret i1 %v16
 }
 
-; isproctype 3664
+; isproctype 3671
 define i1 @p.aptypes.isproctype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5545,7 +5545,7 @@ L3:
   ret i1 %v16
 }
 
-; isemptyset 3669
+; isemptyset 3676
 define i1 @p.aptypes.isemptyset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5580,7 +5580,7 @@ L3:
   ret i1 %v16
 }
 
-; isrestricted 3678
+; isrestricted 3685
 define i1 @p.aptypes.isrestricted(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5615,7 +5615,7 @@ L3:
   ret i1 %v16
 }
 
-; underlying 3683
+; underlying 3690
 define ptr @p.aptypes.underlying(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5654,7 +5654,7 @@ L4:
   ret ptr %v17
 }
 
-; isstructured 3694
+; isstructured 3701
 define i1 @p.aptypes.isstructured(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5743,7 +5743,7 @@ L4:
   ret i1 %v41
 }
 
-; ismemory 3702
+; ismemory 3709
 define i1 @p.aptypes.ismemory(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5824,7 +5824,7 @@ L4:
   ret i1 %v38
 }
 
-; protectable 3714
+; protectable 3721
 define i1 @p.aptypes.protectable(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5965,7 +5965,7 @@ L4:
   ret i1 %v61
 }
 
-; isordinal 3736
+; isordinal 3743
 define i1 @p.aptypes.isordinal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6036,7 +6036,7 @@ L4:
   ret i1 %v35
 }
 
-; ischararray 3769
+; ischararray 3776
 define i1 @p.aptypes.ischararray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6168,7 +6168,7 @@ L17:
   ret i1 %v60
 }
 
-; isstringtype 3783
+; isstringtype 3790
 define i1 @p.aptypes.isstringtype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6195,7 +6195,7 @@ L3:
   ret i1 %v13
 }
 
-; isstringorchar 3789
+; isstringorchar 3796
 define i1 @p.aptypes.isstringorchar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6222,7 +6222,7 @@ L3:
   ret i1 %v13
 }
 
-; isordered 3794
+; isordered 3801
 define i1 @p.aptypes.isordered(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6265,7 +6265,7 @@ L7:
   ret i1 %v21
 }
 
-; isequatable 3804
+; isequatable 3811
 define i1 @p.aptypes.isequatable(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6341,7 +6341,7 @@ L13:
   ret i1 %v38
 }
 
-; satisfiescat 3811
+; satisfiescat 3818
 define i1 @p.aptypes.satisfiescat(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6396,7 +6396,7 @@ L8:
   ret i1 %v25
 }
 
-; writecatname 3824
+; writecatname 3831
 define void @p.aptypes.writecatname(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6430,7 +6430,7 @@ L8:
   ret void
 }
 
-; writecatadmits 3842
+; writecatadmits 3849
 define void @p.aptypes.writecatadmits(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6464,7 +6464,7 @@ L7:
   ret void
 }
 
-; stringvalueformal 3882
+; stringvalueformal 3889
 define i1 @p.aptypes.stringvalueformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6482,7 +6482,7 @@ L2:
   call void @pas_runtime_error(ptr @s291)
   unreachable
 L3:
-  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
+  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
   %v9 = load i32, ptr %v8
   %v10 = icmp eq i32 %v9, 3
   br i1 %v10, label %L4, label %L5
@@ -6495,7 +6495,7 @@ L6:
   call void @pas_runtime_error(ptr @s292)
   unreachable
 L7:
-  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 59
+  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 60
   %v15 = load ptr, ptr %v14
   %v16 = icmp ne ptr %v15, null
   br label %L5
@@ -6511,7 +6511,7 @@ L10:
   call void @pas_runtime_error(ptr @s293)
   unreachable
 L11:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 59
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 60
   %v22 = load ptr, ptr %v21
   %v23 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 50
   %v24 = load ptr, ptr %v23
@@ -6525,7 +6525,7 @@ L9:
   ret i1 %v28
 }
 
-; foreignstringformal 3894
+; foreignstringformal 3901
 define i1 @p.aptypes.foreignstringformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6543,7 +6543,7 @@ L2:
   call void @pas_runtime_error(ptr @s294)
   unreachable
 L3:
-  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
+  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
   %v9 = load i32, ptr %v8
   %v10 = icmp eq i32 %v9, 3
   br i1 %v10, label %L4, label %L5
@@ -6556,7 +6556,7 @@ L6:
   call void @pas_runtime_error(ptr @s295)
   unreachable
 L7:
-  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 59
+  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 60
   %v15 = load ptr, ptr %v14
   %v16 = icmp ne ptr %v15, null
   br label %L5
@@ -6572,7 +6572,7 @@ L10:
   call void @pas_runtime_error(ptr @s296)
   unreachable
 L11:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 3
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 3
   %v22 = load ptr, ptr %v21
   %v23 = call i1 @p.aptypes.isvarstring(ptr @frame.aptypes, ptr %v22)
   br label %L9
@@ -6584,7 +6584,7 @@ L9:
   ret i1 %v26
 }
 
-; enumcount 3900
+; enumcount 3907
 define i32 @p.aptypes.enumcount(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6651,7 +6651,7 @@ L6:
   ret i32 %v32
 }
 
-; ordinallo 3914
+; ordinallo 3921
 define i32 @p.aptypes.ordinallo(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6716,7 +6716,7 @@ L6:
   ret i32 %v26
 }
 
-; ordinalhi 3921
+; ordinalhi 3928
 define i32 @p.aptypes.ordinalhi(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6850,7 +6850,7 @@ L6:
   ret i32 %v54
 }
 
-; typelength 3931
+; typelength 3938
 define i32 @p.aptypes.typelength(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6906,7 +6906,7 @@ L9:
   ret i32 %v26
 }
 
-; padstofixedstring 3953
+; padstofixedstring 3960
 define i1 @p.aptypes.padstofixedstring(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7036,7 +7036,7 @@ L17:
   ret i1 %v63
 }
 
-; armatin 3966
+; armatin 3973
 define ptr @p.aptypes.armatin(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7091,7 +7091,7 @@ L4:
   ret ptr %v26
 }
 
-; findfieldin 3975
+; findfieldin 3982
 define internal ptr @p92(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7242,7 +7242,7 @@ L4:
   ret ptr %v75
 }
 
-; findfield 3991
+; findfield 3998
 define ptr @p.aptypes.findfield(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7364,7 +7364,7 @@ L18:
   ret ptr %v62
 }
 
-; armat 4006
+; armat 4013
 define internal ptr @p93(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7491,7 +7491,7 @@ L6:
   ret ptr %v59
 }
 
-; armsat 4028
+; armsat 4035
 define ptr @p.aptypes.armsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7547,7 +7547,7 @@ L4:
   ret ptr %v27
 }
 
-; fieldsat 4039
+; fieldsat 4046
 define ptr @p.aptypes.fieldsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7603,7 +7603,7 @@ L4:
   ret ptr %v27
 }
 
-; tagfieldat 4053
+; tagfieldat 4060
 define i32 @p.aptypes.tagfieldat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7659,7 +7659,7 @@ L4:
   ret i32 %v27
 }
 
-; tagtypeat 4064
+; tagtypeat 4071
 define ptr @p.aptypes.tagtypeat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7715,7 +7715,7 @@ L4:
   ret ptr %v27
 }
 
-; fileindexof 4075
+; fileindexof 4082
 define i32 @p.aptypes.fileindexof(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7793,7 +7793,7 @@ L3:
   ret i32 %v42
 }
 
-; writeordinalname 4092
+; writeordinalname 4099
 define void @p.aptypes.writeordinalname(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8040,7 +8040,7 @@ L7:
   ret void
 }
 
-; writeboundname 4138
+; writeboundname 4145
 define internal void @p94(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8073,7 +8073,7 @@ L5:
   call void @pas_runtime_error(ptr @s359)
   unreachable
 L6:
-  %v16 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v14, i32 0, i32 0
+  %v16 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v14, i32 0, i32 0
   %v17 = load i32, ptr %v16
   %v18 = getelementptr inbounds %frame94, ptr %frame, i32 0, i32 2
   %v19 = load ptr, ptr %v18
@@ -8083,7 +8083,7 @@ L7:
   call void @pas_runtime_error(ptr @s360)
   unreachable
 L8:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 1
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i1, i1, i32, ptr, i1, i1, i1, i1, i32, i32, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 1
   %v22 = load i32, ptr %v21
   call void @p.aptypes.writepool(ptr @frame.aptypes, i32 %v17, i32 %v22)
   br label %L4
@@ -8091,7 +8091,7 @@ L4:
   ret void
 }
 
-; writetypename 4144
+; writetypename 4151
 define void @p.aptypes.writetypename(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8892,7 +8892,7 @@ L4:
   ret void
 }
 
-; writedistincttypenote 4340
+; writedistincttypenote 4347
 define void @p.aptypes.writedistincttypenote(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
