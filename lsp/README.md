@@ -92,9 +92,9 @@ slices the written spelling out of the document it is holding. And `range` is th
 declaration where `selectionRange` is the name inside it
 ([ADR-0253](../doc/adr/0253-a-declaration-has-an-extent.md)) — the two were
 the same until the parser recorded where a block ends, which is what "expand
-selection to the enclosing declaration" needs. A *statement's* extent is still
-not recorded, so that gesture stops at the enclosing declaration rather than
-stepping outward through nested statements.
+selection to the enclosing declaration" needs. A **statement** has an extent
+too, since ADR-0258, so expanding a selection steps outward through nested
+statements instead of jumping to the declaration — see below.
 
 It answers `textDocument/definition` and `textDocument/hover` out of
 `pascalc --dump-uses` ([ADR-0246](../doc/adr/0246-what-a-name-denotes-and-where-it-was-written.md)),
@@ -179,6 +179,29 @@ which is when a file is being typed into. Folds are offered only for the
 constructs that *contain* statements and are deduplicated by the lines they
 cover, because `while c do begin … end` is two statements over the same lines
 and two identical arrows in a gutter is one too many.
+
+**And the compiler lays the source out**
+([ADR-0280](../doc/adr/0280-the-editor-asks-the-compiler-to-format.md)).
+`textDocument/formatting` is answered from `pascalc --format`, which prints
+the program back from the **token stream** with a layout of its own: the same
+tokens in the same order, the same comments in the same places, and nothing
+else the same. It is the one question here whose answer is a *program* rather
+than a report, which is why its command sends standard output to a file of its
+own instead of folding it into standard error the way every other one does — a
+diagnostic mixed into the text would be written straight into the reader's
+buffer.
+
+`textDocument/rangeFormatting` is the same flag with `--range=L:H`
+([ADR-0284](../doc/adr/0284-the-printer-already-knows-where-it-is.md)). The
+server widens the client's selection to whole lines before asking, because a
+range is a *line* range to the compiler; a selection ending at character 0 of a
+line does not include that line, so its end is decremented first. The printer
+needs no parse to know where the indent begins: it walks the lines before the
+range with its sink closed and arrives at the depth the whole-file format would
+have had. What a range's output deliberately does *not* match is the whole
+file's layout — a boundary inside a construct forces a break there, which every
+language server does — so what `format-check` asserts over ranges is the
+semantic claim, that the token stream on those lines is unchanged.
 
 **A change nobody will see the answer to is not compiled**
 ([ADR-0257](../doc/adr/0257-a-change-nobody-will-see-is-not-compiled.md)). A

@@ -443,6 +443,105 @@ using one where the other was meant is a defect: it has been three times, none
 of them a case-statement and so none of them visible to `kind-exhaustive`
 (ADR-0191, ADR-0193, ADR-0194).
 
+**Move (`take`).** The one value an assignment to an affine variable admits
+besides `nil`: `take(v)` empties `v` and yields what it held, so at no moment
+do two variables hold one value. **The source is emptied before the target's
+address is taken**, which turns `p^.next := take(p)` from a cycle nothing owns
+into a nil dereference. It was an owned pointer's alone and was over-broad by
+one kind: a **handle** is one word as an owned pointer is, so both move, while
+a file variable is several storage units the processor holds and has no value
+to stop holding (ADR-0182, ADR-0267, AP 6.4.12.7, AP 6.4.14.6).
+
+**Borrow.** The only second name an owned value has: a `var` parameter bound
+to `o^` for the duration of a call. It **cannot escape**, and by construction
+rather than by a check — Pascal has no address-of operator and `new` is the
+only producer of a pointer, so no pointer can ever name it. Unformable rather
+than forbidden, which is stronger and free, and *silent* if a future feature
+takes it away (ADR-0201, `doc/sop.md` §7).
+
+**Fallible type (`T ! E`).** A value or the reason there is none: the result
+record `lib/dialect/` used to write per payload type, now written by the
+compiler with the field names fixed. It needed no new type — an ordinary
+record with a flag on it — so the copy, the layout and ADR-0118's trap came
+free and CodeGen was not touched. Its value side may be **affine**, and the
+two arms are then laid *beside* one another rather than over one another,
+because a memcpy over a live handle is a double free (ADR-0176, ADR-0256,
+AP 6.4.13).
+
+**Propagation (`try`).** `try(x)` yields a fallible value's payload or leaves
+the enclosing function with its cause. A **required identifier** and not a
+position, which is the finding rather than the feature: a factor may be a
+variable-access, so `try (x)`, `try [x]`, `try + x`, `try.f` and `try^` all
+mean something to a program that declared `try`. The rule that works for a
+statement does not transfer to an expression (ADR-0178, AP 6.8.9).
+
+**Armed statement (`defer`).** A statement written where a resource is
+acquired and executed when the statement-sequence it stands in is completed,
+or when the activation terminates. Zig's unit rather than Go's — per
+*sequence* and not per activation — because a per-activation defer runs a
+loop's `dispose(p)` once, with the last `p` (ADR-0175, AP 6.9.3.11).
+
+**Factory.** A function of this program whose result is a handle, or a
+fallible value whose payload is one. The value is built directly in the
+variable the caller assigns it to, so there is no moment at which two names
+identify one resource, and a factory calling another passes the destination on
+and holds nothing itself. It is the one item on `doc/roadmap.md` where *ask
+whether the address can be retired at the call* does not apply: a factory's
+whole point is that the callee's answer outlives the call (ADR-0255, ADR-0256,
+AP 6.4.12.6).
+
+**Type parameter.** A schema discriminant that names a **type** rather than a
+value, so `Vec(T: type; cap: integer)` is a container written once and a
+client writes one line per element type. §6.4.7 interns a production per
+distinct tuple, which is what makes a named production the same type as the
+schema applied again. A parameter **may say what it needs** (ADR-0266); what
+is still absent is a generic *routine* over one, which is why `lib/passort.pas`
+sorts by `less(i, j)` and `swap(i, j)` and never sees an element (ADR-0209,
+ADR-0266).
+
+**Type-inquiry (`type of`).** Names a whole **variable-access** and denotes
+its type, so a generic reads an element type off the container it was handed
+instead of the caller naming a type the argument already knows. The substring
+is the one access it must refuse. §6.4.9's object is a variable-*name* and no
+more, so the wider form is the dialect's and not a conformance gap — a
+distinction this project got wrong for a day (ADR-0214, ADR-0215).
+
+**Task.** A second thread of control, and the one sentence left of the
+aliasing fork ADR-0201 withdrew. `spawn P(a, b)` starts one; it takes only
+**transferable** values and channels (AP 6.7.8.1), may name only its own
+variables (AP 6.7.8.2), and every task a block spawned is **joined** before
+that block releases anything — which is what makes *a borrow cannot outlive
+the call* true again. Share-nothing, so there is no shared mutable state for a
+memory model to be about. **The compiler is one thread and must stay so**, the
+seed compiling it (ADR-0268).
+
+**Channel.** A bounded queue, `channel [n] of T`, and **it is a handle**: no
+copy, released where a file closes, and the only thing besides a transferable
+value that may cross into a task. `send` blocks when it is full and `receive`
+when it is empty; closing it lets a receiver drain what is in flight before it
+reports the close (ADR-0268, AP 6.4.16).
+
+**Transferable.** What may cross into a task or through a channel: a value
+this language can *copy*, which is every type but the affine ones and the
+schematic ones whose bounds a receiver could not know. It is the predicate
+that keeps a task share-nothing, and it is why a task cannot yet be **given**
+a socket — the move exists (ADR-0267) and the argument block does not use it
+(ADR-0268, AP 6.4.16.3).
+
+**Warning.** A diagnostic that is not an error: same format, same stream, same
+exit status, and **the only difference is `errorSeen`**. There are four. Three
+guards govern each and every one was learned by it failing — written only when
+`warnOn`, which every `--dump` flag clears; only when nothing has been
+reported, since a name that did not resolve records no use; and only for
+`curFile = mainFile`, or a component is warned about once per importer. A test
+case is held to them by a `.warn` sidecar in both directions, and this tree's
+own sources by `warning-free` (ADR-0272, ADR-0286).
+
+**Trivia.** A comment, recorded as a **position** and never as text: which
+token it precedes, and where it began and ended in the source. That is all a
+formatter needs and it costs the token table nothing, the words being sliced
+back out of the source by whoever wants them (ADR-0279).
+
 ## The pipeline
 
 **Stage.** One of Tokenize → ParseProgram → RunSema → RunCodeGen, each guarded
