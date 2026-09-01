@@ -366,7 +366,8 @@ not what a compiled program wrote:
   `--dump-stmts`, `--dump-imports` and `--dump-uses` -- and under `--format`,
   which is not a dump but writes a program to standard output and is compared
   the same way (ADR-0279). Sidecars are `name.dump` (the golden), `name.flags` (which
-  flag, `--dump-all` by default), `name.components` (§6.13's other
+  flags, whitespace-separated, `--dump-all` by default — it held exactly one
+  until ADR-0284 wanted `--format --range=L:H`), `name.components` (§6.13's other
   program-components, one path per line relative to the case, each passed as
   an `--import`) and `name.status` (the exit status the case expects, when it
   is not 0). There was another, `name.std`, pinning the standard against a

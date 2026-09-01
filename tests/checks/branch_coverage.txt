@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 861
-instrumented 10608
-decisions 5304
+uncovered 866
+instrumented 10694
+decisions 5347
 
 accept 0/4
 accumulate 1/32
@@ -310,6 +310,7 @@ evalconstvalue 1/4
 evallabelrange 5/18
 evalordinal 0/10
 expect 0/4
+exportedroutine 0/10
 exporthas 0/4
 exprend 0/2
 extendeddigit 2/10
@@ -336,10 +337,12 @@ fmtenddecl 1/6
 fmtflush 0/12
 fmtglue 0/52
 fmthasblock 4/26
+fmtnewline 0/2
 fmtownsanof 0/6
 fmtpop 0/2
 fmtpretrivia 0/32
 fmtpush 0/2
+fmtput 0/2
 fmttoken 0/180
 fmttrivia 0/16
 fmtwantatleast 0/2
@@ -357,7 +360,7 @@ forgetarms 0/4
 forgetformals 0/6
 forgetlist 0/2
 forgetresolved 0/6
-formatsource 1/4
+formatsource 1/16
 frameat 0/2
 frameglobal 0/4
 frameof 0/2
@@ -498,6 +501,7 @@ notedeclarationsto 0/8
 notedefining 2/8
 noteexportedinterface 1/8
 notehandlecloser 0/2
+noteunwrittenvarparams 0/22
 noteuse 0/6
 noteusefield 0/4
 notinghere 0/4
@@ -511,7 +515,7 @@ packedcomponent 3/18
 padstofixedstring 2/18
 parameterof 1/6
 parseactualparameters 0/6
-parseargs 6/122
+parseargs 6/126
 parsearraytype 0/4
 parseblock 0/36
 parseboundident 0/4
@@ -545,6 +549,7 @@ parseprocorfunc 0/14
 parseprocparam 0/16
 parseprogram 0/24
 parsequalifiedname 0/4
+parserange 5/14
 parseread 0/4
 parserecordtype 0/4
 parserepeat 2/10
@@ -688,6 +693,7 @@ warnat 1/2
 warnpartialresult 0/22
 warnunreachable 0/18
 warnunusedlocals 1/24
+warnunwrittenvarparams 0/20
 widenordinal 0/4
 writeboundname 0/2
 writedistincttypenote 2/18

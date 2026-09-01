@@ -15,6 +15,22 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`pascalc --format --range=L:H`** (ADR-0284) writes those lines alone, with
+  the layout they have in the whole file. `doc/roadmap.md` had this down as
+  needing the printer told where its indent begins, "a question about the
+  enclosing structure that only a parse can answer"; the printer accumulates
+  that depth itself, so the lines before the range are walked without being
+  written and the depth on arrival is the one the whole file would have. A
+  boundary inside a construct gets a line break there that the whole file would
+  not have, which is what asking for part of a file means. A span it cannot use
+  is refused rather than widened to the document.
+
+- **The language server formats a selection.** `textDocument/rangeFormatting`,
+  beside the whole-document request. A client's range is a position pair and
+  the formatter's unit is a line, so the selection is widened to every line it
+  touches and the reply replaces whole lines; a range ending at character 0
+  does not reach into that line, so three selected lines come back as three.
+
 - **A `var` parameter nothing writes through is reported** (ADR-0283). The
   fourth warning, and the first whose answer is a property of the whole
   compilation rather than of one routine. 6.7.3.1 spells such a parameter
@@ -41,6 +57,14 @@ appears below in the release where it still existed.
   about what any of them does changes -- `protected` is a Sema-only property
   and the code generator never reads it -- but a future change that writes
   through one of them is now a compilation error naming the clause.
+
+### Fixed
+
+- **`and then` and `or else` were written straight to standard output** by the
+  formatter, which adjusted its column counter by hand rather than going
+  through its one character sink. The bytes were identical either way, so
+  nothing could see it until `--range` gave the sink something to suppress --
+  and then those two word-symbols printed outside the range asked for.
 
 ## [3.3.0] - 2026-09-01
 

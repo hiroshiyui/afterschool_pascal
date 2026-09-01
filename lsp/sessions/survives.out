@@ -1,6 +1,6 @@
-Content-Length: 300
+Content-Length: 339
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 121
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 121
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///never/opened.pas","diagnostics":[]}}Content-Length: 118
 

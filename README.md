@@ -260,7 +260,15 @@ input is one bad exit away from an empty source file.
 
 ```
 $ pascalc --format messy.pas > tidy.pas
+$ pascalc --format --range=22:24 messy.pas    # those lines alone
 ```
+
+**`--range=L:H` asks for part of a file**, and what comes back is indented as
+it stands in the whole of it — the printer walks the lines before the range
+without writing them, so the depth it has on arrival is the depth it would have
+had anyway. A range whose ends fall inside a construct gets a line break there
+that the whole file would not have, which is what asking for part of a file
+means. A span it cannot use is refused rather than widened to the document.
 
 Every Pascal source in this repository is formatted on every test run and
 required to produce the same tokens, the same comments and the same text a
@@ -341,6 +349,7 @@ besides:
 | `foldingRange` | the gutter arrows beside every `begin`, `if` and loop |
 | `selectionRange` | expand-selection, outward through nested statements |
 | `formatting` | the document laid out by `pascalc --format` |
+| `rangeFormatting` | the lines you selected, laid out as they stand in the file |
 
 The outline and the two extent answers work on a document that **does not
 compile yet**, which is when they are most wanted: they stop after the parse.

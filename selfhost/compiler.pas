@@ -257,6 +257,7 @@ var
     is one bad exit away from an empty source file, and a shell redirection
     says what is being replaced where a reader can see it. }
   formatOpt: boolean;
+  rangeLo, rangeHi: integer;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
     tested on. }
@@ -411,6 +412,38 @@ end;
   spelling that is not one of them -- `--target=` then reports and names what is
   admitted, because a target whose layout has not been compared against LlSize
   and LlAlign would be answered wrongly rather than refused. }
+{ `L:H`, two decimal line numbers, and a bad one is *reported* rather than
+  quietly taken for the whole file. Silently widening would be the friendlier
+  guess and the wrong one: a caller asking for lines 5 to 2 has a bug, and a
+  whole document arriving where a fragment was asked for is the kind of answer
+  that gets diagnosed as an editor fault.
+
+  One test decides it, so one message covers every way of getting it wrong --
+  a letter in it, no colon, a zero, or the ends the wrong way round. }
+procedure ParseRange(protected var spec: nameStr);
+var i, v, lo: integer; ok: boolean;
+begin
+  lo := 0; v := 0; ok := length(spec) > 0;
+  for i := 1 to length(spec) do
+    if spec[i] = ':' then
+      if lo = 0 then begin lo := v; v := 0 end else ok := false
+    else if (spec[i] >= '0') and (spec[i] <= '9') then
+      v := v * 10 + (ord(spec[i]) - ord('0'))
+    else ok := false;
+  if ok and (lo > 0) and (v >= lo) then begin
+    rangeLo := lo;
+    rangeHi := v
+  end
+  else begin
+    writeln('pascalc: --range wants L:H, two line numbers with H at least L');
+    { Both, and they are not the same thing: `argsOk` stops the parse, which
+      is what `-h` and `--version` want, and `argsBad` is what makes the exit
+      status say the command line was wrong. }
+    argsOk := false;
+    argsBad := true
+  end
+end;
+
 function TargetIndex(protected var name: nameStr): integer;
 begin
   if EQ(name, 'x86_64-pc-linux-gnu') then TargetIndex := tgtX86
@@ -474,6 +507,8 @@ begin
   writeln('                  in the order they must be activated, and stop');
   writeln('  --format        write this source back out with the');
   writeln('                  compiler''s own layout, and stop');
+  writeln('  --range=L:H     with --format, write only lines L to H,');
+  writeln('                  indented as they stand in the whole file');
   writeln('  --dump-trivia   write every comment this source holds, with');
   writeln('                  its position and the token it precedes, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
@@ -524,6 +559,8 @@ begin
   dumpLimitsOpt := false;
   dumpTriviaOpt := false;
   formatOpt := false;
+  rangeLo := 0;
+  rangeHi := 0;
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
@@ -564,6 +601,15 @@ begin
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
     else if EQ(a, '--dump-trivia') then dumpTriviaOpt := true
     else if EQ(a, '--format') then formatOpt := true
+    { AP: `--range L:H`, the inclusive line span --format is to print. The
+      formatter accumulates its own indentation as it walks the token stream,
+      so what a range needs is not a parse but the state the walk already has
+      when it arrives -- the lines before the range are walked with the sink
+      turned off. }
+    else if (length(a) > 8) and EQ(substr(a, 1, 8), '--range=') then begin
+      tname := substr(a, 9, length(a) - 8);
+      ParseRange(tname)
+    end
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
@@ -12325,7 +12371,10 @@ begin
   if dumpTriviaOpt then DumpTrivia;
   { After the trivia dump and not before it, so `--format --dump-trivia` reads
     as the report and then the program. Both rewind the source cursor. }
-  if formatOpt and not errorSeen then FormatSource;
+  if formatOpt and not errorSeen then begin
+    SetFormatRange(rangeLo, rangeHi);
+    FormatSource
+  end;
   { A dump flag stops at the stage it names, which is how the C++ driver
     behaves -- and the only way a stage can be dumped for a program the next
     stage would reject. This source is Extended Pascal, which has no early

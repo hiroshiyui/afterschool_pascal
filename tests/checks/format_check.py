@@ -44,6 +44,7 @@ oracle for that and this does not pretend to one -- which is also why nothing
 in this tree is formatted by it (doc/sop.md §7).
 """
 
+import random
 import subprocess
 import sys
 import tempfile
@@ -140,11 +141,70 @@ def main() -> int:
         return sweep(pascalc, root, sources, Path(tmp))
 
 
+
+# The claim for `--format --range=L:H` (ADR-0284), and it is the *semantic*
+# one rather than the layout one. A range's output cannot be compared with the
+# whole file's: a boundary inside a construct forces a line break there, which
+# the whole-file format would not have -- that is inherent to formatting part
+# of a file and every language server does it. What survives is the claim that
+# matters, and it is the same one the whole-file sweep makes: the tokens must
+# be the tokens the input has on those lines, in that order.
+#
+# Two ranges per source, chosen from a fixed seed so the suite is a regression
+# corpus and not a search -- ADR-0275's rule, met again.
+RANGE_SEED = 4831
+
+
+def token_stream(pascalc, path, work):
+    r = run(pascalc, ["--dump-tokens", str(path)])
+    if r.returncode != 0:
+        return None
+    out = []
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0].isdigit():
+            out.append((int(parts[0]), " ".join(parts[2:])))
+    return out
+
+
+def check_range(pascalc, src, name, work, bad) -> int:
+    whole = token_stream(pascalc, src, work)
+    if whole is None:
+        return 0
+    lines = src.read_text(encoding="latin-1").count("\n") + 1
+    if lines < 8:
+        return 0
+    rng = random.Random(RANGE_SEED + len(name))
+    frag = work / "range.pas"
+    for _ in range(2):
+        lo = rng.randint(1, lines - 3)
+        hi = rng.randint(lo + 1, lines - 1)
+        r = run(pascalc, ["--format", f"--range={lo}:{hi}", str(src)])
+        if r.returncode != 0:
+            bad.append(f"{name}: --range={lo}:{hi} failed where --format did not")
+            return 0
+        frag.write_text(r.stdout, encoding="latin-1")
+        got = token_stream(pascalc, frag, work)
+        if got is None:
+            bad.append(f"{name}: --range={lo}:{hi} produced something the lexer rejects")
+            return 0
+        want = [k for ln, k in whole if lo <= ln <= hi and k != "eof"]
+        have = [k for _, k in got if k != "eof"]
+        if want != have:
+            where = next((i for i, (x, y) in enumerate(zip(want, have)) if x != y),
+                         min(len(want), len(have)))
+            bad.append(f"{name}: --range={lo}:{hi} changed the token stream "
+                       f"({len(want)} wanted, {len(have)} got, first differing at "
+                       f"{where})")
+            return 0
+    return 1
+
+
 def sweep(pascalc: Path, root: Path, sources: list, work: Path) -> int:
     formatted = work / "formatted.pas"
     again = work / "again.pas"
 
-    checked, skipped, bad = 0, 0, []
+    checked, skipped, ranged, bad = 0, 0, 0, []
     for name in sources:
         src = root / name
         first = run(pascalc, ["--format", str(src)])
@@ -192,6 +252,7 @@ def sweep(pascalc: Path, root: Path, sources: list, work: Path) -> int:
                                f"({len(first_lines)} lines then {len(second_lines)})")
             else:
                 checked += 1
+                ranged += check_range(pascalc, src, name, work, bad)
 
     if bad:
         print(f"format-check: {len(bad)} of {len(sources)} sources are not "
@@ -210,7 +271,8 @@ def sweep(pascalc: Path, root: Path, sources: list, work: Path) -> int:
 
     print(f"format-check: {checked} sources format to the same tokens and the "
           f"same comments, and format again to the same text "
-          f"({skipped} the lexer rejects)")
+          f"({skipped} the lexer rejects); {ranged} of them keep their token "
+          f"stream when only part of them is asked for")
     return 0
 
 

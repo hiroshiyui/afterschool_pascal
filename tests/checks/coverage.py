@@ -223,6 +223,15 @@ def corpus(root):
             extra = job[2] if len(job) > 2 else {}
             jobs.append((src, flags + ["--format"], extra))
             jobs.append((src, flags + ["--dump-trivia"], extra))
+            # And once asking for part of the file (ADR-0284). The range walk
+            # is the same walk with the sink closed for the lines before it,
+            # so the *layout* rules are already reached by the line above --
+            # what this reaches is the gating itself, and the transitions into
+            # and out of the range, which nothing else here passes the flag to
+            # exercise. A fixed span rather than a sample: this is a coverage
+            # sweep and not a search, and a range that moves with the corpus
+            # would move the ratchet with it.
+            jobs.append((src, flags + ["--format", "--range=2:40"], extra))
 
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
@@ -248,6 +257,14 @@ def corpus(root):
     # capacities it reports must equal the constants this tree declares.
     jobs.append((root / "selfhost" / "compiler.pas",
                  components.imports(root) + ["--dump-limits"]))
+
+    # A `--range` the compiler refuses (ADR-0284). The same argument as every
+    # job above: `tests/dumps/range_refused.pas` drives this on every run, so
+    # without it the refusal and its message report as unreached while a case
+    # reaches them. One spec covers the whole arm -- there is a single test and
+    # a single message, so a letter in the span, a missing colon, a zero and
+    # the ends reversed all arrive at the same three statements.
+    jobs.append((root / "tests" / "hello.pas", ["--format", "--range=5:2"]))
 
     # ADR-0104's --coverage, and since ADR-0274 its branch counters too. The
     # same argument as the three jobs above, met a fourth time: the harness

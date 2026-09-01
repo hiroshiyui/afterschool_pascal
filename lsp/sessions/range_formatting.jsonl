@@ -1,0 +1,23 @@
+# textDocument/rangeFormatting (ADR-0284): the lines a client selected, written
+# back out with the layout they have in the whole file.
+#
+# What this session pins is the half that is not the whole-document request.
+# The indentation of a nested routine is *accumulated* rather than derived: the
+# printer walks every line before the range with its sink closed, so the depth
+# it has when it arrives is the depth the whole-file format would have there.
+# Asking for the body of a nested function alone must therefore come back
+# indented as it stands, which no parse of the range on its own would say.
+#
+# Two smaller rules are here too. A selection is widened to whole lines,
+# because the formatter's unit is a line and an editor asking about half of one
+# means the whole of it. And a range whose end is at character 0 does not reach
+# into that line, so selecting three whole lines sends end 3:0 and gets three
+# lines back and not four -- which is the off-by-one every client would
+# otherwise expose.
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": null, "capabilities": {}}}
+{"jsonrpc": "2.0", "method": "initialized", "params": {}}
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file:///scratch/nest.pas", "languageId": "pascal", "version": 1, "text": "program nest(output);\nfunction Outer(n: integer): integer;\nfunction Inner(k: integer): integer;\nbegin\nInner := k+1\nend;\nbegin\nOuter := Inner(n)\nend;\nbegin writeln(Outer(1):1) end.\n"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "textDocument/rangeFormatting", "params": {"textDocument": {"uri": "file:///scratch/nest.pas"}, "range": {"start": {"line": 2, "character": 0}, "end": {"line": 6, "character": 0}}, "options": {"tabSize": 2, "insertSpaces": true}}}
+{"jsonrpc": "2.0", "id": 3, "method": "textDocument/rangeFormatting", "params": {"textDocument": {"uri": "file:///scratch/nest.pas"}, "range": {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 9}}, "options": {"tabSize": 2, "insertSpaces": true}}}
+{"jsonrpc": "2.0", "id": 4, "method": "shutdown", "params": null}
+{"jsonrpc": "2.0", "method": "exit", "params": null}

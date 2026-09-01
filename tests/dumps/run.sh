@@ -26,7 +26,11 @@
 # a --dump flag.
 #
 #   name.dump    expected standard output, in full
-#   name.flags   the flag to compile with; --dump-all when absent
+#   name.flags   the flags to compile with, whitespace-separated;
+#                --dump-all when absent. It held exactly one flag until
+#                ADR-0284 needed `--format --range=L:H`, and the failure was
+#                the readable kind: the two were concatenated and the compiler
+#                reported `unknown option --format--range=15:21`.
 #   name.components  §6.13's other program-components, one path per line
 #                relative to this directory, each passed as an --import. It
 #                is the same sidecar tests/run_test.sh and irtest.sh read and
@@ -62,8 +66,12 @@ name=$(basename "$base")
 expected="$base.dump"
 flags_file="$base.flags"
 
-flags="--dump-all"
-[[ -f $flags_file ]] && flags=$(tr -d '[:space:]' <"$flags_file")
+flags=("--dump-all")
+# Split on whitespace, and drop anything that splits to nothing -- a sidecar
+# with a trailing newline is the ordinary case.
+if [[ -f $flags_file ]]; then
+  read -r -a flags <"$flags_file"
+fi
 
 # One --import per line, resolved against this case's own directory so the
 # golden does not depend on where the checkout lives.
@@ -89,7 +97,7 @@ trap 'rm -rf "$work"' EXIT
 # The IR still gets written -- a --dump flag stops the *reporting* at the stage
 # it names, not the translation -- so it goes somewhere disposable. Only what
 # reaches standard output is the subject here.
-"$pascalc" "${imports[@]+"${imports[@]}"}" "$flags" "$source_file" \
+"$pascalc" "${imports[@]+"${imports[@]}"}" "${flags[@]}" "$source_file" \
   -o "$work/out.ll" >"$work/actual" 2>"$work/stderr"
 status=$?
 
@@ -119,4 +127,4 @@ if ! diff -u "$expected" <(sed -e "s|$source_file|<source>|g" \
   exit 1
 fi
 
-echo "$name: ok ($flags)"
+echo "$name: ok (${flags[*]})"

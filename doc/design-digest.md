@@ -3986,6 +3986,25 @@ nothing else. What it would lose, mechanism by mechanism:
   mechanism is undone is `format-check`, whose first claim is the whole
   semantic one: the token stream must be unchanged but for positions, which is
   not a sample, the parser seeing the token stream and nothing else.
+- **A range is formatted by walking to it, not by parsing to it** (ADR-0284).
+  `--format --range=L:H` prints those lines with the layout they have in the
+  whole file, and the whole of it is a gate on `FmtPut` and `FmtNewline`: the
+  write is suppressed outside the range and the counters are updated anyway,
+  so on arrival the printer stands where the whole-file format stands.
+  `doc/roadmap.md` had recorded this as needing the printer *told* where its
+  indent begins, "a question about the enclosing structure that only a parse
+  can answer" -- and the printer accumulates that depth itself, which a second
+  implementation of the depth rules would then have to agree with (ADR-0111's
+  objection, ADR-0230's). Turning the sink on fakes exactly one thing, the
+  newline that would have ended the previous line, since that line and any
+  blank the layout wants before the range are outside it; turning it off
+  finishes the line, or two ranges pasted together run into each other. What
+  the gate can claim is the token stream and not the layout: a boundary inside
+  a construct forces a break the whole file would not have, which is inherent
+  to formatting part of a file. The tests are `format-check`'s fourth claim
+  (semantics) and `tests/dumps/format_range.pas` (layout), and they are
+  independent -- a mutation discarding the accumulated indent leaves every
+  token in place.
 - **A document is formatted by the compiler and replaced whole** (ADR-0280).
   `textDocument/formatting` runs `--format` over the scratch file the server
   already writes and answers with a single `TextEdit`, not a diff: computing a

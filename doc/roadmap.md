@@ -324,9 +324,9 @@ real sites and was still not built, because §6.6.3.6's congruity makes the fix
 illegal for a routine passed as a procedural parameter and no one component
 can know whether an exported one ever is.
 
-**What is left of the chapter is two named things** — it was three until
-ADR-0283 — each recorded where it was declined rather than left as an estimate
-here:
+**What is left of the chapter is one named thing** — it was three until
+ADR-0283 and two until ADR-0284, and both of those closed by someone trying the
+row rather than believing it:
 
 - ~~**A warning for a `var` parameter never written through.**~~ **Built**
   (ADR-0283), and the estimate above it was wrong in the direction this
@@ -339,10 +339,14 @@ here:
   `protected` **54 times**. A one-shot count under-reports by a factor of five.
   Every round rebuilt clean, which is the evidence the advice was right — the
   word is enforced, so a wrong claim is a compilation error.
-- **`textDocument/rangeFormatting`.** The formatter starts at column zero;
-  being asked about *part* of a file means telling the printer where its
-  indent begins, which is a question about the enclosing structure that only a
-  parse can answer. ADR-0253 and ADR-0258 already report the extents.
+- ~~**`textDocument/rangeFormatting`.**~~ **Built** (ADR-0284), and the row was
+  wrong about why it was hard. It said the printer had to be *told* where its
+  indent begins, a question only a parse can answer; the printer accumulates
+  that depth itself as it walks the token stream, so the lines before a range
+  are walked with the sink closed and the depth on arrival is the depth the
+  whole-file format would have. The whole of it is a gate on `FmtPut` and
+  `FmtNewline`. This chapter's own lesson, met for the second time on this
+  page: **a row saying a feature is blocked is a row nobody has tried.**
 - **A `style:` gate for the Pascal**, of the kind `git clang-format` gives the
   C. `format-check` proves the formatter *preserves* a program (ADR-0279); it
   says nothing about whether the output is well laid out, and **nothing in

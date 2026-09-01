@@ -52,7 +52,7 @@ export ApFront = (
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
   At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent, DumpTrivia,
-  FormatSource);
+  FormatSource, SetFormatRange);
 
 import StandardOutput; ApTypes;
 
@@ -186,6 +186,7 @@ procedure DumpTrivia;
   (ADR-0279). Refuses, rather than printing a short file, when the source has
   more comments than the trivia table holds. }
 procedure FormatSource;
+procedure SetFormatRange(lo, hi: integer);
 
 procedure DumpProgram;
 
@@ -24232,10 +24233,11 @@ end;
   indentation in the middle of it. }
 var
   fmtCol, fmtNL: integer;
+  fmtEmit: boolean; fmtRangeLo, fmtRangeHi: integer;
 
 procedure FmtNewline;
 begin
-  writeln;
+  if fmtEmit then writeln;
   fmtCol := 0;
   fmtNL := fmtNL + 1
 end;
@@ -24246,9 +24248,22 @@ end;
   there is nothing here to test for. }
 procedure FmtPut(c: char);
 begin
-  write(c);
+  if fmtEmit then write(c);
   fmtCol := fmtCol + 1;
   fmtNL := 0
+end;
+
+{ A word the formatter supplies rather than copies from the source. Only
+  ADR-0038's two joined word-symbols need it -- `and then` and `or else` are
+  one token each and the source text between the words is the program's
+  spacing, not this formatter's. It goes through `FmtPut` like everything
+  else: writing straight to `output` and adjusting `fmtCol` by hand gives the
+  same bytes while the sink is always on, and is invisible until something
+  turns the sink off. `--range` did. }
+procedure FmtWord(w: nameStr);
+var i: integer;
+begin
+  for i := 1 to length(w) do FmtPut(w[i])
 end;
 
 { ----------------------------------------------- the source, read again -- }
@@ -24749,16 +24764,8 @@ begin
   if heading and (fmtRoutine > 0) then fmtLift := 1;
   FmtFlush;
   fmtLift := 0;
-  if k = tkAndThen then begin
-    write('and then');
-    fmtCol := fmtCol + 8;
-    fmtNL := 0
-  end
-  else if k = tkOrElse then begin
-    write('or else');
-    fmtCol := fmtCol + 7;
-    fmtNL := 0
-  end
+  if k = tkAndThen then FmtWord('and then')
+  else if k = tkOrElse then FmtWord('or else')
   else begin
     SrcTo(tok[i].line, tok[i].col);
     SrcCopy(tok[i].line, tok[i].endCol, false)
@@ -24921,6 +24928,15 @@ begin
   end
 end;
 
+{ 6.11.1 puts the heading in the interface, so the completing block repeats
+  neither the parameters nor their names -- 6.2.2.12 makes the heading's
+  defining-points the block's as well. }
+procedure SetFormatRange;
+begin
+  fmtRangeLo := lo;
+  fmtRangeHi := hi
+end;
+
 procedure FormatSource;
 var i, tv, lastLine: integer;
 begin
@@ -24956,10 +24972,40 @@ begin
     fmtSawCase := false;
     fmtAfterComment := false;
     fmtInModuleHead := false;
+    fmtEmit := fmtRangeLo = 0;
     SrcRewind;
     tv := 1;
     lastLine := 0;
     for i := mainTokBase to tokCount do begin
+      { The sink is turned on when the walk reaches the range and off when it
+        leaves, and the *transitions* are the whole of what a range costs.
+        Turning it on pretends the walk is at the start of a line with two
+        blank ones owed, so `FmtFlush` writes the indent the prefix
+        accumulated and nothing is owed from before the range. Turning it off
+        finishes the line first: without that the last line of a range has no
+        newline, and a caller pasting one range after another runs them
+        together -- which is what the partition check found. }
+      if fmtRangeLo > 0 then
+        if (tok[i].line >= fmtRangeLo) and (tok[i].line <= fmtRangeHi) then begin
+          if not fmtEmit then begin
+            fmtEmit := true;
+            { A range opens at a line start with nothing owed from before it.
+              The gate suppresses the *writes* and never the counters, so
+              `fmtWant` still holds whatever the layout wants next -- but a
+              blank line it asks for belongs *between* the previous line and
+              this one, and the previous line is outside the range. Claiming
+              two newlines already written is what discharges it: a range
+              handed back to an editor must be exactly the lines it was asked
+              for, and one that opened with a blank line would replace four
+              with five. }
+            fmtCol := 0;
+            fmtNL := 2
+          end
+        end
+        else begin
+          if fmtEmit and (fmtCol > 0) then FmtNewline;
+          fmtEmit := false
+        end;
       FmtPreTrivia(i);
       FmtTrivia(i, tv, lastLine);
       if tok[i].kind <> tkEof then begin
@@ -25520,6 +25566,12 @@ end;
   there was one component (ADR-0233). }
 to begin do
   begin
+    fmtRangeLo := 0;
+    fmtRangeHi := 0;
+    { The sink is open unless a range closes it. `DumpTrivia` copies comment
+      text through the same `FmtPut` and never runs `FormatSource`, so a
+      default of false silently emptied that dump. }
+    fmtEmit := true;
     InstallKeywords;
     level := 0;
     curDeclBlock := nil;

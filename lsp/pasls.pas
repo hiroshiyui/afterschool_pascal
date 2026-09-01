@@ -780,7 +780,7 @@ end;
   A line that is not a diagnostic is skipped and is not an error -- most of
   what a compilation writes is not one, which is the first thing
   `tests/dialect/lsp_diag.pas` pins. }
-function DiagnosticsIn(var out: CaptureText; var doc: JsonChars): JsonPtr;
+function DiagnosticsIn(protected var out: CaptureText; var doc: JsonChars): JsonPtr;
 var arr: JsonPtr;
     line: DiagText;
     source: DiagLine;
@@ -908,6 +908,7 @@ begin
   { ADR-0279: `pascalc --format` writes the whole file, so what comes back is
     one edit over the whole document and never a diff. }
   JsonPut(caps, 'documentFormattingProvider', JsonNewBoolean(true));
+  JsonPut(caps, 'documentRangeFormattingProvider', JsonNewBoolean(true));
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -2193,7 +2194,9 @@ end;
   and a client clamps it; computing the exact end would mean measuring the
   last line in the negotiated encoding, and `LineOf` bounds a line at
   `DiagLine`'s capacity, which the corpus exceeds. }
-function FormatCommand(source: PathName; var cmd: CommandLine): boolean;
+function FormatCommand(source: PathName; lo, hi: integer;
+                       var cmd: CommandLine): boolean;
+var span: JsonLine;
 begin
   cmd := '';
   if length(compilerCmd) + length(source) + 2 * length(scratchPath) + 48
@@ -2201,7 +2204,16 @@ begin
     Note('the compiler command line would be longer than this program holds');
     exit(false)
   end;
-  cmd := compilerCmd + ' --format ''' + source + ''' -o '''
+  cmd := compilerCmd + ' --format';
+  { AP: --range=L:H asks the formatter for those lines alone, indented as they
+    stand in the whole file -- the printer walks the lines before them with its
+    sink closed, so the indentation is the one it accumulated and not a guess
+    (ADR-0284). lo = 0 asks for the whole document. }
+  if lo > 0 then begin
+    writestr(span, lo:1, ':', hi:1);
+    cmd := cmd + ' --range=' + span
+  end;
+  cmd := cmd + ' ''' + source + ''' -o '''
          + scratchPath + '.ll'' > ''' + scratchPath + '.fmt''';
   FormatCommand := true
 end;
@@ -2253,7 +2265,15 @@ begin
   ReadFormatted := true
 end;
 
-procedure Formatting(id: JsonPtr; params: JsonPtr);
+{ Both formatting requests, which differ only in what they ask the compiler
+  for and in the range the one edit replaces. `lo` = 0 is the whole document;
+  otherwise they are 1-based inclusive source lines (ADR-0284).
+
+  A range edit replaces **whole lines** -- the formatter's unit is a line, and
+  a client that selected half of one gets the whole of it back, laid out. The
+  end is line `hi` counted from zero, which is the line *after* the last one
+  replaced, so the edit ends where the next line begins. }
+procedure Formatting(id: JsonPtr; params: JsonPtr; lo, hi: integer);
 var reply, result, edit, rng, a, b, text: JsonPtr;
     uri: DocUri;
     at, i, n, lines: integer;
@@ -2267,7 +2287,7 @@ begin
   at := IndexOf(uri);
   if at <> 0 then begin
     d := VecGet(DocVec, Document, docs, at);
-    if WriteScratch(d.text) and FormatCommand(scratchPath, cmd) then begin
+    if WriteScratch(d.text) and FormatCommand(scratchPath, lo, hi, cmd) then begin
       r := Run(cmd);
       if not r.ok then
         Note('could not run the compiler: ' + ErrorText(r.cause))
@@ -2283,10 +2303,12 @@ begin
           for i := 1 to n do
             if JsonCharsAt(d.text, i) = chr(10) then lines := lines + 1;
           a := JsonNewObject;
-          JsonPut(a, 'line', JsonNewInteger(0));
+          if lo = 0 then JsonPut(a, 'line', JsonNewInteger(0))
+                    else JsonPut(a, 'line', JsonNewInteger(lo - 1));
           JsonPut(a, 'character', JsonNewInteger(0));
           b := JsonNewObject;
-          JsonPut(b, 'line', JsonNewInteger(lines));
+          if lo = 0 then JsonPut(b, 'line', JsonNewInteger(lines))
+                    else JsonPut(b, 'line', JsonNewInteger(hi));
           JsonPut(b, 'character', JsonNewInteger(0));
           rng := JsonNewObject;
           JsonPut(rng, 'start', a);
@@ -2304,6 +2326,30 @@ begin
   JsonPut(reply, 'result', result);
   Send(reply);
   JsonFree(reply)
+end;
+
+{ 6.11's other formatting request. The range a client sends is a *position*
+  pair and this asks the compiler for lines, so the selection is widened to
+  the whole of every line it touches -- which is what an editor means by
+  formatting a selection, and what makes the reply's own range whole lines
+  too.
+
+  A range whose end is at character 0 does not reach into that line, so it is
+  not included: selecting three whole lines in an editor sends start 0:0 and
+  end 3:0, and that is three lines and not four. }
+procedure RangeFormatting(id: JsonPtr; params: JsonPtr);
+var rng, s, e: JsonPtr; lo, hi: integer;
+begin
+  rng := JsonMember(params, 'range');
+  s := JsonMember(rng, 'start');
+  e := JsonMember(rng, 'end');
+  lo := JsonIntegerOr(JsonMember(s, 'line'), 0) + 1;
+  hi := JsonIntegerOr(JsonMember(e, 'line'), 0) + 1;
+  if JsonIntegerOr(JsonMember(e, 'character'), 0) = 0 then
+    if hi > lo then hi := hi - 1;
+  if lo < 1 then lo := 1;
+  if hi < lo then hi := lo;
+  Formatting(id, params, lo, hi)
 end;
 
 procedure Dispatch(msg: JsonPtr);
@@ -2328,7 +2374,8 @@ begin
   else if method = 'textDocument/hover' then Hover(id, params)
   else if method = 'textDocument/foldingRange' then Folding(id, params)
   else if method = 'textDocument/selectionRange' then Selection(id, params)
-  else if method = 'textDocument/formatting' then Formatting(id, params)
+  else if method = 'textDocument/formatting' then Formatting(id, params, 0, 0)
+  else if method = 'textDocument/rangeFormatting' then RangeFormatting(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

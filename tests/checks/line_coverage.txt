@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 395
-instrumented 19149
+uncovered 396
+instrumented 19230
 
 accept 0/4
 accumulate 0/84
@@ -120,8 +120,8 @@ checkmoduleheading 2/39
 checkmutualsupply 0/24
 checknewtuple 0/32
 checkpendingimplementations 0/8
-checkprocargument 0/46
-checkprocbody 0/48
+checkprocargument 0/47
+checkprocbody 0/49
 checkread 3/71
 checkreceive 0/27
 checkrecordvalue 0/92
@@ -149,7 +149,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/24
 collecttagtests 0/31
-compile 0/52
+compile 0/54
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -220,7 +220,7 @@ dumpmodulesbefore 0/7
 dumpnames 0/11
 dumpoptional 0/7
 dumpproc 0/36
-dumpprogram 0/74
+dumpprogram 0/77
 dumprecordlayout 0/9
 dumpstmt 0/207
 dumpstmtlist 0/4
@@ -348,6 +348,7 @@ evalconstvalue 0/6
 evallabelrange 5/36
 evalordinal 0/14
 expect 0/12
+exportedroutine 0/9
 exporthas 0/6
 exprend 0/4
 extendeddigit 1/7
@@ -381,11 +382,12 @@ fmtpop 0/4
 fmtpretrivia 0/5
 fmtpush 0/6
 fmtput 0/3
-fmttoken 0/119
+fmttoken 0/113
 fmttopkind 0/1
 fmttrivia 0/20
 fmtwantatleast 0/1
 fmtwidthof 0/3
+fmtword 0/1
 foldintop 2/33
 foldrealbinary 5/50
 foldsubstr 0/13
@@ -399,7 +401,7 @@ forgetarms 0/8
 forgetformals 0/7
 forgetlist 0/3
 forgetresolved 4/20
-formatsource 2/32
+formatsource 2/41
 frameat 0/12
 frameglobal 0/8
 frameof 0/2
@@ -555,7 +557,7 @@ nestwith 0/8
 newblock 0/2
 newnode 0/87
 newresultslot 0/7
-newsymbol 0/96
+newsymbol 0/97
 newtype 0/41
 nextformal 0/4
 nonvarying 3/42
@@ -565,6 +567,7 @@ notedeclarationsto 0/6
 notedefining 0/7
 noteexportedinterface 0/6
 notehandlecloser 0/6
+noteunwrittenvarparams 0/13
 noteuse 0/8
 noteusefield 0/5
 notinghere 0/4
@@ -584,7 +587,7 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/133
+parseargs 10/138
 parsearraytype 0/17
 parseblock 0/50
 parseboundident 0/12
@@ -621,6 +624,7 @@ parseprocorfunc 0/19
 parseprocparam 0/23
 parseprogram 0/32
 parsequalifiedname 0/12
+parserange 1/13
 parseread 0/14
 parserecordtype 0/15
 parserepeat 1/18
@@ -728,7 +732,7 @@ roundup 0/1
 row 0/57
 runcodegen 0/91
 rundefersreversed 0/4
-runsema 2/83
+runsema 2/86
 samelink 0/1
 sametuple 0/7
 satisfiescat 0/6
@@ -738,6 +742,7 @@ schematicformal 0/3
 sel 0/51
 selectedsize 0/14
 seq 0/25
+setformatrange 0/2
 setindex 0/47
 setuniverse 0/21
 setvaluetypeof 0/13
@@ -791,7 +796,7 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/57
+usage 0/59
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
@@ -801,6 +806,7 @@ warnat 0/2
 warnpartialresult 0/11
 warnunreachable 0/13
 warnunusedlocals 0/13
+warnunwrittenvarparams 0/22
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
