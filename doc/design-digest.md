@@ -324,6 +324,20 @@ checks they agree, which is the same arrangement the version number has. A
   entire body of pop-front. Lowered in `EmitAssign` in four instructions;
   `EmitCall` has no arm for it at all, and `partial_cases.txt` says why that
   is deliberate. `tests/dialect/take.pas` is the case.
+- **And the move was over-broad by one kind** (ADR-0267, AP 6.4.12.7).
+  ADR-0182's refusal — *nothing else has a value one variable can stop
+  holding* — was written of the three affine kinds together and is true of one
+  of them. A **file-variable** is `IsMemory`, several storage units the
+  processor is holding, and there genuinely is no value in one for a variable
+  to stop holding; a **handle** is one word, `struct pas_handle` being a value,
+  a closer and two list links, which is what an owned pointer is. The reason
+  neither may be copied is the reason both need a move. Nothing had noticed
+  because nothing had wanted it: ADR-0201 named *a task cannot be given a
+  socket until a handle can move* as the prerequisite for a concurrency
+  construct, and ADR-0268 is what asked. The source is emptied before the
+  target is released, so a self-move is a no-op and not a close.
+  `tests/dialect/handle_move.pas` is the case and
+  `tests/dialect/handle_move_errors.pas` the refusals.
 - **A second name for an owned value exists, and cannot escape** (ADR-0201).
   `Bump(o^)` binds a `var` parameter to what `o` owns, which is a borrow for
   the duration of the call — and the borrow can never be stored, because

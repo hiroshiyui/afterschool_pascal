@@ -323,7 +323,13 @@ load-bearing and the entry names the test that fails without it.
   needs a move to be usable**: `take` (ADR-0182) is the one value an owned
   pointer may be assigned, in 6.4.12.2's position, and its source is emptied
   before the target's address is taken -- which is what stops a target reached
-  through the source from building a cycle nothing owns.
+  through the source from building a cycle nothing owns. **Two of the three
+  kinds move, not one** (ADR-0267, AP 6.4.12.7): ADR-0182's refusal --
+  *nothing else has a value one variable can stop holding* -- was written of
+  all three and is true of a **file**, which is `IsMemory`. A handle is one
+  word exactly as an owned pointer is, so the reason neither may be copied is
+  the reason both need a move. Nothing had noticed because nothing had wanted
+  it until a task had to be handed a socket.
   **A second name for an owned value exists in exactly one form and cannot
   escape** (ADR-0201): a `var` parameter bound to `o^` is a borrow for the
   duration of the call, and no pointer can ever name it, because Pascal has no

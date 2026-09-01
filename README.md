@@ -770,6 +770,23 @@ position it may stand and in none of the others. A handle may be lent to a
 foreign routine as a value parameter, and lending an empty one stops the
 program. What it is not is a value: no record copies one.
 
+**And a handle moves** (ADR-0267). `take` was an owned pointer's alone, and
+the refusal said why in as many words — *nothing else has a value one variable
+can stop holding*. That is true of a file and not of a handle: a handle is one
+word of the runtime's exactly as an owned pointer is one word of the heap, and
+the reason neither may be copied is the reason both need a move.
+
+```pascal
+procedure TakeOver(var from, into: Dir);
+begin
+  into := take(from)               { at no moment do two variables hold it }
+end;
+```
+
+The source is emptied before the target is released, so a self-move is a no-op
+and not a close. A file still has no move, and that is a decision rather than a
+gap: there is no value in one for a variable to stop holding.
+
 **A function of your own may answer one** (ADR-0255), so a library can hand a
 caller an open stream instead of making the caller declare a variable and pass
 it as a `var` parameter:
@@ -845,8 +862,8 @@ end.                             { dispose runs here, all the way down }
 ```
 
 **`take` is how one variable stops holding what another starts holding**
-(ADR-0182). It is the only value of an owned pointer type an assignment
-admits, and it may stand nowhere else:
+(ADR-0182, and ADR-0267 for a handle). It is the only value of an owned
+pointer type an assignment admits, and it may stand nowhere else:
 
 ```pascal
 fresh^.next := take(head);   head := take(fresh)   { push a node on the front }
