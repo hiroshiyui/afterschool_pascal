@@ -480,6 +480,34 @@ after the last such sweep. Five had moved and one was simply wrong:
   checkable, wrong referent, which is the shape ADR-0072 named for clause
   numbers met once more.
 
+**A fourth shape, found on 2026-09-01 by trimming `doc/roadmap.md`, and it is
+not a number.** The three audits above look for a claim that has drifted from
+the code. This one is a claim that never met the code at all: **ADR-0266,
+ADR-0267 and ADR-0268 had landed and reached no document outside their own
+records.** Two of them closed roadmap rows that were still written as open --
+*`take` is refused for a handle in as many words* (ADR-0267 widened it) and
+the concurrency row reading **unblocked and unbuilt** (ADR-0268 built it) --
+and ADR-0267 was in no README, no digest and no `CLAUDE.md` bullet. A fourth
+claim, that the terminal binding an IDE needs is small and shaped and will be
+built *whenever something asks for it*, had been built by ADR-0262. And
+`doc/history.md`'s increment table had stopped counting seventeen increments
+earlier while its preamble said *thirty so far*.
+
+None of these is reachable by re-running a gate, which is what the audit above
+does: a gate answers a question about the compiler, and these are documents
+that were never told a decision was made. The distinguishing feature is that
+each was found by reading a **record** and asking where else it should appear
+-- the opposite direction from every other audit here, which starts from the
+document.
+
+**A gate could ask this and none does.** Every accepted ADR whose change moved
+the accepted language should be named somewhere outside `doc/adr/`, and
+`grep -l "ADR-0267" -- ':!doc/adr'` answers in one command. What makes it more
+than a grep is deciding which records *must* appear -- a gate over all 286
+would fail on every internal one -- and that is the design question rather
+than the mechanism. Not built here; recorded so the next reader does not
+conclude from four repairs that the class is closed.
+
 **A count is now stated in one place where it was stated in four.** The
 language server's findings were *twenty-one, fifteen closed, six open* in this
 file's sibling documents and *twenty-six, seventeen, nine* in the section that
