@@ -24552,9 +24552,20 @@ begin
   FmtGlue := false;
   { nothing may come before these }
   if (c = tkComma) or (c = tkSemi) or (c = tkColon) or (c = tkRParen)
-     or (c = tkRBracket) or (c = tkPeriod) or (c = tkDotDot) or (c = tkCaret)
-     or (c = tkQuery) or (c = tkBang) then
+     or (c = tkRBracket) or (c = tkPeriod) or (c = tkDotDot)
+     or (c = tkQuery) then
     FmtGlue := true;
+  { ...except a separator after a colon, which is 6.9.2.1's empty statement
+    written where a case-label's statement goes. `jsNull, jsTrue: ;` is the
+    shape, and gluing it reads as a typo rather than as a statement. }
+  if (c = tkSemi) and (p = tkColon) then FmtGlue := false;
+  { A caret is two constructs. 6.5.4's dereference is *postfix* and binds to
+    what it dereferences; 6.4.4's pointer-type is a *prefix* and the type it
+    points at is a separate word -- `= ^Vec(char)`, not `=^Vec(char)`. Nothing
+    but a variable-access can precede the first. }
+  if c = tkCaret then
+    if (p = tkIdent) or (p = tkRParen) or (p = tkRBracket) or (p = tkCaret)
+    then FmtGlue := true;
   { nor after these }
   if (p = tkLParen) or (p = tkLBracket) or (p = tkPeriod) or (p = tkDotDot)
      or (p = tkCaret) then
@@ -24568,6 +24579,10 @@ begin
     if (p = tkIdent) or (p = tkRParen) or (p = tkRBracket) or (p = tkCaret)
        or (p = tkStr) then
       FmtGlue := true;
+  { AP 6.4.13's fallible-type is *binary* -- `JsonPtr ! ErrorCode` names two
+    types and an operator between them -- so it takes a space on both sides
+    like any other. It sat in the list above, which gave it one side only. }
+  if (c = tkBang) or (p = tkBang) then FmtGlue := false;
   { 6.9.3.1's field-width, written against its colon }
   if (p = tkColon) and (c = tkInt) and (fmtParen > 0) then FmtGlue := true
 end;
@@ -24734,8 +24749,21 @@ begin
   fmtAfterComment := false;
 
   { A break a rule asked for ends any continuation: what follows is a new
-    statement, declaration or line of a block, and starts at its own indent. }
-  if fmtWant >= 2 then fmtCont := 0;
+    statement, declaration or line of a block, and starts at its own indent.
+
+    Inside parentheses it is none of those. A blank line in the middle of an
+    export-part or a parameter list separates *groups of one list*, and the
+    list is still open -- so clearing the continuation there put the rest of
+    the list at column 0, which is what a reformat of `lib/dialect/pasjson.pas`
+    showed. No oracle could: the token stream is unchanged, so `format-check`
+    is green either way, and no case under `tests/dumps/` had a blank line
+    inside a bracket. }
+  if fmtWant >= 2 then
+    if fmtParen = 0 then fmtCont := 0
+    { and inside them it *establishes* one rather than clearing it: the list
+      did not wrap for the margin, so there is no continuation yet, and
+      without this the rest of the list starts at column 0. }
+    else fmtCont := 1;
 
   { --- the token --------------------------------------------------------- }
   sign := ((k = tkPlus) or (k = tkMinus)) and not FmtBinaryPos(p);
@@ -24891,7 +24919,7 @@ end;
   carries. Anything else goes on a line of its own, and a blank line before it
   in the source is kept for the reason a blank line anywhere is. }
 procedure FmtTrivia(i: integer; var tv, lastLine: integer);
-var held: integer; trail: boolean;
+var held, back: integer; trail: boolean;
 begin
   while (tv <= triviaCount) and (trivia[tv].before <= i) do begin
     held := fmtWant;
@@ -24914,7 +24942,20 @@ begin
       { A comment on a line of its own starts at the block's indent and not at
         the continuation of whatever ran long above it. }
       fmtCont := 0;
-      FmtFlush
+      { And it belongs to what *follows* it, not to what it stands after. The
+        four word-symbols below release an indent when they are written, and
+        the release happens after this -- so a comment introducing an `else`
+        was laid out at the depth of the arm above it, four spaces in where
+        the `else` it explains is two. This tree's compiler is comment-dense
+        enough that the reformat which found it (ADR-0285) mis-indented the
+        explanation of nearly every second branch. }
+      back := 0;
+      if (tok[i].kind = tkElse) or (tok[i].kind = tkOtherwise)
+         or (tok[i].kind = tkUntil) or (tok[i].kind = tkEnd) then
+        if FmtDepth > 0 then back := 1;
+      fmtLift := fmtLift - back;
+      FmtFlush;
+      fmtLift := fmtLift + back
     end;
     FmtComment(tv);
     if trail then fmtWant := held

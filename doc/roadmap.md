@@ -324,9 +324,10 @@ real sites and was still not built, because §6.6.3.6's congruity makes the fix
 illegal for a routine passed as a procedural parameter and no one component
 can know whether an exported one ever is.
 
-**What is left of the chapter is one named thing** — it was three until
-ADR-0283 and two until ADR-0284, and both of those closed by someone trying the
-row rather than believing it:
+**Nothing is left of the chapter that is a task.** It was three rows until
+ADR-0283, two until ADR-0284 and none until ADR-0285 — and all three closed by
+someone trying the row rather than believing it, which is twice what the
+attempt built and once what it talked the page out of:
 
 - ~~**A warning for a `var` parameter never written through.**~~ **Built**
   (ADR-0283), and the estimate above it was wrong in the direction this
@@ -348,11 +349,33 @@ row rather than believing it:
   `FmtNewline`. This chapter's own lesson, met for the second time on this
   page: **a row saying a feature is blocked is a row nobody has tried.**
 - **A `style:` gate for the Pascal**, of the kind `git clang-format` gives the
-  C. `format-check` proves the formatter *preserves* a program (ADR-0279); it
-  says nothing about whether the output is well laid out, and **nothing in
-  this tree is formatted by it**. That is a policy this tree has not chosen,
-  and choosing it is a larger decision than the gate: it rewrites every Pascal
-  source in the repository.
+  C. **Tried, measured and declined** (ADR-0285), which is the third row on
+  this page to be settled by attempting it rather than arguing about it — and
+  the first of the three where the attempt said *no*.
+
+  A full reformat rewrites **42 601 lines across 728 files**; the
+  implementation alone — `selfhost/`'s three components, `lib/`, `lsp/`, with
+  the fixtures left out — is 36 files and **25 070 lines**, and it grows the
+  source **6.8%**. Almost none of that is defects. It is 818 one-line `var`
+  declarations split in two, 558 one-line `begin … end` bodies expanded, and
+  210 blank lines inserted between headings written as a group: opinions, not
+  errors, and ones this source does not share.
+
+  **What the attempt was worth is five layout defects it found**, each of
+  which preserves the token stream and so was invisible to `format-check` and
+  to every other oracle here: a blank line inside a parenthesised list dropped
+  the rest of it to column zero; a comment introducing an `else` took the
+  indent of the arm above it, which in a tree this comment-dense is nearly
+  every second branch; `^` was glued to what preceded it, which is right for a
+  dereference and wrong for a pointer-type; `!` took a space on one side of a
+  binary operator; and the empty statement after a case-label lost its space.
+  All five are fixed and `tests/dumps/format.pas` holds all five shapes now.
+
+  **Fixing them did not shrink the reformat** — 24 490 lines to 25 070 — which
+  is what settles it: the diff is a disagreement about style and not a list of
+  bugs. The gate becomes cheap the day that style is agreed; the mechanism is
+  already there, `format-check` formatting every source on every run and
+  discarding the result. Deciding it belongs to whoever maintains this source.
 
 **One is blocked on hardware rather than on a decision.** `benchmark` abstains
 on aarch64 and on CI (ADR-0282), so no push is guarded by it; an aarch64

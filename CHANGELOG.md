@@ -60,6 +60,16 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Five layout defects in the formatter** (ADR-0285), found by pointing it at
+  36 real sources rather than at a case someone wrote. Every one preserves the
+  token stream, so every oracle here was green on all five. A blank line
+  inside a parenthesised list dropped the rest of the list to column zero. A
+  comment introducing an `else` took the indent of the arm above it. `^` was
+  glued to whatever preceded it, which is right for a dereference and wrong
+  for a pointer-type, printing `= ^T` as `=^T`. AP 6.4.13's `!` is binary and
+  took a space on one side only. And 6.9.2.1's empty statement after a
+  case-label lost its space, printing `red:;`.
+
 - **`and then` and `or else` were written straight to standard output** by the
   formatter, which adjusted its column counter by hand rather than going
   through its one character sink. The bytes were identical either way, so

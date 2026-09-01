@@ -293,3 +293,4 @@ the alternatives that were rejected and why.
 | [0282](0282-a-gate-is-not-exercised-until-ci-has-run-it.md) | A gate is not exercised until CI has run it | Accepted |
 | [0283](0283-a-parameter-that-could-say-it-is-read-only.md) | A parameter that could say it is read-only | Accepted |
 | [0284](0284-the-printer-already-knows-where-it-is.md) | The printer already knows where it is | Accepted |
+| [0285](0285-the-formatter-is-not-ready-to-own-the-tree.md) | The formatter is not ready to own the tree | Accepted |

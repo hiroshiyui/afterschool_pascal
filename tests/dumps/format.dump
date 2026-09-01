@@ -9,7 +9,17 @@
   a variant-part, a repeat, a with, a for, a nested procedure, a declaration
   part, a line long enough to need the margin, and comments in each of the
   three places one can stand -- above a thing, beside it, and inside an
-  expression. }
+  expression.
+
+  And four *spacings*, each of which was wrong until an attempt to format this
+  whole repository showed it (ADR-0285). A caret is two constructs and takes a
+  space on one of them -- 6.4.4's pointer-type is a prefix and 6.5.4's
+  dereference is a postfix. AP 6.4.13's fallible-type is binary and takes a
+  space on both sides. 6.9.2.1's empty statement after a case-label's colon
+  takes one before the separator. And a blank line inside a parenthesised list
+  leaves the list open, so what follows it is still indented. Every one of
+  them keeps the token stream, so `format-check` was green for all four and
+  this case is the only thing that can hold them. }
 program format(output);
 type
   colour = (red, green, blue);
@@ -64,6 +74,52 @@ begin
   until k >= n;
   with s do
     tag := green
+end;
+
+{ the four spacings, which no other case here holds }
+type
+  node = ^item;
+  item = record
+    next: node
+  end;
+  maybe = node ! integer;
+  pair = (one, two);
+var
+  head: node;
+  m: maybe;
+  pk: pair;
+
+{ a comment introducing the branch it stands before, which takes that
+  branch's indent and not the arm's above it }
+procedure branches(n: integer);
+begin
+  if n = 0 then
+    writeln('zero')
+  { the other way }
+  else if n = 1 then
+    writeln('one')
+  else
+    writeln('many')
+end;
+
+procedure grouped(a, b,
+
+  c, d: integer);
+begin
+  writeln(a + b + c + d:1)
+end;
+
+procedure spacings;
+begin
+  new(head);
+  head^.next := nil;
+  case pk of
+    one: ;
+    two: writeln('two')
+  end;
+  dispose(head);
+  grouped(1, 2, 3, 4);
+  branches(1)
 end;
 
 begin
