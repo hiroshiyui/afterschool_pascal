@@ -28,6 +28,7 @@
  * reintroduces the escaping alias this language has never had.
  */
 
+#include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +65,14 @@ void *pas_chan_new(long long esize, long long cap) {
   struct pas_chan *c;
   if (esize <= 0 || cap <= 0)
     pas_runtime_error("a channel needs a positive capacity");
+  /* Both factors come from the *type* and never from a value, so a program
+     cannot reach this with input -- it takes a channel whose elements are
+     gigabytes. It is checked anyway for the reason every arithmetic in this
+     language is checked: it traps rather than wrapping (ADR-0014), and a
+     wrapped product here would be a small allocation with a large index into
+     it, which is the one shape a bounds check cannot catch. */
+  if (esize > LLONG_MAX / cap)
+    pas_runtime_error("a channel that large cannot be allocated");
   c = malloc(sizeof *c);
   if (!c)
     pas_runtime_error("out of memory making a channel");
@@ -257,7 +266,13 @@ void pas_tasks_spawn(void *slot, void *fn, void *args) {
   struct pas_taskset *s = slot;
   struct pas_taskarg *t;
   if (s->n == s->cap) {
-    int want = s->cap ? s->cap * 2 : 8;
+    int want;
+    /* Doubling is the growth, and the double is what overflows. Unreachable
+       with real threads -- it wants 2^30 of them live in one block -- but the
+       wrap would be negative and `(size_t)want` then enormous. */
+    if (s->cap > INT_MAX / 2)
+      pas_runtime_error("too many tasks spawned by one block");
+    want = s->cap ? s->cap * 2 : 8;
     pthread_t *grown = realloc(s->tids, (size_t)want * sizeof *grown);
     if (!grown)
       pas_runtime_error("out of memory spawning a task");

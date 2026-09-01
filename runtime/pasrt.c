@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <math.h>
 #include <setjmp.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,10 +44,36 @@
 #include "pasrt.h"
 #include "pasrt_unicode.h"
 
+/* **Leaving, once.** C11 7.22.4.4 leaves a second *concurrent* call to exit
+ * undefined, and since ADR-0268 this runtime can have two threads of control:
+ * two workers can trap in the same instant -- a send on a channel another
+ * task has closed is the ordinary way -- and both would arrive here. The
+ * first through owns the shutdown and leaves by `exit`, which flushes and
+ * runs the atexit handlers; a second has already written its own message and
+ * has nothing to add, so it leaves by `_Exit`, which ends the process without
+ * touching either.
+ *
+ * Deliberately narrower than serialising the two. A loser made to *wait* for
+ * the winner would hang if the winner's exit ever blocked, and a hang is
+ * worse than the race it replaces -- where this cannot be worse, the process
+ * having been ending either way. Every site below flushes before it prints,
+ * so the loser's own message is out before it calls this. In a
+ * single-threaded program the flag is set once and nothing else changes.
+ *
+ * `<stdatomic.h>` is ISO C11 (§7.17), so this costs the runtime's
+ * conformance nothing, exactly as `_Thread_local` did not. */
+static atomic_flag pas_leaving = ATOMIC_FLAG_INIT;
+
+static void pas_exit_once(int status) {
+  if (atomic_flag_test_and_set(&pas_leaving))
+    _Exit(status);
+  exit(status);
+}
+
 void pas_runtime_error(const char *msg) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s\n", msg);
-  exit(1);
+  pas_exit_once(1);
 }
 
 /* --- statement coverage, for `pascalc --coverage` (ADR-0104) --------------
@@ -206,7 +233,7 @@ void pas_index_error(int lo, int hi) {
   fflush(stdout);
   fprintf(stderr, "runtime error: array index out of bounds (%d..%d)\n", lo,
           hi);
-  exit(1);
+  pas_exit_once(1);
 }
 
 /// And the same for a store into a subrange whose bounds are discriminants
@@ -221,7 +248,7 @@ void pas_index_error(int lo, int hi) {
 void pas_range_error(int lo, int hi) {
   fflush(stdout);
   fprintf(stderr, "runtime error: value out of range (%d..%d)\n", lo, hi);
-  exit(1);
+  pas_exit_once(1);
 }
 
 /// ISO/IEC 10206:1991 §6.4.6 d): two types produced from one schema with
@@ -236,7 +263,7 @@ void pas_disc_error(const char *schema, const char *disc, int left,
           "runtime error: assignment needs one type: schema '%s' with %s = %d "
           "and %s = %d\n",
           schema, disc, left, disc, right);
-  exit(1);
+  pas_exit_once(1);
 }
 
 /// ISO 7185 §6.7.2.5 compares two strings character by character and gives the
@@ -248,13 +275,13 @@ void pas_length_error(int left, int right) {
           "runtime error: strings of different lengths cannot be compared "
           "(%d and %d)\n",
           left, right);
-  exit(1);
+  pas_exit_once(1);
 }
 
 static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s%s\n", msg, what);
-  exit(1);
+  pas_exit_once(1);
 }
 
 /* ---------------------------------------------------------- exponentiation */
@@ -1199,7 +1226,7 @@ void pas_put(void *v) {
       fflush(stdout);
       fprintf(stderr, "runtime error: this file holds at most %d components\n",
               f->capacity);
-      exit(1);
+      pas_exit_once(1);
     }
   }
   if (f->istext)
@@ -1874,7 +1901,7 @@ void *pas_new(long long size) {
   if (!p) {
     fflush(stdout);
     fprintf(stderr, "runtime error: out of memory in new\n");
-    exit(1);
+    pas_exit_once(1);
   }
   return p;
 }
@@ -2079,7 +2106,7 @@ void pas_halt(int status) {
     h = next;
   }
   fflush(NULL);
-  exit(status);
+  pas_exit_once(status);
 }
 
 void pas_unbind(void *v) {
@@ -2325,12 +2352,16 @@ _Thread_local static char pas_str_arena[PAS_STR_ARENA];
 
 /* How much of the arena is in use, and the one datum the generated code shares
  * with this file rather than reaching through a function. It is named
- * `@pas_str_at = external global i32` in the emitted module, so the release at
- * a statement's end is a store and costs nothing in a program that never
- * concatenates -- where a call would have to be emitted in every prologue and
- * could not be optimised away. It is an `int` for the same reason a
- * variable-string's length is: the compiler writes both as an LLVM i32, and
- * the assertion above is what ties the two spellings together. */
+ * `@pas_str_at = external thread_local global i32` in the emitted module --
+ * thread_local since ADR-0268, because the arena is a stack of what the
+ * current chain of activations owns and a task is a second chain, and the
+ * emitter must spell the model the same way or the two would disagree about
+ * where the variable lives. So the release at a statement's end is a store and
+ * costs nothing in a program that never concatenates -- where a call would have
+ * to be emitted in every prologue and could not be optimised away. It is an
+ * `int` for the same reason a variable-string's length is: the compiler writes
+ * both as an LLVM i32, and the assertion above is what ties the two spellings
+ * together. */
 _Thread_local int pas_str_at;
 
 /* Both ways to run out are errors, and they are different mistakes: one value

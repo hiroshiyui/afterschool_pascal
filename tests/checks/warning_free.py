@@ -51,6 +51,7 @@ one file fewer -- which is the shape a skip-what-fails sweep would have had,
 and would have turned a source that broke into a source that was skipped.
 """
 
+import argparse
 import subprocess
 import sys
 import tempfile
@@ -116,9 +117,18 @@ def compile_one(pascalc: Path, root: Path, name: str, out: Path):
 
 
 def main() -> int:
-    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
-    build = (Path(sys.argv[sys.argv.index("--build") + 1]) if "--build" in sys.argv
-             else root / "build")
+    # argparse rather than positional indexing, which is what every other check
+    # here uses -- and the reason is that the hand-rolled version read
+    # `--build` as the *root* when no root was given, so
+    # `warning_free.py --build build` swept a directory named `--build` and
+    # found nothing in it. The FLOOR below caught that and exited 1, which is
+    # the floor doing its job; matching the siblings is what stops it arising.
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("root", nargs="?", default=None)
+    ap.add_argument("--build", default=None)
+    args = ap.parse_args()
+    root = Path(args.root) if args.root else Path(__file__).resolve().parents[2]
+    build = Path(args.build) if args.build else root / "build"
     pascalc = build / "bin" / "pascalc"
     if not pascalc.exists():
         print(f"warning-free: {pascalc} is missing -- skipping")
