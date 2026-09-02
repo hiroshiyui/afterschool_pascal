@@ -21,9 +21,9 @@ var
 procedure dump(path: PathName; what: string);
 var r: Stream;
 begin
-  if OpenRead(r, path) = errNone then begin
+  if StreamOpenRead(r, path) = errNone then begin
     writeln(what, ':');
-    while ReadLine(r, line) do
+    while StreamReadLine(r, line) do
       writeln('  [', line, ']')
   end
   else
@@ -34,9 +34,9 @@ end;
 procedure writer(path: PathName);
 var w: Stream;
 begin
-  e := OpenWrite(w, path);
-  e := WriteLine(w, 'from writer');
-  e := WriteText(w, 'no newline at the end')
+  e := StreamOpenWrite(w, path);
+  e := StreamWriteLine(w, 'from writer');
+  e := StreamWriteText(w, 'no newline at the end')
 end;
 
 begin
@@ -47,43 +47,43 @@ begin
   writer(p);
   dump(p, 'after the block');
 
-  { explicit Close, then the file is complete while the block goes on }
-  e := OpenWrite(s, q);
+  { explicit StreamClose, then the file is complete while the block goes on }
+  e := StreamOpenWrite(s, q);
   writeln('open for writing: ', ErrorText(e));
-  e := WriteLine(s, 'one');
-  e := WriteLine(s, '');
-  e := WriteLine(s, 'three');
-  Close(s);
+  e := StreamWriteLine(s, 'one');
+  e := StreamWriteLine(s, '');
+  e := StreamWriteLine(s, 'three');
+  StreamClose(s);
   writeln('closed, empty: ', s = nil);
   dump(q, 'after Close');
 
   { append keeps what was there }
-  e := OpenAppend(s, q);
-  e := WriteLine(s, 'four, and the rest of a long line');
-  Close(s);
+  e := StreamOpenAppend(s, q);
+  e := StreamWriteLine(s, 'four, and the rest of a long line');
+  StreamClose(s);
   dump(q, 'after append');
 
   { a line longer than the string loses its tail and only its tail }
-  e := OpenRead(t, q);
+  e := StreamOpenRead(t, q);
   n := 0;
-  while ReadLine(t, short) do begin
+  while StreamReadLine(t, short) do begin
     n := n + 1;
     writeln('short ', n:1, ': [', short, ']')
   end;
   writeln('lines: ', n:1);
-  Close(t);
+  StreamClose(t);
 
-  { Flush makes a write visible to a second reader of the same file }
-  e := OpenWrite(s, p);
-  e := WriteLine(s, 'flushed');
-  e := Flush(s);
+  { StreamFlush makes a write visible to a second reader of the same file }
+  e := StreamOpenWrite(s, p);
+  e := StreamWriteLine(s, 'flushed');
+  e := StreamFlush(s);
   dump(p, 'while still open');
 
   { a missing file, and a directory that cannot be created in }
-  e := OpenRead(t, '/nonexistent-apascal/x');
+  e := StreamOpenRead(t, '/nonexistent-apascal/x');
   writeln('missing: ', ErrorText(e), ', empty: ', t = nil);
-  e := OpenWrite(t, '/nonexistent-apascal/x');
+  e := StreamOpenWrite(t, '/nonexistent-apascal/x');
   writeln('uncreatable: ', ErrorText(e));
-  Close(t);
+  StreamClose(t);
   writeln('close of empty: ', t = nil)
 end.

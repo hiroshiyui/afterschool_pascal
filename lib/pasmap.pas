@@ -17,7 +17,7 @@
   - the hash accumulates modulo `HashMod` at every character rather than at the
     end, so the product never approaches maxint however long the key;
   - the load-factor test is `live * 4 >= cap * 3` with `cap` bounded by
-    `CapMax`, so neither side can overflow.
+    `SMapCapMax`, so neither side can overflow.
 
   As with PasVector there are no generics, so the value type is `integer` and
   a caller wanting another copies the file. The *key* type is fixed for a
@@ -26,30 +26,30 @@
 
 module PasMap;
 
-export PasMap = (MapKey, KeyMax, CapMax, StrMap, MapPtr,
-                 MapNew, MapFree, MapPut, MapGet, MapHas, MapDelete,
-                 MapCount, MapSlots, MapLiveAt, MapKeyAt, MapValAt);
+export PasMap = (SMapKey, SMapKeyMax, SMapCapMax, StrMap, SMapPtr,
+                 SMapNew, SMapFree, SMapPut, SMapGet, SMapHas, SMapDelete,
+                 SMapCount, SMapSlots, SMapLiveAt, SMapKeyAt, SMapValAt);
 
 const
   { A key longer than this is refused by 6.4.6's string store, which is a trap
     rather than a truncation -- so a caller passing arbitrary text should trim
-    it to KeyMax first. Stated here because it is the one way to make this
+    it to SMapKeyMax first. Stated here because it is the one way to make this
     module halt a program. }
-  KeyMax = 32;
+  SMapKeyMax = 32;
   { Slots, not entries: the table never exceeds three-quarters full. }
-  CapMax = 4194304;
+  SMapCapMax = 4194304;
   { The hash is taken modulo this before the table size, so the accumulation
     stays far below maxint whatever the key. Prime, and about 2^20. }
   HashMod = 1048573;
 
 type
-  MapKey = string(KeyMax);
+  SMapKey = string(SMapKeyMax);
 
   { `state` is 0 empty, 1 live, 2 deleted. A deleted slot must be walked
     *through* when probing and may be written *into* when inserting, which is
     the whole reason it is three values and not a boolean. }
   Slot = record
-    key: MapKey;
+    key: SMapKey;
     val: integer;
     state: integer
   end;
@@ -59,52 +59,52 @@ type
     filled: integer;
     slots: array [1..cap] of Slot
   end;
-  MapPtr = ^StrMap;
+  SMapPtr = ^StrMap;
 
 { An empty map with at least `want` slots, rounded up to at least 8. }
-procedure MapNew(var m: MapPtr; want: integer);
+procedure SMapNew(var m: SMapPtr; want: integer);
 
 { Release the storage and set `m` to nil. A nil `m` is harmless. }
-procedure MapFree(var m: MapPtr);
+procedure SMapFree(var m: SMapPtr);
 
 { Associate `val` with `key`, replacing any previous association. Grows when
   the table passes three-quarters full. }
-procedure MapPut(var m: MapPtr; key: MapKey; val: integer);
+procedure SMapPut(var m: SMapPtr; key: SMapKey; val: integer);
 
 { The value associated with `key`, or `whenAbsent` when there is none. There is
   no out-of-band integer to reserve for "missing", so the caller supplies one --
-  or asks MapHas, which is the unambiguous question. }
-function MapGet(m: MapPtr; key: MapKey; whenAbsent: integer): integer;
+  or asks SMapHas, which is the unambiguous question. }
+function SMapGet(m: SMapPtr; key: SMapKey; whenAbsent: integer): integer;
 
 { Whether `key` has an association. }
-function MapHas(m: MapPtr; key: MapKey): boolean;
+function SMapHas(m: SMapPtr; key: SMapKey): boolean;
 
 { Remove `key`'s association if it has one. Answers whether it did. }
-function MapDelete(m: MapPtr; key: MapKey): boolean;
+function SMapDelete(m: SMapPtr; key: SMapKey): boolean;
 
 { The number of live associations. }
-function MapCount(m: MapPtr): integer;
+function SMapCount(m: SMapPtr): integer;
 
 { The number of slots, which is the bound for the iteration below. Iteration is
   phrased over slot positions rather than as a cursor because a cursor would be
-  state this module would have to own; the caller walks 1..MapSlots and asks
-  MapLiveAt at each. The order is the table's and not the insertion order. }
-function MapSlots(m: MapPtr): integer;
+  state this module would have to own; the caller walks 1..SMapSlots and asks
+  SMapLiveAt at each. The order is the table's and not the insertion order. }
+function SMapSlots(m: SMapPtr): integer;
 
 { Whether slot `i` holds a live association. }
-function MapLiveAt(m: MapPtr; i: integer): boolean;
+function SMapLiveAt(m: SMapPtr; i: integer): boolean;
 
-{ The key in slot `i`. Meaningful only where MapLiveAt answers true. }
-function MapKeyAt(m: MapPtr; i: integer): MapKey;
+{ The key in slot `i`. Meaningful only where SMapLiveAt answers true. }
+function SMapKeyAt(m: SMapPtr; i: integer): SMapKey;
 
-{ The value in slot `i`. Meaningful only where MapLiveAt answers true. }
-function MapValAt(m: MapPtr; i: integer): integer;
+{ The value in slot `i`. Meaningful only where SMapLiveAt answers true. }
+function SMapValAt(m: SMapPtr; i: integer): integer;
 
 end;
 
 { 1..cap, from the key. Accumulated modulo HashMod so the product is never
   formed near the top of the type. }
-function HashOf(key: MapKey; cap: integer): integer;
+function HashOf(key: SMapKey; cap: integer): integer;
 var i, h: integer;
 begin
   h := 0;
@@ -116,7 +116,7 @@ end;
 { The slot `key` occupies, or 0 when it occupies none. Walks through deleted
   slots and stops at an empty one; bounded by `cap` steps so a table with no
   empty slot left cannot loop forever. }
-function FindSlot(m: MapPtr; key: MapKey): integer;
+function FindSlot(m: SMapPtr; key: SMapKey): integer;
 var at, steps, found: integer;
 begin
   found := 0;
@@ -137,7 +137,7 @@ end;
 { Insert into a table known to have room, without growing and without looking
   for a duplicate: the caller has already established there is none. Used by
   Rehash, where every key is distinct by construction. }
-procedure PlaceFresh(m: MapPtr; key: MapKey; val: integer);
+procedure PlaceFresh(m: SMapPtr; key: SMapKey; val: integer);
 var at: integer;
 begin
   at := HashOf(key, m^.cap);
@@ -152,10 +152,10 @@ end;
 
 { Move every live association into a table of `cap` slots. Tombstones do not
   survive, which is what makes a table of many deletions recover its speed. }
-procedure Rehash(var m: MapPtr; cap: integer);
-var q: MapPtr; i: integer;
+procedure Rehash(var m: SMapPtr; cap: integer);
+var q: SMapPtr; i: integer;
 begin
-  if cap > CapMax then cap := CapMax;
+  if cap > SMapCapMax then cap := SMapCapMax;
   new(q, cap);
   q^.live := 0;
   q^.filled := 0;
@@ -170,13 +170,13 @@ begin
   m := q
 end;
 
-procedure MapNew;
+procedure SMapNew;
 var i, cap: integer;
 begin
   cap := 8;
-  while (cap < want) and (cap < CapMax div 2) do
+  while (cap < want) and (cap < SMapCapMax div 2) do
     cap := cap * 2;
-  if cap > CapMax then cap := CapMax;
+  if cap > SMapCapMax then cap := SMapCapMax;
   new(m, cap);
   m^.live := 0;
   m^.filled := 0;
@@ -184,7 +184,7 @@ begin
     m^.slots[i].state := 0
 end;
 
-procedure MapFree;
+procedure SMapFree;
 begin
   if m <> nil then begin
     dispose(m);
@@ -192,11 +192,11 @@ begin
   end
 end;
 
-procedure MapPut;
+procedure SMapPut;
 var at, steps: integer; placed: boolean;
 begin
   { grow first, so the insert below always has an empty slot to stop at }
-  if (m^.filled * 4 >= m^.cap * 3) and (m^.cap < CapMax) then
+  if (m^.filled * 4 >= m^.cap * 3) and (m^.cap < SMapCapMax) then
     Rehash(m, m^.cap * 2);
 
   at := FindSlot(m, key);
@@ -226,57 +226,57 @@ begin
   end
 end;
 
-function MapGet;
+function SMapGet;
 var at: integer;
 begin
   at := FindSlot(m, key);
-  if at = 0 then MapGet := whenAbsent
-  else MapGet := m^.slots[at].val
+  if at = 0 then SMapGet := whenAbsent
+  else SMapGet := m^.slots[at].val
 end;
 
-function MapHas;
+function SMapHas;
 begin
-  MapHas := FindSlot(m, key) <> 0
+  SMapHas := FindSlot(m, key) <> 0
 end;
 
-function MapDelete;
+function SMapDelete;
 var at: integer;
 begin
   at := FindSlot(m, key);
   if at = 0 then
-    MapDelete := false
+    SMapDelete := false
   else begin
     { 2 and not 0: a probe that started before this slot must still walk
       through it to reach what follows }
     m^.slots[at].state := 2;
     m^.live := m^.live - 1;
-    MapDelete := true
+    SMapDelete := true
   end
 end;
 
-function MapCount;
+function SMapCount;
 begin
-  MapCount := m^.live
+  SMapCount := m^.live
 end;
 
-function MapSlots;
+function SMapSlots;
 begin
-  MapSlots := m^.cap
+  SMapSlots := m^.cap
 end;
 
-function MapLiveAt;
+function SMapLiveAt;
 begin
-  MapLiveAt := m^.slots[i].state = 1
+  SMapLiveAt := m^.slots[i].state = 1
 end;
 
-function MapKeyAt;
+function SMapKeyAt;
 begin
-  MapKeyAt := m^.slots[i].key
+  SMapKeyAt := m^.slots[i].key
 end;
 
-function MapValAt;
+function SMapValAt;
 begin
-  MapValAt := m^.slots[i].val
+  SMapValAt := m^.slots[i].val
 end;
 
 end.

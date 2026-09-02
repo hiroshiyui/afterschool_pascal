@@ -55,7 +55,7 @@ on 2026-08-30:
 
 | Area | Where it is answered |
 | --- | --- |
-| networking | `PasNet` — a socket is a handle and both ends are strings, so `getaddrinfo` decides what they mean and no program writes a byte order — with `Wait` over `poll`, and `PasTls` and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265) |
+| networking | `PasNet` — a socket is a handle and both ends are strings, so `getaddrinfo` decides what they mean and no program writes a byte order — with `NetWait` over `poll`, and `PasTls` and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265) |
 | internationalisation | AP 6.4.15's text model: UTF-8 in normal form C, an element is an extended grapheme cluster, an integer index refused — and Unicode's own conformance files judge it, which is the one oracle here nobody in this project wrote (ADR-0189 – ADR-0193, ADR-0196, ADR-0199) |
 | concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
 | memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
@@ -417,12 +417,12 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-seven entries so far. **Twenty-four are in
+Twenty-seven entries so far. **Twenty-five are in
 [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)**
-— twenty-two acted on, and two that needed no action because each is a
-thing a writer has to know rather than a defect — and **three are open**:
-the two usability findings below, which are recorded rather than acted on
-because each names a design question, and one decision nobody has asked for
+— twenty-three acted on, and two that needed no action because each is a
+thing a writer has to know rather than a defect — and **two are open**:
+the usability finding below, which is recorded rather than acted on
+because it names a design question, and one decision nobody has asked for
 twice. That is the discipline this chapter is for: a finding recorded and
 left is a finding wasted, and the rule that made the first one actionable
 was this section's own — one site is an anecdote, two are a demand
@@ -511,29 +511,6 @@ remain:
   does have has never been exercised at depth by anything here — so the
   question this chapter asked about `T ! E` reading well at depth is still
   unanswered, and now for a stated reason.
-
-- **`only` is a collision workaround, not a narrowing tool.** The server
-  imports **twelve** modules — the roadmap said ten, and it grew — against
-  export lists that reach 50 names (`PasJson`), 19 (`PasFS`) and 17
-  (`PasIO`). Two of those three had drifted by one; the middle one was never
-  right. It was written as 24 on a day `PasFS` exported **18**, and the entry
-  has been read as evidence ever since. A number nothing counts is only ever
-  as good as the afternoon it was typed — and the argument does not need it,
-  since what makes `only` a workaround is the *collisions*, which are named
-  below and are checkable by reading two headings. Both of its §6.11.3 `only` clauses are there because two modules
-  export the same spelling: `PasDir` exports `Close` and `NameMax`, which
-  `PasIO` and `PasJson` also export, and `PasParse` exports `ResultText`, and
-  so does `PasError`. Neither `only` narrows for the sake of narrowing; each
-  enumerates what the client wants from the *colliding* module so the other
-  one's spelling survives.
-
-  At twelve imports that is an annoyance with a workaround. It is worth
-  recording because it **scales the wrong way**: collisions grow with the
-  product of the export lists, `only` is per-import and enumerative, and the
-  alternative the standard offers — `qualified` — makes every use of that
-  module wordier rather than the one that collides. The answer this chapter's
-  own practice suggests is to write the fortieth-import program before
-  designing anything, and there is not one.
 
 Seven entries stood below this line and **six of them are closed**; they
 moved to

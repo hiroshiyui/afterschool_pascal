@@ -5,7 +5,7 @@
   function, declares a foreign struct or asks the runtime for anything. It is
   Pascal over `PasNet`'s socket, and the reason that is possible at all is that
   RFC 9112 framed HTTP/1.1 as lines -- a start-line, then fields one to a line,
-  then an empty line -- which is exactly the shape `PasNet.ReadLine` answers
+  then an empty line -- which is exactly the shape `NetReadLine` answers
   in. The other half of that row, TLS, is not a module over anything and is not
   here.
 
@@ -61,8 +61,8 @@
   close` is what makes that unreachable rather than merely unlikely.
 
   **It blocks, and the caller is what bounds it.** Every read here is
-  `PasNet.ReadLine`, which waits. A caller that must not wait forever keeps its
-  socket in a `SocketList` -- `Connect(list[1], ...)` -- and calls `PasNet.Wait`
+  `NetReadLine`, which waits. A caller that must not wait forever keeps its
+  socket in a `SocketList` -- `NetConnect(list[1], ...)` -- and calls `NetWait`
   before `Receive`; a handle cannot be copied (AP 6.4.12.2), so this module
   cannot build such a list out of the socket it was handed and cannot do it for
   the caller.
@@ -264,7 +264,7 @@ function SetBody(var q: Request; body: RequestBody): ErrorCode;
   HTTP/1.1 as lines, and the four routines below turn a `Request` into the
   octets to write and a sequence of lines back into a `Response` -- without
   reading or writing anything themselves. `Send` and `Receive` below are
-  written over them and are all this module does with a `PasNet.Socket`, so a
+  written over them and are all this module does with a `Socket`, so a
   second transport is a second pair of routines and not a second parser.
 
   `lib/dialect/pashttps.pas` is that second pair, over `PasTls.Connection`.
@@ -635,7 +635,7 @@ function Send;
 var
   { One write per bufferful rather than one per line: a request head arriving
     in eight packets is eight packets the far end reassembles for nothing, and
-    `PasNet.WriteLine`'s comment gives the same reason for its own single
+    `NetWriteLine`'s comment gives the same reason for its own single
     call. The bufferful is what `NextPiece` fills, so the decision is the
     capacity of this variable and nothing else. }
   buf: NetLine;
@@ -647,7 +647,7 @@ begin
   while not w.done do begin
     NextPiece(q, w, buf);
     if length(buf) > 0 then begin
-      e := WriteText(s, buf);
+      e := NetWriteText(s, buf);
       if Failed(e) then exit(e)
     end
   end;
@@ -944,7 +944,7 @@ var raw: NetLine; e: ErrorCode;
 begin
   BeginResponse(r, method);
   while WantsLine(r) do begin
-    e := ReadLine(s, raw);
+    e := NetReadLine(s, raw);
     if e = errAbsent then e := FeedEnd(r)
     else if Failed(e) then exit(e)
     else e := FeedLine(r, raw);

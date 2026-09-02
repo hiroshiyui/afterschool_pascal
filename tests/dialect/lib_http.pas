@@ -5,7 +5,7 @@
   would be a test of that site, of the network, and of whatever proxy sat
   between -- and it would fail on a machine with no route out. So the program
   listens on whatever port is free, connects to itself, and writes the canned
-  responses by hand with `PasNet.WriteText`. Every response below is therefore
+  responses by hand with `NetWriteText`. Every response below is therefore
   a **literal**, byte for byte what the client is asked to read, which is the
   only way a golden can say what was parsed.
 
@@ -60,9 +60,9 @@ var
   listening: accepting does not consume the socket that accepted. }
 procedure Pair;
 begin
-  e := Connect(cli, 'localhost', port);
+  e := NetConnect(cli, 'localhost', port);
   if Failed(e) then writeln('connect: ', ErrorText(e));
-  e := Accept(srv, conn);
+  e := NetAccept(srv, conn);
   if Failed(e) then writeln('accept: ', ErrorText(e))
 end;
 
@@ -82,7 +82,7 @@ var l: NetLine; more: boolean;
 begin
   more := true;
   while more do begin
-    e := ReadLine(conn, l);
+    e := NetReadLine(conn, l);
     if Failed(e) then begin
       writeln('  request: ', ErrorText(e));
       more := false
@@ -141,9 +141,9 @@ begin
   writeln('sending without Host: ', ErrorText(e));
   writeln;
 
-  e := Listen(srv, 'localhost', '0');
+  e := NetListen(srv, 'localhost', '0');
   writeln('listen:  ', ErrorText(e));
-  e := Service(srv, port);
+  e := NetService(srv, port);
   writeln('service: ', ErrorText(e), ', a port was given: ', port <> '');
   writeln;
 
@@ -157,7 +157,7 @@ begin
   e := Send(cli, q);
   writeln('send:    ', ErrorText(e));
   ShowRequest;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Type: text/plain' + CRLF +
        'Content-Length: 12' + CRLF + CRLF +
@@ -181,9 +181,9 @@ begin
   e := Send(cli, q);
   writeln('send:    ', ErrorText(e));
   ShowRequest;
-  e := ReadLine(conn, line);
+  e := NetReadLine(conn, line);
   writeln('  > (body) ', line);
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 404 Not Found' + CRLF +
        'X-Empty:' + CRLF +
        'Set-Cookie: a=1' + CRLF +
@@ -212,7 +212,7 @@ begin
   { The answer goes out before the question, which is what lets one thread run
     both halves of `Exchange`. The middle chunk carries an extension RFC 9112
     §7.1.1 lets a recipient ignore, and data that is two lines. }
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF +
        'Transfer-Encoding: chunked' + CRLF + CRLF +
        '6' + CRLF + 'hello ' + CRLF +
@@ -237,7 +237,7 @@ begin
 
   writeln('--- 302, not followed');
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 302 Found' + CRLF +
        'Location: /elsewhere' + CRLF +
        'Content-Length: 0' + CRLF + CRLF);
@@ -254,7 +254,7 @@ begin
 
   writeln('--- HEAD, whose response states a length it does not send');
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Length: 42' + CRLF + CRLF);
   e := NewRequest(q, 'HEAD', '/thing');
@@ -268,7 +268,7 @@ begin
 
   writeln('--- no Content-Length and no Transfer-Encoding');
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF + CRLF +
        'read until the far end closes' + chr(10));
   conn := nil;
@@ -282,14 +282,14 @@ begin
   writeln('--- what is reported rather than guessed at');
 
   Pair;
-  e := WriteText(conn, 'HTTP/1.1 twohundred OK' + CRLF + CRLF);
+  e := NetWriteText(conn, 'HTTP/1.1 twohundred OK' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
   writeln('status-line with no code:   ', ErrorText(e));
   cli := nil;
 
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF + 'no-colon-here' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
@@ -299,7 +299,7 @@ begin
   { RFC 9112 §6.1: a sender must not send both, and a recipient that picks one
     is half of a request-smuggling pair. }
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Length: 5' + CRLF +
        'Transfer-Encoding: chunked' + CRLF + CRLF);
@@ -320,9 +320,9 @@ begin
   for i := 1 to BodyLineMax + 10 do
     long := long + 'x';
   Pair;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF + 'Content-Length: 1034' + CRLF + CRLF);
-  e := WriteText(conn, long + chr(10));
+  e := NetWriteText(conn, long + chr(10));
   conn := nil;
   e := Receive(cli, 'GET', r);
   writeln('a body line too long:       ', ErrorText(e));

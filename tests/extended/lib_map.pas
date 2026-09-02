@@ -18,63 +18,63 @@ program lib_map(output);
 import PasMap;
 
 var
-  m: MapPtr;
+  m: SMapPtr;
   i, seen, total: integer;
-  k: MapKey;
+  k: SMapKey;
   hit: boolean;
 
 begin
-  MapNew(m, 8);
-  writeln('empty count=', MapCount(m):1);
+  SMapNew(m, 8);
+  writeln('empty count=', SMapCount(m):1);
 
   { a literal actual for a string value parameter, which ADR-0115 is what made
     legal -- before it every key here needed a named variable }
-  MapPut(m, 'alpha', 1);
-  MapPut(m, 'beta', 2);
-  MapPut(m, 'gamma', 3);
-  writeln('count=', MapCount(m):1);
-  writeln('alpha=', MapGet(m, 'alpha', -1):1,
-          ' beta=', MapGet(m, 'beta', -1):1,
-          ' gamma=', MapGet(m, 'gamma', -1):1);
-  writeln('absent=', MapGet(m, 'delta', -1):1,
-          ' has=', MapHas(m, 'delta'));
+  SMapPut(m, 'alpha', 1);
+  SMapPut(m, 'beta', 2);
+  SMapPut(m, 'gamma', 3);
+  writeln('count=', SMapCount(m):1);
+  writeln('alpha=', SMapGet(m, 'alpha', -1):1,
+          ' beta=', SMapGet(m, 'beta', -1):1,
+          ' gamma=', SMapGet(m, 'gamma', -1):1);
+  writeln('absent=', SMapGet(m, 'delta', -1):1,
+          ' has=', SMapHas(m, 'delta'));
 
   { replacing must not add }
-  MapPut(m, 'beta', 20);
-  writeln('replaced beta=', MapGet(m, 'beta', -1):1,
-          ' count=', MapCount(m):1);
+  SMapPut(m, 'beta', 20);
+  writeln('replaced beta=', SMapGet(m, 'beta', -1):1,
+          ' count=', SMapCount(m):1);
 
   { delete, and the neighbours must stay reachable }
-  hit := MapDelete(m, 'beta');
-  writeln('deleted=', hit, ' count=', MapCount(m):1,
-          ' has beta=', MapHas(m, 'beta'));
-  writeln('alpha still=', MapGet(m, 'alpha', -1):1,
-          ' gamma still=', MapGet(m, 'gamma', -1):1);
+  hit := SMapDelete(m, 'beta');
+  writeln('deleted=', hit, ' count=', SMapCount(m):1,
+          ' has beta=', SMapHas(m, 'beta'));
+  writeln('alpha still=', SMapGet(m, 'alpha', -1):1,
+          ' gamma still=', SMapGet(m, 'gamma', -1):1);
 
   { deleting what is not there answers false and changes nothing }
-  hit := MapDelete(m, 'beta');
-  writeln('second delete=', hit, ' count=', MapCount(m):1);
+  hit := SMapDelete(m, 'beta');
+  writeln('second delete=', hit, ' count=', SMapCount(m):1);
 
   { and the slot is reusable }
-  MapPut(m, 'delta', 4);
-  writeln('after reuse count=', MapCount(m):1,
-          ' delta=', MapGet(m, 'delta', -1):1);
+  SMapPut(m, 'delta', 4);
+  writeln('after reuse count=', SMapCount(m):1,
+          ' delta=', SMapGet(m, 'delta', -1):1);
 
-  MapFree(m);
+  SMapFree(m);
 
   { growth: 8 slots to hold 200 associations, so several rehashes, and every
     one of them must carry the whole table }
-  MapNew(m, 8);
+  SMapNew(m, 8);
   for i := 1 to 200 do begin
     writestr(k, 'key', i:1);
-    MapPut(m, k, i * 3)
+    SMapPut(m, k, i * 3)
   end;
-  writeln('grown count=', MapCount(m):1, ' slots>=', MapSlots(m) >= 200);
+  writeln('grown count=', SMapCount(m):1, ' slots>=', SMapSlots(m) >= 200);
 
   seen := 0;
   for i := 1 to 200 do begin
     writestr(k, 'key', i:1);
-    if MapGet(m, k, -1) = i * 3 then seen := seen + 1
+    if SMapGet(m, k, -1) = i * 3 then seen := seen + 1
   end;
   writeln('retrieved=', seen:1);
 
@@ -82,10 +82,10 @@ begin
     without depending on the order }
   total := 0;
   seen := 0;
-  for i := 1 to MapSlots(m) do
-    if MapLiveAt(m, i) then begin
+  for i := 1 to SMapSlots(m) do
+    if SMapLiveAt(m, i) then begin
       seen := seen + 1;
-      total := total + MapValAt(m, i)
+      total := total + SMapValAt(m, i)
     end;
   writeln('walked=', seen:1, ' total=', total:1);
 
@@ -94,25 +94,25 @@ begin
 
   { a key found by iteration is a key the map still has }
   hit := true;
-  for i := 1 to MapSlots(m) do
-    if MapLiveAt(m, i) then
-      if not MapHas(m, MapKeyAt(m, i)) then hit := false;
+  for i := 1 to SMapSlots(m) do
+    if SMapLiveAt(m, i) then
+      if not SMapHas(m, SMapKeyAt(m, i)) then hit := false;
   writeln('every walked key present=', hit);
 
   { delete half, and the rest must survive }
   for i := 1 to 200 do
     if i mod 2 = 0 then begin
       writestr(k, 'key', i:1);
-      hit := MapDelete(m, k)
+      hit := SMapDelete(m, k)
     end;
-  writeln('after deleting evens count=', MapCount(m):1);
+  writeln('after deleting evens count=', SMapCount(m):1);
   seen := 0;
   for i := 1 to 200 do begin
     writestr(k, 'key', i:1);
-    if MapHas(m, k) then seen := seen + 1
+    if SMapHas(m, k) then seen := seen + 1
   end;
   writeln('odds still present=', seen:1);
 
-  MapFree(m);
+  SMapFree(m);
   writeln('done')
 end.

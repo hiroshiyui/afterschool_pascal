@@ -128,7 +128,7 @@ echo "tls: $n transcribed constants agree with OpenSSL's headers"
 # The first is for `localhost` and is what a good connection uses. The second
 # is for a name nobody will ask for, and is the chain-is-right-name-is-wrong
 # case. Both are self-signed, which is the point: a self-signed certificate is
-# its own trust anchor, so `ConnectTrusting` reaches it and `Connect` -- which
+# its own trust anchor, so `TlsConnectTrusting` reaches it and `TlsConnect` -- which
 # consults the system's anchors -- must not.
 # The second certificate must **not** name localhost, or the case it exists
 # for proves nothing: what is being asked is whether a chain that verifies is

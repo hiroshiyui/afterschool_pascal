@@ -15,21 +15,21 @@
   writes is
 
       var s: Stream;
-      if OpenWrite(s, 'notes.txt') = errNone then ...
+      if StreamOpenWrite(s, 'notes.txt') = errNone then ...
 
   and nothing else about `s` is the caller's business: `s <> nil` asks whether
   it is open, and that is the only comparison the type has.
 
-  **Close** is `s := nil`, AP 6.4.12.2's second form of assignment: the
+  **StreamClose** is `s := nil`, AP 6.4.12.2's second form of assignment: the
   variable releases what it holds and is empty afterwards, ready to be opened
   again. It was `fopen` of the empty path until ADR-0202 -- the type had one
   form of assignment, from an external function, so closing early meant
   opening something that would fail. That cost a refused system call and a
-  stale `errno`, and `PasOS.LastErrorText` read after `Close` named the empty
+  stale `errno`, and `PasOS.LastErrorText` read after `StreamClose` named the empty
   path rather than whatever had actually failed. This module and `PasDir` are
   the two callers that argued for the form.
 
-  **Lines and capacity.** `ReadLine` reads up to and including the next
+  **Lines and capacity.** `StreamReadLine` reads up to and including the next
   newline, stores what fits in the caller's string, and discards the rest of
   the line rather than handing it to the next call: a line is a line, and a
   string too short for it loses the tail, as `readln` into a string does.
@@ -42,60 +42,60 @@
 
   **What is not here.** Seeking, binary reads into a buffer, and sharing a
   stream with the standard's own `output`: §6.10's files are the runtime's
-  streams and these are libc's, and the two buffer separately. `Flush`
+  streams and these are libc's, and the two buffer separately. `StreamFlush`
   exists for the moment a program writes through one and reads back through
   the other. }
 
 module PasStream;
 
-export PasStream = (Stream, LineMax, StreamLine,
-                    OpenRead, OpenWrite, OpenAppend, Close,
-                    WriteText, WriteLine, ReadLine, Flush);
+export PasStream = (Stream, StreamLineMax, StreamLine,
+                    StreamOpenRead, StreamOpenWrite, StreamOpenAppend, StreamClose,
+                    StreamWriteText, StreamWriteLine, StreamReadLine, StreamFlush);
 
 import PasError;
        PasFS;
 
 const
-  { The capacity of StreamLine. ReadLine is bounded by the caller's own
+  { The capacity of StreamLine. StreamReadLine is bounded by the caller's own
     string and not by this. }
-  LineMax = 4096;
+  StreamLineMax = 4096;
 
 type
   { A stream this program owns; `fclose` is what releases it (AP 6.4.12.1). }
   Stream = handle external 'fclose';
-  StreamLine = string(LineMax);
+  StreamLine = string(StreamLineMax);
 
 { Open an existing file for reading; `errIO` where the operating system
   refused, which covers a path that is not there. What `s` held before is
   released first, whichever way this answers. }
-function OpenRead(var s: Stream; path: PathName): ErrorCode;
+function StreamOpenRead(var s: Stream; path: PathName): ErrorCode;
 
 { Create or truncate a file and open it for writing. }
-function OpenWrite(var s: Stream; path: PathName): ErrorCode;
+function StreamOpenWrite(var s: Stream; path: PathName): ErrorCode;
 
 { Open a file for writing at its end, creating it if it is not there. }
-function OpenAppend(var s: Stream; path: PathName): ErrorCode;
+function StreamOpenAppend(var s: Stream; path: PathName): ErrorCode;
 
 { Release the stream now rather than at the block's end, and leave `s`
   empty. Harmless on an empty one. See the header for what it costs. }
-procedure Close(var s: Stream);
+procedure StreamClose(var s: Stream);
 
 { Write a string's characters, nothing appended. `errIO` on a refusal, which
-  for a buffered stream is usually reported late -- by `Flush` or `Close`
+  for a buffered stream is usually reported late -- by `StreamFlush` or `StreamClose`
   rather than here. A stream that is not open is a run-time error, AP
   6.4.12.4's, and the message names the lend. }
-function WriteText(var s: Stream; text: StreamLine): ErrorCode;
+function StreamWriteText(var s: Stream; text: StreamLine): ErrorCode;
 
 { The string and then a newline. }
-function WriteLine(var s: Stream; text: StreamLine): ErrorCode;
+function StreamWriteLine(var s: Stream; text: StreamLine): ErrorCode;
 
 { The next line into `line`, without its newline, as far as it fits; the rest
   of a longer line is discarded. `false` at the end of the stream, when
   nothing was read. }
-function ReadLine(var s: Stream; var line: string): boolean;
+function StreamReadLine(var s: Stream; var line: string): boolean;
 
 { Hand what the stream has buffered to the operating system. }
-function Flush(var s: Stream): ErrorCode;
+function StreamFlush(var s: Stream): ErrorCode;
 
 end;
 
@@ -116,25 +116,25 @@ begin
   else Opened := errNone
 end;
 
-function OpenRead;
+function StreamOpenRead;
 begin
   s := ExtFopen(path, 'r');
-  OpenRead := Opened(s)
+  StreamOpenRead := Opened(s)
 end;
 
-function OpenWrite;
+function StreamOpenWrite;
 begin
   s := ExtFopen(path, 'w');
-  OpenWrite := Opened(s)
+  StreamOpenWrite := Opened(s)
 end;
 
-function OpenAppend;
+function StreamOpenAppend;
 begin
   s := ExtFopen(path, 'a');
-  OpenAppend := Opened(s)
+  StreamOpenAppend := Opened(s)
 end;
 
-procedure Close;
+procedure StreamClose;
 begin
   { 6.4.12.2's second form: the assignment releases what the variable holds
     and leaves it empty. It was `ExtFopen('', 'r')` until ADR-0202 -- an
@@ -144,22 +144,22 @@ begin
   s := nil
 end;
 
-function WriteText;
+function StreamWriteText;
 begin
-  if ExtFputs(text, s) < 0 then WriteText := errIO
-  else WriteText := errNone
+  if ExtFputs(text, s) < 0 then StreamWriteText := errIO
+  else StreamWriteText := errNone
 end;
 
-function WriteLine;
+function StreamWriteLine;
 var e: ErrorCode;
 begin
-  e := WriteText(s, text);
+  e := StreamWriteText(s, text);
   if e = errNone then
     if ExtFputc(NewLine, s) < 0 then e := errIO;
-  WriteLine := e
+  StreamWriteLine := e
 end;
 
-function ReadLine;
+function StreamReadLine;
 var c, n: integer;
 begin
   line := '';
@@ -173,13 +173,13 @@ begin
   end;
   { a read that found the end at once is the end; one that found characters
     or a newline first was a line, the last one when there is no newline }
-  ReadLine := (n > 0) or (c = NewLine)
+  StreamReadLine := (n > 0) or (c = NewLine)
 end;
 
-function Flush;
+function StreamFlush;
 begin
-  if ExtFflush(s) < 0 then Flush := errIO
-  else Flush := errNone
+  if ExtFflush(s) < 0 then StreamFlush := errIO
+  else StreamFlush := errNone
 end;
 
 end.

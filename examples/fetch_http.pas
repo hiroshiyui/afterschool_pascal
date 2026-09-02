@@ -8,7 +8,7 @@
   There is no web server in a test, so this program is both ends: it
   listens on whatever port is free (`'0'`), connects to itself, and the
   "server" half reads the request and writes a canned reply. To fetch from
-  a real host, delete the server half and give `Connect` a host and `'80'`.
+  a real host, delete the server half and give `NetConnect` a host and `'80'`.
   Uses PasError, PasNet and PasHttp. }
 program fetch_http(output);
 
@@ -26,10 +26,10 @@ var
   body: string(1024);
 
 begin
-  e := Listen(server, 'localhost', '0');
-  e := Service(server, port);            { which port we were given }
-  e := Connect(client, 'localhost', port);
-  e := Accept(server, conn);
+  e := NetListen(server, 'localhost', '0');
+  e := NetService(server, port);            { which port we were given }
+  e := NetConnect(client, 'localhost', port);
+  e := NetAccept(server, conn);
 
   { --- the client sends --- }
   e := NewRequest(q, 'GET', '/hello');
@@ -39,12 +39,12 @@ begin
   writeln('send: ', ErrorText(e));
 
   { --- the server reads the request head and answers --- }
-  e := ReadLine(conn, line);
+  e := NetReadLine(conn, line);
   while (e = errNone) and (line <> '') do begin
     writeln('  > ', line);
-    e := ReadLine(conn, line)
+    e := NetReadLine(conn, line)
   end;
-  e := WriteText(conn,
+  e := NetWriteText(conn,
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Type: text/plain' + CRLF +
        'Content-Length: 12' + CRLF + CRLF +

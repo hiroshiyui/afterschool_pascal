@@ -125,7 +125,7 @@ begin
   { A read on a descriptor that is not open. }
   r := ReadInto(fd, buf);
   got('read closed   = ', r);
-  writeln('text          = ', ResultText(r));
+  writeln('text          = ', CountResultText(r));
 
   { AtEnd asked of a *failed* result, which is where its first conjunct earns
     its keep: `and` short-circuits, so `r.val` is never read on a result

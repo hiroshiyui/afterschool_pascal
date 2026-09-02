@@ -304,3 +304,4 @@ the alternatives that were rejected and why.
 | [0294](0294-the-question-asked-backwards.md) | The question asked backwards | Accepted |
 | [0295](0295-a-corpus-written-to-be-read.md) | A corpus written to be read | Accepted |
 | [0296](0296-a-tag-ships-an-archive.md) | A tag ships an archive | Accepted |
+| [0298](0298-no-two-library-modules-export-one-spelling.md) | No two library modules export one spelling | Accepted |

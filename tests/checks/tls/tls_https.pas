@@ -4,7 +4,7 @@
   **This is the whole of what the split had to prove.** `lib_http_grammar.pas`
   shows the grammar has no transport under it, and `lib_http.pas` shows the
   socket transport still works; what neither can show is that a *second*
-  transport needs nothing of the parser. Here one does: `PasHttps.Exchange` is
+  transport needs nothing of the parser. Here one does: `HttpsExchange` is
   twelve lines over `PasHttp.BeginRequest`, `NextPiece`, `BeginResponse`,
   `WantsLine`, `FeedLine` and `FeedEnd`, and the response below was parsed by
   the same routines `lib_http.pas` drives over a plain socket (ADR-0265).
@@ -18,7 +18,7 @@ program tls_https(input, output);
 import PasError;
        PasTls;
        PasHttp;
-       PasHttps qualified;
+       PasHttps;
 
 var
   c: Connection;
@@ -33,13 +33,13 @@ begin
   readln(port);
   readln(cert);
 
-  e := ConnectTrusting(c, 'localhost', port, cert);
+  e := TlsConnectTrusting(c, 'localhost', port, cert);
   writeln('connected     : ', ErrorText(e));
   if Failed(e) then exit;
 
   e := NewRequest(q, 'GET', '/');
   e := AddHeader(q, 'Host', 'localhost');
-  e := PasHttps.Exchange(c, q, r);
+  e := HttpsExchange(c, q, r);
   writeln('exchanged     : ', ErrorText(e));
   if Failed(e) then exit;
 
@@ -60,14 +60,14 @@ begin
     is that a spent connection reports rather than hanging. }
   e := NewRequest(q, 'GET', '/again');
   e := AddHeader(q, 'Host', 'localhost');
-  e := PasHttps.Exchange(c, q, r);
+  e := HttpsExchange(c, q, r);
   writeln('second exchange: ', ErrorText(e));
 
-  Close(c);
+  TlsClose(c);
 
   { And a request the grammar refuses costs no connection at all: nothing was
     written, so there is nothing on the wire to take back. }
   e := NewRequest(q, 'GET', '/');
-  e := PasHttps.Send(c, q);
+  e := HttpsSend(c, q);
   writeln('no Host field : ', ErrorText(e))
 end.

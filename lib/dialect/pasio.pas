@@ -40,7 +40,7 @@ module PasIO;
 export PasIO = (StdIn, StdOut, StdErr, IOMax, IOLine,
                 FdResult, CountResult,
                 OpenRead, Close, ReadInto, WriteFrom, WriteAll, WriteText,
-                FdReady, AtEnd, CountOr, ResultText);
+                FdReady, AtEnd, CountOr, CountResultText);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part.
   PasFS supplies PathName rather than this module declaring a second one: a
@@ -135,7 +135,7 @@ function CountOr(r: CountResult; whenBad: integer): integer;
 
 { A result as a sentence, for a caller assembling a message rather than
   branching. }
-function ResultText(r: CountResult) = t: ErrText;
+function CountResultText(r: CountResult) = t: ErrText;
 
 end;
 
@@ -241,7 +241,7 @@ begin
   if r.ok then CountOr := r.val else CountOr := whenBad
 end;
 
-function ResultText;
+function CountResultText;
 begin
   if r.ok then t := 'read or wrote what was asked'
   else t := ErrorText(r.cause)

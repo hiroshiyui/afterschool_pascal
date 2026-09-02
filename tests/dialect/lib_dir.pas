@@ -44,17 +44,17 @@ begin
 end;
 
 { Opened, read to its end and closed by leaving this block: `walk` is a local
-  handle, so the release is the activation's and nothing here says Close.
+  handle, so the release is the activation's and nothing here says CloseDir.
   That is the whole reason the directory is a handle-type. }
 function CountEntries(path: PathName): integer;
 var walk: Dir; nm: EntryName; n: integer; e: ErrorCode;
 begin
   n := 0;
-  if Open(walk, path) = errNone then begin
-    e := Next(walk, nm);
+  if OpenDir(walk, path) = errNone then begin
+    e := NextEntry(walk, nm);
     while e = errNone do begin
       n := n + 1;
-      e := Next(walk, nm)
+      e := NextEntry(walk, nm)
     end
   end;
   CountEntries := n
@@ -77,11 +77,11 @@ begin
   e := MakeDirectory(d);
   writeln('made          = ', ErrorText(e));
   SVecNew(names, 8);
-  writeln('empty list    = ', ErrorText(List(d, names)));
+  writeln('empty list    = ', ErrorText(ListDir(d, names)));
   writeln('empty count   = ', SVecLen(names):1);
 
   { ...which is not the same as having no entries at all: `.` and `..` are
-    there, and `Next` gives them where `List` leaves them out. }
+    there, and `NextEntry` gives them where `ListDir` leaves them out. }
   writeln('with dots     = ', CountEntries(d):1);
 
   { --- three files and a subdirectory --- }
@@ -91,7 +91,7 @@ begin
   e := MakeDirectory(d + '/sub');
 
   SVecClear(names);
-  writeln('list          = ', ErrorText(List(d, names)));
+  writeln('list          = ', ErrorText(ListDir(d, names)));
   writeln('count         = ', SVecLen(names):1);
   SVecSort(names);
   for k := 1 to SVecLen(names) do
@@ -108,16 +108,16 @@ begin
     else writeln('other')
   end;
 
-  { --- the iterator itself, and the two entries List leaves out --- }
+  { --- the iterator itself, and the two entries ListDir leaves out --- }
   writeln('iterated      = ', CountEntries(d):1);
   seen := 0;
   dots := 0;
-  writeln('opened        = ', ErrorText(Open(walk, d)));
-  e := Next(walk, nm);
+  writeln('opened        = ', ErrorText(OpenDir(walk, d)));
+  e := NextEntry(walk, nm);
   while e = errNone do begin
     seen := seen + 1;
     if (nm = '.') or (nm = '..') then dots := dots + 1;
-    e := Next(walk, nm)
+    e := NextEntry(walk, nm)
   end;
   { The end of a directory is `errAbsent` -- the ordinary end of a loop, and
     not a failure a caller has to sort out from one. }
@@ -126,29 +126,29 @@ begin
 
   { Released now rather than at the block's end. `walk = nil` is the only
     comparison a handle has, and it is how a caller asks whether it is open. }
-  Close(walk);
+  CloseDir(walk);
   writeln('closed        = ', walk = nil);
 
   { --- a caller's string that is too short --- }
-  { `Next` writes into a string of the caller's own capacity, and the length
+  { `NextEntry` writes into a string of the caller's own capacity, and the length
     is checked by the side that measured it -- so this is a code and not the
     trap an over-long copy would be. The entry is consumed: the four names
     below are what is left of the six. }
-  writeln('short open    = ', ErrorText(Open(walk, d)));
+  writeln('short open    = ', ErrorText(OpenDir(walk, d)));
   seen := 0;
-  e := Next(walk, tiny);
+  e := NextEntry(walk, tiny);
   while (e = errNone) or (e = errFull) do begin
     if e = errFull then seen := seen + 1;
-    e := Next(walk, tiny)
+    e := NextEntry(walk, tiny)
   end;
   writeln('too long      = ', seen:1, ' of 6 did not fit ', tiny.capacity:1);
-  Close(walk);
+  CloseDir(walk);
 
   { --- the failing directions --- }
-  writeln('no such dir   = ', ErrorText(Open(walk, d + '/not-there')));
+  writeln('no such dir   = ', ErrorText(OpenDir(walk, d + '/not-there')));
   { A file is not a directory, and this module cannot say which refusal it
     was -- PasFS.Info is where a caller asks. }
-  writeln('a file        = ', ErrorText(Open(walk, d + '/alpha')));
+  writeln('a file        = ', ErrorText(OpenDir(walk, d + '/alpha')));
 
   { --- cleared away, so a second run of the harness starts as this one did --- }
   e := Remove(d + '/alpha');

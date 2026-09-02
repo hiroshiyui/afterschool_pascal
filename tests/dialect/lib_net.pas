@@ -11,8 +11,8 @@
   at once needs something this language has not got (ADR-0201).
 
   **No port number appears in the output.** The program asks for service `'0'`,
-  which is "whatever is free", and `Service` reports back the numeric string
-  that `Connect` then takes -- so what is printed is that a port was given and
+  which is "whatever is free", and `NetService` reports back the numeric string
+  that `NetConnect` then takes -- so what is printed is that a port was given and
   never which. A test that named one would fail on a machine where something
   else held it.
 
@@ -36,44 +36,44 @@ var
 
 begin
   { A socket listening on whatever port is free. }
-  e := Listen(srv, 'localhost', '0');
+  e := NetListen(srv, 'localhost', '0');
   writeln('listen:      ', ErrorText(e));
 
-  e := Service(srv, port);
+  e := NetService(srv, port);
   writeln('service:     ', ErrorText(e), ', and a port was given: ',
           port <> '');
 
   { The other end, to the port just reported. Both ends are strings the whole
     way: nothing here knows whether this is IPv4 or IPv6. }
-  e := Connect(cli, 'localhost', port);
+  e := NetConnect(cli, 'localhost', port);
   writeln('connect:     ', ErrorText(e));
 
-  e := Accept(srv, conn);
+  e := NetAccept(srv, conn);
   writeln('accept:      ', ErrorText(e));
 
   { Two lines out and two in. `srv` is still listening -- accepting a
     connection does not consume the socket that accepted it. }
-  e := WriteLine(cli, 'first line');
-  e := WriteLine(cli, 'second line');
+  e := NetWriteLine(cli, 'first line');
+  e := NetWriteLine(cli, 'second line');
   for i := 1 to 2 do begin
-    e := ReadLine(conn, line);
+    e := NetReadLine(conn, line);
     writeln('  server got: ', ErrorText(e), ' [', line, ']')
   end;
 
   { And back the other way, so the connection is shown to be two-directional
     through one handle at each end. }
-  e := WriteLine(conn, 'and a reply');
-  e := ReadLine(cli, line);
+  e := NetWriteLine(conn, 'and a reply');
+  e := NetReadLine(cli, line);
   writeln('  client got: ', ErrorText(e), ' [', line, ']');
 
   { A line the far end sent without a newline is still a line. }
-  e := WriteText(cli, 'no newline at the end');
+  e := NetWriteText(cli, 'no newline at the end');
   cli := nil;                     { AP 6.4.12.2's second form, ADR-0202 }
-  e := ReadLine(conn, line);
+  e := NetReadLine(conn, line);
   writeln('unterminated:', ErrorText(e), ' [', line, ']');
 
   { ...and then the far end has closed and there is nothing left. }
-  e := ReadLine(conn, line);
+  e := NetReadLine(conn, line);
   writeln('after close: ', ErrorText(e));
 
   conn := nil;
@@ -84,21 +84,21 @@ begin
     answering a code can report, so the runtime ignores the signal where a
     socket is first made. Two writes, because the first goes into the kernel's
     buffer and it is the peer's reset that makes the second fail. }
-  e := Connect(cli, 'localhost', port);
-  e := Accept(srv, conn);
+  e := NetConnect(cli, 'localhost', port);
+  e := NetAccept(srv, conn);
   conn := nil;
-  e := WriteLine(cli, 'into a closed connection');
-  e := WriteLine(cli, 'and again');
+  e := NetWriteLine(cli, 'into a closed connection');
+  e := NetWriteLine(cli, 'and again');
   writeln('write to closed: ', ErrorText(e));
   cli := nil;
 
   { A line longer than the string it is going into. The capacity checked is
     the caller's own, read from the actual by 6.4.3.3.3, and the line is gone
     rather than half-delivered. }
-  e := Connect(cli, 'localhost', port);
-  e := Accept(srv, conn);
-  e := WriteLine(cli, 'far too long for four characters');
-  e := ReadLine(conn, short);
+  e := NetConnect(cli, 'localhost', port);
+  e := NetAccept(srv, conn);
+  e := NetWriteLine(cli, 'far too long for four characters');
+  e := NetReadLine(conn, short);
   writeln('too long:    ', ErrorText(e), ' [', short, ']');
   cli := nil;
   conn := nil;
@@ -107,8 +107,8 @@ begin
   { A service nobody can resolve, and a port nobody is listening on. The two
     are different codes because a caller reports them differently: one is a
     name that means nothing, the other a machine that would not talk. }
-  e := Connect(cli, 'localhost', 'not-a-service-name');
+  e := NetConnect(cli, 'localhost', 'not-a-service-name');
   writeln('bad service: ', ErrorText(e));
-  e := Connect(cli, 'localhost', '1');
+  e := NetConnect(cli, 'localhost', '1');
   writeln('refused:     ', ErrorText(e))
 end.

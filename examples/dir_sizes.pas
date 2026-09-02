@@ -1,6 +1,6 @@
 { Walk a directory tree and report every file's size, like du(1).
 
-  PasDir.List answers the names in a directory, PasFS.Info answers what a
+  PasDir.ListDir answers the names in a directory, PasFS.Info answers what a
   name is and how big -- one `stat`, and the size is an `int64` because a
   file may be bigger than maxint. Both answer an `ErrorCode` or a fallible
   result rather than stopping the program, so a directory that cannot be
@@ -22,7 +22,7 @@ var names: StrVecPtr; k: integer; e: ErrorCode;
     child: PathName; fi: InfoResult;
 begin
   SVecNew(names, 16);
-  e := List(path, names);
+  e := ListDir(path, names);
   if Failed(e) then
     writeln(' ':depth, '(cannot list: ', ErrorText(e), ')')
   else begin
@@ -51,7 +51,7 @@ var names: StrVecPtr; k: integer; e: ErrorCode; child: PathName;
     fi: InfoResult;
 begin
   SVecNew(names, 16);
-  e := List(path, names);
+  e := ListDir(path, names);
   for k := 1 to SVecLen(names) do begin
     child := path + '/' + SVecGet(names, k);
     fi := Info(child);
