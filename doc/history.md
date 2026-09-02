@@ -1289,6 +1289,50 @@ ADR-0109's goal and what still blocks it are in
 [`doc/roadmap.md`](roadmap.md#the-goal-adr-0109); this chapter is what has been
 built towards it so far.
 
+### The known-limitations chapter, as it stood under the standards
+
+`doc/roadmap.md`'s *Known limitations* was two lists, *Under ISO 7185* and
+*Under ISO/IEC 10206:1991*, and every entry was a deviation from a clause
+marked as a decision or as work. **Retired as a frame on 2026-09-02**: with
+the conformance modes gone (ADR-0232) a deviation from a clause is not a
+limitation of this language, and every fact the fifteen entries stated was
+already in `doc/implementation-defined.md`. Six entries that were simply the
+language's rule now point at the register; three capacities became a table;
+the three bindability shapes and the language-server chapter's bindable-file
+entry became one decision; the dangling ordinary pointer became the chapter's
+lead, being the one entry that is a limitation in ADR-0109's sense. Two
+entries had closed inside the chapter and are kept here in their own words.
+
+**~~§6.4.9's type-inquiry-object is a variable-access~~ — it is not, and this
+entry was wrong** (ADR-0214). The clause reads `type-inquiry-object =
+variable-name | parameter-identifier`, and §6.5.1's variable-name is
+`[ imported-interface-identifier '.' ] variable-identifier` — a *name*. So
+`type of a[1]`, `type of p^` and `type of r.f` are outside *that clause*, and
+refusing them was conformance rather than a gap in it. **Accepting them under
+`--std=extended` would have been the defect**, which is the direction this
+entry pointed. This language admits them — AP 6.4.9, ADR-0215 — which is a
+different thing from having misread §6.4.9, and ADR-0232 removed the mode in
+which the distinction was enforced.
+
+It was written from the wish rather than the clause — the wish being to read a
+container's element type off its pointer, `x: type of v^.a[1]`, which would
+halve the type arguments a generic call in `lib/dialect/pascontainer.pas`
+carries. ADR-0047 had quoted the production correctly since the feature landed
+and this entry contradicted it for a day; nothing here could see that, which is
+the point. What *did* come of it: the three refusals now say which rule they
+are, instead of stopping at the declaration's own semicolon and reporting a
+missing separator, and the wish itself became a dialect feature the same day
+([question 4](roadmap.md#2-3-and-4--answered),
+ADR-0215) — which is the useful ending: the clause is unchanged and the thing
+that was wanted exists where it belongs.
+
+- **Nothing is known and unfixed about conformance** beyond this list. Both
+  standards are complete, four adversarial audits have run (ADR-0162,
+  ADR-0167, ADR-0168, ADR-0171), and the last seven findings of the fourth
+  were closed on 2026-08-23. A claim no test names is a claim nothing checks
+  — so the next audit is worth running whenever the list above has not moved
+  for a while.
+
 ### The increments at a glance
 
 Forty-seven so far. What each one *is*, for someone who wants to use it, is in

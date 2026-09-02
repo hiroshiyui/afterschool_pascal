@@ -28,7 +28,7 @@ nobody has decided yet.
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
-| [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
+| [Known limitations](#known-limitations) | what is wrong or absent today, in the dialect's own terms: one gap, three capacities and two decisions — the two lists headed by the standards retired on 2026-09-02, everything they stated being in the register already |
 | [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record and its narrative in `doc/history.md` |
 
 Nothing here is a work queue with owners and dates. Where a decision has been
@@ -514,15 +514,14 @@ nobody came back to link. What is left is one decision nobody has asked for
 twice.
 
 - **A bindable file cannot cross a parameter**, which came out of fixing
-  `JsonLine`'s bound (ADR-0291) and is open. §6.4.1 makes `bindable` part of a *variable-declaration*
-  and not of a type-denoter, so no formal parameter accepts one: `var f: text`
-  compiles and `bind(f, b)` inside is then refused, *"only a variable whose
-  type-denoter says 'bindable' can be bound to something outside the
-  program"*. The cost is real and small — a check five routines need must be
-  written once per routine, or the routines must be restructured so that one
-  of them holds the file, which is what `lib/pasfile.pas` now does. What it
-  would take to close is a decision about what a callee may do to a caller's
-  binding, and nothing has asked for it twice.
+  `JsonLine`'s bound (ADR-0291) and is open. §6.4.1 makes `bindable` part of
+  a *variable-declaration* and not of a type-denoter, so `var f: text`
+  compiles and `bind(f, b)` inside it is then refused, which is why
+  `lib/pasfile.pas`'s four writers are one routine with two flags. It is one
+  of four shapes of a single decision — what bindability *is* once no clause
+  fixes it — and the four are one entry under
+  [Known limitations](#known-limitations) since 2026-09-02. Nothing has asked
+  for it twice.
 
 **The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
 and by decision rather than by discovery: the language server is the better
@@ -693,6 +692,14 @@ narrower than it looks — that a *misreading of the two standards* is invisible
 here — and it has nothing to say about a facility the dialect invents outright,
 where there is no reading to get wrong.
 
+**The instrument for the risk is the adversarial audit** — independent readers
+given the behaviour and not the reasoning, told to prove the compiler wrong
+from the standards' text. Four have run (ADR-0162, ADR-0167, ADR-0168,
+ADR-0171) and the last findings of the fourth closed on 2026-08-23; the
+*Known limitations* chapter used to close with the note that the next is
+worth running whenever that chapter has not moved for a while, and the note
+belongs here, since a claim no test names is a claim nothing checks.
+
 ### 2, 3 and 4 — answered
 
 A third-party differential (ADR-0234), mutation testing committed to the tree
@@ -789,141 +796,86 @@ constant's, and the ABI arguments travel by are outside it.
 ## Known limitations
 
 Things that are wrong or absent today, listed so they are not rediscovered as
-surprises. Each is a decision with a record or a piece of work with none yet;
-the two kinds are marked.
+surprises. **Until 2026-09-02 this chapter was two lists headed by the two
+standards**, and every entry in them was classified as a deviation from a
+clause. ADR-0232 made that the wrong question — there is one language and no
+clause governs it — and every fact the lists stated was already in
+[`doc/implementation-defined.md`](implementation-defined.md), which is the
+register of what this processor decides. What stays here is what is still
+open in the dialect's own terms: one gap, three capacities and two decisions.
+The chapter as it stood, with the two entries that had closed inside it, is
+in [`doc/history.md`](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards).
 
-### Under ISO 7185
+Six entries that stood here are the language's rule now and are looked up in
+the register rather than here: an identifier may contain an underscore (§5);
+`ExpDigits` is what C's `%E` writes (§2.3, E.13); §6.5.6's substring aliasing
+rule is not enforced (§3, D.17); a variable created by `new(p, c1, …, cn)`
+may be assigned or passed (§3, D.25); a textfile's last line need not end in a
+terminator (§2.4); and a `char` is a byte, which ADR-0189 records *cannot*
+change and answers with a type beside the string rather than underneath it
+(§2.2, ADR-0191).
 
-- **Nesting deeper than 1000 levels is rejected** (ADR-0020, ADR-0110). A
-  limit on the *tree*, protecting four recursive walkers with an order of
-  magnitude of headroom against the measured crash point. Legal
-  machine-generated programs with chains beyond 1000 terms are refused. *A
-  decision.*
+**One gap: an ordinary pointer can dangle.** `dispose(p)` stores nil into the
+variable it was given, which turns the common form of use-after-dispose into
+the nil trap, and does nothing for a second pointer to the same storage
+(ADR-0019; the register's §3, D.4 and D.5). It is the aliasing half of the
+memory-safety question, and ADR-0109 names memory safety as a property of the
+language rather than a convention. The dialect's `owned ^T` sidesteps rather
+than closes it: storage declared that way can have no second pointer, so
+there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
+ADR-0181 withdraws nothing. What would close it is a decision about the
+ordinary pointer — kept as it is, retired in favour of the owned one, or
+given a check — and it has not been asked with a caller. *The one entry here
+that is a limitation in ADR-0109's sense.*
 
-- **A variable created by `new(p, c1, …, cn)` may still be assigned or
-  passed.** §6.6.5.3 forbids it; detecting it needs the pointer's *value* to
-  carry which form created it, and nothing tracks that (ADR-0027). *A decision,
-  permissive where the standard is restrictive.*
+**Three capacities**, each a decision with a record and each a refusal or a
+trap a program can meet:
 
-- **Use-after-dispose through a second pointer is undetected.** `dispose(p)`
-  sets `p` to nil, which turns the common form into the nil trap, and that is
-  all it does (ADR-0019). *The memory-safety model's aliasing half, above.* The
-  dialect's `owned ^T` sidesteps rather than closes this: storage declared that
-  way can have no second pointer, so there is nothing to dangle — but §6.4.4's
-  ordinary pointer is untouched, and ADR-0181 withdraws nothing.
+| A program meets | Decided in |
+| --- | --- |
+| nesting deeper than 1000 levels is refused, and an operator chain is counted toward the same limit because it is flat for the parser and deep for everything after it | ADR-0020, ADR-0110; the register's §6 |
+| a set's base type must have its values in 0..255, every set being one 256-bit word — so `set of integer` is refused, and so is `set of 1..m` for a bound the block evaluates, which cannot be checked against 0..255 before the program runs | ADR-0028, ADR-0133; §6 |
+| string concatenation draws from an arena released at the end of every statement, so one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
 
-- **A text file's last line need not end in a terminator.** §6.4.3.5 says it
-  does, so one is supplied when the file is read; reading at end-of-*file*
-  is D.97's error and stops the program. *A decision (ADR-0021).*
+**Two decisions, and neither has a record yet:**
 
-- **Characters are bytes, and the locale is never consulted.** `char` is
-  0..255, UTF-8 passes through, a multi-byte character is several `char`
-  values. This one is not going to change: ADR-0189 records that `char`
-  *cannot* widen without breaking containment, and puts the answer in a type
-  beside the string rather than underneath it — `utf8(n)` (ADR-0191).
-  *The text model, above.*
+- **What bindability is, once no clause fixes it to the variable-declaration.**
+  Three shapes were recorded here under ISO/IEC 10206:1991 and a fourth in
+  the language-server chapter, and they are one question. A dereference is
+  answered `bindable` without asking, so `bind(p^, b)` compiles for
+  `p: ^text` as well as for `p: ^bindable text` — the register's §6.1 carries
+  it as a program accepted that the standard rejects. A `var` parameter of
+  file-type would take its bindability from the actual, §6.7.3.3 NOTE 1
+  saying *dynamically*, and §6.7.6.8's own worked example
+  `procedure bindfile(var f: text)` is the program this refuses — which is
+  why `lib/pasfile.pas`'s four writers are one routine with two flags, and
+  is the entry the language-server chapter holds. And `bind` of a non-file
+  bindable variable, `var clock: bindable integer`, is refused, §6.7.5.6's
+  "otherwise" branch presupposing it legal and what it would mean being
+  undesigned. The dialect can answer any of three ways: enforce the clause at
+  the dereference and carry a bindability word with every `var` file
+  parameter, the seventh thing here that travels as two words; make every
+  file variable bindable, which dissolves all four shapes at once and is the
+  answer a dialect with no conformance claim is free to give; or leave it.
+  ADR-0167's reader is where the shapes were found, and nothing has asked for
+  the decision twice (ADR-0116).
 
-- **A set's base type must have its values in 0..255**, every set being one
-  256-bit word. §6.4.3.4 leaves the size to the implementation, so this is a
-  permitted limit rather than a deviation — but `set of integer` is a legal
-  program this compiler refuses (ADR-0028). *A decision.*
+- **`string(5)` as a parameter form** (ADR-0171). §6.7.3.1 admits
+  `type-name | schema-name | type-inquiry`, so `procedure q(x: string)` is
+  inside the grammar and `procedure q(x: string(5))` is outside it, and this
+  compiler accepts both; three sources under `tests/extended/` write the
+  second. There is no mode to refuse it under any more, so what is left is to
+  admit it with a clause of its own or refuse it and edit three sources.
+  Admitting it is the likely answer — it is exactly the convenience ADR-0109
+  says belongs here and the spelling already passes ADR-0140's test — and
+  what it wants is a clause and a record, not a change. Written down rather
+  than done because refusing it takes something away from every program that
+  uses it.
 
-- **An identifier may contain an underscore**, where §6.1.3 does not allow
-  one. It is how a name that would collide with a word-symbol is spelled, and
-  how a test program takes the name of its file (ADR-0072). *A decision, and
-  one of the two extensions `doc/implementation-defined.md` §5 lists.*
-
-### Under ISO/IEC 10206:1991
-
-**Bindability is a property of the type-denoter, and two of its three shapes
-are still read elsewhere.** ADR-0167's reader found five programs refused by
-this; a field or array element of a bindable type can be bound now, and two
-pieces remain. *Work with no record yet, and a record is owed before either.*
-
-- **A dereference is answered `bindable` without asking**, so `bind(p^, b)`
-  compiles for `p: ^text` as well as for `p: ^bindable text`. A pointer's
-  domain reaches Sema through `ResolvePointer`'s deferred paths, where the
-  denoter is no longer in hand. `doc/implementation-defined.md` §6.1 carries
-  it as a program accepted that the standard requires to be rejected. *A fix.*
-
-- **A `var` parameter of file-type takes its bindability from the actual, at
-  run time.** §6.7.3.3 NOTE 1: "determined **dynamically** by the
-  actual-parameter", and §6.7.5.6 and §6.7.6.8 make the file case a
-  *dynamic-violation*. §6.7.6.8's own worked example, `procedure bindfile(var
-  f: text)`, is the program this refuses. A conforming implementation carries a
-  bindability word with every `var` file parameter — the seventh thing here
-  that travels as two words. *Architectural.*
-
-- **`bind` of a non-file bindable variable** — `var clock: bindable integer` —
-  is refused with *'bind' needs a file variable*, and §6.7.5.6's "otherwise"
-  branch presupposes it is legal. What binding an integer to an external entity
-  means is implementation-defined and undesigned. *A feature, not a fix.*
-
-**~~§6.4.9's type-inquiry-object is a variable-access~~ — it is not, and this
-entry was wrong** (ADR-0214). The clause reads `type-inquiry-object =
-variable-name | parameter-identifier`, and §6.5.1's variable-name is
-`[ imported-interface-identifier '.' ] variable-identifier` — a *name*. So
-`type of a[1]`, `type of p^` and `type of r.f` are outside *that clause*, and
-refusing them was conformance rather than a gap in it. **Accepting them under
-`--std=extended` would have been the defect**, which is the direction this
-entry pointed. This language admits them — AP 6.4.9, ADR-0215 — which is a
-different thing from having misread §6.4.9, and ADR-0232 removed the mode in
-which the distinction was enforced.
-
-It was written from the wish rather than the clause — the wish being to read a
-container's element type off its pointer, `x: type of v^.a[1]`, which would
-halve the type arguments a generic call in `lib/dialect/pascontainer.pas`
-carries. ADR-0047 had quoted the production correctly since the feature landed
-and this entry contradicted it for a day; nothing here could see that, which is
-the point. What *did* come of it: the three refusals now say which rule they
-are, instead of stopping at the declaration's own semicolon and reporting a
-missing separator, and the wish itself became a dialect feature the same day
-([question 4](#2-3-and-4--answered),
-ADR-0215) — which is the useful ending: the clause is unchanged and the thing
-that was wanted exists where it belongs.
-
-**A discriminated-schema is not a parameter-form, and this compiler accepts
-one** (ADR-0171). §6.7.3.1 admits `type-name | schema-name | type-inquiry`, so
-`procedure q(x: string)` is right and `procedure q(x: string(5))` is outside
-the grammar. Three sources under `tests/extended/` write the second spelling
-and would have to change. **ADR-0232 dissolved half of this**: there is no
-conformance mode to refuse it under, so what is left is one decision — admit
-it with a clause of its own, or refuse it and edit three sources. It is
-exactly the convenience ADR-0109 says belongs here and the spelling already
-passes ADR-0140's test, so admitting it is the likely answer. *A feature with
-its own record, written down rather than done because refusing it takes
-something away from every program that uses it.*
-
-Five more, each stated in the record that made it:
-
-- **String concatenation draws from an arena** — a fixed buffer in the runtime,
-  released at the end of every statement that took from it (ADR-0111). One
-  *statement* holding more live string values than the arena holds is the
-  limit, and both ways of exhausting it are reported. *A decision.*
-
-- **A subrange whose bounds are not constants is refused as a set's base
-  type.** `set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is
-  refused: a bound the block evaluates cannot be checked against 0..255 before
-  the program runs, so it is the `set of integer` limit reached by another
-  route (ADR-0028, ADR-0133). Every other dynamic-bound shape — arrays,
-  schemata, bare subranges, record fields, file components — works since
-  ADR-0127, ADR-0133 and ADR-0134. *A decision.*
-
-- **ExpDigits is not a fixed number** (ADR-0064). §6.10.3.4.1 makes it one
-  implementation-defined value; here it is what C's `%E` writes — two digits,
-  or three past 1e100. A conforming processor pads `E+00` to `E+000`. *A
-  decision, stated as a deviation.*
-
-- **§6.5.6's substring aliasing rule is not enforced** (ADR-0057), for
-  ADR-0027's reason: a property of values at run time that nothing tracks. *A
-  decision.*
-
-- **Nothing is known and unfixed about conformance** beyond this list. Both
-  standards are complete, four adversarial audits have run (ADR-0162,
-  ADR-0167, ADR-0168, ADR-0171), and the last seven findings of the fourth
-  were closed on 2026-08-23. A claim no test names is a claim nothing checks
-  — so the next audit is worth running whenever the list above has not moved
-  for a while.
+The adversarial audits that filled the old lists — four of them, ADR-0162,
+ADR-0167, ADR-0168 and ADR-0171 — are [open question
+§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
+instrument, and that entry says when the next is worth running.
 
 ---
 
