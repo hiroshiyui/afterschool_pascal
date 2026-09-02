@@ -12607,8 +12607,11 @@ begin
         it does not export, so a nil from here has already been complained
         about -- which is why the not-found arm below asks about the
         unqualified case only. }
+      { The qualifier's position, for the reason CheckExpr's qualified name
+        gives: the spans are measured from `M` and the node stands at the
+        point (ADR-0294). }
       sym := LookupName(a^.fdBase^.vrAt, a^.fdBase^.vrLen, nameAt, nameLen,
-                        a^.line, a^.col)
+                        a^.fdBase^.line, a^.fdBase^.col)
     end
     else begin
       nameAt := a^.vrAt;
@@ -15494,8 +15497,16 @@ begin
         if e^.fdBase^.kind = nkVar then
           if IsInterfaceName(e^.fdBase^.vrAt, e^.fdBase^.vrLen) then begin
             qual := e^.fdBase;
+            { Reported from the *qualifier's* position and not the node's: an
+              nkField stands at its point (ADR-0246), and the two spans
+              LookupName writes for `M.x` are measured from where `M`
+              begins. Passing the point put the interface's span over
+              `.Doubl` and left `M` itself inside neither -- which no session
+              asked about until a rename stood on a qualified name
+              (ADR-0294). }
             e^.fdQualified := LookupName(qual^.vrAt, qual^.vrLen,
-                                         e^.fdAt, e^.fdLen, e^.line, e^.col);
+                                         e^.fdAt, e^.fdLen,
+                                         qual^.line, qual^.col);
             e^.ntype := intType;
             if e^.fdQualified <> nil then
               if (e^.fdQualified^.kind = skConst) or

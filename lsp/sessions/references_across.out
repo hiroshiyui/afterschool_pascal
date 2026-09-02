@@ -1,0 +1,17 @@
+Content-Length: -
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":2,"result":[{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":19,"character":13},"end":{"line":19,"character":19}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":10,"character":15},"end":{"line":10,"character":21}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":12,"character":9},"end":{"line":12,"character":15}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":16,"character":9},"end":{"line":16,"character":15}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":18,"character":2},"end":{"line":18,"character":8}}}]}Content-Length: -
+
+{"jsonrpc":"2.0","id":3,"result":[{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":19,"character":13},"end":{"line":19,"character":19}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":10,"character":15},"end":{"line":10,"character":21}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":16,"character":9},"end":{"line":16,"character":15}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","range":{"start":{"line":18,"character":2},"end":{"line":18,"character":8}}}]}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":4,"result":[{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","range":{"start":{"line":13,"character":10},"end":{"line":13,"character":17}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":9,"character":17},"end":{"line":9,"character":24}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":13,"character":9},"end":{"line":13,"character":16}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":17,"character":9},"end":{"line":17,"character":16}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":19,"character":2},"end":{"line":19,"character":9}}}]}Content-Length: -
+
+{"jsonrpc":"2.0","id":5,"result":[{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","range":{"start":{"line":10,"character":7},"end":{"line":10,"character":13}}},{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":9,"character":7},"end":{"line":9,"character":13}}}]}Content-Length: -
+
+{"jsonrpc":"2.0","id":6,"result":null}

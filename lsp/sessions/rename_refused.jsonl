@@ -1,0 +1,43 @@
+# A rename refused (ADR-0294). A report may be partial and an edit may not,
+# so where an occurrence could be missing or the new name is not a name the
+# answer is LSP 3.17's RequestFailed with a message the editor shows -- not
+# `null`, which is legal and says nothing, and a rename that silently does
+# nothing is one a reader retries.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/shapes.pas","languageId":"pascal","version":1,"text":"program shapes(output);\n\ntype\n  Point = record\n    x, y: integer\n  end;\n\nvar\n  p: Point;\n  total: integer;\n\nprocedure Bump(var q: Point);\nbegin\n  q.x := q.x + 1;\n  with q do y := y + 1\nend;\n\nbegin\n  total := 0;\n  p.x := total;\n  Bump(p);\n  total := p.x + p.y;\n  writeln(total)\nend.\n"}}}
+
+# `integer` is a required identifier: declared in no source (6.2.2.10), so
+# there is no declaration to rename and its rows share a defining-point with
+# every other required identifier's. Refused before a name is asked for, and
+# again when one is given.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/prepareRename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":9,"character":9}}}
+
+{"jsonrpc":"2.0","id":3,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":9,"character":9},"newName":"int"}}
+
+# The new name is judged by the compiler's own lexer and not by a table
+# copied out of it: a word-symbol, a number running into letters, two names,
+# and no name at all are each refused.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"newName":"begin"}}
+
+{"jsonrpc":"2.0","id":5,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"newName":"9x"}}
+
+{"jsonrpc":"2.0","id":6,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"newName":"two words"}}
+
+{"jsonrpc":"2.0","id":7,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"newName":""}}
+
+# No name under the position. prepareRename answers `null`, which is what
+# the protocol has a client show nothing for -- a reader may well right-click
+# a word-symbol -- and rename, which a client sends only after a prepare
+# succeeded, is refused.
+{"jsonrpc":"2.0","id":8,"method":"textDocument/prepareRename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":17,"character":2}}}
+
+{"jsonrpc":"2.0","id":9,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":17,"character":2},"newName":"x"}}
+
+# A document nobody opened, and a request with no new name in it.
+{"jsonrpc":"2.0","id":10,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/never-opened.pas"},"position":{"line":0,"character":0},"newName":"x"}}
+
+{"jsonrpc":"2.0","id":11,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2}}}
+
+{"jsonrpc":"2.0","id":12,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

@@ -1,0 +1,35 @@
+# References across a program-component (ADR-0294), on the workspace the
+# definition sessions use. The unit is the *translation*: a name declared in
+# a component is followed into every component the document's compilation
+# read, each compiled again with the file-table entries before it as its
+# imports, and the rows matched by path against the same defining-point. What
+# no compilation can see is another open document importing the same module;
+# that is a second translation.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file://%ROOT%","capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","languageId":"pascal","version":1,"text":"{ The middle of the workspace, and the shape that needs the walk.\n\n  There is no `middle.components` beside this file. The sidecar that names it\n  is `client.components`, one directory entry along, and what the server must\n  take from it is the entries *before* this one -- `base.pas` and nothing\n  else. Opening this file with no resolution at all reports `no interface\n  named 'base' has been exported` and then every name that came from it. }\nmodule Middle;\n\nexport Middle = (Doubled);\n\nimport Base;\n\nfunction Doubled: integer;\n\nend;\n\nfunction Doubled;\nbegin\n  Doubled := Answer * 2\nend;\n\nend.\n"}}}
+
+# `Answer` on line 19 of middle.pas is declared in base.pas. This document
+# names it once; base.pas names it four times -- the export list, the heading
+# that is its declaration, the block completing the heading (6.11.1), and the
+# assignment to the result. The document's own occurrence comes first, then
+# base.pas in source order.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/references","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":19,"character":13},"context":{"includeDeclaration":true}}}
+
+# Without the declaration the heading on line 13 of base.pas goes; the block
+# completing it on line 17 is an applied occurrence (ADR-0250) and stays.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/references","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":19,"character":13},"context":{"includeDeclaration":false}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","languageId":"pascal","version":1,"text":"{ The top of the workspace: a program, with `client.components` beside it\n  naming the two modules under it and not naming this file.\n\n  That is the ordinary shape -- a case and its sidecar -- and the answer for\n  it is every entry the sidecar holds. The shape it does *not* cover is\n  `selfhost/compiler.components`, which sits beside `compiler.pas` and names\n  it: there the answer is the prefix, because handing a component its own\n  interface is what `tests/run_test.sh` is careful not to do. }\nprogram client(output);\n\nimport Middle;\n\nbegin\n  writeln(Doubled:1)\nend.\n"}}}
+
+# From the top: `Doubled` in client.pas is declared in middle.pas, whose
+# compilation reads base.pas before it. base.pas cannot name it and is
+# compiled and found not to; middle.pas gives four rows.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/references","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":13,"character":10},"context":{"includeDeclaration":true}}}
+
+# An interface (ADR-0248): `import Middle;` here and `export Middle = (...)`
+# in middle.pas, which ADR-0251 made an occurrence of itself.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/references","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":10,"character":7},"context":{"includeDeclaration":true}}}
+
+{"jsonrpc":"2.0","id":6,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

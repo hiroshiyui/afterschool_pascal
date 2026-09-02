@@ -4021,6 +4021,27 @@ nothing else. What it would lose, mechanism by mechanism:
   constituent's defining-point as an occurrence in the importing document, and
   a hover over `Doubled` came back as `(Double`. ADR-0249's mistake from the
   other side, caught by a session golden and not by reasoning.
+- **The same dump read backwards is `references`, and `rename` is that with
+  an edit per row** (ADR-0294). Every cached `use` row carries a
+  defining-point, so the rows sharing the one under the cursor are the
+  occurrences of one thing, compared on all three numbers — the line alone
+  takes `x, y: integer` for one name. The unit is the *translation*: the dump
+  reports no occurrence inside a component, so a name declared in one is
+  followed by compiling each entry of the document's file table again with
+  the entries before it as its imports, which is what the document's own
+  translation read. A field's declaration is in no row (§6.4.3.3's region is
+  not a scope) and is added by position; `includeDeclaration: false` drops
+  the row standing at its own defining-point. A report may be partial and an
+  edit may not, so `rename` refuses with `RequestFailed` where `references`
+  answers what it has: a required identifier, whose key every other one
+  shares; `M . x`, whose wider span stops short; a new name `--dump-tokens`
+  does not read as one identifier — the lexer judges, not a copied table. The
+  edits go in `documentChanges` because `changes` is keyed by URI and
+  `JsonName` is 255 where a URI is a path's length (ADR-0291). What it found
+  was the compiler's: an `nkField` stands at its point, `CheckExpr` passed
+  that to `LookupName`, and every qualified expression's two spans began at
+  the `.` — `Middle` in `Middle.Doubled` was inside neither. Two call sites
+  now pass the qualifier's position and `uses_module.dump` moved six rows.
 - **A statement has an extent** (ADR-0258), which is what `foldingRange` and
   `selectionRange` are answered from — one `--dump-stmts` for both, as one
   `--dump-uses` serves definition and hover. The trap is that ADR-0253's

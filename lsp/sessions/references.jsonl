@@ -1,0 +1,40 @@
+# textDocument/references (ADR-0294): the question `definition` answers, asked
+# backwards. Every `use` row the document caches carries a defining-point, so
+# the rows sharing the one under the cursor are the occurrences of one thing.
+#
+# `context.includeDeclaration` is honoured through ADR-0250: a declaration is
+# reported as an occurrence of itself, so the row standing at its own
+# defining-point is the declaration and is dropped when the flag is false. A
+# field is the exception -- 6.4.3.3's record region is not a scope, so its
+# defining occurrence is in no row -- and its declaration is added by
+# position, which the third request below is for.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/shapes.pas","languageId":"pascal","version":1,"text":"program shapes(output);\n\ntype\n  Point = record\n    x, y: integer\n  end;\n\nvar\n  p: Point;\n  total: integer;\n\nprocedure Bump(var q: Point);\nbegin\n  q.x := q.x + 1;\n  with q do y := y + 1\nend;\n\nbegin\n  total := 0;\n  p.x := total;\n  Bump(p);\n  total := p.x + p.y;\n  writeln(total)\nend.\n"}}}
+
+# `total` at its third use, line 22 `  total := p.x + p.y;`. Five occurrences
+# in source order, the declaration on line 10 first -- the rows arrive in the
+# order Sema resolved them, which puts a block's declarations after its body.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"context":{"includeDeclaration":true}}}
+
+# The same name without its declaration: four.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":21,"character":2},"context":{"includeDeclaration":false}}}
+
+# The field `x`, asked at `p.x` on line 20. It is named at `q.x` twice inside
+# Bump, where `q` is a different variable of the same type, and its
+# declaration is `x, y: integer` on line 5 -- a position no row carries.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":19,"character":4},"context":{"includeDeclaration":true}}}
+
+# `integer`, a required identifier: declared in no source (6.2.2.10), and
+# every required identifier shares the defining-point it has not got, so the
+# rows of `integer` and `writeln` would be one key. `null`.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":9,"character":9},"context":{"includeDeclaration":true}}}
+
+# A position on no name at all -- inside `begin`.
+{"jsonrpc":"2.0","id":6,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/shapes.pas"},"position":{"line":17,"character":2},"context":{"includeDeclaration":true}}}
+
+# A document nobody opened.
+{"jsonrpc":"2.0","id":7,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///scratch/never-opened.pas"},"position":{"line":0,"character":0},"context":{"includeDeclaration":true}}}
+
+{"jsonrpc":"2.0","id":8,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

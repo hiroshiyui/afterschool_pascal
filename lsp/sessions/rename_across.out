@@ -1,0 +1,21 @@
+Content-Length: -
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":2,"result":{"documentChanges":[{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","version":null},"edits":[{"range":{"start":{"line":13,"character":10},"end":{"line":13,"character":17}},"newText":"Twice"}]},{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","version":null},"edits":[{"range":{"start":{"line":9,"character":17},"end":{"line":9,"character":24}},"newText":"Twice"},{"range":{"start":{"line":13,"character":9},"end":{"line":13,"character":16}},"newText":"Twice"},{"range":{"start":{"line":17,"character":9},"end":{"line":17,"character":16}},"newText":"Twice"},{"range":{"start":{"line":19,"character":2},"end":{"line":19,"character":9}},"newText":"Twice"}]}]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":3,"result":{"range":{"start":{"line":5,"character":17},"end":{"line":5,"character":24}},"placeholder":"Doubled"}}Content-Length: -
+
+{"jsonrpc":"2.0","id":4,"result":{"documentChanges":[{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","version":null},"edits":[{"range":{"start":{"line":5,"character":17},"end":{"line":5,"character":24}},"newText":"Twice"}]},{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","version":null},"edits":[{"range":{"start":{"line":9,"character":17},"end":{"line":9,"character":24}},"newText":"Twice"},{"range":{"start":{"line":13,"character":9},"end":{"line":13,"character":16}},"newText":"Twice"},{"range":{"start":{"line":17,"character":9},"end":{"line":17,"character":16}},"newText":"Twice"},{"range":{"start":{"line":19,"character":2},"end":{"line":19,"character":9}},"newText":"Twice"}]}]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":5,"result":{"documentChanges":[{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","version":null},"edits":[{"range":{"start":{"line":2,"character":7},"end":{"line":2,"character":13}},"newText":"Mid"},{"range":{"start":{"line":5,"character":10},"end":{"line":5,"character":16}},"newText":"Mid"}]},{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","version":null},"edits":[{"range":{"start":{"line":9,"character":7},"end":{"line":9,"character":13}},"newText":"Mid"}]}]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":6,"error":{"code":-32803,"message":"a qualified name with spaces around its point cannot be placed"}}Content-Length: -
+
+{"jsonrpc":"2.0","id":7,"result":null}
