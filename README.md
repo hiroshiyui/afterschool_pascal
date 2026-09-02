@@ -1056,6 +1056,34 @@ whichever element type the domain named — so a routine that grows a container
 need not know what is in it. The types decide the layout, which a pointer type
 must know; the capacity decides the extent, which `new` may vary.
 
+**And a helper written for such a container needs no capacity either**
+(ADR-0290). A container that takes its hash and its equality as procedural
+parameters is generic over its key, but §6.7.3.6's congruity is exact, so a
+ready-made pair written for one capacity was refused by a map keyed at any
+other and every client wrote its own. A schematic `string` value formal may now
+stand where a produced string type is written:
+
+```pascal
+function StrHash(key: string): integer;      { no capacity, and it serves all }
+
+type uri = string(200);
+     UriMap = ^Map(uri, integer);
+var m: UriMap;
+begin
+  MapInit(UriMap, m, 8);
+  MapPut(m, 'file:///home/someone/afterschool_pascal/selfhost/apfront.pas',
+         7, StrHash, StrEq)        { PasContainer's own pair, at 200 }
+end;
+```
+
+There is nothing new to spell here either. The permission runs one way only —
+a formal naming a fixed capacity never stands for a schematic one, its slot
+having a size the caller is not bound by — and it is given for the `string`
+schema alone, because a string value carries its length and so a parameter of
+`string(200)` and one of `string` are alike in what the actual supplies. For
+every other schema the tuple is a property of the type, the two forms are not
+alike, and the pair is refused.
+
 A generic may be declared in a **separately translated component** and
 instantiated by a program that imports it, for types that component never heard
 of — the instantiation belongs to whoever named the types, so it is emitted in
