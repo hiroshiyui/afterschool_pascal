@@ -1,0 +1,3 @@
+<source>:59:18: error: 'fixed63' does not match the parameter list of functional parameter 'h'
+<source>:60:12: error: 'genbox' does not match the parameter list of functional parameter 'g'
+<source>:61:17: error: 'vargen' does not match the parameter list of procedural parameter 'g'

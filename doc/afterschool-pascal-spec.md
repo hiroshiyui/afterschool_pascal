@@ -1716,6 +1716,67 @@ it is an error.
 
 #### 6.7.3 Parameters
 
+##### 6.7.3.6 Parameter list congruity [extended]
+
+**6.7.3.6.1 A schematic string value formal.** Two formal-parameter-sections
+shall also match if all of the following are true.
+
+a) Both are value-parameter-specifications containing the same number of
+   parameters, and either both contain `protected` or neither contains
+   `protected`.
+
+b) The parameter-form of the section in the formal-parameter-list of the
+   procedure or function denoted by the actual-parameter is a schema-name
+   denoting the string schema (ISO/IEC 10206:1991 §6.4.3.3).
+
+c) The parameter-form of the corresponding section in the formal-parameter-list
+   of the procedural-parameter-specification or the functional-parameter-
+   specification denotes a type produced from that schema.
+
+**6.7.3.6.2 The addition is not symmetric.** 6.7.3.6.1 with b) and c)
+exchanged shall not match. Where the two are exchanged, the matching of
+ISO/IEC 10206:1991 §6.7.3.6 alone shall decide.
+
+**6.7.3.6.3 Orientation of c) and d).** Where ISO/IEC 10206:1991 §6.7.3.6 c)
+or d) requires the formal-parameter-lists of two procedure-headings or
+function-headings to be congruous, the list belonging to the procedure or
+function denoted by the actual-parameter shall take the position of the
+procedural-parameter-specification's list, and that list shall take the
+position of the actual-parameter's.
+
+NOTE 1 — 6.7.3.6.2 is the whole of the safety argument. A schematic formal
+receives a value of whatever length it is handed and gives its own local
+variable that length, so it can stand in for any capacity. A formal naming a
+produced type has a fixed capacity, and a caller bound by 6.7.3.6.1's
+schema-name form is bound by nothing — the first longer actual would be
+§6.4.6's error at run time. The permission therefore runs one way only.
+
+NOTE 2 — The string schema is named in b), rather than any schema, because it
+is the only one whose values carry what the schematic form requires. §6.4.3.3.3
+makes a string value a length and that many components, so a value parameter of
+`string(n)` and one of `string` are alike in what the actual supplies. For every
+other schema the tuple is a property of the type: where it is written the actual
+supplies nothing, and where it is not the actual supplies the discriminants, so
+the two forms are not alike and no permission is given.
+
+NOTE 3 — Value parameters are named in a), rather than variable parameters as
+well, for the reason ISO/IEC 10206:1991 §6.7.3.3 already draws the same line:
+a variable parameter binds to storage rather than taking a value, so there is
+no value from which a length could be taken.
+
+NOTE 4 — 6.7.3.6.3 states an orientation that ISO/IEC 10206:1991 leaves
+unstated because it does not need it: congruity there is a symmetric relation,
+so the two lists may be compared either way round. 6.7.3.6.1 makes the relation
+directional, and one level in the direction reverses — a body holding the
+procedural parameter builds a routine to the *specification's* inner heading and
+passes it to the actual, which invokes it through its **own**. So the routine
+being passed, at that level, is the specification's, which is what 6.7.3.6.3
+says.
+
+NOTE 5 — This clause only ever admits more: a formal-parameter-list pair
+congruous under ISO/IEC 10206:1991 §6.7.3.6 remains so, and no program that
+conforms to that standard changes meaning.
+
 ##### 6.7.3.9 Slice parameters [added]
 
 **6.7.3.9.1 The denoter.**

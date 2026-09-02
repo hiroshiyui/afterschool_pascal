@@ -5791,6 +5791,45 @@ begin
       ok := a^.elem = b^.elem;
   EquivalentConf := ok
 end;
+{ AP 6.7.3.6 (ADR-0290): a schematic *string* value formal in the routine
+  being passed stands where the declared formal names a type produced from
+  that schema, so one `Hash(key: string)` serves a map keyed at any capacity.
+
+  ISO/IEC 10206:1991 6.7.3.6 a) 4) offers three ways to match and each names
+  both headings -- both a schema-name, both a type-name of one type, or both a
+  type-name produced from one schema. The mixed pair is in none of them.
+
+  Three conditions and each is a measurement rather than a preference.
+
+  It is the **string** schema because a string is the one whose values carry
+  what the schematic form needs: 6.4.3.3.3 makes a value a length and that
+  many characters, so `string(200)` and `string` both travel as a pointer and
+  a length (ADR-0051, ADR-0115) and the two headings call the same way. Every
+  other schema passes its address alone where its tuple is written and an
+  address with its discriminants where it is not, so the pair would be a call
+  through the wrong signature -- `Box(5)` against `Box` is `(ptr)` against
+  `(ptr, i32)`.
+
+  It is a **value** parameter because a var one binds to storage and states no
+  length, which is the same boundary StringValueFormal already draws for its
+  own reason: 6.7.3.3's variable-parameter clause has no paragraph taking the
+  capacity from the value, there being no value.
+
+  And it is **one-directional**. The reverse hands a routine whose slot holds
+  63 characters to a caller bound by nothing, and the first longer actual is
+  6.4.6's store error at run time -- so a fixed formal never stands for a
+  schematic one. }
+function SchematicStandsFor(declared, passed: symPtr): boolean;
+begin
+  if declared^.descSchema = passed^.descSchema then
+    SchematicStandsFor := true
+  else
+    SchematicStandsFor :=
+      StringValueFormal(passed) and (declared^.descSchema = nil) and
+      (declared^.kind = skParam) and (declared^.stype <> nil) and
+      (declared^.stype^.schema = stringSchema)
+end;
+
 function Congruous(formal, actual: symPtr): boolean;
 var f, a: symListPtr; want, got: typePtr; ok: boolean;
 begin
@@ -5832,8 +5871,16 @@ begin
         protected one was promised. }
       else if f^.sym^.isProtected <> a^.sym^.isProtected then
         ok := false
+      { The arguments are **swapped**, and that is the orientation rather than
+        a slip. Congruous(F, A) asks whether A may be passed where F was
+        declared. A body holding F builds a routine to F's own inner heading
+        and hands it over; the routine that receives it is A, which invokes it
+        through *A's* inner heading -- so what must hold one level in is that
+        F's inner heading may be passed where A's was declared, which is this
+        pair the other way round. It was symmetric until ADR-0290 gave the rule
+        a direction, and nothing could have noticed before that. }
       else if f^.sym^.kind = skProcParam then
-        ok := Congruous(f^.sym, a^.sym)
+        ok := Congruous(a^.sym, f^.sym)
       { 6.6.3.6 e): two conformant array parameters match when their schemas
         are equivalent. It has to come before the schematic-formal test below,
         because a conformant array parameter carries a descriptor too and its
@@ -5847,11 +5894,10 @@ begin
               EquivalentConf(f^.sym^.stype, a^.sym^.stype)
       { A schematic formal's type belongs to that one parameter and is never
         equal to another's, so congruity asks the question 6.7.3.3 asks: the
-        same schema, with the tuple left to the actual as it always is. }
+        same schema, with the tuple left to the actual as it always is -- and,
+        for a string value parameter only, the widening below. }
       else if (f^.sym^.descSchema <> nil) or (a^.sym^.descSchema <> nil) then
-      begin
-        if f^.sym^.descSchema <> a^.sym^.descSchema then ok := false
-      end
+        ok := SchematicStandsFor(f^.sym, a^.sym)
       else if f^.sym^.stype <> a^.sym^.stype then
         ok := false;
       if ok then begin

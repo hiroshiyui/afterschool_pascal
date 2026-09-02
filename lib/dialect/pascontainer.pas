@@ -224,9 +224,19 @@ function MapKeyAt(Ptr: type; K: type; var m: Ptr; i: integer): K;
 
 { The hash and the equality for a string key, which is what a map is keyed by
   most of the time. Exported so that the commonest case is `MapPut(m, name, 1,
-  StrHash, StrEq)` and not a pair of routines every client writes again. }
-function StrHash(key: MapKey): integer;
-function StrEq(a, b: MapKey): boolean;
+  StrHash, StrEq)` and not a pair of routines every client writes again.
+
+  **The parameters are schematic, so the pair serves a map keyed at any
+  capacity** (AP 6.7.3.6, ADR-0290). They were `MapKey` -- `string(63)` -- and
+  6.7.3.6's congruity is exact, so a map keyed on anything else got the pair
+  refused and its client wrote eight lines of its own. `lsp/pasls.pas` read
+  that refusal as the *map's* bound and kept its documents in a linearly
+  searched vector; the map has been generic over its key since ADR-0254 and
+  the bound was never its. `MapKey` and `KeyMax` remain exported as a
+  ready-made key type for a client that wants one, and are no longer a limit
+  on anything. }
+function StrHash(key: string): integer;
+function StrEq(a, b: string): boolean;
 
 { The two helpers below are exported, and **not because a caller wants
   them.** A generic routine's body is translated where it is *instantiated*

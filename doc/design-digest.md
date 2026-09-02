@@ -123,6 +123,22 @@ own exception and compare by length instead.
   function along, which is what the second mutation shows.
   `tests/index_span.pas` is the case, and it allocates the shape whose offsets
   reach exactly `maxint`.
+- **One hash for every capacity** (ADR-0290, AP 6.7.3.6). A schematic `string`
+  value formal in the heading being passed matches a formal naming a type
+  produced from that schema, so `StrHash(key: string)` serves a map keyed at
+  any capacity. ISO/IEC 10206:1991 §6.7.3.6 a) 4) offers three matches and each
+  names *both* headings, so the mixed pair was in none — and the cost was a
+  client: `PasContainer`'s map has been generic over its key since ADR-0254,
+  its ready-made pair was not, and `lsp/pasls.pas` read the refusal as the
+  map's own bound and kept its documents in a linearly searched vector. The
+  three restrictions are measurements. **String only**, because a string value
+  carries its length (§6.4.3.3.3) so both forms are `(ptr, i32)`, where
+  `Box(5)` is `(ptr)` against `Box`'s `(ptr, i32)`. **Value only**, the same
+  way, and the boundary is the one `StringValueFormal` already drew.
+  **One-directional**, a fixed slot having a capacity the caller is not bound
+  by. And congruity acquired an **orientation**: it reverses one level in, so
+  `Congruous` swaps its arguments in the recursion — invisible while the
+  relation was symmetric.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the

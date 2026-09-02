@@ -247,8 +247,8 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-six entries so far, and **seventeen of them have been acted on** — three
-of the nine open are the usability findings below, which are recorded rather
+Twenty-six entries so far, and **eighteen of them have been acted on** — three
+of the eight open are the usability findings below, which are recorded rather
 than acted on because each names a design question and not a defect — which
 is the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
@@ -356,11 +356,13 @@ activity and had never been done. Three came out of one pass.
   were found by asking what writing it was like, which is what this chapter is
   for and what it had not done.
 
-The six below are what a program of this size still runs into. Two of them are
-bounds that have not yet cost anything, one is a rule about the language a
-writer has to know and nothing tells them, one is a limitation of the parse
-tree, one is a clause that reads like a readiness test and is not, and one is
-a decision nobody has asked for twice.
+The six below are what a program of this size still runs into, and the first of
+them is closed. One is a bound that has not yet cost anything, one is a rule
+about the language a writer has to know and nothing tells them, one is a
+limitation of the parse tree, one is a clause that reads like a readiness test
+and is not, and one is a decision nobody has asked for twice. The closed one is
+kept in place rather than moved to `doc/history.md`, because what it is now
+worth reading for is that it was **wrong** and what found that out.
 
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
@@ -377,15 +379,35 @@ a decision nobody has asked for twice.
   the compiler; the finding stands for every other program that speaks a
   descriptor protocol.
 
-- **`PasContainer`'s map cannot key on a URI.** `MapKey` is 63 characters and
+- ~~**`PasContainer`'s map cannot key on a URI.**~~ **Closed by ADR-0290, and
+  the sentence was wrong.** It read: *`MapKey` is 63 characters and
   `file:///home/someone/projects/afterschool_pascal/selfhost/apfront.pas` is
-  69, so the document store is a vector searched linearly. The example that
-  stood here was 44 characters and fitted, which is worth saying rather than
-  quietly replacing: the finding was true and the illustration of it was not,
-  and nothing in this tree can check an arithmetic claim made in prose. For a
-  handful of open documents that costs nothing and the workaround is fine; the
-  finding is that the container's one dimension was sized for a test case's
-  keys and nothing said so.
+  69, so the document store is a vector searched linearly* — and the map has
+  been generic over its key type since ADR-0254. A probe keys one on a
+  200-character string and stores the 69-character URI in it, so the map could
+  always have held the document store and the entry named a limitation the
+  library did not have.
+
+  **What was true is one layer down.** `StrHash` and `StrEq` — the ready-made
+  pair — were declared over `MapKey`, and ISO/IEC 10206:1991 §6.7.3.6 makes a
+  procedural parameter's congruity exact, so a map keyed on any other capacity
+  got the pair refused and its client wrote eight lines of its own. AP 6.7.3.6
+  lets a schematic `string` value formal stand where a produced string type is
+  written, the pair is schematic now, and a client writes nothing.
+
+  **This is the second entry in this chapter to be corrected by a probe rather
+  than by a test**, after the `T ! E` one above, and both corrections say the
+  same thing: *the language could do it and the convenience layer could not*.
+  The first illustration here was 44 characters and did not fit the claim; the
+  claim itself then turned out not to fit the library. Nothing in this tree
+  can check a sentence, which is why writing the probe is the only method
+  there is — and it is cheap, and it was not done for eleven increments.
+
+  `lsp/pasls.pas` still holds its documents in the vector, with a comment
+  giving the reason that has just stopped being true. Converting it is a
+  separate change and is not urgent: a handful of open documents is what an
+  editor has, so the map is not measurably faster. The reason to make it is
+  the comment.
 
 - **`JsonLine` is 255 characters and a URI is not a line.** Three modules pick
   255 for "a string a caller hands over in one piece", which is right for a

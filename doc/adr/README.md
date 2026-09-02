@@ -298,3 +298,4 @@ the alternatives that were rejected and why.
 | [0287](0287-a-type-s-storage-is-a-fact-about-the-program.md) | A type's storage is a fact about the program | Accepted |
 | [0288](0288-the-element-bound-is-one-too-strict.md) | The element bound is one too strict, and the model agreed with it | Accepted |
 | [0289](0289-the-last-legal-span-rather-than-the-first-illegal-one.md) | The last legal span, rather than the first illegal one | Accepted |
+| [0290](0290-one-hash-for-every-capacity.md) | One hash for every capacity | Accepted |
