@@ -282,16 +282,6 @@ it. None of these is a language feature and none needs a spelling.
   textual metadata in the `.ll` and links nothing new, which is ADR-0085's
   bar. The first is the one that changes a user's afternoon.
 
-- **The library has not caught up with the language's inference.** ADR-0254
-  let a generic activation omit its types on 2026-08-30, and it was landed
-  *because* the five per-type `…Or` accessors were a workaround for having to
-  write them. `grep -rn ValueOr lib lsp` finds nothing: the five helpers
-  stand, the generic that would replace them lives in a test case, and the
-  thirty call sites the usability finding counts are still `IntOr` and
-  `JsonIntegerOr`. That is not a defect. It is the measurement the finding
-  below asks for — whether `T ! E` reads well at depth — taken *before* the
-  language had the feature the finding said was missing, and never retaken.
-
 - **What a program reads can be cut without a word.** ADR-0292 closed with
   a warning rather than a gap, and this row is where it lives now. `readln`
   truncates **silently** at the variable's capacity, §6.9.1 skipping the rest
@@ -385,12 +375,12 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-seven entries so far. **Twenty-four are in
+Twenty-seven entries so far. **Twenty-five are in
 [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)**
-— twenty-two acted on, and two that needed no action because each is a
-thing a writer has to know rather than a defect — and **three are open**:
-the two usability findings below, which are recorded rather than acted on
-because each names a design question, and one decision nobody has asked for
+— twenty-three acted on, and two that needed no action because each is a
+thing a writer has to know rather than a defect — and **two are open**:
+the usability finding below, which is recorded rather than acted on
+because it names a design question, and one decision nobody has asked for
 twice. That is the discipline this chapter is for: a finding recorded and
 left is a finding wasted, and the rule that made the first one actionable
 was this section's own — one site is an anecdote, two are a demand
@@ -421,64 +411,11 @@ finished program as a *reader* rather than as its author, which is a different
 activity and had never been done. Three came out of one pass, and one of
 the three closed in both its halves within four days (ADR-0290, ADR-0291,
 ADR-0292); it is in the register with what it taught, which is that the pass
-that finds an annoyance can also file a defect as a taste. The two that
-remain:
-
-- **The dialect's error-handling constructs are unused by its largest
-  client.** `lsp/pasls.pas` is 2 678 lines and contains **no `T ! E` and no
-  `try`** — not one of either. It was 1 944 lines when this was written and the
-  zero has not moved, which is the half of the finding a count can carry: the
-  program grew by 38% and reached for neither construct once. It is not that the library withholds them:
-  `PasIO.OpenRead`, `ReadInto` and `WriteFrom`, `PasFS.Info`,
-  `WorkingDirectory`, `LinkTarget` and `TemporaryPath`, and `PasJson`'s parse
-  all answer a fallible-type, and the server imports all three modules.
-
-  What it reaches for instead is the **accessor**: `IntOr` eighteen times,
-  `JsonIntegerOr` eight, `LookupOr` three, `PathOr` once — thirty calls against
-  zero, and every one of the seven added since this was written was an
-  accessor too. Take the ratio and not the count; `grep -c` is the authority
-  and this sentence goes stale on its own. The cause is that `try(x)` propagates by *leaving the routine*
-  (AP 6.8.9), which is right for a program that may fail and wrong for a
-  server, which must answer something to every request — so the library grew
-  `…Or(r, whenBad)` and the client uses that.
-
-  **This entry first said the helpers exist because a routine generic over the
-  fallible type cannot be written. That was wrong, and the correction is the
-  more useful finding.** It can be written, and
-  `tests/dialect/generic_fallible.pas` is it: one
-  `ValueOr(T: type; res: Fallible(T); whenBad: T): T` serving four types, two
-  of them structured. What cannot be written is the *anonymous* form — a
-  heading saying `res: T ! Code` is a type-denoter that is not a type name,
-  and §6.4.1 makes each of those denote a type of its own, so it never matches
-  the caller's. A **schema** answers, because §6.4.7 interns a production per
-  tuple (ADR-0039), and a named production is the same type as the schema
-  applied again — which is exactly the shape `lib/` already uses for its
-  result types.
-
-  **So the language is not the blocker, and why the library does not do it is
-  the real finding.** Five of the helpers are genuinely `T ! ErrorCode → T`,
-  and all seven result types in `lib/` share that shape, so one generic would
-  serve them all — but the call site goes from `IntOr(r, 0)` to
-  `ValueOr(integer, r, 0)`, naming a type the argument already knows.
-  Collapsing five helpers into one would make **thirty call sites** wordier in
-  order to make one library smaller. The helpers are not a workaround for a
-  missing generic. They were a workaround for **missing inference** — and
-  ADR-0254 landed inference on 2026-08-30 with this paragraph as its stated
-  cause, so `ValueOr(r, 0)` can be written now. **It is not**: `grep -rn
-  ValueOr lib lsp` finds nothing, the five helpers stand, and the measurement
-  this finding asked for has not been retaken with the feature present. The
-  chapter above carries that as a row.
-
-  (The twelve counted here are also two patterns and not one: `JsonIntegerOr`
-  and its neighbours read a scalar out of a `JsonPtr`, and `LookupOr` takes an
-  environment default — neither is a fallible accessor at all. So the fallible
-  accessor proper is `IntOr`, and it is eighteen of the thirty.)
-
-  This is not an argument against `try`. It is the finding that **the shape a
-  server needs is the one the language does not have**, and that the shape it
-  does have has never been exercised at depth by anything here — so the
-  question this chapter asked about `T ! E` reading well at depth is still
-  unanswered, and now for a stated reason.
+that finds an annoyance can also file a defect as a taste. A second closed
+on 2026-09-03 (ADR-0297) — the library now uses the inference it asked for,
+and the probe written before touching it found two compiler defects that
+four cases and a green suite had not; it is in the register with the
+retaken measurement. The one that remains:
 
 - **`only` is a collision workaround, not a narrowing tool.** The server
   imports **twelve** modules — the roadmap said ten, and it grew — against

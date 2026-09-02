@@ -27,7 +27,7 @@
 
 module PasMathX;
 
-export PasMathX = (RealResult, RealOr, Cbrt, Log10, Log2, FMod);
+export PasMathX = (RealResult, Cbrt, Log10, Log2, FMod);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -36,12 +36,7 @@ type
   { ADR-0120's shape over a real, and since AP 6.4.13 a *type* rather than a
     convention: `T ! E` is the record every module used to declare, with the
     field names fixed -- `ok`, `val`, `cause` (ADR-0176). }
-  RealResult = real ! ErrorCode;
-
-{ The value, or the caller's own answer where there is none. The alternative
-  to checking, for a caller that has a sensible default and does not want to
-  branch -- reading `r.val` without asking traps, which is the whole point. }
-function RealOr(r: RealResult; whenBad: real): real;
+  RealResult = Fallible(real);
 
 { The real cube root. Total: every real has one, including a negative one,
   which is what makes this a plain function rather than a result. `x ** (1/3)`
@@ -72,11 +67,6 @@ function ExtCbrt(x: real): real; external 'cbrt';
 function ExtLog10(x: real): real; external 'log10';
 function ExtLog2(x: real): real; external 'log2';
 function ExtFMod(x, y: real): real; external 'fmod';
-
-function RealOr;
-begin
-  if r.ok then RealOr := r.val else RealOr := whenBad
-end;
 
 function Cbrt;
 begin

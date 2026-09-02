@@ -105,8 +105,10 @@ import PasError;
 
          `only` for the same reason PasDir has one, which is now a pattern
          and not an incident: PasParse exports `ResultText` and so does
-         PasError. Four names are the whole of what this program wants. }
-       PasParse only (ParseMax, ParseLine, ParseInt, IntOr);
+         PasError. Three names are the whole of what this program wants;
+         the fourth was `IntOr`, and `PasError.ValueOr` is that routine for
+         every result type at once (ADR-0297). }
+       PasParse only (ParseMax, ParseLine, ParseInt);
        PasProcess;
        PasContainer;
        PasJson;
@@ -1140,15 +1142,15 @@ begin
   if SymField(text, 1) <> 'symbol' then
     SymParse := false
   else begin
-    s.depth := IntOr(ParseInt(SymField(text, 2)), 0);
+    s.depth := ValueOr(ParseInt(SymField(text, 2)), 0);
     s.kind := SymField(text, 3);
-    s.line := IntOr(ParseInt(SymField(text, 4)), 0);
-    s.col := IntOr(ParseInt(SymField(text, 5)), 0);
-    s.len := IntOr(ParseInt(SymField(text, 6)), 0);
+    s.line := ValueOr(ParseInt(SymField(text, 4)), 0);
+    s.col := ValueOr(ParseInt(SymField(text, 5)), 0);
+    s.len := ValueOr(ParseInt(SymField(text, 6)), 0);
     { The extent, which a block gives and a constant answers with the end of
       its own name (ADR-0253). }
-    s.endLine := IntOr(ParseInt(SymField(text, 7)), 0);
-    s.endCol := IntOr(ParseInt(SymField(text, 8)), 0);
+    s.endLine := ValueOr(ParseInt(SymField(text, 7)), 0);
+    s.endCol := ValueOr(ParseInt(SymField(text, 8)), 0);
     { Folded, the lexer having case-folded it: a fallback for a source neither
       reader can slice the real spelling out of. }
     s.name := SymField(text, 9);
@@ -1491,7 +1493,7 @@ begin
     if (length(line) > 5) and (substr(line, 1, 5) = 'file ') then begin
       k := 6;
       while (k <= length(line)) and (line[k] <> ' ') do k := k + 1;
-      ix := IntOr(ParseInt(substr(line, 6, k - 6)), -1);
+      ix := ValueOr(ParseInt(substr(line, 6, k - 6)), -1);
       if ix <> VecLen(PathVec, files) then
         ok := false
       else if k >= length(line) then
@@ -1563,9 +1565,9 @@ begin
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);
     if SymField(text, 1) = 'use' then begin
-      ul := IntOr(ParseInt(SymField(text, 2)), 0);
-      uc := IntOr(ParseInt(SymField(text, 3)), 0);
-      un := IntOr(ParseInt(SymField(text, 4)), 0);
+      ul := ValueOr(ParseInt(SymField(text, 2)), 0);
+      uc := ValueOr(ParseInt(SymField(text, 3)), 0);
+      un := ValueOr(ParseInt(SymField(text, 4)), 0);
       if Covers(ul, uc, un, line, col) then
         { Narrowest wins, so the interface inside a qualified name is
           reachable at all. }
@@ -1574,10 +1576,10 @@ begin
           hit.line := ul;
           hit.col := uc;
           hit.len := un;
-          hit.declFile := IntOr(ParseInt(SymField(text, 5)), 0);
-          hit.declLine := IntOr(ParseInt(SymField(text, 6)), 0);
-          hit.declCol := IntOr(ParseInt(SymField(text, 7)), 0);
-          hit.declLen := IntOr(ParseInt(SymField(text, 8)), 0);
+          hit.declFile := ValueOr(ParseInt(SymField(text, 5)), 0);
+          hit.declLine := ValueOr(ParseInt(SymField(text, 6)), 0);
+          hit.declCol := ValueOr(ParseInt(SymField(text, 7)), 0);
+          hit.declLen := ValueOr(ParseInt(SymField(text, 8)), 0);
           hit.kind := SymField(text, 9);
           hit.denotes := SymRest(text, 10)
         end
@@ -2102,10 +2104,10 @@ begin
   if SymField(text, 1) <> 'stmt' then
     StmtParse := false
   else begin
-    q.line := IntOr(ParseInt(SymField(text, 2)), 0);
-    q.col := IntOr(ParseInt(SymField(text, 3)), 0);
-    q.endLine := IntOr(ParseInt(SymField(text, 4)), 0);
-    q.endCol := IntOr(ParseInt(SymField(text, 5)), 0);
+    q.line := ValueOr(ParseInt(SymField(text, 2)), 0);
+    q.col := ValueOr(ParseInt(SymField(text, 3)), 0);
+    q.endLine := ValueOr(ParseInt(SymField(text, 4)), 0);
+    q.endCol := ValueOr(ParseInt(SymField(text, 5)), 0);
     q.word := SymField(text, 6);
     StmtParse := q.line > 0
   end
@@ -2564,7 +2566,7 @@ begin
     and an agent's subprocess is started in the checkout it is working on. So
     the walk that finds a `.components` has a root under both transports, from
     the place each protocol actually puts one (ADR-0241). }
-  if transport = tpMcp then rootPath := PathOr(WorkingDirectory, '')
+  if transport = tpMcp then rootPath := ValueOr(WorkingDirectory, '')
   else rootPath := '';
   LspOpen(reader, StdIn);
   MapInit(DocMap, docs, 4);

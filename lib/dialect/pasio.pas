@@ -40,7 +40,7 @@ module PasIO;
 export PasIO = (StdIn, StdOut, StdErr, IOMax, IOLine,
                 FdResult, CountResult,
                 OpenRead, Close, ReadInto, WriteFrom, WriteAll, WriteText,
-                FdReady, AtEnd, CountOr, ResultText);
+                FdReady, AtEnd, ResultText);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part.
   PasFS supplies PathName rather than this module declaring a second one: a
@@ -69,9 +69,9 @@ type
     field names are the language's: `ok`, `val`, `cause` (ADR-0176). Before
     it, this module spelled the failing side of the first one `openCode` and
     of the second `code` -- two names for one thing, in one file. }
-  FdResult = integer ! ErrorCode;
+  FdResult = Fallible(integer);
 
-  CountResult = integer ! ErrorCode;
+  CountResult = Fallible(integer);
 
 { Open an existing file for reading. `errIO` where the operating system
   refused, which covers a path that is not there and one that may not be read.
@@ -127,11 +127,6 @@ function FdReady(fd: integer; timeoutMs: integer): boolean;
   "nothing more to read" and "the read was refused" are different things and a
   caller that conflates them loops. }
 function AtEnd(r: CountResult): boolean;
-
-{ The count of a successful result, or `whenBad` for a failed one. Reading
-  `count` here is safe for the reason the dialect makes it safe: the read is
-  inside the arm the tag selects. }
-function CountOr(r: CountResult; whenBad: integer): integer;
 
 { A result as a sentence, for a caller assembling a message rather than
   branching. }
@@ -234,11 +229,6 @@ end;
 function AtEnd;
 begin
   AtEnd := r.ok and (r.val = 0)
-end;
-
-function CountOr;
-begin
-  if r.ok then CountOr := r.val else CountOr := whenBad
 end;
 
 function ResultText;

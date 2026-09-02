@@ -11027,14 +11027,19 @@ begin
                 for as long as the body is being resolved, which is what lets
                 `array [1..n] of T` reach the existing array code with nothing
                 added to it -- the ordinal case's own sentence, one kind over.
-                The type is re-derived from the argument rather than carried
-                beside the tuple: the tuple holds an id and there is no
-                registry to turn one back into a type, and the argument node
-                is still here. }
+                The type is read off the tuple, which has carried it beside
+                the id since ADR-0254, and **not** re-derived from the
+                argument node: that node is looked up in the scope this line
+                has just declared the discriminant into, so an argument
+                spelled like the discriminant -- `Box(T)` produced where a
+                `T` is in scope, which is every generic whose type parameter
+                shares the schema's spelling -- found the discriminant itself,
+                a type with no type, and the body was resolved over nil
+                (ADR-0297). }
               if p^.sym^.kind = skType then begin
                 disc := Declare(p^.sym^.at, p^.sym^.len, skType, d^.line,
                                 d^.col);
-                disc^.stype := TypeArgument(arg);
+                disc^.stype := tv^.ty;
                 { The *formal* discriminant's position, not this production's.
                   `Declare` is handed the actual-discriminant-part's line and
                   column because that is where its duplicate message points,
@@ -21033,15 +21038,23 @@ end;
   parameter-form is a type-name, a schema-name or a type-inquiry, and `var p:
   ^T` is refused by the parser before any of this could see it.
 
-  The schema is found by looking its name up **at the call**, so a generic
-  whose parameter-form names a schema the caller cannot see infers nothing and
-  the types have to be written out. That is a graceful degradation and not a
-  wrong answer, and it is why this is a lookup and not a comparison of
-  spellings: a same-named schema of the caller's own would otherwise bind a
-  type the callee never meant. }
+  The schema is found by looking its name up in the region the generic was
+  **declared** in -- `genDeclTop`, the same scope InstantiateGeneric switches
+  to for the body -- and not at the call (ADR-0297). AP 6.7.3.10.4 b) says
+  "that schema", meaning the one the parameter-form names, and a parameter-form
+  is written where the generic is. ADR-0254 looked it up at the call and
+  called the result a graceful degradation: a generic imported by `only`, or
+  one whose schema its module keeps private, determined nothing through that
+  formal. The library's own shape is exactly that -- `import PasError only
+  (ValueOr)` cannot see `Fallible` -- and what it degraded to was not
+  graceful: the next actual bound the type parameter instead, and a formal
+  `Fallible(T)` produced for the wrong T. A lookup rather than a comparison of
+  spellings, for the reason ADR-0254 gave: a same-named schema of the caller's
+  own must not bind a type the callee never meant, and resolving in the
+  callee's region is what makes that impossible rather than merely unlikely. }
 procedure Determine(gen: symPtr; d: nodePtr; t: typePtr;
                     var bs: typeBindings);
-var sc: symPtr;
+var sc: symPtr; saveTop: entryPtr; saveDepth: integer;
 begin
   if (d <> nil) and (t <> nil) then
     if d^.kind = nkNamed then begin
@@ -21049,7 +21062,13 @@ begin
         BindType(bs, d^.nmAt, d^.nmLen, t)
     end
     else if d^.kind = nkSchema then begin
+      saveTop := scopeTop;
+      saveDepth := scopeDepth;
+      scopeTop := gen^.genDeclTop;
+      scopeDepth := gen^.genDeclDepth;
       sc := LookupQuiet(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen);
+      scopeTop := saveTop;
+      scopeDepth := saveDepth;
       if sc <> nil then
         if t^.schema = sc then DetermineTuple(gen, d^.scArgs, t, bs)
     end

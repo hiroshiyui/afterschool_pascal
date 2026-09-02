@@ -90,7 +90,7 @@ begin
   r := ReadInto(fd, buf[1..5]);
   got('short read    = ', r);
   write('bytes         = ');
-  for i := 1 to CountOr(r, 0) do write(buf[i]);
+  for i := 1 to ValueOr(r, 0) do write(buf[i]);
   writeln;
 
   { The whole array, so the count is its extent and the rest of the file
@@ -98,7 +98,7 @@ begin
   r := ReadInto(fd, buf);
   got('rest          = ', r);
   write('bytes         = ');
-  for i := 1 to CountOr(r, 0) do write(buf[i]);
+  for i := 1 to ValueOr(r, 0) do write(buf[i]);
   writeln;
 
   r := ReadInto(fd, buf);
@@ -136,5 +136,5 @@ begin
 
   { A count is a value like any other, and the default is what a failed
     result answers with. }
-  writeln('CountOr       = ', CountOr(r, -7):1)
+  writeln('ValueOr       = ', ValueOr(r, -7):1)
 end.

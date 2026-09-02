@@ -8,10 +8,15 @@
   is an error when the text is not a number and stops the program (ADR-0076).
 
   ADR-0120 answers that with a shape rather than a type, and this module is the
-  half of the shape that can be shared. The other half cannot: with no generics
-  a result record's payload type is part of its layout, so each producing module
-  declares its own. What every one of them agrees on is the code below and the
-  spelling of the tag.
+  half of the shape that can be shared. The other half could not be, for a
+  long time: with no generics a result record's payload type was part of its
+  layout, so each producing module declared its own `T ! ErrorCode`, and 6.4.1
+  made each such denoter a type of its own -- so one routine could serve none
+  of them, and every module grew an `XOr(r, whenBad)` accessor of its own.
+  `Fallible(T)` is the other half now (ADR-0297): 6.4.7 interns a production
+  per tuple, so `Fallible(integer)` written in two modules is one type, and
+  `ValueOr` is the one accessor, with its type inferred at the call
+  (AP 6.7.3.10.4). Every result type in `lib/` is a production of it.
 
   This module is **dialect-only**, and that is a decision rather than an
   accident (ADR-0119, ADR-0120). Its safety comes from this dialect making a
@@ -27,7 +32,7 @@ module PasError;
 
 export PasError = (ErrorCode,
                    errNone, errSyntax, errRange, errAbsent, errFull, errIO,
-                   ErrText, ErrorText, Failed);
+                   ErrText, ErrorText, Failed, Fallible, ValueOr);
 
 type
   { Short enough that a caller can put one in a fixed field without asking how
@@ -46,6 +51,12 @@ type
                errFull,     { a bound the caller chose was reached }
                errIO);      { the world refused }
 
+  { The one result type, over whatever a routine answers. A module names its
+    production -- `IntResult = Fallible(integer)` -- and keeps the name; what
+    the schema adds is that the name is the *same* type wherever the tuple is
+    the same, which is what lets `ValueOr` below take every one of them. }
+  Fallible(T: type) = T ! ErrorCode;
+
 { A sentence for a code, for a caller assembling a message. `errNone` has one
   too: a routine that formats a result unconditionally must not have to special-
   case the successful one. }
@@ -54,6 +65,13 @@ function ErrorText(e: ErrorCode): ErrText;
 { Whether a code reports a failure -- `e <> errNone`, spelled so that a caller
   reads the intent rather than the comparison. }
 function Failed(e: ErrorCode): boolean;
+
+{ The value of a successful result, or `whenBad` for a failed one -- for a
+  caller with a sensible default that does not want to branch. `ValueOr(r, 0)`
+  is the whole call: T is read off `r` (AP 6.7.3.10.4). Reading `val` here is
+  safe for the reason the dialect makes it safe: the read is inside the arm
+  the tag selects (ADR-0118). }
+function ValueOr(T: type; res: Fallible(T); whenBad: T): T;
 
 end;
 
@@ -72,6 +90,11 @@ end;
 function Failed;
 begin
   Failed := e <> errNone
+end;
+
+function ValueOr;
+begin
+  if res.ok then ValueOr := res.val else ValueOr := whenBad
 end;
 
 end.

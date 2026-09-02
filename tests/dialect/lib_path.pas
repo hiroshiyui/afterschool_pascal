@@ -62,7 +62,7 @@ begin
 
   { And the default a caller supplies for the failing case. }
   r := LinkTarget(a);
-  writeln('PathOr        = ', PathOr(r, 'nothing there'));
+  writeln('ValueOr       = ', ValueOr(r, 'nothing there'));
 
   e := Remove(b);
   yes('link removed  = ', not Exists(b))

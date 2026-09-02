@@ -112,7 +112,7 @@ type
   { AP 6.4.13's fallible type. `errSyntax` for a line that is not a
     diagnostic, which is the ordinary case -- most of what a compilation
     writes is not one. }
-  DiagResult = Diagnostic ! ErrorCode;
+  DiagResult = Fallible(Diagnostic);
 
 { Read one line of `pascalc` output. A line that is neither
   `file:line:col: error:` nor `file:line:col: warning:` answers `errSyntax`,

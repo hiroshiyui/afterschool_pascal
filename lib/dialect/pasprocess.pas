@@ -102,7 +102,7 @@ type
     status here and the ErrorCode in four other modules of the same library.
     One reader had to know which. The field names are `ok`, `val` and `cause`
     everywhere now, and the collision is gone by construction. }
-  RunResult = integer ! ErrorCode;
+  RunResult = Fallible(integer);
 
 { Run `command` through the shell and wait for it. `ok` with the command's
   exit code -- 0 for success by the usual convention, the command's own

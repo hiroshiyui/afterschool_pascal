@@ -1,0 +1,12 @@
+adr: 0297
+file: selfhost/apfront.pas
+kills: generic_fallible_import
+why: ADR-0254's lookup, restored: the schema a parameter-form names is resolved where the call stands. A client importing the generic by `only` -- `import PasError only (ValueOr)` is the library's own shape -- cannot see the schema's name there, so the formal determines nothing, the default binds the type parameter instead, and the call is refused as a mismatch it is not.
+--- old
+      scopeTop := gen^.genDeclTop;
+      scopeDepth := gen^.genDeclDepth;
+      sc := LookupQuiet(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen);
+      scopeTop := saveTop;
+      scopeDepth := saveDepth;
+--- new
+      sc := LookupQuiet(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen);

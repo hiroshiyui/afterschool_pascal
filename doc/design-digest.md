@@ -2982,6 +2982,18 @@ frame slot for a nested call's result, so it is not idempotent.
 are each caught by a different one — the last determining position winning, the
 tie-break dropped, and the old group-wise binding.
 
+**The schema a parameter-form names is resolved where the generic was
+declared** (ADR-0297), in `genDeclTop`'s region and not at the call — ADR-0254
+looked it up at the call and called a caller that cannot see the name a
+graceful degradation, and it was not one: the next actual determined the type
+instead. And a production reads its type-valued discriminant off the tuple's
+`ty` rather than looking the argument node up, because the discriminant has
+just been declared into the scope that lookup would search — `Box(T)` written
+where a `T` is in scope found the discriminant itself and resolved the body
+over nil, which every generic over `Fallible(T)` writes and every case had
+avoided by declaring its productions first. `generic_fallible_import` and
+`schema_typearg_shadow` are the cases, one per fix.
+
 **Two latent defects went with it.** The walk matched actuals against
 parameter *groups* rather than formals, which is invisible while every generic
 in the tree writes its type parameters first and one to a group:

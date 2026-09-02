@@ -38,6 +38,6 @@ begin
   writeln('fmod   7 0   = ', ErrorText(r.cause), '  failed=', Failed(r.cause));
 
   { The alternative to branching, for a caller with a default in hand. }
-  writeln('or 0 of bad  = ', RealOr(FMod(1.0, 0.0), 0.0):0:1);
-  writeln('or 0 of good = ', RealOr(FMod(9.0, 4.0), 0.0):0:1)
+  writeln('or 0 of bad  = ', ValueOr(FMod(1.0, 0.0), 0.0):0:1);
+  writeln('or 0 of good = ', ValueOr(FMod(9.0, 4.0), 0.0):0:1)
 end.

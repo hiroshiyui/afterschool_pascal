@@ -44,7 +44,8 @@ function Lookup(name: EnvText): OptEnvText;
 
 { The value, or the caller's own answer where there is none -- for a caller
   with a sensible default that does not want to branch. The same shape
-  PasMathX's RealOr has, and for the same reason. }
+  PasError's ValueOr has, and for the same reason -- but not that routine,
+  because an absent variable is not a failure and this answers no ErrorCode. }
 function LookupOr(name, whenUnset: EnvText): EnvText;
 
 { Whether the variable is set at all, including to the empty string. }

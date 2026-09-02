@@ -117,7 +117,7 @@ type
   { ADR-0120's shape, and AP 6.4.13 since ADR-0176. `errSyntax` for a document
     that is not one, `errRange` for a number that cannot be represented,
     `errFull` for a member name longer than `NameMax`. }
-  JsonResult = JsonPtr ! ErrorCode;
+  JsonResult = Fallible(JsonPtr);
 
 { --- the byte buffer ------------------------------------------------------ }
 

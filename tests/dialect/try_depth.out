@@ -1,0 +1,5 @@
+12+34: average 23
+12+35: failed -- outside the representable range
+1x+34: failed -- not of the expected form
+12+3-: failed -- not of the expected form
+21 -1

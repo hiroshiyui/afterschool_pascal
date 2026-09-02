@@ -38,6 +38,15 @@ begin
   held := a; a := b; b := held
 end;
 
+{ The default first, so the *value* determines T and the result is then held
+  to Fallible(T). This call was accepted with exit 0 until ADR-0297: the
+  production `Fallible(T)` read its own discriminant instead of the bound T,
+  came out with no value type, and Assignable answered yes to a nil side. }
+function WhenBadFirst(T: type; whenBad: T; res: Fallible(T)): T;
+begin
+  if res.ok then WhenBadFirst := res.val else WhenBadFirst := whenBad
+end;
+
 var
   good: IntFallible;
   i: integer;
@@ -57,5 +66,9 @@ begin
 
   { A count that is neither form: short of the written one and long for the
     inferred one, so it is read as the written one and says so. }
-  writeln(ValueOr(good):1)
+  writeln(ValueOr(good):1);
+
+  { The default binds T to char; `good` is a Fallible(integer) and is refused
+    as the mismatch it is, in the words a mismatch has always had. }
+  writeln(WhenBadFirst('?', good))
 end.
