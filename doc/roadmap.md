@@ -247,8 +247,8 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-seven entries so far, and **twenty of them have been acted on** — three
-of the seven open are the usability findings below, which are recorded rather
+Twenty-seven entries so far, and **twenty-one of them have been acted on** — three
+of the six open are the usability findings below, which are recorded rather
 than acted on because each names a design question and not a defect — which
 is the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
@@ -281,15 +281,19 @@ finished program as a *reader* rather than as its author, which is a different
 activity and had never been done. Three came out of one pass.
 
 - **The dialect's error-handling constructs are unused by its largest
-  client.** `lsp/pasls.pas` is 1 944 lines and contains **no `T ! E` and no
-  `try`** — not one of either. It is not that the library withholds them:
+  client.** `lsp/pasls.pas` is 2 678 lines and contains **no `T ! E` and no
+  `try`** — not one of either. It was 1 944 lines when this was written and the
+  zero has not moved, which is the half of the finding a count can carry: the
+  program grew by 38% and reached for neither construct once. It is not that the library withholds them:
   `PasIO.OpenRead`, `ReadInto` and `WriteFrom`, `PasFS.Info`,
   `WorkingDirectory`, `LinkTarget` and `TemporaryPath`, and `PasJson`'s parse
   all answer a fallible-type, and the server imports all three modules.
 
-  What it reaches for instead is the **accessor**: `IntOr` sixteen times,
-  `JsonIntegerOr` and `LookupOr` three each, `PathOr` once. Twenty-three calls
-  against zero. The cause is that `try(x)` propagates by *leaving the routine*
+  What it reaches for instead is the **accessor**: `IntOr` eighteen times,
+  `JsonIntegerOr` eight, `LookupOr` three, `PathOr` once — thirty calls against
+  zero, and every one of the seven added since this was written was an
+  accessor too. Take the ratio and not the count; `grep -c` is the authority
+  and this sentence goes stale on its own. The cause is that `try(x)` propagates by *leaving the routine*
   (AP 6.8.9), which is right for a program that may fail and wrong for a
   server, which must answer something to every request — so the library grew
   `…Or(r, whenBad)` and the client uses that.
@@ -318,9 +322,10 @@ activity and had never been done. Three came out of one pass.
   row this page already carries and which now has a measured caller rather
   than a hypothetical one.
 
-  (The nine counted here were also two patterns and not one: `JsonIntegerOr`
+  (The twelve counted here are also two patterns and not one: `JsonIntegerOr`
   and its neighbours read a scalar out of a `JsonPtr`, and `LookupOr` takes an
-  environment default — neither is a fallible accessor at all.)
+  environment default — neither is a fallible accessor at all. So the fallible
+  accessor proper is `IntOr`, and it is eighteen of the thirty.)
 
   This is not an argument against `try`. It is the finding that **the shape a
   server needs is the one the language does not have**, and that the shape it
@@ -330,8 +335,13 @@ activity and had never been done. Three came out of one pass.
 
 - **`only` is a collision workaround, not a narrowing tool.** The server
   imports **twelve** modules — the roadmap said ten, and it grew — against
-  export lists that reach 49 names (`PasJson`), 24 (`PasFS`) and 16
-  (`PasIO`). Both of its §6.11.3 `only` clauses are there because two modules
+  export lists that reach 50 names (`PasJson`), 19 (`PasFS`) and 17
+  (`PasIO`). Two of those three had drifted by one; the middle one was never
+  right. It was written as 24 on a day `PasFS` exported **18**, and the entry
+  has been read as evidence ever since. A number nothing counts is only ever
+  as good as the afternoon it was typed — and the argument does not need it,
+  since what makes `only` a workaround is the *collisions*, which are named
+  below and are checkable by reading two headings. Both of its §6.11.3 `only` clauses are there because two modules
   export the same spelling: `PasDir` exports `Close` and `NameMax`, which
   `PasIO` and `PasJson` also export, and `PasParse` exports `ResultText`, and
   so does `PasError`. Neither `only` narrows for the sake of narrowing; each
@@ -346,23 +356,36 @@ activity and had never been done. Three came out of one pass.
   own practice suggests is to write the fortieth-import program before
   designing anything, and there is not one.
 
-- **A comment in the client is the third finding and needs no prose here.**
-  `MapKey` is 63 characters, so the document store is a vector searched
-  linearly; `JsonLine` is 255, so a URI is held as a line. Both are already
-  entries above. What the ergonomic pass adds is that the *reason* they are
-  tolerable is the same reason `…Or` is: the program is small enough that
-  linear search and a per-type helper cost nothing. **None of these three
-  findings would have been found by a program that was merely correct.** They
-  were found by asking what writing it was like, which is what this chapter is
-  for and what it had not done.
+- **A comment in the client is the third finding, and both halves of it were
+  wrong within four days.** It read: `MapKey` is 63 characters, so the document
+  store is a vector searched linearly; `JsonLine` is 255, so a URI is held as a
+  line — and the *reason* they are tolerable is the same reason `…Or` is, the
+  program being small enough that linear search and a per-type helper cost
+  nothing.
 
-The seven below are what a program of this size still runs into, and **five of
-them are closed**. What is left is a rule about the language a writer has to
-know and nothing tells them, and a decision nobody has asked for twice. The
+  Neither was tolerable and neither was about size. The first was not a bound
+  at all (ADR-0290): the map had been generic over its key since ADR-0254 and
+  the refusal belonged to the ready-made hash, and the store is a map now with
+  *less* code than the vector had. The second was three silent defects
+  (ADR-0291, ADR-0292), one of which answered go-to-definition with a location
+  in a file nobody named. **They were tolerable because nobody had run the
+  program from a deep enough directory**, which is a different sentence
+  entirely and not an ergonomic one.
+
+  The entry is kept because that is the finding now. An ergonomic pass asks
+  *what was unpleasant*, and unpleasantness is judged against the program you
+  have; a bound nothing has met yet reads as a preference rather than as a
+  defect. **None of these three findings would have been found by a program
+  that was merely correct** — and this one shows the converse too: the pass
+  that finds them can also file a defect as a taste.
+
+The seven below are what a program of this size still runs into, and **six of
+them are closed**. What is left is one decision nobody has asked for twice. The
 closed ones are kept in place rather than moved to `doc/history.md`, because
 what each is now worth reading for is what closing it found — two of them were
-**wrong**, one was right and understated by a wide margin, and the last was
-opened by closing that one and shut three hours later.
+**wrong**, one was right and understated by a wide margin, one was opened by
+closing that one and shut three hours later, and the last had been answered
+eight hours after it was written by a record nobody came back to link.
 
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
@@ -519,14 +542,29 @@ opened by closing that one and shut three hours later.
   column before a statement could have an extent. Both wrong answers are
   staged as mutations and each is caught twice.
 
-- **`binding(f).bound` is not a readiness test, and reads exactly like one.**
+- ~~**`binding(f).bound` is not a readiness test, and reads exactly like one.**~~
+  **Closed by ADR-0240 — eight hours after this entry was written, and the
+  entry never said so.** The trap it describes is real and unchanged:
   `doc/implementation-defined.md` E.16 binds a variable when the external name
   *exists*, so a file about to be created reports `false` and one already
-  written reports `true` — the opposite of what a "can I write here?" check
-  wants, in both directions. The first `WriteScratch` asked it and refused to
-  write anything at all. The register says so and the compiler's own `BindTo`
-  does not ask; nothing else does either, which is why it survived to be met
-  by the first program that needed it.
+  written reports `true`, which is the opposite of what a "can I write here?"
+  check wants in both directions. The first `WriteScratch` asked it and
+  refused to write anything at all.
+
+  What the entry went on to say — *nothing else does either, which is why it
+  survived to be met by the first program that needed it* — stopped being true
+  the same afternoon. AP 6.4.3.4.7 gives `BindingType` a third field,
+  `writable`, which is the question `bound` reads like and is not, and both
+  `lib/pasfile.pas` and `lsp/pasls.pas` ask it where they mean the write side.
+  §6.4.3.4 NOTE 7 admits the extension, so it needed no spelling.
+
+  **The finding here is about the register and not the language.** This entry
+  was written at 04:55 and the record answering it landed at 13:22 on the same
+  day, and nothing linked them for four days — long enough for the entry to be
+  read three times as an open question. A chapter that says *a finding recorded
+  and left is a finding wasted* has to mean a finding left **unlinked** too:
+  what stays worth knowing is the trap, which no fix removes, and a reader
+  needed to be told in the same paragraph that the answer exists.
 
 **The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
 and by decision rather than by discovery: the language server is the better
