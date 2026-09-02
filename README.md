@@ -1787,8 +1787,13 @@ past the array, or produce an arbitrary value:
 
 ```
 $ tools/pascalcc overflow.pas && ./overflow
-runtime error: integer overflow in sqr
+runtime error: integer overflow in sqr at overflow.pas:6:11
 ```
+
+The position is the construct's own -- the `sqr`, the subscript that was out
+of range and not the line's first one, the `to`-bound of a `for` -- and a trap
+raised inside the runtime, a `read` that found no number or a file that was
+never opened, names the call that asked (ADR-0293).
 
 The integer type is `-maxint..maxint`, which is narrower than the machine word
 it lives in — so `2147483648` is rejected at compile time rather than silently

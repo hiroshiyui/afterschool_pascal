@@ -1,1 +1,1 @@
-runtime error: assignment needs one type: schema 'vector' with n = 4 and n = 3
+runtime error: assignment needs one type: schema 'vector' with n = 4 and n = 3 at <source>:17:3

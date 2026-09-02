@@ -206,7 +206,18 @@ nothing is forbidden. What this processor does:
 | the program-block completes | 0 |
 | §6.7.5.7's bare `halt` | 0 — 3.6 makes it normal termination, not an error |
 | `halt(n)` — an extension, §5 | `n` |
-| a run-time error (Annex D, a failed range check, a trap) | 1, with a message on standard error |
+| a run-time error (Annex D, a failed range check, a trap) | 1, with a message on standard error naming the position |
+
+The message is one line, `runtime error: <message> at <file>:<line>:<column>`
+(ADR-0293). `runtime error:` opens the line -- the harnesses here recognise a
+trap by it -- and the position closes it, in the form this processor's
+compile-time diagnostics use: the file as it was named to the compiler, and
+the construct that trapped rather than the statement holding it, so the
+subscript, the `to`-bound, the operator, the variable being read. A trap in a
+separately translated component (§6.13) names that component's file. The
+position is absent only where nothing supplied one: a trap raised by a
+runtime routine the compiler did not bracket, of which none is known, and a
+trap in a compiler built from the seed, until the seed is refreshed.
 
 **A conforming program has no way to choose**, `halt` taking no parameter in
 either standard and there being no other control procedure. `halt(n)` is this

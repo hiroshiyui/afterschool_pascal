@@ -1,1 +1,1 @@
-runtime error: a string crossing to a foreign routine contains a NUL character
+runtime error: a string crossing to a foreign routine contains a NUL character at <source>:15:16

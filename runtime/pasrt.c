@@ -70,10 +70,69 @@ static void pas_exit_once(int status) {
   exit(status);
 }
 
+/* --- where a trap happened (ADR-0293) ---------------------------------------
+ *
+ * A trap names the source position of the construct that trapped, in the form
+ * the compiler's own diagnostics use, and it names it *after* the message:
+ * `runtime error:` stays at the start of the line, because
+ * tests/checks/coverage.py, fuzz.py and sanitize.sh recognise a trap by that
+ * prefix -- and sanitize.sh tells this runtime's trap from UBSan's by UBSan's
+ * carrying a position *before* the words. So the position trails the message
+ * and cannot lead it.
+ *
+ * Two classes of trap, two ways the position arrives. A check the compiler
+ * emits inline -- a subscript, a subrange store, a nil dereference, checked
+ * arithmetic -- passes the position as three arguments, because the emitter
+ * holds the node while it writes the trap. A trap raised *inside* a runtime
+ * routine -- a read that found no number, a file that was not opened, a
+ * string that does not fit -- knows nothing about the source, so the emitter
+ * stores a pointer to a position record into `pas_at` before every call into
+ * a routine that can trap and clears it after the call returns. The clear is
+ * what makes a call the emitter forgot to bracket report *no* position rather
+ * than the previous call's: a wrong position is worse than none. Thread-local
+ * for ADR-0268's reason -- a task is a second chain of activations -- and a
+ * fresh thread's value is null, which is "no position".
+ *
+ * The record is `{ ptr, i32, i32 }` in the emitted module and this struct
+ * here, and the file name is one constant per module, so a position costs
+ * sixteen bytes and no copy of the path. */
+struct pas_pos {
+  const char *file;
+  int line, col;
+};
+
+_Thread_local const struct pas_pos *pas_at;
+
+/* Every printer of `runtime error:` ends through here, so the position is
+ * spelled in exactly one place. A null file is "no position", which is what
+ * a runtime routine nothing bracketed reports. */
+static void pas_error_end(const char *file, int line, int col) {
+  if (file)
+    fprintf(stderr, " at %s:%d:%d", file, line, col);
+  fputc('\n', stderr);
+  pas_exit_once(1);
+}
+
+/* ...and the same, reading the position the emitter stored, for the runtime's
+ * own traps. */
+static void pas_error_end_at(void) {
+  const struct pas_pos *p = pas_at;
+  pas_error_end(p ? p->file : NULL, p ? p->line : 0, p ? p->col : 0);
+}
+
 void pas_runtime_error(const char *msg) {
   fflush(stdout);
-  fprintf(stderr, "runtime error: %s\n", msg);
-  pas_exit_once(1);
+  fprintf(stderr, "runtime error: %s", msg);
+  pas_error_end_at();
+}
+
+/* The inline checks' entry: the emitter wrote the position beside the
+ * message, so nothing here reads `pas_at`. */
+void pas_runtime_error_at(const char *msg, const char *file, int line,
+                          int col) {
+  fflush(stdout);
+  fprintf(stderr, "runtime error: %s", msg);
+  pas_error_end(file, line, col);
 }
 
 /* --- statement coverage, for `pascalc --coverage` (ADR-0104) --------------
@@ -229,11 +288,17 @@ void pas_cov_branch(int line, int col, int dir) {
 /// for one whose bounds arrive with the actual (ISO/IEC 10206:1991 §6.7.3.3).
 /// A schematic formal parameter is compiled once for every tuple, so the text
 /// cannot be a constant in the generated program and is built here instead.
-void pas_index_error(int lo, int hi) {
+void pas_index_error_at(int lo, int hi, const char *file, int line, int col) {
   fflush(stdout);
-  fprintf(stderr, "runtime error: array index out of bounds (%d..%d)\n", lo,
-          hi);
-  pas_exit_once(1);
+  fprintf(stderr, "runtime error: array index out of bounds (%d..%d)", lo, hi);
+  pas_error_end(file, line, col);
+}
+
+/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
+ * go on linking until the next reseed: a position it does not pass is no
+ * position, never a guessed one. */
+void pas_index_error(int lo, int hi) {
+  pas_index_error_at(lo, hi, NULL, 0, 0);
 }
 
 /// And the same for a store into a subrange whose bounds are discriminants
@@ -245,10 +310,17 @@ void pas_index_error(int lo, int hi) {
 /// bounds as values, which is what `pas_index_error` above does for exactly
 /// the same reason, and prints them as ordinal numbers whatever the host type
 /// is -- again as the index message does.
-void pas_range_error(int lo, int hi) {
+void pas_range_error_at(int lo, int hi, const char *file, int line, int col) {
   fflush(stdout);
-  fprintf(stderr, "runtime error: value out of range (%d..%d)\n", lo, hi);
-  pas_exit_once(1);
+  fprintf(stderr, "runtime error: value out of range (%d..%d)", lo, hi);
+  pas_error_end(file, line, col);
+}
+
+/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
+ * go on linking until the next reseed: a position it does not pass is no
+ * position, never a guessed one. */
+void pas_range_error(int lo, int hi) {
+  pas_range_error_at(lo, hi, NULL, 0, 0);
 }
 
 /// ISO/IEC 10206:1991 §6.4.6 d): two types produced from one schema with
@@ -256,32 +328,47 @@ void pas_range_error(int lo, int hi) {
 /// dynamic-violation. The schema and the discriminant are named where the
 /// program was compiled and the values are known only where it runs, so the
 /// two halves of the message meet here.
-void pas_disc_error(const char *schema, const char *disc, int left,
-                    int right) {
+void pas_disc_error_at(const char *schema, const char *disc, int left, int right,
+                    const char *file, int line, int col) {
   fflush(stdout);
   fprintf(stderr,
           "runtime error: assignment needs one type: schema '%s' with %s = %d "
-          "and %s = %d\n",
+          "and %s = %d",
           schema, disc, left, disc, right);
-  pas_exit_once(1);
+  pas_error_end(file, line, col);
+}
+
+/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
+ * go on linking until the next reseed: a position it does not pass is no
+ * position, never a guessed one. */
+void pas_disc_error(const char *schema, const char *disc, int left, int right) {
+  pas_disc_error_at(schema, disc, left, right, NULL, 0, 0);
 }
 
 /// ISO 7185 §6.7.2.5 compares two strings character by character and gives the
 /// operators only to strings of one length. Where both lengths are written in
 /// the program the compiler says so; where one is a discriminant, this does.
-void pas_length_error(int left, int right) {
+void pas_length_error_at(int left, int right, const char *file, int line,
+                      int col) {
   fflush(stdout);
   fprintf(stderr,
           "runtime error: strings of different lengths cannot be compared "
-          "(%d and %d)\n",
+          "(%d and %d)",
           left, right);
-  pas_exit_once(1);
+  pas_error_end(file, line, col);
+}
+
+/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
+ * go on linking until the next reseed: a position it does not pass is no
+ * position, never a guessed one. */
+void pas_length_error(int left, int right) {
+  pas_length_error_at(left, right, NULL, 0, 0);
 }
 
 static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
-  fprintf(stderr, "runtime error: %s%s\n", msg, what);
-  pas_exit_once(1);
+  fprintf(stderr, "runtime error: %s%s", msg, what);
+  pas_error_end_at();
 }
 
 /* ---------------------------------------------------------- exponentiation */
@@ -1224,9 +1311,9 @@ void pas_put(void *v) {
     at = ftell(f->fp) / f->compsize;
     if (at >= f->capacity) {
       fflush(stdout);
-      fprintf(stderr, "runtime error: this file holds at most %d components\n",
+      fprintf(stderr, "runtime error: this file holds at most %d components",
               f->capacity);
-      pas_exit_once(1);
+      pas_error_end_at();
     }
   }
   if (f->istext)
@@ -1802,6 +1889,11 @@ void pas_jump_go(void *v, int id) {
   if (!j->active)
     pas_runtime_error("goto to a block that is no longer active");
 
+  /* ADR-0293: this call never returns, so the clear the emitter wrote after
+   * it never runs. Cleared here instead, or the goto's position would stand
+   * for whatever trapped next in the block it lands in. */
+  pas_at = NULL;
+
   /* AP 6.9.3.11: the armed statements of every activation being abandoned,
    * innermost first, and *before* any file or handle is released -- a
    * deferred statement is the last thing that block runs, and it may still
@@ -1900,8 +1992,8 @@ void *pas_new(long long size) {
   }
   if (!p) {
     fflush(stdout);
-    fprintf(stderr, "runtime error: out of memory in new\n");
-    pas_exit_once(1);
+    fprintf(stderr, "runtime error: out of memory in new");
+    pas_error_end_at();
   }
   return p;
 }

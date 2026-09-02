@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 855
-instrumented 10708
-decisions 5354
+uncovered 854
+instrumented 10712
+decisions 5356
 
 accept 0/4
 accumulate 1/32
@@ -248,7 +248,7 @@ emitforin 1/10
 emitframealiases 0/6
 emitframeglobal 0/2
 emitframetype 0/10
-emitglobals 0/10
+emitglobals 0/2
 emitgoto 1/4
 emithandletest 1/4
 emitif 0/8
@@ -262,6 +262,7 @@ emitnewselectors 1/6
 emitnewtuple 2/10
 emitoptionaltest 1/4
 emitownrels 1/10
+emitposglobals 0/2
 emitprocargument 1/6
 emitprocbody 0/14
 emitprocs 1/8
@@ -561,7 +562,7 @@ parsestructuredvalue 0/20
 parseterm 0/18
 parsetypedenoter 1/78
 parsetypeexpr 0/8
-parsetypepart 1/14
+parsetypepart 0/14
 parsevariantpart 1/30
 parsevariantpartvalue 1/4
 parsevarpart 0/10
@@ -578,11 +579,13 @@ pooliswide 1/8
 poolput 1/2
 poolsame 0/6
 poolstarts 1/10
+posconst 0/2
 procactualsym 0/2
 producefromschema 6/100
 protectable 1/16
 pushstmt 0/4
 put 0/2
+putcchar 0/8
 putdescparamtypes 0/6
 putdesctype 0/2
 puthex 0/4

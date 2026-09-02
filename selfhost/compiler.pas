@@ -98,6 +98,12 @@ type
     optional (ADR-0123), and the characters are copied at the call site. }
   envText = string(envMax);
   optEnvText = ?envText;
+  { ADR-0293: a source position a trap may name -- see posHead. }
+  posConstPtr = ^posConstRec;
+  posConstRec = record
+    id, line, col: integer;
+    next: posConstPtr
+  end;
 
 { The one foreign name this compiler binds (ADR-0244). It is ISO C, it is
   where every operating system keeps what a user configured, and there is no
@@ -301,6 +307,15 @@ var
     a level-0 record is a global rather than something to walk to. }
   irRoot: symPtr;
   strHead, strTail: strConstPtr;
+  { ADR-0293: the positions a running program may be asked to name. One
+    record per bracketed runtime call, written after the last function as
+    `@at.N`, holding the address of `@at.file`, the line and the column;
+    translation's source path, written once. One record per call and no
+    cache: a statement's calls mostly name *different* positions -- each
+    write-parameter its own, the writeln the statement's -- and remembering
+    the last one hit once in the 2747 brackets of apfront.pas. }
+  posHead, posTail: posConstPtr;
+  nextPos: integer;
   { 6.13: the storage, procedures and modules this component names and another
     one defines, each declared once at the end of the module. }
   externVars, externVarTail: symListPtr;
@@ -1245,6 +1260,56 @@ begin
   MsgEnd := AddGlobal(at, msgBuf.len)
 end;
 
+{ ADR-0293: a trap names the source position of the construct that trapped.
+  These three are the whole of how a position reaches the running program.
+
+  PutPos writes the position as three trailing arguments -- the file constant,
+  the line and the column -- for a trap the emitter writes inline: the block
+  is cold, the emitter holds the node, and the runtime formats the message
+  with what it is handed. Nothing about it depends on state.
+
+  EmitAt and EmitAtDone bracket a call into a runtime routine that may trap
+  on its own -- a read, a file operation, a string store, `**`. The runtime
+  knows nothing about the source, so a pointer to a position record is stored
+  into its thread-local `pas_at` before the call and cleared after it. The
+  clear is not tidiness: it is what makes a call this emitter forgot to
+  bracket report *no* position rather than the previous call's, a wrong
+  position being worse than none. A runtime routine that never returns
+  (`pas_jump_go`) clears the word itself, for the same reason.
+
+  The position is a record and not three stores because a bracket is paid on
+  every call of a routine that can trap, which is most of them, and a store
+  of one address is the least that can be paid. The record is a constant in
+  the module, so it costs the program sixteen bytes of rodata and no code. }
+procedure PutPos(line, col: integer);
+begin
+  write(ircode, ', ptr @at.file, i32 ', line:1, ', i32 ', col:1)
+end;
+
+function PosConst(line, col: integer): integer;
+var g: posConstPtr;
+begin
+  new(g);
+  nextPos := nextPos + 1;
+  g^.id := nextPos;
+  g^.line := line;
+  g^.col := col;
+  g^.next := nil;
+  if posHead = nil then posHead := g else posTail^.next := g;
+  posTail := g;
+  PosConst := nextPos
+end;
+
+procedure EmitAt(line, col: integer);
+begin
+  writeln(ircode, '  store ptr @at.', PosConst(line, col):1, ', ptr @pas_at')
+end;
+
+procedure EmitAtDone;
+begin
+  writeln(ircode, '  store ptr null, ptr @pas_at')
+end;
+
 procedure PutHex(v: integer);
 var d: integer;
 begin
@@ -1354,24 +1419,51 @@ begin
   if not known then AppendSym(externMods, externModTail, m)
 end;
 
+{ One character of a `c"..."` constant, escaped where LLVM's syntax needs it.
+  Shared by the string constants and ADR-0293's file constant, so there is one
+  spelling of the rule. }
+procedure PutCChar(c: char);
+begin
+  if (c = '"') or (c = '\') or (ord(c) < 32) or (ord(c) >= 127) then begin
+    write(ircode, '\');
+    PutHex(ord(c))
+  end
+  else
+    write(ircode, c)
+end;
+
 procedure EmitGlobals;
-var g: strConstPtr; k: integer; c: char;
+var g: strConstPtr; k: integer;
 begin
   g := strHead;
   while g <> nil do begin
     write(ircode, '@s', g^.id:1, ' = private unnamed_addr constant [',
           g^.len + 1:1, ' x i8] c"');
-    for k := g^.at to g^.at + g^.len - 1 do begin
-      c := pool[k];
-      if (c = '"') or (c = '\') or (ord(c) < 32) or (ord(c) >= 127) then begin
-        write(ircode, '\');
-        PutHex(ord(c))
-      end
-      else
-        write(ircode, c)
-    end;
+    for k := g^.at to g^.at + g^.len - 1 do
+      PutCChar(pool[k]);
     writeln(ircode, '\00"');
     g := g^.next
+  end
+end;
+
+{ ADR-0293: the source path once, and one record per position a bracketed
+  runtime call may name. The path is written straight from mainFile rather
+  than through the pool, because a path may be pathMax characters (ADR-0291)
+  and msgBuf holds strMax. }
+procedure EmitPosGlobals;
+var p: posConstPtr; k: integer;
+begin
+  write(ircode, '@at.file = private unnamed_addr constant [',
+        length(mainFile) + 1:1, ' x i8] c"');
+  for k := 1 to length(mainFile) do
+    PutCChar(mainFile[k]);
+  writeln(ircode, '\00"');
+  p := posHead;
+  while p <> nil do begin
+    writeln(ircode, '@at.', p^.id:1,
+            ' = private unnamed_addr constant { ptr, i32, i32 } ',
+            '{ ptr @at.file, i32 ', p^.line:1, ', i32 ', p^.col:1, ' }');
+    p := p^.next
   end
 end;
 
@@ -1409,7 +1501,7 @@ begin
   writeln(ircode, ', i32 0, i32 ', index:1)
 end;
 
-procedure EmitTrapIf(protected var cond: str; msg: integer);
+procedure EmitTrapIf(protected var cond: str; msg, line, col: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1418,14 +1510,16 @@ begin
   PutOp(cond);
   writeln(ircode, ', label %L', t:1, ', label %L', c:1);
   StartBlock(t);
-  writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
+  write(ircode, '  call void @pas_runtime_error_at(ptr @s', msg:1);
+  PutPos(line, col);
+  writeln(ircode, ')');
   writeln(ircode, '  unreachable');
   StartBlock(c)
 end;
 
 { The same shape, for a trap whose message cannot be written here: the runtime
   formats it out of values only the running program has. }
-procedure EmitTrapIndex(protected var cond, lo, hi: str);
+procedure EmitTrapIndex(protected var cond, lo, hi: str; line, col: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1434,10 +1528,11 @@ begin
   PutOp(cond);
   writeln(ircode, ', label %L', t:1, ', label %L', c:1);
   StartBlock(t);
-  write(ircode, '  call void @pas_index_error(i32 ');
+  write(ircode, '  call void @pas_index_error_at(i32 ');
   PutOp(lo);
   write(ircode, ', i32 ');
   PutOp(hi);
+  PutPos(line, col);
   writeln(ircode, ')');
   writeln(ircode, '  unreachable');
   StartBlock(c)
@@ -1448,7 +1543,7 @@ end;
   what a program wrote and the more useful of the two; a bound evaluated at the
   block's commencement has no spelling to name, so this names its value -- the
   same trade EmitTrapIndex makes, and made here for the same reason. }
-procedure EmitTrapRange(protected var cond, lo, hi: str);
+procedure EmitTrapRange(protected var cond, lo, hi: str; line, col: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1457,10 +1552,11 @@ begin
   PutOp(cond);
   writeln(ircode, ', label %L', t:1, ', label %L', c:1);
   StartBlock(t);
-  write(ircode, '  call void @pas_range_error(i32 ');
+  write(ircode, '  call void @pas_range_error_at(i32 ');
   PutOp(lo);
   write(ircode, ', i32 ');
   PutOp(hi);
+  PutPos(line, col);
   writeln(ircode, ')');
   writeln(ircode, '  unreachable');
   StartBlock(c)
@@ -1474,7 +1570,8 @@ end;
   arm that calls it cannot be reached at all. Kept because relaxing that guard
   -- so two schematic char arrays may be compared -- is a feature, and this is
   the check it would need. }
-procedure EmitTrapLength(protected var cond, left, right: str);
+procedure EmitTrapLength(protected var cond, left, right: str;
+                         line, col: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1483,10 +1580,11 @@ begin
   PutOp(cond);
   writeln(ircode, ', label %L', t:1, ', label %L', c:1);
   StartBlock(t);
-  write(ircode, '  call void @pas_length_error(i32 ');
+  write(ircode, '  call void @pas_length_error_at(i32 ');
   PutOp(left);
   write(ircode, ', i32 ');
   PutOp(right);
+  PutPos(line, col);
   writeln(ircode, ')');
   writeln(ircode, '  unreachable');
   StartBlock(c)
@@ -1496,7 +1594,7 @@ end;
   where the program is compiled and their values are known only where it runs,
   so the message is assembled out of two string constants and two integers. }
 procedure EmitTrapDisc(protected var cond: str; schemaMsg, discMsg: integer;
-                       protected var l, r: str);
+                       protected var l, r: str; line, col: integer);
 var t, c: integer;
 begin
   t := NewBlock;
@@ -1505,11 +1603,12 @@ begin
   PutOp(cond);
   writeln(ircode, ', label %L', t:1, ', label %L', c:1);
   StartBlock(t);
-  write(ircode, '  call void @pas_disc_error(ptr @s', schemaMsg:1,
+  write(ircode, '  call void @pas_disc_error_at(ptr @s', schemaMsg:1,
         ', ptr @s', discMsg:1, ', i32 ');
   PutOp(l);
   write(ircode, ', i32 ');
   PutOp(r);
+  PutPos(line, col);
   writeln(ircode, ')');
   writeln(ircode, '  unreachable');
   StartBlock(c)
@@ -2027,7 +2126,7 @@ end;
   That is a hole in the safety claim rather than an oversight, and it is
   written down in doc/sop.md 7. }
 procedure EmitVariantGuard(protected var rec: str; t: typePtr; prefix: numPtr;
-                           armIndex, guard: integer);
+                           armIndex, guard, line, col: integer);
 var tagIdx, msg: integer;
     arms, arm, other: variantPtr; tt: typePtr; r: rangePtr;
     tagAddr, tagVal, acc, c1, c2, c3, cond: str;
@@ -2151,14 +2250,14 @@ begin
           split across two loses the space between them }
         MsgText('variant: the tag selects another arm    ');
         msg := MsgEnd;
-        EmitTrapIf(acc, msg)
+        EmitTrapIf(acc, msg, line, col)
       end
     end
   end
 end;
 
 procedure FieldAddress(protected var rec: str; t: typePtr; f: fieldPtr; var v: str;
-                       guard: integer);
+                       guard, line, col: integer);
 var cur, p: str; prefix, step: numPtr;
 begin
   cur := rec;
@@ -2168,7 +2267,7 @@ begin
     { ADR-0118, before descending: `cur` is the struct holding this variant
       part, and `step^.value_` is the arm being entered. The guard is emitted
       per step because activity is a chain -- see EmitVariantGuard. }
-    EmitVariantGuard(cur, t, prefix, step^.value_, guard);
+    EmitVariantGuard(cur, t, prefix, step^.value_, guard, line, col);
     Def(p);
     write(ircode, 'getelementptr inbounds ');
     PutStructAt(t, prefix);
@@ -2280,7 +2379,7 @@ end;
   is itself a file: a program parameter is an entire variable (6.10), so a file
   reached through a subscript or a field is always an internal one. }
 procedure WalkFiles(addr: str; t: typePtr; init: boolean;
-                    binding, arg, name: integer);
+                    binding, arg, name, line, col: integer);
 var istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     comp: int64;
     f: fieldPtr;
@@ -2303,10 +2402,12 @@ begin
         write(ircode, '  call void @pas_handle_init(ptr ');
         PutOp(addr);
         writeln(ircode, ', ptr @pas_chan_close)');
+        EmitAt(line, col);
         Def(chan);
         write(ircode, 'call ptr @pas_chan_new(i64 ', LlSize(t^.elem):1,
               ', i64 ', t^.hi:1, ')');
         writeln(ircode);
+        EmitAtDone;
         write(ircode, '  call void @pas_handle_set(ptr ');
         PutOp(addr);
         write(ircode, ', ptr ');
@@ -2364,11 +2465,13 @@ begin
         if (ixLo <= 0) and (ixHi >= maxint + ixLo) then cap := 0
         else cap := ixHi - ixLo + 1
       end;
+      EmitAt(line, col);
       write(ircode, '  call void @pas_file_init(ptr ');
       PutOp(addr);
       writeln(ircode, ', i32 ', binding:1, ', i32 ', arg:1,
               ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
-              ', i32 ', direct:1, ', i32 ', cap:1, ')')
+              ', i32 ', direct:1, ', i32 ', cap:1, ')');
+      EmitAtDone
     end
   end
   { AP 6.4.14 (ADR-0181). Setting up is storing `nil`, and it is not a
@@ -2397,8 +2500,8 @@ begin
     f := t^.fields;
     while f <> nil do begin
       if HoldsFile(f^.ftype) then begin
-        FieldAddress(addr, t, f, elem, vgNone);
-        WalkFiles(elem, f^.ftype, init, 0, 0, name)
+        FieldAddress(addr, t, f, elem, vgNone, 0, 0);
+        WalkFiles(elem, f^.ftype, init, 0, 0, name, line, col)
       end;
       f := f^.next
     end;
@@ -2416,8 +2519,8 @@ begin
         f := v^.fields;
         while f <> nil do begin
           if HoldsFile(f^.ftype) then begin
-            FieldAddress(addr, t, f, elem, vgNone);
-            WalkFiles(elem, f^.ftype, init, 0, 0, name)
+            FieldAddress(addr, t, f, elem, vgNone, 0, 0);
+            WalkFiles(elem, f^.ftype, init, 0, 0, name, line, col)
           end;
           f := f^.next
         end;
@@ -2469,7 +2572,7 @@ begin
       write(ircode, ', i32 0, i32 ');
       PutOp(i);
       writeln(ircode);
-      WalkFiles(elem, t^.elem, init, 0, 0, name);
+      WalkFiles(elem, t^.elem, init, 0, 0, name, line, col);
       OpInt(1, one);
       Def(next);
       write(ircode, 'add i32 ');
@@ -2547,7 +2650,7 @@ begin
 
         StartBlock(workB);
         if HoldsFile(r^.dom) then
-          WalkFiles(own, r^.dom, false, 0, 0, 0);
+          WalkFiles(own, r^.dom, false, 0, 0, 0, 0, 0);
         { No stepping back over a tuple header, where dispose's own arm does
           it: 6.4.14.2 refuses a schema domain, so HeaderSize is zero for
           every type that can reach here and the arm would be unreachable. If
@@ -2746,7 +2849,8 @@ end;
   which a subrange never has. So `type t = 1..m; q = ^t` allocates four bytes
   with no tuple in front of them and `ptr^ := k` is checked against the block's
   own descriptor, which is where its bounds have been all along. }
-procedure CheckedForSubrange(protected var v: str; target: typePtr);
+procedure CheckedForSubrange(protected var v: str; target: typePtr;
+                             line, col: integer);
 var below, above, bad, lo, hi, hdr, val: str; sign, dynamic: boolean;
     msg: integer;
 begin
@@ -2801,14 +2905,14 @@ begin
         writeln(ircode);
 
         if dynamic then
-          EmitTrapRange(bad, lo, hi)
+          EmitTrapRange(bad, lo, hi, line, col)
         else begin
           MsgStart;
           MsgText('value out of range (                    ');
           WriteTypeName(target);
           Put(')');
           msg := MsgEnd;
-          EmitTrapIf(bad, msg)
+          EmitTrapIf(bad, msg, line, col)
         end
       end
     end
@@ -3055,7 +3159,8 @@ end;
   that. It is one `and` against the base type's universe: the check a set
   constructor cannot make for itself, because a constructor does not know what
   it is being assigned to. }
-procedure CheckedForSetBase(protected var v: str; target: typePtr);
+procedure CheckedForSetBase(protected var v: str; target: typePtr;
+                            line, col: integer);
 var universe, notU, stray, bad, zero: str; msg: integer;
 begin
   if IsSet(target) and (target^.elem <> nil) then
@@ -3090,16 +3195,17 @@ begin
       WriteTypeName(target);
       Put(')');
       msg := MsgEnd;
-      EmitTrapIf(notU, msg)
+      EmitTrapIf(notU, msg, line, col)
     end
 end;
 
 { A value entering a variable of `target`: the subrange check and the set check
   are the same idea for two kinds of type, so call sites ask once. }
-procedure CheckedForStore(protected var v: str; target: typePtr);
+procedure CheckedForStore(protected var v: str; target: typePtr;
+                          line, col: integer);
 begin
-  CheckedForSubrange(v, target);
-  CheckedForSetBase(v, target)
+  CheckedForSubrange(v, target, line, col);
+  CheckedForSetBase(v, target, line, col)
 end;
 
 { A member's position in the bit vector, checked and widened. Every set shares
@@ -3151,7 +3257,7 @@ begin
       PutOp(hi);
       writeln(ircode)
     end;
-    EmitTrapIf(bad, msg)
+    EmitTrapIf(bad, msg, e^.line, e^.col)
   end;
   Def(v);
   write(ircode, 'zext ');
@@ -3670,6 +3776,7 @@ begin
       PutOp(adj);
       writeln(ircode, ', 1')
     end;
+    EmitAt(e^.line, e^.col);
     write(ircode, '  call void @pas_slice_check(i32 ');
     PutOp(lo);
     write(ircode, ', i32 ');
@@ -3677,6 +3784,7 @@ begin
     write(ircode, ', i32 ');
     PutOp(len);
     writeln(ircode, ')');
+    EmitAtDone;
     { The new count, and then the new base: (hi - lo) + 1 components, starting
       (lo - 1) of them along. }
     Def(adj);
@@ -3748,10 +3856,12 @@ begin
     report. }
   else if IsHandle(f^.stype) then begin
     EmitAddress(arg, a);
+    EmitAt(arg^.line, arg^.col);
     Def(cs);
     write(ircode, 'call ptr @pas_handle_lend(ptr ');
     PutOp(a);
     writeln(ircode, ')');
+    EmitAtDone;
     AppendOpnd(head, tail, cs, true, nil)
   end
   else if ForeignStringFormal(f) then begin
@@ -3762,18 +3872,20 @@ begin
       ADR-0111's counter, this being a third producer. }
     EmitString(arg, a, alen);
     strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+    EmitAt(arg^.line, arg^.col);
     Def(cs);
     write(ircode, 'call ptr @pas_str_cstr(ptr ');
     PutOp(a);
     write(ircode, ', i32 ');
     PutOp(alen);
     writeln(ircode, ')');
+    EmitAtDone;
     AppendOpnd(head, tail, cs, true, nil)
   end
   else begin
     EmitExpr(arg, a);
     ConvertFor(a, arg^.ntype, f^.stype);
-    CheckedForStore(a, f^.stype);
+    CheckedForStore(a, f^.stype, arg^.line, arg^.col);
     AppendOpnd(head, tail, a, false, f^.stype)
   end
 end;
@@ -3781,7 +3893,7 @@ end;
 { slotSym is the call site's own storage for a result that lives in memory
   (6.7.2); nil for every other call, and unread for them. }
 procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
-                       var v: str);
+                       var v: str; line, col: integer);
 var link, a, alen, slot, half, target, resAddr, padded: str;
     head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
@@ -3906,6 +4018,7 @@ begin
             PadsToFixedString(p^.sym^.stype, arg^.ntype) then begin
       EmitString(arg, a, alen);
       strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+      EmitAt(arg^.line, arg^.col);
       Def(padded);
       write(ircode, 'call ptr @pas_str_pad(i32 ',
             TypeLength(p^.sym^.stype):1, ', ptr ');
@@ -3913,6 +4026,7 @@ begin
       write(ircode, ', i32 ');
       PutOp(alen);
       writeln(ircode, ')');
+      EmitAtDone;
       AppendOpnd(head, tail, padded, true, nil)
     end
     { ADR-0125: the address of the first component and how many there are.
@@ -3932,7 +4046,7 @@ begin
       else begin
         EmitExpr(arg, a);
         ConvertFor(a, arg^.ntype, p^.sym^.stype);
-        CheckedForStore(a, p^.sym^.stype)
+        CheckedForStore(a, p^.sym^.stype, arg^.line, arg^.col)
       end;
       AppendOpnd(head, tail, a,
                  (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype),
@@ -4020,6 +4134,7 @@ begin
   else if foreignPtr then begin
     AddressOfSym(slotSym, resAddr);
     OptionalPart(resAddr, result, 1, slot);
+    EmitAt(line, col);
     Def(half);
     { AP 6.7.7.8 (ADR-0187): a record's copy is a guarded memcpy where a
       string's is a guarded strlen-and-store, and the two are one shape --
@@ -4042,6 +4157,7 @@ begin
       PutOp(v);
       writeln(ircode, ')')
     end;
+    EmitAtDone;
     OptionalPart(resAddr, result, 0, alen);
     write(ircode, '  store i32 ');
     PutOp(half);
@@ -4075,7 +4191,7 @@ begin
     write(ircode, ', ');
     PutOp(other);
     writeln(ircode);
-    EmitTrapLength(bad, len, other)
+    EmitTrapLength(bad, len, other, e^.line, e^.col)
   end;
   Def(cmp);
   write(ircode, 'call i32 @pas_str_compare(ptr ');
@@ -4119,7 +4235,7 @@ end;
 
 procedure EmitCheckedArith(which: char; protected var l, r: str; var v: str;
                            msg: integer;
-                           wide: boolean);
+                           wide: boolean; line, col: integer);
 var pair, ovf, isMin, bad: str;
 begin
   Def(pair);
@@ -4169,10 +4285,11 @@ begin
   write(ircode, ', ');
   PutOp(isMin);
   writeln(ircode);
-  EmitTrapIf(bad, msg)
+  EmitTrapIf(bad, msg, line, col)
 end;
 
-procedure GuardNonZero(protected var r: str; msg: integer; wide: boolean);
+procedure GuardNonZero(protected var r: str; msg: integer; wide: boolean;
+                       line, col: integer);
 var zero: str;
 begin
   Def(zero);
@@ -4181,7 +4298,7 @@ begin
   write(ircode, ' ');
   PutOp(r);
   writeln(ircode, ', 0');
-  EmitTrapIf(zero, msg)
+  EmitTrapIf(zero, msg, line, col)
 end;
 
 { 6.7.2.2 (D.46): "a term of the form i mod j shall be an error if j is zero
@@ -4189,7 +4306,8 @@ end;
   constant divisor -- which is what makes the two answers the same answer.
   Before this, `const c = 5 mod -3` was a diagnostic and the same expression
   over a variable quietly computed 1. }
-procedure GuardPositive(protected var r: str; msg: integer; wide: boolean);
+procedure GuardPositive(protected var r: str; msg: integer; wide: boolean;
+                        line, col: integer);
 var nonpos: str;
 begin
   Def(nonpos);
@@ -4198,53 +4316,54 @@ begin
   write(ircode, ' ');
   PutOp(r);
   writeln(ircode, ', 0');
-  EmitTrapIf(nonpos, msg)
+  EmitTrapIf(nonpos, msg, line, col)
 end;
 
 { 6.7.2.2 (D.44): "a term of the form x/y shall be an error if y is zero".
   IEEE would answer with an infinity, which is not a value of the real-type.
   The complex division uses this too, on c*c + d*d -- that number is zero
   exactly when the divisor is, so one comparison serves rather than two. }
-procedure GuardRealNonZero(protected var r: str; msg: integer);
+procedure GuardRealNonZero(protected var r: str; msg, line, col: integer);
 var zero: str;
 begin
   Def(zero);
   write(ircode, 'fcmp oeq double ');
   PutOp(r);
   writeln(ircode, ', 0.0');
-  EmitTrapIf(zero, msg)
+  EmitTrapIf(zero, msg, line, col)
 end;
 
 { 6.6.6.2 (D.34): "for sqrt(x), it is an error if x is negative". Without the
   check the answer is a NaN, which is not a value of the real-type either. }
-procedure GuardSqrtArg(protected var x: str; msg: integer);
+procedure GuardSqrtArg(protected var x: str; msg, line, col: integer);
 var bad: str;
 begin
   Def(bad);
   write(ircode, 'fcmp olt double ');
   PutOp(x);
   writeln(ircode, ', 0.0');
-  EmitTrapIf(bad, msg)
+  EmitTrapIf(bad, msg, line, col)
 end;
 
 { 6.6.6.2 (D.33): "for ln(x), it is an error if x is not greater than zero" --
   so zero as well as negative, where sqrt admits zero. That one value is the
   whole difference between this procedure and the one above it. }
-procedure GuardLnArg(protected var x: str; msg: integer);
+procedure GuardLnArg(protected var x: str; msg, line, col: integer);
 var bad: str;
 begin
   Def(bad);
   write(ircode, 'fcmp ole double ');
   PutOp(x);
   writeln(ircode, ', 0.0');
-  EmitTrapIf(bad, msg)
+  EmitTrapIf(bad, msg, line, col)
 end;
 
 { ISO 7185 6.6.6.2: trunc and round are errors unless the result is a value of
   the integer type. The bounds are the exactly-representable powers of two just
   outside the range, and the comparisons are *ordered*, so a NaN fails both and
   traps rather than converting to something unspecified. }
-procedure CheckedFpToInt(protected var x: str; var v: str; msg: integer);
+procedure CheckedFpToInt(protected var x: str; var v: str;
+                         msg, line, col: integer);
 var gt, lt, ok, bad: str;
 begin
   Def(gt);
@@ -4265,7 +4384,7 @@ begin
   write(ircode, 'xor i1 ');
   PutOp(ok);
   writeln(ircode, ', true');
-  EmitTrapIf(bad, msg);
+  EmitTrapIf(bad, msg, line, col);
   Def(v);
   write(ircode, 'fptosi double ');
   PutOp(x);
@@ -4438,7 +4557,7 @@ begin
       MsgStart;
       MsgText('division by zero                        ');
       cmsg := MsgEnd;
-      GuardRealNonZero(den, cmsg);
+      GuardRealNonZero(den, cmsg, e^.line, e^.col);
       EmitFBin('fmul            ', a, c_, ac);
       EmitFBin('fmul            ', b_, d_, bd);
       EmitFBin('fadd            ', ac, bd, er);
@@ -4538,6 +4657,7 @@ begin
     EmitString(e^.bnLhs, ad, al);
     EmitString(e^.bnRhs, bd, bl);
     strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+    EmitAt(e^.line, e^.col);
     Def(addr);
     write(ircode, 'call ptr @pas_text_concat(ptr ');
     PutOp(ad);
@@ -4548,6 +4668,7 @@ begin
     write(ircode, ', i32 ');
     PutOp(bl);
     writeln(ircode, ')');
+    EmitAtDone;
     Def(at_);
     write(ircode, 'getelementptr inbounds ');
     PutLlType(canonTextType);
@@ -4570,6 +4691,7 @@ begin
     EmitString(e^.bnLhs, ad, al);
     EmitString(e^.bnRhs, bd, bl);
     strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+    EmitAt(e^.line, e^.col);
     Def(data);
     write(ircode, 'call ptr @pas_str_concat(ptr ');
     PutOp(ad);
@@ -4580,6 +4702,7 @@ begin
     write(ircode, ', i32 ');
     PutOp(bl);
     writeln(ircode, ')');
+    EmitAtDone;
     { 6.8.3.6: "whose length shall be equal to the sum of the length of a and
       the length of b" -- so the length is arithmetic here and the runtime
       never returns one. }
@@ -4617,6 +4740,7 @@ begin
       PutOp(addr);
       writeln(ircode)
     end;
+    EmitAt(e^.line, e^.col);
     Def(data);
     if e^.clBuiltin = biDate then write(ircode, 'call ptr @pas_date(i32 ')
     else write(ircode, 'call ptr @pas_time(i32 ');
@@ -4626,6 +4750,7 @@ begin
     write(ircode, ', i32 ');
     PutOp(part[2]);
     writeln(ircode, ')');
+    EmitAtDone;
     if e^.clBuiltin = biDate then OpInt(dateLen, len)
     else OpInt(timeLen, len)
   end
@@ -4635,10 +4760,12 @@ begin
     is a second call on a position the first has already admitted. }
   else if (e^.kind = nkCall) and (e^.clBuiltin = biArgument) then begin
     EmitExpr(e^.clArgs, hdr);
+    EmitAt(e^.line, e^.col);
     Def(data);
     write(ircode, 'call ptr @pas_argument(i32 ');
     PutOp(hdr);
     writeln(ircode, ')');
+    EmitAtDone;
     Def(len);
     write(ircode, 'call i32 @pas_argument_len(i32 ');
     PutOp(hdr);
@@ -4674,6 +4801,7 @@ begin
         PutOp(bd);
         writeln(ircode, ', 1')
       end;
+      EmitAt(e^.line, e^.col);
       write(ircode, '  call void @pas_str_slice_check(i32 ');
       PutOp(at_);
       write(ircode, ', i32 ');
@@ -4681,6 +4809,7 @@ begin
       write(ircode, ', i32 ');
       PutOp(al);
       writeln(ircode, ')');
+      EmitAtDone;
       Def(bl);
       write(ircode, 'sub i32 ');
       PutOp(at_);
@@ -4726,6 +4855,7 @@ begin
       Pascal and ADR-0125's `a[i..i-1]` is already the empty slice, so this
       leaves `s[i..i-1]` as the only bracketed range in the dialect that could
       not be empty. lib/dialect/pasparse.pas is where that cost a defect. }
+    EmitAt(e^.line, e^.col);
     write(ircode, '  call void @pas_str_substr_check(i32 ');
     PutOp(bd);
     write(ircode, ', i32 ');
@@ -4734,6 +4864,7 @@ begin
     PutOp(al);
     write(ircode, ', i32 1');
     writeln(ircode, ')');
+    EmitAtDone;
     Def(one);
     write(ircode, 'sub i32 ');
     PutOp(bd);
@@ -4759,10 +4890,12 @@ begin
   else if IsChar(st) then begin
     EmitExpr(e, c);
     strTemps := strTemps + 1;   { ADR-0111: a char given an address is arena }
+    EmitAt(e^.line, e^.col);
     Def(data);
     write(ircode, 'call ptr @pas_str_char(i8 ');
     PutOp(c);
     writeln(ircode, ')');
+    EmitAtDone;
     OpInt(1, len)
   end
   { ...and a *name* bound to a literal is that same value, which is where the
@@ -4817,7 +4950,7 @@ end;
   as an expression -- which is what 6.7.5.5's writestr has, since its value was
   produced by the runtime and no expression in the tree denotes it. }
 procedure EmitStringStoreValue(protected var dst: str; t: typePtr; protected var sd, sl: str;
-                               protected var hdr: str);
+                               protected var hdr: str; line, col: integer);
 var cap: str;
 begin
   { AP 6.4.15.5: a text is the one target whose store is not a copy. The bytes
@@ -4829,6 +4962,7 @@ begin
   if IsText(t) then begin
     StringCapacity(t, hdr, cap);
     strTemps := strTemps + 1;
+    EmitAt(line, col);
     write(ircode, '  call void @pas_text_store(ptr ');
     PutOp(dst);
     write(ircode, ', i32 ');
@@ -4837,10 +4971,12 @@ begin
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
   else if IsStringRep(t) then begin
     StringCapacity(t, hdr, cap);
+    EmitAt(line, col);
     write(ircode, '  call void @pas_str_store_var(ptr ');
     PutOp(dst);
     write(ircode, ', i32 ');
@@ -4849,19 +4985,23 @@ begin
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
   else if IsChar(t) then begin
+    EmitAt(line, col);
     write(ircode, '  call void @pas_str_store_char(ptr ');
     PutOp(dst);
     write(ircode, ', ptr ');
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
   else begin
     DynLength(t, hdr, cap);
+    EmitAt(line, col);
     write(ircode, '  call void @pas_str_store_fixed(ptr ');
     PutOp(dst);
     write(ircode, ', i32 ');
@@ -4870,7 +5010,8 @@ begin
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
 end;
 
@@ -4879,7 +5020,7 @@ procedure EmitStringStore(protected var dst: str; t: typePtr; src: nodePtr;
 var sd, sl: str;
 begin
   EmitString(src, sd, sl);
-  EmitStringStoreValue(dst, t, sd, sl, hdr)
+  EmitStringStoreValue(dst, t, sd, sl, hdr, src^.line, src^.col)
 end;
 
 { 6.8.3.5: the relational operators over string types, where the shorter value
@@ -4919,6 +5060,7 @@ begin
   EmitString(e^.bnRhs, bd, bl);
   if not IsText(e^.bnLhs^.ntype) or not IsText(e^.bnRhs^.ntype) then
     strTemps := strTemps + 1;   { ADR-0111: the normalised copy is arena }
+  EmitAt(e^.line, e^.col);
   Def(cmp);
   write(ircode, 'call i32 @pas_text_cmp(ptr ');
   PutOp(ad);
@@ -4932,6 +5074,7 @@ begin
     so only the right may need normalising, and this flag is which. }
   if IsText(e^.bnRhs^.ntype) then writeln(ircode, ', i32 0)')
   else writeln(ircode, ', i32 1)');
+  EmitAtDone;
   Def(v);
   write(ircode, 'icmp ');
   case e^.bnOp of
@@ -5125,9 +5268,11 @@ begin
           else if e^.bnOp = opSub then Put('-')
           else Put('*');
           msg := MsgEnd;
-          if e^.bnOp = opAdd then EmitCheckedArith('+', l, r, v, msg, wide)
-          else if e^.bnOp = opSub then EmitCheckedArith('-', l, r, v, msg, wide)
-          else EmitCheckedArith('*', l, r, v, msg, wide)
+          if e^.bnOp = opAdd then
+            EmitCheckedArith('+', l, r, v, msg, wide, e^.line, e^.col)
+          else if e^.bnOp = opSub then
+            EmitCheckedArith('-', l, r, v, msg, wide, e^.line, e^.col)
+          else EmitCheckedArith('*', l, r, v, msg, wide, e^.line, e^.col)
         end;
 
       opRealDiv: begin
@@ -5136,7 +5281,7 @@ begin
         MsgStart;
         MsgText('division by zero                        ');
         msg := MsgEnd;
-        GuardRealNonZero(r, msg);
+        GuardRealNonZero(r, msg, e^.line, e^.col);
         Def(v);
         write(ircode, 'fdiv double ');
         PutOp(l);
@@ -5153,38 +5298,44 @@ begin
       opExp: begin
         ToReal(l, lt);
         ToReal(r, rt);
+        EmitAt(e^.line, e^.col);
         Def(v);
         write(ircode, 'call double @pas_pow_real(double ');
         PutOp(l);
         write(ircode, ', double ');
         PutOp(r);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end;
 
       opPow:
         if IsReal(e^.ntype) then begin
           ToReal(l, lt);
+          EmitAt(e^.line, e^.col);
           Def(v);
           write(ircode, 'call double @pas_pow_realint(double ');
           PutOp(l);
           write(ircode, ', i32 ');
           PutOp(r);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end
         else begin
+          EmitAt(e^.line, e^.col);
           Def(v);
           write(ircode, 'call i32 @pas_pow_int(i32 ');
           PutOp(l);
           write(ircode, ', i32 ');
           PutOp(r);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end;
 
       opIntDiv: begin
         MsgStart;
         MsgText('division by zero                        ');
         msg := MsgEnd;
-        GuardNonZero(r, msg, wide);
+        GuardNonZero(r, msg, wide, e^.line, e^.col);
         { maxint div -1 is representable, but INT_MIN div -1 is not; LLVM calls
           it undefined rather than wrapping, so it is excluded explicitly. The
           same sentence one width up for ADR-0128's int64. }
@@ -5211,7 +5362,7 @@ begin
         MsgStart;
         MsgText('integer overflow in div                 ');
         msg := MsgEnd;
-        EmitTrapIf(bad, msg);
+        EmitTrapIf(bad, msg, e^.line, e^.col);
         Def(v);
         write(ircode, 'sdiv ');
         PutIntWidth(wide);
@@ -5228,7 +5379,7 @@ begin
         Put(' ');
         MsgText('positive                                ');
         msg := MsgEnd;
-        GuardPositive(r, msg, wide);
+        GuardPositive(r, msg, wide, e^.line, e^.col);
         { ISO 7185 defines i mod j (for j > 0) as a non-negative result, unlike
           the truncating remainder LLVM gives. }
         Def(rem);
@@ -5453,7 +5604,7 @@ var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
     at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
-    EmitUserCall(e^.clSym, e^.clArgs, e^.clSlot, v)
+    EmitUserCall(e^.clSym, e^.clArgs, e^.clSlot, v, e^.line, e^.col)
   { AP 6.8.9's try, taken here so that none of the instruction-shaped arms
     below can see it -- which is also why biTry is left out of their
     exhaustive lists (tests/checks/partial_cases.txt). }
@@ -5483,6 +5634,7 @@ begin
       write(ircode, 'call i32 @pas_binding_namelen(ptr ');
       PutOp(a);
       writeln(ircode, ')');
+      EmitAt(e^.line, e^.col);
       write(ircode, '  call void @pas_str_store_var(ptr ');
       PutOp(x);
       write(ircode, ', i32 ', bindNameCap:1, ', ptr ');
@@ -5490,6 +5642,7 @@ begin
       write(ircode, ', i32 ');
       PutOp(c_);
       writeln(ircode, ')');
+      EmitAtDone;
       Def(d_);
       write(ircode, 'call i32 @pas_binding_bound(ptr ');
       PutOp(a);
@@ -5594,17 +5747,21 @@ begin
     this is a function where `send` is a procedure. }
   else if e^.clBuiltin = biReceive then begin
     EmitAddress(e^.clArgs, x);
+    EmitAt(e^.line, e^.col);
     Def(y);
     write(ircode, 'call ptr @pas_handle_lend(ptr ');
     PutOp(x);
     writeln(ircode, ')');
+    EmitAtDone;
     EmitAddress(e^.clArgs^.next, c_);
+    EmitAt(e^.line, e^.col);
     Def(w);
     write(ircode, 'call i32 @pas_chan_receive(ptr ');
     PutOp(y);
     write(ircode, ', ptr ');
     PutOp(c_);
     writeln(ircode, ')');
+    EmitAtDone;
     Def(v);
     write(ircode, 'icmp ne i32 ');
     PutOp(w);
@@ -5661,6 +5818,7 @@ begin
       OpInt(0, v)
     else begin
       EmitAddress(e^.clArgs, a);
+      EmitAt(e^.line, e^.col);
       Def(w);
       if e^.clBuiltin = biEmpty then write(ircode, 'call i32 @pas_empty(ptr ')
       else if e^.clBuiltin = biPosition then
@@ -5668,6 +5826,7 @@ begin
       else write(ircode, 'call i32 @pas_lastposition(ptr ');
       PutOp(a);
       writeln(ircode, ')');
+      EmitAtDone;
       if e^.clBuiltin = biEmpty then begin
         Def(v);
         write(ircode, 'trunc i32 ');
@@ -5704,11 +5863,13 @@ begin
       OpWord('false           ', v)   { the parameter was missing: reported }
     else begin
       EmitAddress(e^.clArgs, a);
+      EmitAt(e^.line, e^.col);
       Def(w);
       if e^.clBuiltin = biEof then write(ircode, 'call i32 @pas_eof(ptr ')
       else write(ircode, 'call i32 @pas_eoln(ptr ');
       PutOp(a);
       writeln(ircode, ')');
+      EmitAtDone;
       Def(v);
       write(ircode, 'trunc i32 ');
       PutOp(w);
@@ -5891,13 +6052,14 @@ begin
           MsgStart;
           MsgText('real overflow in sqr                    ');
           msg := MsgEnd;
-          EmitTrapIf(sqbad, msg)
+          EmitTrapIf(sqbad, msg, e^.line, e^.col)
         end
         else begin
           MsgStart;
           MsgText('integer overflow in sqr                 ');
           msg := MsgEnd;
-          EmitCheckedArith('*', a, a, v, msg, IsInt64(e^.ntype))
+          EmitCheckedArith('*', a, a, v, msg, IsInt64(e^.ntype),
+                           e^.line, e^.col)
         end;
       biOdd: begin
         Def(w);
@@ -5942,7 +6104,7 @@ begin
         Put(' ');
         MsgText('ordinal                                 ');
         msg := MsgEnd;
-        EmitTrapIf(tmp, msg);
+        EmitTrapIf(tmp, msg, e^.line, e^.col);
         Def(v);
         write(ircode, 'trunc i32 ');
         PutOp(a);
@@ -6046,7 +6208,7 @@ begin
           Put(' ');
           WriteTypeName(at);
           msg := MsgEnd;
-          EmitTrapIf(lim, msg);
+          EmitTrapIf(lim, msg, e^.line, e^.col);
           Def(v);
           write(ircode, 'trunc i64 ');
           PutOp(sum);
@@ -6080,7 +6242,7 @@ begin
         Put(' ');
         WriteTypeName(at);
         msg := MsgEnd;
-        EmitTrapIf(w, msg);
+        EmitTrapIf(w, msg, e^.line, e^.col);
         Def(v);
         if isSucc then write(ircode, 'add ') else write(ircode, 'sub ');
         PutLlType(at);
@@ -6095,13 +6257,13 @@ begin
           MsgStart;
           MsgText('sqrt of a negative number               ');
           msg := MsgEnd;
-          GuardSqrtArg(a, msg)
+          GuardSqrtArg(a, msg, e^.line, e^.col)
         end
         else if e^.clBuiltin = biLn then begin
           MsgStart;
           MsgText('ln of a number that is not positive     ');
           msg := MsgEnd;
-          GuardLnArg(a, msg)
+          GuardLnArg(a, msg, e^.line, e^.col)
         end;
         Def(v);
         case e^.clBuiltin of
@@ -6141,7 +6303,7 @@ begin
           MsgStart;
           MsgText('trunc: value out of integer range       ');
           msg := MsgEnd;
-          EmitTrapIf(narrow, msg);
+          EmitTrapIf(narrow, msg, e^.line, e^.col);
           Def(v);
           write(ircode, 'trunc i64 ');
           PutOp(a);
@@ -6152,7 +6314,7 @@ begin
           MsgStart;
           MsgText('trunc: value out of integer range       ');
           msg := MsgEnd;
-          CheckedFpToInt(a, v, msg)
+          CheckedFpToInt(a, v, msg, e^.line, e^.col)
         end;
       biRound: begin
         { 6.6.6.3 and 6.7.6.3 define round by *equivalence* and not by a
@@ -6189,7 +6351,7 @@ begin
         MsgStart;
         MsgText('round: value out of integer range       ');
         msg := MsgEnd;
-        CheckedFpToInt(sum, v, msg)
+        CheckedFpToInt(sum, v, msg, e^.line, e^.col)
       end;
       biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
       biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
@@ -6228,7 +6390,8 @@ begin
       else
         { The name was a field of an enclosing `with`, and vrSym is that
           statement's binding -- the record's address, taken once on entry. }
-        FieldAddress(base, e^.vrSym^.stype, e^.vrField, v, designatorGuard)
+        FieldAddress(base, e^.vrSym^.stype, e^.vrField, v, designatorGuard,
+                     e^.line, e^.col)
       end
     end;
 
@@ -6246,7 +6409,8 @@ begin
       end
       else begin
         EmitAddress(e^.fdBase, base);
-        FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v, designatorGuard)
+        FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v, designatorGuard,
+                     e^.line, e^.col)
       end;
 
     nkIndex: begin
@@ -6279,7 +6443,7 @@ begin
         PutOp(above);
         writeln(ircode);
         OpInt(1, lo);
-        EmitTrapIndex(bad, lo, hi);
+        EmitTrapIndex(bad, lo, hi, e^.ixIndex^.line, e^.ixIndex^.col);
         Def(off);
         write(ircode, 'sub i32 ');
         PutOp(idx);
@@ -6313,7 +6477,7 @@ begin
         PutOp(above);
         writeln(ircode);
         OpInt(1, lo);
-        EmitTrapIndex(bad, lo, hi);
+        EmitTrapIndex(bad, lo, hi, e^.ixIndex^.line, e^.ixIndex^.col);
         Def(off);
         write(ircode, 'sub i32 ');
         PutOp(idx);
@@ -6370,7 +6534,7 @@ begin
       { The message names the bounds, so a schematic array's has to be built
         where the bounds are known -- which is at run time, in the runtime. }
       if (arr^.loDisc <> nil) or (arr^.hiDisc <> nil) then
-        EmitTrapIndex(bad, lo, hi)
+        EmitTrapIndex(bad, lo, hi, e^.ixIndex^.line, e^.ixIndex^.col)
       else begin
         MsgStart;
         MsgText('array index out of bounds (             ');
@@ -6379,7 +6543,7 @@ begin
         AppendInt(msgBuf, arr^.hi);
         Put(')');
         msg := MsgEnd;
-        EmitTrapIf(bad, msg)
+        EmitTrapIf(bad, msg, e^.ixIndex^.line, e^.ixIndex^.col)
       end;
 
       Def(off);
@@ -6426,10 +6590,12 @@ begin
         holds first, which is where the lookahead actually happens. }
       if IsFile(e^.drBase^.ntype) then begin
         EmitAddress(e^.drBase, base);
+        EmitAt(e^.line, e^.col);
         Def(v);
         write(ircode, 'call ptr @pas_buffer(ptr ');
         PutOp(base);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
       { ADR-0123: `o^` is the value an optional holds, and the flag is read
         first. It is the only way to that value, so this is the one check
@@ -6448,7 +6614,7 @@ begin
         MsgStart;
         MsgText('this optional has no value              ');
         msg := MsgEnd;
-        EmitTrapIf(bad, msg);
+        EmitTrapIf(bad, msg, e^.line, e^.col);
         OptionalPart(base, Underlying(e^.drBase^.ntype), 1, v)
       end
       else begin
@@ -6461,7 +6627,7 @@ begin
         MsgStart;
         MsgText('dereference of nil                      ');
         msg := MsgEnd;
-        EmitTrapIf(bad, msg);
+        EmitTrapIf(bad, msg, e^.line, e^.col);
         v := target
       end;
 
@@ -6519,7 +6685,7 @@ begin
     nkIndex:
       if e^.ixSetValue <> nil then begin
         EmitSet(e^.ixSetValue, v);
-        CheckedForSetBase(v, e^.ntype)
+        CheckedForSetBase(v, e^.ntype, e^.line, e^.col)
       end
       else EmitLoad(e, v);
     { The same, for a spine whose outermost selector was a range. A substring
@@ -6528,7 +6694,7 @@ begin
     nkSubstr:
       if e^.ssSetValue <> nil then begin
         EmitSet(e^.ssSetValue, v);
-        CheckedForSetBase(v, e^.ntype)
+        CheckedForSetBase(v, e^.ntype, e^.line, e^.col)
       end
       else OpInt(0, v);
     { A schema-discriminant is the value the type was produced with, so it is
@@ -6539,7 +6705,7 @@ begin
       if e^.fdQualified <> nil then
         if e^.fdQualified^.kind = skConst then EmitConst(e^.fdQualified, v)
         else if IsInvocable(e^.fdQualified) then
-          EmitUserCall(e^.fdQualified, nil, e^.fdSlot, v)
+          EmitUserCall(e^.fdQualified, nil, e^.fdSlot, v, e^.line, e^.col)
         else EmitLoad(e, v)
       { ...unless the base is a schematic formal parameter, whose type was
         produced with no tuple: then it is one field of the descriptor the
@@ -6571,7 +6737,7 @@ begin
         functional parameter, which is the same call through a loaded
         address. }
       else if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
-        EmitUserCall(e^.vrSym, nil, e^.vrSlot, v)
+        EmitUserCall(e^.vrSym, nil, e^.vrSlot, v, e^.line, e^.col)
       else
         EmitLoad(e, v);
     nkSet: EmitSet(e, v);
@@ -6719,7 +6885,7 @@ begin
   else begin
     EmitExpr(src, v);
     ConvertFor(v, from, t);
-    CheckedForStore(v, t);
+    CheckedForStore(v, t, src^.line, src^.col);
     write(ircode, '  store ');
     PutLlType(t);
     write(ircode, ' ');
@@ -6845,14 +7011,14 @@ begin
         if f^.index = el^.veFields^.value_ then first := f;
         f := f^.next
       end;
-      FieldAddress(into, rec, first, src, vgNone);
+      FieldAddress(into, rec, first, src, vgNone, 0, 0);
       EmitComponentValue(src, first^.ftype, el^.veValue);
       num := el^.veFields^.next;
       while num <> nil do begin
         f := fields;
         while f <> nil do begin
           if f^.index = num^.value_ then begin
-            FieldAddress(into, rec, f, dst, vgNone);
+            FieldAddress(into, rec, f, dst, vgNone, 0, 0);
             CopyComponent(dst, src, f^.ftype)
           end;
           f := f^.next
@@ -6874,7 +7040,7 @@ begin
         i := i + 1;
         f := f^.next
       end;
-      FieldAddress(into, rec, first, dst, vgNone);
+      FieldAddress(into, rec, first, dst, vgNone, 0, 0);
       OpInt(e^.svTagOrd, ord_);
       write(ircode, '  store ');
       PutLlType(first^.ftype);
@@ -6948,7 +7114,7 @@ begin
     writeln(ircode);
     WidenOrdinal(l, dp^.sym^.stype);
     WidenOrdinal(r, dp^.sym^.stype);
-    EmitTrapDisc(bad, schemaMsg, discMsg, l, r);
+    EmitTrapDisc(bad, schemaMsg, discMsg, l, r, dst^.line, dst^.col);
     k := k + 1;
     dp := dp^.next
   end
@@ -6971,6 +7137,7 @@ begin
   if s^.asTarget^.kind = nkSubstr then begin
     EmitString(s^.asTarget, td, tl);
     EmitString(s^.asValue, sd, sl);
+    EmitAt(s^.line, s^.col);
     write(ircode, '  call void @pas_str_store_fixed(ptr ');
     PutOp(td);
     write(ircode, ', i32 ');
@@ -6979,7 +7146,8 @@ begin
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
   { AP 6.4.12.2 (ADR-0174): the variable takes ownership of what the external
     call answered, and the runtime releases what it held first. The call is
@@ -7193,7 +7361,8 @@ end;
   is the one thing about it the standard decides and the runtime is never told
   which standard it was compiled for. It also keeps -1 usable as the "no width
   given" sentinel: no width that reaches the runtime is ever negative. }
-procedure CheckedWidth(protected var v: str; isPrec: boolean);
+procedure CheckedWidth(protected var v: str; isPrec: boolean;
+                       line, col: integer);
 var least, msg: integer; leastOp, bad: str;
 begin
   least := 0;
@@ -7209,7 +7378,7 @@ begin
   else MsgText('a field width                           ');
   MsgText(' must not be negative                   ');
   msg := MsgEnd;
-  EmitTrapIf(bad, msg)
+  EmitTrapIf(bad, msg, line, col)
 end;
 
 { The write-parameters of the text form (6.10.3), emitted into whichever file
@@ -7223,12 +7392,12 @@ begin
     while a <> nil do begin
       if a^.waWidth <> nil then begin
         EmitExpr(a^.waWidth, width);
-        CheckedWidth(width, false)
+        CheckedWidth(width, false, a^.waWidth^.line, a^.waWidth^.col)
       end
       else OpInt(-1, width);
       if a^.waPrec <> nil then begin
         EmitExpr(a^.waPrec, prec);
-        CheckedWidth(prec, true)
+        CheckedWidth(prec, true, a^.waPrec^.line, a^.waPrec^.col)
       end
       else OpInt(-1, prec);
 
@@ -7246,6 +7415,7 @@ begin
       none, and East Asian Width is a table this language does not carry. }
     if IsText(a^.waValue^.ntype) then begin
       EmitString(a^.waValue, sdata, slen);
+      EmitAt(a^.waValue^.line, a^.waValue^.col);
       write(ircode, '  call void @pas_write_text(ptr ');
       PutOp(fh);
       write(ircode, ', ptr ');
@@ -7254,10 +7424,12 @@ begin
       PutOp(slen);
       write(ircode, ', i32 ');
       PutOp(width);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end
     else if IsStringType(a^.waValue^.ntype) then begin
       EmitString(a^.waValue, sdata, slen);
+      EmitAt(a^.waValue^.line, a^.waValue^.col);
       write(ircode, '  call void @pas_write_str(ptr ');
       PutOp(fh);
       write(ircode, ', ptr ');
@@ -7266,12 +7438,14 @@ begin
       PutOp(slen);
       write(ircode, ', i32 ');
       PutOp(width);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end
     else if IsCharArray(a^.waValue^.ntype) then begin
         EmitAddress(a^.waValue, addr);
         HeapHeader(a^.waValue, shdr);
         DynLength(a^.waValue^.ntype, shdr, slen);
+        EmitAt(a^.waValue^.line, a^.waValue^.col);
         write(ircode, '  call void @pas_write_str(ptr ');
         PutOp(fh);
         write(ircode, ', ptr ');
@@ -7280,7 +7454,8 @@ begin
         PutOp(slen);
         write(ircode, ', i32 ');
         PutOp(width);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
       else begin
         EmitExpr(a^.waValue, v);
@@ -7298,15 +7473,18 @@ begin
           end
           else
             addr := v;
+          EmitAt(a^.waValue^.line, a^.waValue^.col);
           write(ircode, '  call void @pas_write_int(ptr ');
           PutOp(fh);
           write(ircode, ', i64 ');
           PutOp(addr);
           write(ircode, ', i32 ');
           PutOp(width);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end
         else if b^.kind = tyReal then begin
+          EmitAt(a^.waValue^.line, a^.waValue^.col);
           write(ircode, '  call void @pas_write_real(ptr ');
           PutOp(fh);
           write(ircode, ', double ');
@@ -7315,29 +7493,34 @@ begin
           PutOp(width);
           write(ircode, ', i32 ');
           PutOp(prec);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end
         else if b^.kind = tyBoolean then begin
           Def(addr);
           write(ircode, 'zext i1 ');
           PutOp(v);
           writeln(ircode, ' to i32');
+          EmitAt(a^.waValue^.line, a^.waValue^.col);
           write(ircode, '  call void @pas_write_bool(ptr ');
           PutOp(fh);
           write(ircode, ', i32 ');
           PutOp(addr);
           write(ircode, ', i32 ');
           PutOp(width);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end
         else if b^.kind = tyChar then begin
+          EmitAt(a^.waValue^.line, a^.waValue^.col);
           write(ircode, '  call void @pas_write_char(ptr ');
           PutOp(fh);
           write(ircode, ', i8 ');
           PutOp(v);
           write(ircode, ', i32 ');
           PutOp(width);
-          writeln(ircode, ')')
+          writeln(ircode, ')');
+          EmitAtDone
         end
       end;
       a := a^.next
@@ -7353,13 +7536,17 @@ begin
     variable, so everything between here and the store below is the ordinary
     text `write` -- emitted by the very same procedure. }
   if s^.wrStr <> nil then begin
+    EmitAt(s^.line, s^.col);
     Def(aux);
     writeln(ircode, 'call ptr @pas_str_write_begin()');
     EmitWriteArgs(s, aux);
+    EmitAt(s^.line, s^.col);
     Def(slen);
     write(ircode, 'call i32 @pas_str_write_len(ptr ');
     PutOp(aux);
     writeln(ircode, ')');
+    EmitAtDone;
+    EmitAtDone;
     Def(sdata);
     write(ircode, 'call ptr @pas_str_write_ptr(ptr ');
     PutOp(aux);
@@ -7369,6 +7556,7 @@ begin
       more was written than the destination can hold. }
     if s^.wrStr^.kind = nkSubstr then begin
       EmitString(s^.wrStr, tdata, tlen);
+      EmitAt(s^.wrStr^.line, s^.wrStr^.col);
       write(ircode, '  call void @pas_str_store_fixed(ptr ');
       PutOp(tdata);
       write(ircode, ', i32 ');
@@ -7377,12 +7565,14 @@ begin
       PutOp(sdata);
       write(ircode, ', i32 ');
       PutOp(slen);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end
     else begin
       EmitAddress(s^.wrStr, tdata);
       HeapHeader(s^.wrStr, hdr);
-      EmitStringStoreValue(tdata, s^.wrStr^.ntype, sdata, slen, hdr)
+      EmitStringStoreValue(tdata, s^.wrStr^.ntype, sdata, slen, hdr,
+                           s^.wrStr^.line, s^.wrStr^.col)
     end;
     write(ircode, '  call void @pas_str_write_end(ptr ');
     PutOp(aux);
@@ -7396,23 +7586,29 @@ begin
     if not IsTextFile(s^.wrFile^.ntype) then begin
       a := s^.wrArgs;
       while a <> nil do begin
+        EmitAt(a^.waValue^.line, a^.waValue^.col);
         Def(sdata);
         write(ircode, 'call ptr @pas_buffer(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
+        EmitAtDone;
         EmitStore(sdata, s^.wrFile^.ntype^.elem, a^.waValue);
+        EmitAt(a^.waValue^.line, a^.waValue^.col);
         write(ircode, '  call void @pas_put(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
+        EmitAtDone;
         a := a^.next
       end
     end
     else begin
       EmitWriteArgs(s, fh);
       if s^.wrNewline then begin
+        EmitAt(s^.line, s^.col);
         write(ircode, '  call void @pas_writeln(ptr ');
         PutOp(fh);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
     end
   end
@@ -7453,6 +7649,7 @@ begin
       designatorGuard := vgWrite;
       if a^.kind = nkSubstr then begin
         EmitString(a, slot, rcap);
+        EmitAt(a^.line, a^.col);
         write(ircode, '  call void @pas_read_str(ptr ');
         PutOp(fh);
         write(ircode, ', ptr ');
@@ -7473,6 +7670,7 @@ begin
         HeapHeader(a, rhdr);
         if IsVarString(t) then StringCapacity(t, rhdr, rcap)
         else DynLength(t, rhdr, rcap);
+        EmitAt(a^.line, a^.col);
         write(ircode, '  call void @pas_read_str(ptr ');
         PutOp(fh);
         write(ircode, ', ptr ');
@@ -7484,41 +7682,51 @@ begin
       end
       else if IsChar(t) then begin
         needStore := true;
+        EmitAt(a^.line, a^.col);
         Def(v);
         write(ircode, 'call i8 @pas_read_char(ptr ');
         PutOp(fh);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone;
+        EmitAtDone;
+        EmitAtDone
       end
       else if IsReal(t) then begin
         needStore := true;
+        EmitAt(a^.line, a^.col);
         Def(v);
         write(ircode, 'call double @pas_read_real(ptr ');
         PutOp(fh);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
       { An int64 is what the runtime already accumulates in, so this is the
         one arm with nothing to narrow -- and no subrange to check, ADR-0128
         making int64 numeric rather than ordinal. }
       else if IsInt64(t) then begin
         needStore := true;
+        EmitAt(a^.line, a^.col);
         Def(v);
         write(ircode, 'call i64 @pas_read_int64(ptr ');
         PutOp(fh);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
       else begin
         needStore := true;
         { The runtime returns i64 and has already rejected anything outside
           -maxint..maxint, so this truncation cannot lose a valid value. }
+        EmitAt(a^.line, a^.col);
         Def(wide);
         write(ircode, 'call i64 @pas_read_int(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
+        EmitAtDone;
         Def(v);
         write(ircode, 'trunc i64 ');
         PutOp(wide);
         writeln(ircode, ' to i32');
-        CheckedForSubrange(v, t)
+        CheckedForSubrange(v, t, a^.line, a^.col)
       end
       end;
       if needStore then begin
@@ -7545,19 +7753,23 @@ begin
     variables are read by the very procedure below. }
   if s^.rdStr <> nil then begin
     EmitString(s^.rdStr, sdata, slen);
+    EmitAt(s^.line, s^.col);
     Def(aux);
     write(ircode, 'call ptr @pas_str_read_begin(ptr ');
     PutOp(sdata);
     write(ircode, ', i32 ');
     PutOp(slen);
     writeln(ircode, ')');
+    EmitAtDone;
     EmitReadArgs(s, aux);
     { "It shall be an error if the equivalent of eof(f) is true upon
       completion" -- the runtime asks, because eof is its question and the
       auxiliary variable is not a file the program can name. }
+    EmitAt(s^.line, s^.col);
     write(ircode, '  call void @pas_str_read_end(ptr ');
     PutOp(aux);
-    writeln(ircode, ')')
+    writeln(ircode, ')');
+    EmitAtDone
   end
   else if s^.rdFile <> nil then begin
     EmitAddress(s^.rdFile, fh);
@@ -7569,10 +7781,12 @@ begin
       a := s^.rdArgs;
       while a <> nil do begin
         EmitAddress(a, slot);
+        EmitAt(a^.line, a^.col);
         Def(buf);
         write(ircode, 'call ptr @pas_buffer(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
+        EmitAtDone;
         if IsStructured(a^.ntype) then
           EmitCopyAt(slot, a^.ntype, buf)
         else begin
@@ -7583,7 +7797,7 @@ begin
           PutOp(buf);
           writeln(ircode);
           ConvertFor(v, comp, a^.ntype);
-          CheckedForStore(v, a^.ntype);
+          CheckedForStore(v, a^.ntype, a^.line, a^.col);
           write(ircode, '  store ');
           PutLlType(a^.ntype);
           write(ircode, ' ');
@@ -7592,18 +7806,22 @@ begin
           PutOp(slot);
           writeln(ircode)
         end;
+        EmitAt(a^.line, a^.col);
         write(ircode, '  call void @pas_get(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
+        EmitAtDone;
         a := a^.next
       end
     end
     else begin
       EmitReadArgs(s, fh);
       if s^.rdNewline then begin
+        EmitAt(s^.line, s^.col);
         write(ircode, '  call void @pas_readln(ptr ');
         PutOp(fh);
-        writeln(ircode, ')')
+        writeln(ircode, ')');
+        EmitAtDone
       end
     end
   end
@@ -7618,7 +7836,7 @@ end;
   are answered from the values rather than from a header -- no scratch storage
   exists, which is what lets a sequential emitter do this at all. }
 procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
-                            var header: str);
+                            var header: str; line, col: integer);
   forward;
 
 { ISO/IEC 10206:1991 6.7.5.3, for `new(p, c1, ..., cn)`: "the initial state of
@@ -7690,7 +7908,7 @@ begin
     { A discriminant outside its own type is outside 6.4.7's domain, and this
       is where the value enters the variable that holds it -- so the check
       that guards every other such store makes this one too. }
-    CheckedForStore(v, d^.sym^.stype);
+    CheckedForStore(v, d^.sym^.stype, s^.line, s^.col);
     if IsChar(d^.sym^.stype) or IsBoolean(d^.sym^.stype) then begin
       raw := v;
       Def(v);
@@ -7713,7 +7931,7 @@ begin
   StrClear(nohdr);
   { 6.7.5.3: it shall be a dynamic-violation if the tuple is not in the domain
     of the schema -- the same check a variable's tuple gets on entry. }
-  CheckSchemaDomain(domain, domain^.schema, nohdr);
+  CheckSchemaDomain(domain, domain^.schema, nohdr, s^.line, s^.col);
   DynSize(domain, nohdr, size);
   head := HeaderSize(domain);
   Def(raw);
@@ -7724,10 +7942,12 @@ begin
   write(ircode, 'zext i32 ');
   PutOp(raw);
   writeln(ircode, ' to i64');
+  EmitAt(s^.line, s^.col);
   Def(block);
   write(ircode, 'call ptr @pas_new(i64 ');
   PutOp(v);
   writeln(ircode, ')');
+  EmitAtDone;
 
   cell := newTuple;
   while cell <> nil do begin
@@ -7860,7 +8080,7 @@ begin
     built where they are known -- which is the subscript check's own answer,
     and the same helper. }
   if DynamicExtent(ut) then
-    EmitTrapIndex(bad, lo, hi)
+    EmitTrapIndex(bad, lo, hi, indexArg^.line, indexArg^.col)
   else begin
     MsgStart;
     MsgText('array index out of bounds (             ');
@@ -7869,7 +8089,7 @@ begin
     AppendInt(msgBuf, ut^.hi);
     Put(')');
     msg := MsgEnd;
-    EmitTrapIf(bad, msg)
+    EmitTrapIf(bad, msg, indexArg^.line, indexArg^.col)
   end;
 
   { k - m, the offset of the first unpacked component. The check above has
@@ -7993,20 +8213,24 @@ begin
     see the send arm's note in doc/sop.md §7. }
   else if s^.pcStd = spSend then begin
     EmitAddress(s^.pcArgs, chSlot);
+    EmitAt(s^.line, s^.col);
     Def(chan);
     write(ircode, 'call ptr @pas_handle_lend(ptr ');
     PutOp(chSlot);
     writeln(ircode, ')');
+    EmitAtDone;
     { A structured value has no register form (ADR-0017), so what a
       designator of one yields *is* an address and the runtime copies from
       it -- no temporary at all. }
     if IsStructured(s^.pcArgs^.ntype^.elem) then begin
       EmitAddress(s^.pcArgs^.next, chTmp);
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_chan_send(ptr ');
       PutOp(chan);
       write(ircode, ', ptr ');
       PutOp(chTmp);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end
     { A scalar needs somewhere for the runtime to copy from, and the storage
       is claimed and given back around this one statement.
@@ -8035,11 +8259,13 @@ begin
       write(ircode, ', ptr ');
       PutOp(chTmp);
       writeln(ircode);
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_chan_send(ptr ');
       PutOp(chan);
       write(ircode, ', ptr ');
       PutOp(chTmp);
       writeln(ircode, ')');
+      EmitAtDone;
       write(ircode, '  call void @llvm.stackrestore.p0(ptr ');
       PutOp(chMark);
       writeln(ircode, ')')
@@ -8102,13 +8328,15 @@ begin
       write(ircode, ', ptr ');
       PutOp(nameRec);
       writeln(ircode, ', i32 0, i32 1');
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_bind(ptr ');
       PutOp(slot);
       write(ircode, ', ptr ');
       PutOp(ndata);
       write(ircode, ', i32 ');
       PutOp(raw);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end;
     spUnbind: begin
       write(ircode, '  call void @pas_unbind(ptr ');
@@ -8116,6 +8344,7 @@ begin
       writeln(ircode, ')')
     end;
     spReset, spRewrite, spGet, spPut, spUpdate, spExtend: begin
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_');
       case s^.pcStd of
         spReset:   write(ircode, 'reset');
@@ -8130,7 +8359,8 @@ begin
       end;
       write(ircode, '(ptr ');
       PutOp(slot);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end;
     { 6.7.5.2's three seeks. The position reaches the runtime already relative
       to the index-type's smallest value, so `SeekRead(f, 'c')` on a
@@ -8148,6 +8378,7 @@ begin
         writeln(ircode, ', ', OrdinalLo(idx):1);
         raw := block
       end;
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_');
       case s^.pcStd of
         spSeekRead:   write(ircode, 'seekread');
@@ -8161,7 +8392,8 @@ begin
       PutOp(slot);
       write(ircode, ', i32 ');
       PutOp(raw);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end;
     spNew: begin
       domain := s^.pcArgs^.ntype^.elem;
@@ -8186,6 +8418,7 @@ begin
       else begin
       { ISO 7185 6.6.5.3: with tag values, only the selected variants have to
         fit. Without them the whole record does. }
+      EmitAt(s^.line, s^.col);
       Def(block);
       if s^.pcSelect = nil then
         writeln(ircode, 'call ptr @pas_new(i64 ',
@@ -8193,6 +8426,7 @@ begin
       else
         writeln(ircode, 'call ptr @pas_new(i64 ',
                 SelectedSize(s^.pcArgs^.ntype^.elem, nil, s^.pcSelect):1, ')');
+      EmitAtDone;
       write(ircode, '  store ptr ');
       PutOp(block);
       write(ircode, ', ptr ');
@@ -8209,7 +8443,7 @@ begin
         MsgStart;
         MsgText('heap                                    ');
         msg := MsgEnd;
-        WalkFiles(block, domain, true, 0, 0, msg)
+        WalkFiles(block, domain, true, 0, 0, msg, s^.line, s^.col)
       end
       end
     end;
@@ -8238,9 +8472,9 @@ begin
       MsgStart;
       MsgText('dispose of nil                          ');
       msg := MsgEnd;
-      EmitTrapIf(raw, msg);
+      EmitTrapIf(raw, msg, s^.pcArgs^.line, s^.pcArgs^.col);
       if HoldsFile(domain) then
-        WalkFiles(block, domain, false, 0, 0, 0);
+        WalkFiles(block, domain, false, 0, 0, 0, 0, 0);
       { What was allocated is the header and the variable together, so what is
         given back has to be the block rather than the variable. }
       head := HeaderSize(s^.pcArgs^.ntype^.elem);
@@ -8283,15 +8517,19 @@ begin
       -- which is the runtime's too. Sema has already supplied output when none
       was written. }
     spPage: begin
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_page(ptr ');
       PutOp(slot);
-      writeln(ircode, ')')
+      writeln(ircode, ')');
+      EmitAtDone
     end;
     spGetTimeStamp: begin
       writeln(ircode, '  call void @pas_gettimestamp()');
       for k := 0 to 7 do begin
+        EmitAt(s^.line, s^.col);
         Def(part);
         writeln(ircode, 'call i32 @pas_timestamp_field(i32 ', k:1, ')');
+        EmitAtDone;
         Def(at_);
         write(ircode, 'getelementptr inbounds ');
         PutLlType(s^.pcArgs^.ntype);
@@ -8488,9 +8726,11 @@ begin
         zero would come back looking like the ordinary entry. }
       FrameOf(s^.gtOwner, frame);
       JumpRecord(s^.gtOwner, frame, rec);
+      EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_jump_go(ptr ');
       PutOp(rec);
       writeln(ircode, ', i32 ', s^.gtId + 1:1, ')');
+      EmitAtDone;
       writeln(ircode, '  unreachable')
     end
     else
@@ -8582,6 +8822,7 @@ begin
   writeln(ircode);
   { pas_text_take and not pas_text_store: the element is already in normal
     form and this is inside a loop, so it must take nothing from the arena. }
+  EmitAt(s^.line, s^.col);
   write(ircode, '  call void @pas_text_take(ptr ');
   PutOp(slot);
   write(ircode, ', i32 ');
@@ -8591,6 +8832,7 @@ begin
   write(ircode, ', i32 ');
   PutOp(test);
   writeln(ircode, ')');
+  EmitAtDone;
   write(ircode, '  store i32 ');
   PutOp(nextOp);
   write(ircode, ', ptr ');
@@ -8732,7 +8974,7 @@ begin
     PutLlType(t);
     writeln(ircode)
   end;
-  CheckedForSubrange(now, t);
+  CheckedForSubrange(now, t, s^.line, s^.col);
   write(ircode, '  store ');
   PutLlType(t);
   write(ircode, ' ');
@@ -8826,8 +9068,8 @@ begin
     writeln(ircode, ', label %L', checkB:1, ', label %L', skipB:1);
 
     StartBlock(checkB);
-    CheckedForSubrange(from, t);
-    CheckedForSubrange(toV, t);
+    CheckedForSubrange(from, t, s^.frFrom^.line, s^.frFrom^.col);
+    CheckedForSubrange(toV, t, s^.frTo^.line, s^.frTo^.col);
     writeln(ircode, '  br label %L', skipB:1);
 
     StartBlock(skipB)
@@ -9222,7 +9464,9 @@ begin
     MsgStart;
     MsgText('case: no label matches the selector     ');
     msg := MsgEnd;
-    writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
+    write(ircode, '  call void @pas_runtime_error_at(ptr @s', msg:1);
+    PutPos(s^.csSelector^.line, s^.csSelector^.col);
+    writeln(ircode, ')');
     writeln(ircode, '  unreachable')
   end;
 
@@ -9277,13 +9521,15 @@ begin
       nkWrite:
         if s^.wrCall <> nil then begin
           if s^.wrCall^.pcSym <> nil then
-            EmitUserCall(s^.wrCall^.pcSym, s^.wrCall^.pcArgs, nil, v)
+            EmitUserCall(s^.wrCall^.pcSym, s^.wrCall^.pcArgs, nil, v,
+                         s^.wrCall^.line, s^.wrCall^.col)
         end
         else EmitWrite(s);
       nkRead:
         if s^.rdCall <> nil then begin
           if s^.rdCall^.pcSym <> nil then
-            EmitUserCall(s^.rdCall^.pcSym, s^.rdCall^.pcArgs, nil, v)
+            EmitUserCall(s^.rdCall^.pcSym, s^.rdCall^.pcArgs, nil, v,
+                         s^.rdCall^.line, s^.rdCall^.col)
         end
         else EmitRead(s);
       nkIf: EmitIf(s);
@@ -9298,7 +9544,7 @@ begin
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
         else if s^.pcSym <> nil then
-          EmitUserCall(s^.pcSym, s^.pcArgs, nil, v);
+          EmitUserCall(s^.pcSym, s^.pcArgs, nil, v, s^.line, s^.col);
       nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
@@ -9517,7 +9763,8 @@ begin
       end;
       name := AddGlobal(l^.sym^.at, l^.sym^.len);
       AddressOfSym(l^.sym, addr);
-      WalkFiles(addr, l^.sym^.stype, true, binding, l^.sym^.fileArg, name)
+      WalkFiles(addr, l^.sym^.stype, true, binding, l^.sym^.fileArg, name,
+                l^.sym^.declLine, l^.sym^.declCol)
     end;
     l := l^.next
   end
@@ -9625,7 +9872,7 @@ begin
   while l <> nil do begin
     if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
       AddressOfSym(l^.sym, addr);
-      WalkFiles(addr, l^.sym^.stype, false, 0, 0, 0)
+      WalkFiles(addr, l^.sym^.stype, false, 0, 0, 0, 0, 0)
     end;
     l := l^.next
   end;
@@ -9689,7 +9936,7 @@ begin
       level came from. }
     if (t^.kind = tyRecord) and DynamicExtent(t) then begin
       last := LastField(t^.fields);
-      CheckSchemaDomain(last^.ftype, schema, header)
+      CheckSchemaDomain(last^.ftype, schema, header, line, col)
     end
     { A subrange whose bounds are discriminants, which ADR-0133 made reachable
       here. 6.4.2.4 requires the first bound not to exceed the second, and
@@ -9716,7 +9963,7 @@ begin
       MsgText('this subrange has no values: its upper  ');
       MsgText(' bound is below its lower bound         ');
       msg := MsgEnd;
-      EmitTrapIf(bad, msg)
+      EmitTrapIf(bad, msg, line, col)
     end
     { 6.4.3.3.3: "Each tuple in the domain of the schema shall have one
       component that is a value of integer-type greater than zero", and
@@ -9749,7 +9996,7 @@ begin
         MsgText('the capacity of a string must be greater');
       MsgText(' than zero                              ');
       msg := MsgEnd;
-      EmitTrapIf(bad, msg)
+      EmitTrapIf(bad, msg, line, col)
     end
     else if (t^.kind = tyArray) and DynamicExtent(t) then begin
       if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
@@ -9778,9 +10025,9 @@ begin
           MsgText(''' with these discriminants              ')
         end;
         msg := MsgEnd;
-        EmitTrapIf(bad, msg)
+        EmitTrapIf(bad, msg, line, col)
       end;
-      CheckSchemaDomain(t^.elem, schema, header)
+      CheckSchemaDomain(t^.elem, schema, header, line, col)
     end
 end;
 
@@ -9807,7 +10054,7 @@ begin
     f := t^.fields;
     while f <> nil do begin
       if (f^.initValue <> nil) or IsRecord(f^.ftype) then begin
-        FieldAddress(addr, t, f, sub, vgNone);
+        FieldAddress(addr, t, f, sub, vgNone, 0, 0);
         InitialStateInto(sub, f^.ftype, f^.initValue)
       end;
       f := f^.next
@@ -9895,7 +10142,7 @@ begin
         { A discriminant outside its own type is outside 6.4.7's domain. The
           store is where a value enters a variable, so the check that guards
           every other such store is the one that says so here too. }
-        CheckedForStore(value_, d^.sym^.stype);
+        CheckedForStore(value_, d^.sym^.stype, l^.sym^.declLine, l^.sym^.declCol);
         Def(half);
         write(ircode, 'getelementptr inbounds ');
         PutDescType(l^.sym);
@@ -9913,7 +10160,8 @@ begin
         d := d^.next
       end;
       StrClear(nohdr);
-      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema, nohdr)
+      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema, nohdr,
+                        l^.sym^.declLine, l^.sym^.declCol)
       end;
       { A type-definition's own descriptor allocates nothing: a type has no
         storage, and the variables of it each get their own below. Its slot is
@@ -10229,7 +10477,8 @@ begin
         StrAppend(arglen, 'a');
         AppendInt(arglen, k);
         StrClear(shdr);
-        EmitStringStoreValue(slot, l^.sym^.stype, arg, arglen, shdr)
+        EmitStringStoreValue(slot, l^.sym^.stype, arg, arglen, shdr,
+                             l^.sym^.declLine, l^.sym^.declCol)
       end
       { AP 6.7.8.1: a task's channel parameter. The value crosses and the
         formal takes a *reference* to the channel -- which is the one thing
@@ -10459,10 +10708,12 @@ begin
   write(ircode, 'ptrtoint ptr ');
   PutOp(one);
   writeln(ircode, ' to i64');
+  EmitAt(s^.line, s^.col);
   Def(blk);
   write(ircode, 'call ptr @pas_tasks_alloc(i64 ');
   PutOp(size);
   writeln(ircode, ')');
+  EmitAtDone;
 
   { The static link: a task declared at level L runs with the frame at level
     L-1 as its enclosing scope, which is the rule every other call here
@@ -10480,10 +10731,12 @@ begin
   while (arg <> nil) and (l <> nil) do begin
     if IsChannel(l^.sym^.stype) then begin
       EmitAddress(arg, val);
+      EmitAt(arg^.line, arg^.col);
       Def(link);
       write(ircode, 'call ptr @pas_handle_lend(ptr ');
       PutOp(val);
       writeln(ircode, ')');
+      EmitAtDone;
       write(ircode, '  call void @pas_chan_ref(ptr ');
       PutOp(link);
       writeln(ircode, ')');
@@ -10531,13 +10784,15 @@ begin
 
   FrameAt(irProc^.level, frame);
   TaskSetSlot(irProc, frame, set_);
+  EmitAt(s^.line, s^.col);
   write(ircode, '  call void @pas_tasks_spawn(ptr ');
   PutOp(set_);
   write(ircode, ', ptr ');
   PutTaskName(task);
   write(ircode, ', ptr ');
   PutOp(blk);
-  writeln(ircode, ')')
+  writeln(ircode, ')');
+  EmitAtDone
 end;
 
 procedure EmitDeferRunner(p: symPtr);
@@ -10661,6 +10916,12 @@ begin
   if covOpt then
     writeln(ircode, 'declare void @pas_cov_branch(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
+  { ADR-0293: a trap's position. The inline checks pass theirs as arguments;
+    a call into a runtime routine that may trap stores a record's address
+    into the runtime's thread-local word first -- see EmitAt. Thread-local
+    here as well as in the runtime, for pas_str_at's reason. }
+  writeln(ircode, 'declare void @pas_runtime_error_at(ptr, ptr, i32, i32)');
+  writeln(ircode, '@pas_at = external thread_local(initialexec) global ptr');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
   writeln(ircode,
           'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, ',
@@ -10844,14 +11105,14 @@ begin
   writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)');
   writeln(ircode, 'declare i', setBits:1, ' @llvm.ctpop.i', setBits:1,
           '(i', setBits:1, ')');
-  writeln(ircode, 'declare void @pas_index_error(i32, i32)');
-  writeln(ircode, 'declare void @pas_range_error(i32, i32)');
+  writeln(ircode, 'declare void @pas_index_error_at(i32, i32, ptr, i32, i32)');
+  writeln(ircode, 'declare void @pas_range_error_at(i32, i32, ptr, i32, i32)');
   { 6.4.6 d): an assignment between two types produced from one schema with
     different tuples. The schema and the discriminant are named here; only the
     values come from the running program. }
-  writeln(ircode, 'declare void @pas_disc_error(ptr, ptr, i32, i32)');
+  writeln(ircode, 'declare void @pas_disc_error_at(ptr, ptr, i32, i32, ptr, i32, i32)');
   { 6.7.2.5 compares strings of one length, and a schema's is a discriminant. }
-  writeln(ircode, 'declare void @pas_length_error(i32, i32)')
+  writeln(ircode, 'declare void @pas_length_error_at(i32, i32, ptr, i32, i32)')
 end;
 
 { One global activation record. }
@@ -11094,6 +11355,8 @@ begin
   nextStr := 0;
   strTemps := 0;
   strHead := nil;
+  posHead := nil;
+  nextPos := 0;
   strTail := nil;
   nextConst := 0;
   constHead := nil;
@@ -11193,6 +11456,7 @@ begin
     EmitOwnRels;
     writeln(ircode);
     EmitGlobals;
+    EmitPosGlobals;
     EmitConstGlobals;
     EmitExterns;
     EmitDeclares
@@ -11235,6 +11499,7 @@ begin
 
   writeln(ircode);
   EmitGlobals;
+  EmitPosGlobals;
   EmitConstGlobals;
   EmitExterns;
   EmitDeclares

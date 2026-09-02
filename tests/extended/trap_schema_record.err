@@ -1,1 +1,1 @@
-runtime error: no type is produced from schema 'buffer' with these discriminants
+runtime error: no type is produced from schema 'buffer' with these discriminants at <source>:26:3

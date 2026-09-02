@@ -230,8 +230,10 @@ the chapter above has three rows that were wrong about exactly that.
 Almost everything here is on the **outside** of the compiler. ADR-0109's four
 areas are answered and both standards are complete, so what is missing is not
 what the compiler accepts but what surrounds it — how it is obtained, how it
-is learned, what it says when a program stops, and what an editor can ask of
-it. None of these is a language feature and none needs a spelling.
+is learned, and what an editor can ask of it. None of these is a language
+feature and none needs a spelling. What it said when a program stopped was
+the first row here to close, the day after the chapter was written
+(ADR-0293), and `doc/history.md` has what doing it found.
 
 ### Getting it and learning it
 
@@ -258,19 +260,6 @@ it. None of these is a language feature and none needs a spelling.
   half of that document; the other half is prose that says why.
 
 ### Writing a daily program
-
-- **A runtime error names no position.** Sixty-eight distinct trap messages
-  stand in the corpus' `.err` files and **not one carries a file or a line**
-  (`grep -rho 'runtime error: [^(]*' tests --include='*.err' | sort -u | wc -l`,
-  and the same list filtered for `line` is empty). `array index out of bounds
-  (1..3)` is exact about the bounds and silent about *where*, and a program
-  of any size has a hundred subscripts in it. The emitted IR carries no debug
-  metadata either — `grep -c '!dbg' selfhost/compiler.pas` is 0 — so a
-  debugger stopped at the trap shows nothing. Two separable things: a
-  position in every trap message is the compiler passing what it already
-  holds, `ErrorAt` having the line and column of every node; a line table is
-  textual metadata in the `.ll` and links nothing new, which is ADR-0085's
-  bar. The first is the one that changes a user's afternoon.
 
 - **What a program reads can be cut without a word.** ADR-0292 closed with
   a warning rather than a gap, and this row is where it lives now. `readln`

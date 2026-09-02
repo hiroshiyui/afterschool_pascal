@@ -198,6 +198,22 @@ own exception and compare by length instead.
   spelling twice. Sixty-nine spellings moved, the less general side each
   time; both `only`s and both `qualified`s are gone.
 
+**And since ADR-0293 the message says where.** `runtime error: array index
+out of bounds (1..3) at prog.pas:18:17` -- the position after the message,
+because five readers recognise a trap by the prefix and `sanitize.sh` tells it
+from UBSan's by UBSan's position coming *first*; the file as it was named to
+the compiler, one constant per module, never through the 255-character
+message buffer; the column the construct's own. Two classes, two routes. An
+inline check -- `EmitTrapIf` and its four siblings -- passes the file, line
+and column as three arguments in the cold block. A call into a runtime
+routine that can trap, which the runtime's call graph says is 72 of the 127
+the emitter calls and includes every `write`, is bracketed: `EmitAt` stores a
+`{ ptr, i32, i32 }` record's address into the runtime's thread-local `pas_at`
+and `EmitAtDone` clears it, so a call nobody bracketed reports no position
+and never the last one's. Unmeasurable in time; +28% of the compiler's text.
+The seed still calls the two-word `pas_index_error`, which stays as a
+positionless wrapper until the reseed.
+
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the
 rest all answer for the base — so `1..9` *is* an integer everywhere except
