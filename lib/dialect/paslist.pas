@@ -40,16 +40,16 @@
 
 module PasList;
 
-export PasList = (ItemMax, ListItem, List,
+export PasList = (ListItemMax, ListItem, List,
                   ListPush, ListPop, ListPeek, ListEmpty, ListLen,
                   ListAppend, ListGet, ListDrop, ListClear, ListReverse);
 
 const
   { The capacity of one element, PasStrVec's ItemMax and for its reason. }
-  ItemMax = 255;
+  ListItemMax = 255;
 
 type
-  ListItem = string(ItemMax);
+  ListItem = string(ListItemMax);
   { The chain. `List` is the whole of what a caller names: a node is this
     module's business, and a caller could do nothing with one anyway -- an
     owned pointer cannot be copied out of the chain. }

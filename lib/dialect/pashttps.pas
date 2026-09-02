@@ -9,7 +9,7 @@
   `PasHttp` four exported routines and cost this module twenty-four lines
   (ADR-0265).
 
-  **Those twenty-four lines are duplicated on purpose.** `Send` and `Receive`
+  **Those twenty-four lines are duplicated on purpose.** `HttpsSend` and `HttpsReceive`
   below are the same loops `PasHttp.Send` and `PasHttp.Receive` are, over a
   different pair of primitives. ADR-0116's rule is that two sites are a
   demand, and this is the case where the demand is refused with a reason: what
@@ -29,8 +29,8 @@
   **What TLS adds to the failures is nothing new.** A refused handshake, an
   unverified certificate and a connection the far end dropped all arrive as
   `errIO` from `PasTls`, and `c.reason` is where the sentence is; this module
-  passes both through without inventing a code. `PasTls.Connect` is the
-  caller's to make, as `PasNet.Connect` is for the plain form -- a client that
+  passes both through without inventing a code. `TlsConnect` is the
+  caller's to make, as `NetConnect` is for the plain form -- a client that
   is handed an open connection can be pointed at a proxy, a test server or a
   socket somebody else opened, and this module has no business deciding.
 
@@ -39,75 +39,74 @@
 
 module PasHttps;
 
-export PasHttps = (Send, Receive, Exchange);
+export PasHttps = (HttpsSend, HttpsReceive, HttpsExchange);
 
-{ `PasHttp` is imported **qualified** because three of its exported names are
-  three of this module's, which is the property worth keeping: a program
-  changes the qualifier on a call and not the name of what it is doing. }
-import PasError; PasTls; PasHttp qualified;
+{ `PasHttp` is imported plain: this module's three routines carry the `Https`
+  prefix, so nothing here collides with the grammar it wraps (ADR-0298). }
+import PasError; PasTls; PasHttp;
 
-{ Write the request over `c`. The codes are `PasHttp.BeginRequest`'s, with
+{ Write the request over `c`. The codes are `BeginRequest`'s, with
   `errIO` where the TLS connection refused rather than where a socket did. }
-function Send(var c: Connection; protected var q: PasHttp.Request): ErrorCode;
+function HttpsSend(var c: Connection; protected var q: Request): ErrorCode;
 
-{ Read a response into `r`. The method is `PasHttp.BeginResponse`'s and is a
+{ Read a response into `r`. The method is `BeginResponse`'s and is a
   parameter for the reason given there: RFC 9112 §6.3 makes the framing a
   property of the exchange. }
-function Receive(var c: Connection; method: PasHttp.MethodName;
-                 var r: PasHttp.Response): ErrorCode;
+function HttpsReceive(var c: Connection; method: MethodName;
+                 var r: Response): ErrorCode;
 
-{ `Send` and then `Receive`. Two routines as well as one, for `PasHttp`'s
+{ `HttpsSend` and then `HttpsReceive`. Two routines as well as one, for `PasHttp`'s
   reason: a program that is both ends of a connection has to put the server's
   answer between them. }
-function Exchange(var c: Connection; protected var q: PasHttp.Request;
-                  var r: PasHttp.Response): ErrorCode;
+function HttpsExchange(var c: Connection; protected var q: Request;
+                  var r: Response): ErrorCode;
 
 end;
 
-function Send;
+function HttpsSend;
 var
   { What one write carries, and the only decision this module makes about the
     shape of what goes out: `NextPiece` fills it and spans a longer piece
     across calls, so this is a buffer size and never a bound on a request. }
   buf: TlsLine;
-  w: PasHttp.RequestCursor;
+  w: RequestCursor;
   e: ErrorCode;
 begin
-  e := PasHttp.BeginRequest(q, w);
+  e := BeginRequest(q, w);
   if Failed(e) then exit(e);
   while not w.done do begin
-    PasHttp.NextPiece(q, w, buf);
+    NextPiece(q, w, buf);
     if length(buf) > 0 then begin
-      e := WriteText(c, buf);
+      e := TlsWriteText(c, buf);
       if Failed(e) then exit(e)
     end
   end;
-  Send := errNone
+  HttpsSend := errNone
 end;
 
-function Receive;
+function HttpsReceive;
 var raw: TlsLine; e: ErrorCode;
 begin
-  PasHttp.BeginResponse(r, method);
-  while PasHttp.WantsLine(r) do begin
-    e := ReadLine(c, raw);
+  BeginResponse(r, method);
+  while WantsLine(r) do begin
+    e := TlsReadLine(c, raw);
     { A closed connection is not a failure here; which of RFC 9112 §6.3's
       rules was in force decides what it means, and `FeedEnd` is what knows
       that. `errFull` and `errIO` are the transport's own and are final. }
-    if e = errAbsent then e := PasHttp.FeedEnd(r)
+    if e = errAbsent then e := FeedEnd(r)
     else if Failed(e) then exit(e)
-    else e := PasHttp.FeedLine(r, raw);
+    else e := FeedLine(r, raw);
     if Failed(e) then exit(e)
   end;
-  Receive := errNone
+  HttpsReceive := errNone
 end;
 
-function Exchange;
+function HttpsExchange;
 var e: ErrorCode;
 begin
-  e := Send(c, q);
+  e := HttpsSend(c, q);
   if Failed(e) then exit(e);
-  Exchange := Receive(c, q.method, r)
+  HttpsExchange := HttpsReceive(c, q.method, r)
 end;
 
 end.

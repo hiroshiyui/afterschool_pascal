@@ -25,7 +25,7 @@ begin
   { the read is inside the arm the tag selects, which is what makes it legal }
   if got.ok then write(' val=', got.val:1)
             else write(' cause=', ErrorText(got.cause));
-  writeln(' [', ResultText(got), ']')
+  writeln(' [', IntResultText(got), ']')
 end;
 
 begin

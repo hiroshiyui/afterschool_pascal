@@ -3,7 +3,7 @@
   **The golden beside this file did not change when this program was rewritten**,
   and that is the point of the rewrite. Every argument here used to have to be a
   string *variable* -- a variable-string could not be a value parameter
-  (ADR-0052), so `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` did not
+  (ADR-0052), so `StartsWith(s, 'Hello')` and `UpperAscii(Reverse(s))` did not
   compile and the earlier version of this program assigned to a named
   intermediate before every call. ADR-0115 made the callee convert its
   argument, so the literals and the nesting below are written directly and the
@@ -17,8 +17,8 @@ var s: Line;
 begin
   s := 'Hello, World';
 
-  writeln(Upper(s));
-  writeln(Lower(s));
+  writeln(UpperAscii(s));
+  writeln(LowerAscii(s));
 
   { A prefix and a suffix that match, and one of each that does not. }
   writeln(StartsWith(s, 'Hello'));
@@ -72,5 +72,5 @@ begin
 
   { One function's result as another's argument, which is the composition the
     old interface could not express at all. }
-  writeln(Upper(Reverse(s)))
+  writeln(UpperAscii(Reverse(s)))
 end.

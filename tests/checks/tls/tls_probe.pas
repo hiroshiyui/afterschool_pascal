@@ -56,12 +56,12 @@ begin
   { 1. The system's anchors do not know a certificate made for this test, so
        the handshake must fail -- and it must fail with something to say. A
        client that accepted this would accept anything. }
-  e := Connect(c, 'localhost', goodPort);
+  e := TlsConnect(c, 'localhost', goodPort);
   Say('unknown anchor       ', e, true);
 
   { 2. The certificate itself as the anchor: the chain verifies and the name
        matches, so this is the connection. }
-  e := ConnectTrusting(c, 'localhost', goodPort, goodCert);
+  e := TlsConnectTrusting(c, 'localhost', goodPort, goodCert);
   Say('own certificate      ', e, false);
   writeln('  protocol negotiated : ',
           (length(c.protocol) >= 7) and (c.protocol[1..6] = 'TLSv1.'));
@@ -69,11 +69,11 @@ begin
   { 3. And it carries data. `s_server -WWW` answers a small file the harness
        wrote, so the body is this repository's and not OpenSSL's -- which is
        what lets the two cases below name what they expect. }
-  e := WriteLine(c, 'GET /hello HTTP/1.0');
+  e := TlsWriteLine(c, 'GET /hello HTTP/1.0');
   Say('  request written    ', e, false);
-  e := WriteLine(c, '');
+  e := TlsWriteLine(c, '');
   Say('  request ended      ', e, false);
-  e := ReadLine(c, line);
+  e := TlsReadLine(c, line);
   Say('  response read      ', e, false);
   writeln('  status line        : ', line[1..12]);
 
@@ -81,48 +81,48 @@ begin
        truncation. The next line is `Content-type: text/plain`, longer than
        eight characters, and its characters are gone rather than
        half-delivered. }
-  e := ReadLine(c, short);
+  e := TlsReadLine(c, short);
   Say('  a line that is long', e, true);
 
   { 5. The far end closes when the page ends, which is the ordinary end of a
        loop and not a failure. }
   n := 0;
   repeat
-    e := ReadLine(c, line);
+    e := TlsReadLine(c, line);
     if e = errNone then n := n + 1
   until e <> errNone;
   writeln('  loop ended on      : ', ErrorText(e));
   writeln('  more lines followed: ', n > 0);
 
   { 6. Closing twice is harmless, and the variable may be connected again. }
-  Close(c);
-  Close(c);
+  TlsClose(c);
+  TlsClose(c);
   writeln('closed twice         : ok');
 
   { 7. The chain is perfect and the name is wrong: this is the case a client
        checking only the chain accepts, and it must be refused. }
-  e := ConnectTrusting(c, 'localhost', badPort, badCert);
+  e := TlsConnectTrusting(c, 'localhost', badPort, badCert);
   Say('right chain, wrong name', e, true);
 
   { 8. A trust file that is not there is this program's own mistake and must
        not arrive as a rejection by the peer. }
-  e := ConnectTrusting(c, 'localhost', goodPort, missing);
+  e := TlsConnectTrusting(c, 'localhost', goodPort, missing);
   Say('trust file absent    ', e, true);
 
   { 9. Nothing is listening on the service `1`, which is reserved and needs
        privilege even to bind. }
-  e := ConnectTrusting(c, 'localhost', '1', goodCert);
+  e := TlsConnectTrusting(c, 'localhost', '1', goodCert);
   Say('nobody listening     ', e, true);
 
   { 10. A host that resolves to nothing. }
-  e := ConnectTrusting(c, 'no-such-host.invalid', goodPort, goodCert);
+  e := TlsConnectTrusting(c, 'no-such-host.invalid', goodPort, goodCert);
   Say('host does not resolve', e, true);
 
   { 11. Reading or writing a connection that is not open is refused rather
         than being undefined. }
-  e := WriteText(c, 'x');
+  e := TlsWriteText(c, 'x');
   Say('write when closed    ', e, true);
-  e := ReadLine(c, line);
+  e := TlsReadLine(c, line);
   Say('read when closed     ', e, true);
   writeln('  line left empty    : ', line = '')
 end.

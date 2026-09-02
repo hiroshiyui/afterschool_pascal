@@ -44,7 +44,7 @@ module PasJson;
 export PasJson = (JsonKind, jsNull, jsFalse, jsTrue, jsNumber, jsString,
                   jsArray, jsObject,
                   JsonName, JsonLine, JsonChars, JsonPtr, JsonResult,
-                  JsonDepthMax, NameMax, LineMax,
+                  JsonDepthMax, JsonNameMax, JsonLineMax,
 
                   JsonCharsNew, JsonCharsFree, JsonCharsAdd, JsonCharsAddLine,
                   JsonCharsLen, JsonCharsAt, JsonCharsInto, JsonCharsFull,
@@ -65,7 +65,7 @@ import PasError; PasContainer;
 
 const
   { A key is a key. `errFull` rather than a silent truncation past this. }
-  NameMax = 255;
+  JsonNameMax = 255;
   { A ready-made capacity for a caller that wants one, and **not** a bound
     this module imposes: every routine below that takes a string in one piece
     takes a schematic one, so the capacity is the caller's (ADR-0291). A
@@ -73,7 +73,7 @@ const
     by PasContainer's CapMax and says so: `JsonCharsFull` is how a caller
     asks, and until ADR-0276 this comment claimed there was no bound and a
     buffer past it trapped. }
-  LineMax = 255;
+  JsonLineMax = 255;
   { Nesting, so a hostile document cannot exhaust the stack -- the parser is
     recursive descent and this is the compiler's own answer (ADR-0020) at a
     depth a message will never reach. }
@@ -85,8 +85,8 @@ type
     then covers the document rather than the document minus a field. }
   JsonKind = (jsNull, jsFalse, jsTrue, jsNumber, jsString, jsArray, jsObject);
 
-  JsonName = string(NameMax);
-  JsonLine = string(LineMax);
+  JsonName = string(JsonNameMax);
+  JsonLine = string(JsonLineMax);
 
   { PasContainer's vector over `char`, which is what makes a string value
     unbounded. A caller never names `Vec` and never imports PasContainer: the
@@ -116,7 +116,7 @@ type
 
   { ADR-0120's shape, and AP 6.4.13 since ADR-0176. `errSyntax` for a document
     that is not one, `errRange` for a number that cannot be represented,
-    `errFull` for a member name longer than `NameMax`. }
+    `errFull` for a member name longer than `JsonNameMax`. }
   JsonResult = JsonPtr ! ErrorCode;
 
 { --- the byte buffer ------------------------------------------------------ }
@@ -282,7 +282,7 @@ begin
     JsonCharsInto := errFull
   else begin
     { Built into `s` and not through a local accumulator. It was built through
-      `acc: string(LineMax)`, which made the capacity check a lie: the guard
+      `acc: string(JsonLineMax)`, which made the capacity check a lie: the guard
       asks the *caller's* capacity and the accumulator imposed 255 whatever
       the caller passed, so a document between 256 and the caller's capacity
       passed the check and then stopped the program at
@@ -860,7 +860,7 @@ begin
         if named then begin
           JsonCharsNew(nm);
           if not ParseStringInto(b, i, nm) then e := errSyntax
-          else if JsonCharsLen(nm) > NameMax then e := errFull
+          else if JsonCharsLen(nm) > JsonNameMax then e := errFull
           else e := JsonCharsInto(nm, s);
           JsonCharsFree(nm);
           if e = errNone then begin

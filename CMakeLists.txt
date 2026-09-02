@@ -437,6 +437,21 @@ if(Python3_FOUND)
   set_tests_properties(warning-free PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
+# ...and whether any two library modules export one spelling (ADR-0298). The
+# language has no overloading and 6.11.2 puts every imported name in one
+# scope, so a collision costs every importer an `only` or a `qualified`, per
+# import; the language server carried two for that reason and the library
+# held 37 such spellings the day this was written. The export-parts are read
+# from the compiler's own token stream, `=>` honoured, and the sweep refuses
+# to pass by reading nothing. Skips (77) when pascalc has not been built.
+if(Python3_FOUND)
+  add_test(NAME export-unique
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/export_unique.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(export-unique PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ...and how long the compiler takes, which nothing here had ever asked
 # (ADR-0270). A millisecond is a fact about the machine that took it, so what
 # is committed is a set of *proportions* -- four stage shares of one compile,

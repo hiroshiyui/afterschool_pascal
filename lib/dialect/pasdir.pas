@@ -31,12 +31,12 @@
   `PasFS.Info(dir + '/' + name)`, which is one `stat` and an honest answer.
 
   **The order is the file system's**, which is neither sorted nor stable, and
-  `.` and `..` are entries like any others. `Next` gives every entry; `List`
+  `.` and `..` are entries like any others. `NextEntry` gives every entry; `ListDir`
   is the convenience and skips those two, so an empty vector means an empty
   directory.
 
   **A directory changed while it is being read** has no answer here and none in
-  POSIX: whether an entry created or removed after `Open` appears is
+  POSIX: whether an entry created or removed after `OpenDir` appears is
   unspecified. Read a directory you are also modifying and the result is
   whatever the file system does.
 
@@ -46,7 +46,7 @@
 
 module PasDir;
 
-export PasDir = (NameMax, EntryName, Dir, Open, Next, Close, List);
+export PasDir = (EntryNameMax, EntryName, Dir, OpenDir, NextEntry, CloseDir, ListDir);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -58,7 +58,7 @@ const
     is 14 and is a floor nobody has been at for thirty years. A name longer than
     this is reported as `errFull` by the runtime, which knows the length -- not
     truncated, and not the trap an over-long copy would be. }
-  NameMax = 255;
+  EntryNameMax = 255;
 
 type
   { An open directory this program owns; `closedir` is what releases it
@@ -67,10 +67,10 @@ type
 
   { One entry's name -- a name and not a path, so it holds no separator and
     the caller joins it to the directory it came from. It is StrVec's ItemMax
-    exactly, which is why `List` pushes one without a conversion, and it is
-    the capacity at which `Next` cannot answer `errFull`. A caller wanting a
+    exactly, which is why `ListDir` pushes one without a conversion, and it is
+    the capacity at which `NextEntry` cannot answer `errFull`. A caller wanting a
     shorter string may pass one and be told. }
-  EntryName = string(NameMax);
+  EntryName = string(EntryNameMax);
 
   { How the name stops being a C pointer (ADR-0123). Not exported: a caller
     sees an EntryName, and the copy is made at the call site. }
@@ -81,10 +81,10 @@ type
   PasFS.Exists and PasFS.Info are how a caller tells those apart, and
   PasOS.LastErrorText is the sentence. What `d` held before is released first,
   whichever way this answers. }
-function Open(var d: Dir; path: PathName): ErrorCode;
+function OpenDir(var d: Dir; path: PathName): ErrorCode;
 
 { The next entry's name into `name`, which is a string of the caller's own
-  capacity -- PasStream.ReadLine's shape, so an EntryName is a convenience and
+  capacity -- StreamReadLine's shape, so an EntryName is a convenience and
   not an obligation.
 
   `errNone` and `name` holds it; `errAbsent` when the directory is exhausted,
@@ -92,7 +92,7 @@ function Open(var d: Dir; path: PathName): ErrorCode;
   longer than `name` can hold, whose entry is consumed rather than retried,
   there being no way to put one back; `errIO` for anything else.
 
-      while Next(d, nm) = errNone do writeln(nm)
+      while NextEntry(d, nm) = errNone do writeln(nm)
 
   **The capacity is checked on the far side**, by the routine that measured the
   name, so an over-long one is a code and never the trap an over-long copy
@@ -101,7 +101,7 @@ function Open(var d: Dir; path: PathName): ErrorCode;
   stated, to whoever holds the pointer.
 
   `name` is set to the null-string on every answer but `errNone`. }
-function Next(var d: Dir; var name: string): ErrorCode;
+function NextEntry(var d: Dir; var name: string): ErrorCode;
 
 { Release the directory now rather than at the block's end, and leave `d`
   empty. Harmless on an empty one.
@@ -111,7 +111,7 @@ function Next(var d: Dir; var name: string): ErrorCode;
   ADR-0202, the type having had one form of assignment and that one from an
   external function, which cost a refused system call and a stale errno. This
   module and PasStream are the two callers that argued for the form. }
-procedure Close(var d: Dir);
+procedure CloseDir(var d: Dir);
 
 { Every entry of a directory onto `names`, in the file system's own order,
   with `.` and `..` left out -- so an empty vector means an empty directory.
@@ -121,7 +121,7 @@ procedure Close(var d: Dir);
   part-way leaves what was read: the answer is the failure's code, and the
   entries already pushed are still there. `errNone` when the directory was
   read to its end. }
-function List(path: PathName; var names: StrVecPtr): ErrorCode;
+function ListDir(path: PathName; var names: StrVecPtr): ErrorCode;
 
 end;
 
@@ -139,17 +139,17 @@ function ExtDirNext(d: Dir; cap: integer;
                     var status: integer): OptEntryName;
   external 'pasx_dir_next';
 
-function Open;
+function OpenDir;
 begin
   d := ExtOpendir(path);
-  if d = nil then Open := errIO else Open := errNone
+  if d = nil then OpenDir := errIO else OpenDir := errNone
 end;
 
-function Next;
+function NextEntry;
 var got: OptEntryName; status: integer;
 begin
   status := 0;
-  { the caller's capacity and not NameMax: what must not be exceeded is the
+  { the caller's capacity and not EntryNameMax: what must not be exceeded is the
     string this answer is going into, and 6.4.3.3.3 makes that readable }
   got := ExtDirNext(d, name.capacity, status);
   name := '';
@@ -157,39 +157,39 @@ begin
     routine answering 0 with no name would be a defect over there, and reading
     `got^` for it is the trap that says so rather than a null-string entry. }
   if got = nil then begin
-    if status = 1 then Next := errAbsent
-    else if status = 3 then Next := errFull
-    else Next := errIO
+    if status = 1 then NextEntry := errAbsent
+    else if status = 3 then NextEntry := errFull
+    else NextEntry := errIO
   end
   else begin
     name := got^;
-    Next := errNone
+    NextEntry := errNone
   end
 end;
 
-procedure Close;
+procedure CloseDir;
 begin
   { 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
   d := nil
 end;
 
-function List;
+function ListDir;
 var d: Dir; e: ErrorCode; nm: EntryName;
 begin
-  { `d` is a local of this activation, so the directory is closed when List
+  { `d` is a local of this activation, so the directory is closed when ListDir
     returns -- by every path out of it, including the failures below. That is
-    what the handle-type is for and it is why nothing here says Close. }
-  e := Open(d, path);
+    what the handle-type is for and it is why nothing here says CloseDir. }
+  e := OpenDir(d, path);
   if e = errNone then begin
-    e := Next(d, nm);
+    e := NextEntry(d, nm);
     while e = errNone do begin
       if (nm <> '.') and (nm <> '..') then SVecPush(names, nm);
-      e := Next(d, nm)
+      e := NextEntry(d, nm)
     end;
     { reaching the end is how a listing succeeds }
     if e = errAbsent then e := errNone
   end;
-  List := e
+  ListDir := e
 end;
 
 end.

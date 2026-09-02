@@ -91,22 +91,16 @@ import PasError;
        PasIO;
        PasEnv;
        PasStrVec;
-       { 6.11.3's import-clause, and the reason for it is a collision rather
-         than a preference: PasDir exports `Close` and `NameMax`, which PasIO
-         and PasJson also export. `List` is the whole of what this program
-         wants from it, and naming that is cheaper than qualifying every use
-         of the other two. }
-       PasDir only (List);
+       { No `only` and no `qualified` anywhere in this list: no two modules
+         under lib/ export one spelling, and `export-unique` holds the library
+         to that (ADR-0298). }
+       PasDir;
        { ADR-0120's ParseInt, for the four numbers on a --dump-symbols line.
          A second reader of decimal digits written here would be a second
          reader free to disagree with the one this tree already has -- and
          the one it has is the one AP 6.5.6's empty substring was found
-         through (ADR-0219).
-
-         `only` for the same reason PasDir has one, which is now a pattern
-         and not an incident: PasParse exports `ResultText` and so does
-         PasError. Four names are the whole of what this program wants. }
-       PasParse only (ParseMax, ParseLine, ParseInt, IntOr);
+         through (ADR-0219). }
+       PasParse;
        PasProcess;
        PasContainer;
        PasJson;
@@ -680,7 +674,7 @@ begin
   found := false;
   if depth > WalkDepthMax then exit(false);
   SVecNew(names, 32);
-  if List(dir, names) = errNone then begin
+  if ListDir(dir, names) = errNone then begin
     SVecSort(names);
     for i := 1 to SVecLen(names) do begin
       nm := SVecGet(names, i);
@@ -2374,11 +2368,11 @@ begin
   while not eof(scratchFile) do begin
     while not eoln(scratchFile) do begin
       read(scratchFile, c);
-      if length(chunk) >= LineMax - 1 then Flush;
+      if length(chunk) >= JsonLineMax - 1 then Flush;
       chunk := chunk + c
     end;
     readln(scratchFile);
-    if length(chunk) >= LineMax - 1 then Flush;
+    if length(chunk) >= JsonLineMax - 1 then Flush;
     chunk := chunk + chr(10)
   end;
   Flush;

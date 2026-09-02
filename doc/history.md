@@ -4752,6 +4752,37 @@ written in, strikethrough and all.
   that was merely correct** — and this one shows the converse too: the pass
   that finds them can also file a defect as a taste.
 
+**An eighth followed on 2026-09-03**, the second of the usability findings,
+and it is the one whose measurement changed the task it named.
+
+- ~~**`only` is a collision workaround, not a narrowing tool.**~~ **Closed by
+  ADR-0298, and the entry had counted three of thirty-seven.** It read: the
+  server imports twelve modules, and both of its §6.11.3 `only` clauses
+  exist because two modules export the same spelling — `PasDir` exports
+  `Close` and `NameMax`, which `PasIO` and `PasJson` also export, and
+  `PasParse` exports `ResultText`, and so does `PasError`. Collisions grow
+  with the product of the export lists, `only` is per-import and
+  enumerative, `qualified` makes every use wordier, and the fortieth-import
+  program should be written before designing anything.
+
+  **The fortieth-import program did not need writing; reading the
+  export-parts did.** Every spelling exported by more than one module under
+  `lib/` was listed, folded, and there were **37**: twenty shared by
+  `PasContainer` and the fixed `PasVector`/`PasMap` it generalised, nine
+  shared among five transports on purpose (ADR-0264, ADR-0265), four
+  modules each exporting a `LineMax`, and four accidents — of which the
+  entry's `ResultText` was `PasIO`'s and `PasParse`'s, not `PasError`'s, and
+  `PasDir.List` collided with a *type* in `PasList` that nothing had noticed
+  because nothing imported both. The deliberate ones settled the design:
+  each transport imported the one beneath it `qualified`, which is the very
+  cost the entry complained of, paid inside the library at every layer. So
+  the rule is absolute — no two modules under `lib/` export one spelling —
+  and the less general side of each collision took a prefix. Both `only`s
+  and both `qualified`s are gone, and `export-unique` reads every
+  export-part from the compiler's token stream and refuses to pass by
+  reading nothing. A collision is now a failed build and not a comment
+  beside an import.
+
 ### The chapter as it stood, and the argument it was made on
 
 **The IDE was withdrawn on 2026-09-01**, which closes the argument below

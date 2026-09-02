@@ -49,15 +49,15 @@ function Remove(path: PathName): ErrorCode;
 
 **`ErrorCode`.** `errNone` is success. Thirty-six exported routines take this
 shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
-`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `OpenRead`,
-`OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, `PasDir`'s
-`Open`, `Next` and `List`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
-`Lower`, and `PasNet`'s `Connect`, `Listen`, `Accept`, `Service`, `WriteText`,
-`WriteLine`, `ReadLine` and `Wait` — the four `Open`s included, because the stream or
+`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `StreamOpenRead`,
+`StreamOpenWrite`, `StreamOpenAppend`, `StreamWriteText`, `StreamWriteLine` and `StreamFlush`, `PasDir`'s
+`OpenDir`, `NextEntry` and `ListDir`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
+`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept`, `NetService`, `NetWriteText`,
+`NetWriteLine`, `NetReadLine` and `NetWait` — the four `Open`s included, because the stream or
 directory they answer goes into the `var` parameter and what is left to return
 is whether the world refused.
 
-`PasDir.Next` is the one that uses more than two of the six codes, and it is
+`PasDir.NextEntry` is the one that uses more than two of the six codes, and it is
 worth reading as the shape rather than as an exception: `errNone` with a name,
 `errAbsent` at the end of the directory, `errFull` for a name too long for the
 string it was going into, `errIO` for a refusal. Each is that code's own gloss
@@ -110,9 +110,9 @@ function Exists(path: PathName): boolean;
 ```
 
 **A question about the world** answers `boolean`. `Exists`, `Defined`, `Failed`,
-`AtEnd` and `ReadLine` are questions, not operations: there is no failure
+`AtEnd` and `StreamReadLine` are questions, not operations: there is no failure
 distinct from the answer, and giving one an `ErrorCode` would invent a third
-state the caller would have to handle for nothing. `ReadLine` is the one that
+state the caller would have to handle for nothing. `StreamReadLine` is the one that
 looks like an operation, and its `false` means *nothing more*, which is the
 answer and not a refusal.
 
@@ -128,8 +128,10 @@ other call in these modules can fail.
 - **`XOr(r, whenBad)`** takes a result and a default, for a caller who has a
   sensible answer and does not want to branch: `LookupOr`, `PathOr`, `CountOr`,
   `IntOr`, `RealOr`. Always the result first and the default second.
-- **`ResultText(r)`** renders a result as a sentence, for a caller composing a
-  message. `PasError.ErrorText` does the same for a bare code, and it answers
+- **`<Result>Text(r)`** — `IntResultText`, `CountResultText` — renders a result
+  as a sentence, for a caller composing a message. Named for the result type
+  and not `ResultText` alone, because two modules exporting one spelling is
+  what `export-unique` refuses (ADR-0298). `PasError.ErrorText` does the same for a bare code, and it answers
   for `errNone` too, so a routine that formats unconditionally needs no special
   case.
 
@@ -187,8 +189,8 @@ function — the one assignment the type has — and the block the caller
 declared it in is what closes it. `s <> nil` asks whether it is open and is
 the whole of what a caller can ask. This is not a shape chosen over the
 others; it is the only one the type admits, and it is why `PasStream`'s
-`Open`s answer an `ErrorCode` where `PasIO.OpenRead` answers a result record
-carrying the descriptor. `PasTls.Connect` is the same shape one level up: what
+`StreamOpen`s answer an `ErrorCode` where `PasIO.OpenRead` answers a result record
+carrying the descriptor. `TlsConnect` is the same shape one level up: what
 it fills is a **record** of three handles -- a socket, a context and a session
 -- which is affine for the same reason a single handle is, and which the
 declaring block releases in one go. A module that keeps its handle private — `PasProcess`

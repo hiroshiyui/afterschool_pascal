@@ -20,7 +20,7 @@
 
   - **A function accumulates into a local and assigns its identifier once.**
     6.8.2.2 makes every *read* of the identifier a recursive call, so
-    `Upper := Upper + c` is a recursion rather than an append; the other way to
+    `UpperAscii := UpperAscii + c` is a recursion rather than an append; the other way to
     accumulate is a result-variable-specification, and 6.11.1 makes a heading
     in a module-heading a `forward`, whose body cannot see that name. That one
     is still a live limitation and doc/sop.md 7 carries it.
@@ -35,7 +35,7 @@ module PasStrings;
 
 export PasStrings = (
   LineMax, Line,
-  Upper, Lower,
+  UpperAscii, LowerAscii,
   StartsWith, EndsWith, IndexOf,
   PadLeft, PadRight, Times, Reverse, Replace);
 
@@ -45,8 +45,8 @@ const
 type
   Line = string(LineMax);
 
-function Upper(s: Line): Line;
-function Lower(s: Line): Line;
+function UpperAscii(s: Line): Line;
+function LowerAscii(s: Line): Line;
 
 function StartsWith(s, prefix: Line): boolean;
 function EndsWith(s, suffix: Line): boolean;
@@ -82,7 +82,7 @@ end;
   passes every other byte through -- which is the honest behaviour to expose
   until the text model of ADR-0109 is settled. }
 
-function Upper;
+function UpperAscii;
 var t: Line; i: integer;
 begin
   t := '';
@@ -91,10 +91,10 @@ begin
       t := t + chr(ord(s[i]) - ord('a') + ord('A'))
     else
       t := t + s[i];
-  Upper := t
+  UpperAscii := t
 end;
 
-function Lower;
+function LowerAscii;
 var t: Line; i: integer;
 begin
   t := '';
@@ -103,7 +103,7 @@ begin
       t := t + chr(ord(s[i]) - ord('A') + ord('a'))
     else
       t := t + s[i];
-  Lower := t
+  LowerAscii := t
 end;
 
 function StartsWith;

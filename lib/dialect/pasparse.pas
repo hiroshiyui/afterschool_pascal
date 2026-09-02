@@ -27,7 +27,7 @@
 module PasParse;
 
 export PasParse = (ParseMax, ParseLine, IntResult,
-                   ParseInt, IntOr, ResultText);
+                   ParseInt, IntOr, IntResultText);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part:
   what a module exports is part of its heading and what it imports is not. }
@@ -62,7 +62,7 @@ function IntOr(r: IntResult; whenBad: integer): integer;
 
 { A result as a sentence, for a caller assembling a message rather than
   branching. }
-function ResultText(r: IntResult) = t: ErrText;
+function IntResultText(r: IntResult) = t: ErrText;
 
 end;
 
@@ -128,7 +128,7 @@ begin
   if r.ok then IntOr := r.val else IntOr := whenBad
 end;
 
-function ResultText;
+function IntResultText;
 begin
   if r.ok then t := 'parsed' else t := ErrorText(r.cause)
 end;

@@ -201,7 +201,7 @@ function ExtScalar(s: string; at: integer; var cp: integer): integer;
 function ExtElement(s: string; at: integer): integer;
   external 'pasx_text_element';
 
-{ The three cases, and the shape is PasDir.Next's: the value comes back
+{ The three cases, and the shape is PasDir.NextEntry's: the value comes back
   through an optional and the *caller's* capacity goes in, so the bound checked
   is the one the program declared rather than one this module chose. }
 type CaseText = string(CaseMax);

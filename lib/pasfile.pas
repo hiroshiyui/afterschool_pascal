@@ -17,7 +17,7 @@
   same stop.
 
   **Lines are what text files hold, and they are capped.** A line longer
-  than `LineMax` is delivered truncated to it, and the remainder of that line
+  than `FileLineMax` is delivered truncated to it, and the remainder of that line
   is skipped -- `readln` does that -- so a routine over lines never stops on
   a long one and never reports it either. `ReadAllText` is the one routine
   that can say it ran out of room: `size` is the whole file's length, so the
@@ -31,17 +31,17 @@
 
 module PasFile;
 
-export PasFile = (PathMax, FilePath, LineMax, FileLine,
+export PasFile = (PathMax, FilePath, FileLineMax, FileLine,
                   FileExists, LineCount, ReadLine, ForEachLine, ReadAllText,
                   WriteAllText, WriteLine, AppendLine, AppendText, CopyFile);
 
 const
   PathMax = 255;
-  LineMax = 255;
+  FileLineMax = 255;
 
 type
   FilePath = string(PathMax);
-  FileLine = string(LineMax);
+  FileLine = string(FileLineMax);
 
 { Whether something is there under that name. Exactly `binding(f).bound`
   after a `bind`, which is E.16's rule: existence, not readability. }
@@ -198,7 +198,7 @@ begin
     dest := '';
     n := 0;
     { Character by character rather than line by line, so that a line longer
-      than LineMax is not the one thing this routine silently loses. }
+      than FileLineMax is not the one thing this routine silently loses. }
     while not eof(f) do begin
       if eoln(f) then begin
         c := chr(10);
@@ -302,7 +302,7 @@ begin
     reset(i);
     rewrite(o);
     { Character by character, for ReadAllText's reason: nothing is lost to
-      LineMax. }
+      FileLineMax. }
     while not eof(i) do begin
       if eoln(i) then begin
         writeln(o);

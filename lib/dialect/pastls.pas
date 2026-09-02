@@ -19,9 +19,9 @@
   verifies wrongly is worse than one that does not verify at all, because it
   reports a security property it has not got -- and the commonest way to get
   one is a flag someone set while debugging. What a caller may choose is
-  *which anchors*: `Connect` uses the system's, `ConnectTrusting` uses one PEM
+  *which anchors*: `TlsConnect` uses the system's, `TlsConnectTrusting` uses one PEM
   file and nothing else. A self-signed certificate is its own anchor, so the
-  self-signed case is `ConnectTrusting` with that certificate and not a hole
+  self-signed case is `TlsConnectTrusting` with that certificate and not a hole
   in the rule.
 
   **What is checked, and what is therefore promised.** The peer must present a
@@ -47,7 +47,7 @@
   **The connection owns everything under it.** A `Connection` holds the TCP
   socket, the configuration and the session, all three handles, so the block
   that declared it closes all three when it ends (AP 6.4.12 NOTE 3) and
-  neither can outlive the other. That is also why `Connect` takes the variable
+  neither can outlive the other. That is also why `TlsConnect` takes the variable
   that will own the result rather than answering one: lib/dialect/README.md's
   third rule, and the only shape an affine type admits.
 
@@ -58,8 +58,8 @@
 
   **What it is not.** There is no server side, no client certificate, no
   session resumption, no renegotiation and no `Wait` over several connections
-  -- `PasNet.Wait` reads a descriptor and this module does not hand one out.
-  `PasHttp` speaks to a `PasNet.Socket` and so still speaks plain HTTP only;
+  -- `NetWait` reads a descriptor and this module does not hand one out.
+  `PasHttp` speaks to a `Socket` and so still speaks plain HTTP only;
   making it speak both means splitting its grammar from its transport, which
   is a change to that module and not to this one.
 
@@ -75,14 +75,14 @@ export PasTls = (TlsHostMax, TlsServiceMax, TlsLineMax, TlsReasonMax,
                  TlsProtocolMax, TlsTrustMax, TlsBufMax,
                  TlsHost, TlsService, TlsLine, TlsReason, TlsProtocol,
                  TrustPath, Connection,
-                 Connect, ConnectTrusting, Close,
-                 WriteText, WriteLine, ReadLine);
+                 TlsConnect, TlsConnectTrusting, TlsClose,
+                 TlsWriteText, TlsWriteLine, TlsReadLine);
 
-{ `PasNet` is imported **qualified** because five of its exported names are
-  five of this module's: a TLS connection is read and written with the words
-  a socket is, which is the property worth keeping and the reason the two
-  cannot share a scope (ISO/IEC 10206:1991 §6.11.2). }
-import PasError; PasNet qualified;
+{ `PasNet` is imported plain: this module's six routines carry the `Tls`
+  prefix and the socket's carry `Net`, so a program moving from one to the
+  other changes the type of a variable and the prefix on its calls -- the
+  qualifier it used to write, paid once in the library (ADR-0298). }
+import PasError; PasNet;
 
 const
   { The bounds, each prefixed as `PasLsp`'s are and for the reason this
@@ -97,7 +97,7 @@ const
     name of `PasNet`'s, the socket underneath being none of its business. }
   TlsHostMax = 255;
   TlsServiceMax = 63;
-  { What a line may be, and it is `PasNet.LineMax` deliberately: a program
+  { What a line may be, and it is `NetLine`'s capacity deliberately: a program
     that reads a socket and a program that reads a TLS connection meet the
     same bound, so moving between them is not a rewrite. }
   TlsLineMax = 4096;
@@ -157,7 +157,7 @@ type
   Connection = record
     reason: TlsReason;
     protocol: TlsProtocol;
-    sock: PasNet.Socket;
+    sock: Socket;
     ctx: Context;
     ss: Session;
     { What has arrived and not been handed out: `buf[head..tail - 1]`. Empty
@@ -176,7 +176,7 @@ type
   is what separates those two, which is why it is a field and not a sentence
   this module invents. What `c` held before is released first, whichever way
   this answers. }
-function Connect(var c: Connection; host: TlsHost;
+function TlsConnect(var c: Connection; host: TlsHost;
                  service: TlsService): ErrorCode;
 
 { The same, verifying against the certificates in `trust` and nothing else --
@@ -191,7 +191,7 @@ function Connect(var c: Connection; host: TlsHost;
   `errAbsent` where `trust` could not be read -- a path that is not there is
   the commonest mistake here and it must not look like a rejection by the
   peer. }
-function ConnectTrusting(var c: Connection; host: TlsHost;
+function TlsConnectTrusting(var c: Connection; host: TlsHost;
                          service: TlsService;
                          trust: TrustPath): ErrorCode;
 
@@ -204,16 +204,16 @@ function ConnectTrusting(var c: Connection; host: TlsHost;
   the end of the data from a connection that was cut. Harmless on a
   `Connection` that is already empty, and the variable may be connected
   again. }
-procedure Close(var c: Connection);
+procedure TlsClose(var c: Connection);
 
 { The characters of `text`, nothing appended. `errIO` on a refusal, which
   includes the far end having closed. }
-function WriteText(var c: Connection; text: TlsLine): ErrorCode;
+function TlsWriteText(var c: Connection; text: TlsLine): ErrorCode;
 
 { The characters and then CRLF, which is the terminator every line-oriented
-  protocol over TLS uses -- unlike `PasNet.WriteLine`, whose newline is a
+  protocol over TLS uses -- unlike `NetWriteLine`, whose newline is a
   Pascal one. }
-function WriteLine(var c: Connection; text: TlsLine): ErrorCode;
+function TlsWriteLine(var c: Connection; text: TlsLine): ErrorCode;
 
 { The next line into `line`, without its terminator, and with a carriage
   return immediately before the newline removed.
@@ -225,7 +225,7 @@ function WriteLine(var c: Connection; text: TlsLine): ErrorCode;
   terminator **is** a line.
 
   `line` is the null-string on every answer but `errNone`. }
-function ReadLine(var c: Connection; var line: string): ErrorCode;
+function TlsReadLine(var c: Connection; var line: string): ErrorCode;
 
 end;
 
@@ -258,7 +258,7 @@ const
   ADR-0203's reason -- a program holding a descriptor could close it twice --
   and the reason holds here: it lives inside one statement and is never a
   value of anything exported. }
-function ExtFd(s: PasNet.Socket): integer; external 'pasx_socket_fd';
+function ExtFd(s: Socket): integer; external 'pasx_socket_fd';
 
 { The client's half of OpenSSL. `TLS_client_method` answers a pointer to
   static storage which is only ever handed straight back to `SSL_CTX_new`, so
@@ -376,7 +376,7 @@ begin
   IsAddressLiteral := onlyDigits
 end;
 
-procedure Close;
+procedure TlsClose;
 var k: integer;
 begin
   if c.ss <> nil then begin
@@ -390,7 +390,7 @@ begin
     c.ss := nil
   end;
   c.ctx := nil;
-  PasNet.Close(c.sock);
+  NetClose(c.sock);
   c.head := 1;
   c.tail := 1;
   c.protocol := ''
@@ -405,13 +405,13 @@ function Establish(var c: Connection; host: TlsHost; service: TlsService;
                    trust: TrustPath): ErrorCode;
 var e: ErrorCode; k: integer; got: OptProtocol;
 begin
-  Close(c);
+  TlsClose(c);
   c.reason := '';
   c.protocol := '';
   c.head := 1;
   c.tail := 1;
 
-  e := PasNet.Connect(c.sock, host, service);
+  e := NetConnect(c.sock, host, service);
   if Failed(e) then begin
     c.reason := 'the connection could not be made';
     exit(e)
@@ -420,13 +420,13 @@ begin
   c.ctx := CtxNew(ClientMethod);
   if c.ctx = nil then begin
     c.reason := Complaint('no TLS context could be made');
-    PasNet.Close(c.sock);
+    NetClose(c.sock);
     exit(errIO)
   end;
   CtxSetVerify(c.ctx, VerifyPeer, 0);
   if CtxCtrl(c.ctx, CtrlSetMinProto, VersionTls12, '') <> 1 then begin
     c.reason := Complaint('TLS 1.2 could not be set as the floor');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
 
@@ -435,43 +435,43 @@ begin
   if k <> 1 then begin
     if trust = '' then begin
       c.reason := Complaint('this system has no trust anchors configured');
-      Close(c);
+      TlsClose(c);
       exit(errIO)
     end;
     { A named file that cannot be read is `errAbsent` and not `errIO`: it is
       this program's own mistake and not the peer's, and the two must not
       arrive as one code. }
     c.reason := Complaint('the trust file could not be read');
-    Close(c);
+    TlsClose(c);
     exit(errAbsent)
   end;
 
   c.ss := SslNew(c.ctx);
   if c.ss = nil then begin
     c.reason := Complaint('no TLS session could be made');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
   if not IsAddressLiteral(host) then
     if SslCtrl(c.ss, CtrlSetHostName, NameTypeHost, host) <> 1 then begin
       c.reason := Complaint('the server name could not be indicated');
-      Close(c);
+      TlsClose(c);
       exit(errIO)
     end;
   if SslSetHost(c.ss, host) <> 1 then begin
     c.reason := Complaint('the host could not be checked for');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
   if SslSetFd(c.ss, ExtFd(c.sock)) <> 1 then begin
     c.reason := Complaint('the connection could not carry TLS');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
 
   if SslConnect(c.ss) <> 1 then begin
     c.reason := Complaint('the handshake was refused');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
   { SSL_VERIFY_PEER has already failed the handshake on a bad chain, so
@@ -482,7 +482,7 @@ begin
     processor does not translate (ADR-0264). }
   if SslVerifyResult(c.ss) <> VerifyOk then begin
     c.reason := Complaint('the certificate was not accepted');
-    Close(c);
+    TlsClose(c);
     exit(errIO)
   end;
 
@@ -491,17 +491,17 @@ begin
   Establish := errNone
 end;
 
-function Connect;
+function TlsConnect;
 begin
-  Connect := Establish(c, host, service, '')
+  TlsConnect := Establish(c, host, service, '')
 end;
 
-function ConnectTrusting;
+function TlsConnectTrusting;
 begin
-  ConnectTrusting := Establish(c, host, service, trust)
+  TlsConnectTrusting := Establish(c, host, service, trust)
 end;
 
-function WriteText;
+function TlsWriteText;
 var n: integer;
 begin
   if c.ss = nil then begin
@@ -517,12 +517,12 @@ begin
     c.reason := Complaint('the write was refused');
     exit(errIO)
   end;
-  WriteText := errNone
+  TlsWriteText := errNone
 end;
 
-function WriteLine;
+function TlsWriteLine;
 begin
-  WriteLine := WriteText(c, text + CR + LF)
+  TlsWriteLine := TlsWriteText(c, text + CR + LF)
 end;
 
 { Move what is held down to the front, so a read can use the whole buffer. }
@@ -546,7 +546,7 @@ begin
   Take := true
 end;
 
-function ReadLine;
+function TlsReadLine;
 var p, count, n, k: integer;
 begin
   line := '';

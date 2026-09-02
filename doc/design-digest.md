@@ -179,6 +179,24 @@ own exception and compare by length instead.
   a long *URI* separately. The lesson is the third of its shape in
   `doc/roadmap.md`'s language-server chapter: the bound belonged to the
   convenience layer and not to the language, and a two-minute probe said so.
+- **No two library modules export one spelling** (ADR-0298). The roadmap's
+  entry said `lsp/pasls.pas`'s two `only` clauses existed for three
+  collisions; reading every export-part under `lib/` found **37**, in four
+  kinds — a generic container and the fixed ones it replaced sharing twenty
+  `Vec`/`Map` spellings, five transports sharing `Close`, `ReadLine`,
+  `WriteLine`, `WriteText`, `OpenRead`, `Connect`, `Send`, `Receive` and
+  `Exchange`, four modules each exporting a `LineMax`, and four accidents
+  (`ResultText`, `List`, `Upper`, `Lower`). The language has no overloading
+  and §6.11.2 puts every imported name into one scope, so each collision costs
+  every importer an `only` or a `qualified`, per import — and the two
+  deliberate ones (ADR-0264, ADR-0265) were already paying it, each
+  transport importing the one beneath it `qualified`. A prefix is that
+  qualifier paid once in the library. The rule is the library's rather than
+  the language's, held by `export-unique`, which reads the export-parts from
+  `--dump-tokens` — `=>` honoured, a range counted as its ends — and refuses
+  to pass by reading nothing: 486 exports across 31 modules, and no
+  spelling twice. Sixty-nine spellings moved, the less general side each
+  time; both `only`s and both `qualified`s are gone.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the
@@ -2761,7 +2779,7 @@ demonstrations, not a measurement** — `doc/sop.md` §7 carries that, because
 than it says.
 
 **A server serves many clients, and the language needed nothing** (ADR-0205).
-`PasNet.Wait` answers which of a list of sockets can be read, or accepted
+`NetWait` answers which of a list of sockets can be read, or accepted
 from, without blocking. The list is a schema — `SocketList(n: integer) =
 array [1..n] of Socket` — and the flags come back in a slice of booleans; the
 whole feature is a library routine over AP 6.4.12, AP 6.4.8 and ADR-0125, and
@@ -2778,7 +2796,7 @@ wanted.
   statement and its last nothing can close a socket, so the question does not
   arise: ADR-0187's *an ownership question is only a question while something
   holds the address*, a second time.
-- **Readiness is two questions and `poll` answers one of them.** `ReadLine`
+- **Readiness is two questions and `poll` answers one of them.** `NetReadLine`
   buffers, so a client sending two lines in one write leaves the second in the
   runtime with the descriptor quiet. Asking only `poll` leaves a server
   sitting still holding a line it was handed — which is the mutation that
@@ -4209,10 +4227,12 @@ mechanisms carry it.
   this language. That is what keeps OpenSSL out of the runtime, and therefore
   out of every program that does not want it: the **program** links
   `-lssl -lcrypto`, through `AFTERSCHOOL_PASCAL_LDFLAGS`.
-- **`PasNet` is imported qualified.** Five of its exported names are five of
-  this module's, and that is the property worth keeping rather than the
-  obstacle it looks like: a program moving from a socket to a TLS connection
-  changes the type of a variable and nothing else.
+- **`PasNet` was imported qualified**, five of its exported names being five
+  of this module's, on the argument that a program moving from a socket to a
+  TLS connection then changes the type of a variable and nothing else. It
+  changed the qualifier on every call too, which ADR-0298 measured as the
+  same edit paid at every importer: the six routines are `Tls`-prefixed now,
+  the socket's `Net`-prefixed, and the import is plain.
 
 **Verification has no off switch** — no flag, no mode, no second entry point.
 What a caller chooses is which anchors: the system's, or one PEM file. A

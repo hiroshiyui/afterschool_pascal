@@ -4,67 +4,67 @@
   case checks that the elements survive one.
 
   It also pins the arithmetic that must not trap. Doubling is written against
-  `CapMax div 2`, and the two boundary pushes below are what say the guard is
+  `IVecCapMax div 2`, and the two boundary pushes below are what say the guard is
   the live path rather than decoration. }
 program lib_vector(output);
 
 import PasVector;
 
 var
-  v: VecPtr;
-  w: VecPtr;
+  v: IVecPtr;
+  w: IVecPtr;
   i, sum: integer;
 
 begin
   { grows from 1 through 2, 4, 8, 16 -- five reallocations, and every element
     written before them is still there afterwards }
-  VecNew(v, 1);
-  writeln('empty len=', VecLen(v):1, ' cap=', VecCap(v):1);
+  IVecNew(v, 1);
+  writeln('empty len=', IVecLen(v):1, ' cap=', IVecCap(v):1);
   for i := 1 to 10 do
-    VecPush(v, i * i);
-  writeln('len=', VecLen(v):1, ' cap=', VecCap(v):1);
-  for i := 1 to VecLen(v) do
-    write(VecGet(v, i):1, ' ');
+    IVecPush(v, i * i);
+  writeln('len=', IVecLen(v):1, ' cap=', IVecCap(v):1);
+  for i := 1 to IVecLen(v) do
+    write(IVecGet(v, i):1, ' ');
   writeln;
-  writeln('sum=', VecSum(v):1);
+  writeln('sum=', IVecSum(v):1);
 
   { pop is the inverse, and the length is what it moves }
-  writeln('pop=', VecPop(v):1, ' pop=', VecPop(v):1, ' len=', VecLen(v):1);
+  writeln('pop=', IVecPop(v):1, ' pop=', IVecPop(v):1, ' len=', IVecLen(v):1);
 
   { set and get address the same storage }
-  VecSet(v, 1, 100);
-  writeln('a1=', VecGet(v, 1):1);
+  IVecSet(v, 1, 100);
+  writeln('a1=', IVecGet(v, 1):1);
 
   { reserve grows once and no push after it reallocates }
-  VecNew(w, 2);
-  VecReserve(w, 50);
-  writeln('reserved cap=', VecCap(w):1);
+  IVecNew(w, 2);
+  IVecReserve(w, 50);
+  writeln('reserved cap=', IVecCap(w):1);
   for i := 1 to 50 do
-    VecPush(w, i);
-  writeln('after 50 pushes cap=', VecCap(w):1, ' len=', VecLen(w):1);
+    IVecPush(w, i);
+  writeln('after 50 pushes cap=', IVecCap(w):1, ' len=', IVecLen(w):1);
 
   { reserve never shrinks }
-  VecReserve(w, 4);
-  writeln('reserve(4) leaves cap=', VecCap(w):1);
+  IVecReserve(w, 4);
+  writeln('reserve(4) leaves cap=', IVecCap(w):1);
 
   { clear keeps the storage }
-  VecClear(w);
-  writeln('cleared len=', VecLen(w):1, ' cap=', VecCap(w):1);
+  IVecClear(w);
+  writeln('cleared len=', IVecLen(w):1, ' cap=', IVecCap(w):1);
 
   { fill sets both the length and the contents }
-  VecFill(w, 5, 7);
+  IVecFill(w, 5, 7);
   sum := 0;
-  for i := 1 to VecLen(w) do
-    sum := sum + VecGet(w, i);
-  writeln('filled len=', VecLen(w):1, ' sum=', sum:1);
+  for i := 1 to IVecLen(w) do
+    sum := sum + IVecGet(w, i);
+  writeln('filled len=', IVecLen(w):1, ' sum=', sum:1);
 
   { popping an empty vector answers 0 and stays empty }
-  VecClear(w);
-  writeln('pop empty=', VecPop(w):1, ' len=', VecLen(w):1);
+  IVecClear(w);
+  writeln('pop empty=', IVecPop(w):1, ' len=', IVecLen(w):1);
 
-  VecFree(v);
-  VecFree(w);
+  IVecFree(v);
+  IVecFree(w);
   { freeing nil is harmless, which is what lets a caller free unconditionally }
-  VecFree(w);
+  IVecFree(w);
   writeln('freed')
 end.
