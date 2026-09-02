@@ -130,7 +130,8 @@ own exception and compare by length instead.
   names *both* headings, so the mixed pair was in none — and the cost was a
   client: `PasContainer`'s map has been generic over its key since ADR-0254,
   its ready-made pair was not, and `lsp/pasls.pas` read the refusal as the
-  map's own bound and kept its documents in a linearly searched vector. The
+  map's own bound and kept its documents in a linearly searched vector until
+  the pair was widened. The
   three restrictions are measurements. **String only**, because a string value
   carries its length (§6.4.3.3.3) so both forms are `(ptr, i32)`, where
   `Box(5)` is `(ptr)` against `Box`'s `(ptr, i32)`. **Value only**, the same
@@ -3822,11 +3823,19 @@ nothing else. What it would lose, mechanism by mechanism:
   `writeln` at all — which turns "do not mix buffered Pascal output with a
   descriptor write" from a thing a writer has to remember into a compile-time
   error. Everything for a person goes to `StdErr` through one procedure.
-- **The document store is a vector searched linearly**, because
-  `PasContainer`'s `MapKey` is 63 characters and a URI is past that before the
-  file name starts. The key type is `JsonLine` deliberately: `DiagPublish`
-  takes one, so a URI the server could hold and that module could not would be
-  a truncation at the boundary rather than a refusal at the door.
+- **The document store is `PasContainer`'s map, keyed on the URI** — and it
+  was a vector searched linearly, for a reason that was wrong. The reason given
+  was that `MapKey` is 63 characters and a URI is past that before the file
+  name starts; the map has been generic over its key since ADR-0254 and never
+  had that bound. What did was the ready-made `StrHash`/`StrEq`, declared over
+  `string(63)` where §6.7.3.6's congruity is exact. ADR-0290 made the pair
+  schematic and the conversion followed — it removed code rather than adding
+  it, `Store` going from two paths to one and `Forget` from closing a gap in
+  the vector by hand to deleting a key. Not for speed: an editor holds a
+  handful of documents and the linear search cost nothing measurable. The key
+  type is `JsonLine` deliberately: `DiagPublish` takes one, so a URI the server
+  could hold and that module could not would be a truncation at the boundary
+  rather than a refusal at the door.
 - **`binding(f).bound` is not asked, and asking it was the first defect.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name
   *exists*, so a file about to be created reports false and one already written

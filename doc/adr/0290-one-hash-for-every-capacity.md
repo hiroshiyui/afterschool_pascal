@@ -4,7 +4,9 @@ Date: 2026-09-02
 
 ## Status
 
-Accepted, 2026-09-02.
+Accepted, 2026-09-02. *The client conversion this record defers under
+Consequences was made the same day; `lsp/pasls.pas`'s document store is
+`PasContainer`'s map, and `doc/roadmap.md`'s entry carries what it cost.*
 
 ## Context
 

@@ -36,14 +36,21 @@
   a stray one is a compile-time error instead of a corrupted frame. What this
   program has to say to a person goes to `StdErr` through `Note`.
 
-  **The document store is a vector searched linearly, and not `PasContainer`'s
-  map.** `MapKey` is 63 characters and a document URI is not a key of that
-  size -- this component's own is
-  `file:///home/someone/projects/afterschool_pascal/lsp/pasls.pas` under any
-  checkout deeper than a couple of directories, and 63 runs out inside the
-  project name. A handful of open documents is what an editor has, so the
-  search costs nothing; the finding is recorded in the roadmap rather than
-  worked around silently.
+  **The document store is `PasContainer`'s map, keyed on the URI.** It was a
+  vector searched linearly, and the reason given here was wrong: it said
+  `MapKey` is 63 characters and a URI is not a key of that size, but the map
+  has been generic over its key type since ADR-0254 and never had that bound.
+  What did was the ready-made `StrHash`/`StrEq`, declared over `string(63)`
+  where 6.7.3.6's congruity is exact -- so the pair, not the map, is what a
+  255-character key could not reach. AP 6.7.3.6 made the pair schematic
+  (ADR-0290) and the key is now the URI itself.
+
+  The conversion is not for speed. A handful of open documents is what an
+  editor has and the linear search cost nothing measurable; it is that the
+  paragraph explaining the vector had stopped being true, and a comment giving
+  a false reason is worse than no comment. It also removed code rather than
+  adding it -- `Store` had two paths and has one, and `Forget` closed a gap in
+  the vector by hand and now deletes a key.
 
   **The compiler reads a file, so the document has to become one.** An editor
   holds a buffer that has never been saved, which is the whole reason a server
@@ -206,14 +213,14 @@ type
     uses_: StrVecPtr
   end;
 
-  DocVec = ^Vec(Document);
+  DocMap = ^Map(DocUri, Document);
 
   CaptureText = string(CaptureMax);
 
 var
   reader: LspReader;
   transport: TransportKind;
-  docs: DocVec;
+  docs: DocMap;
   running: boolean;
   { What a Position.character counts in this session. The protocol's default
     until `initialize` says otherwise, which is also what a client that offers
@@ -293,16 +300,29 @@ end;
 
 { --- the document store --------------------------------------------------- }
 
-{ Where this URI is held, or 0. Linear, for the reason in the header. }
-function IndexOf(uri: DocUri): integer;
-var i: integer;
-    d: Document;
+{ The empty document. A `JsonChars` is `^Vec(char)`, so nil is a value the
+  field can hold and a miss needs no sentinel of its own -- which is also what
+  lets this stand as `MapGet`'s whenAbsent, a parameter that is passed whether
+  or not the key is there. }
+procedure NoDocument(var d: Document);
 begin
-  IndexOf := 0;
-  for i := 1 to VecLen(DocVec, docs) do begin
-    d := VecGet(DocVec, Document, docs, i);
-    if d.uri = uri then exit(i)
-  end
+  d.uri := '';
+  d.text := nil;
+  d.uses_ := nil
+end;
+
+{ What this URI names, and whether it names anything. Two hashes rather than
+  one: `MapGet` alone would answer the empty document for a key that is
+  absent and for one whose text is nil, and only the first of those can
+  happen -- so asking separately keeps the caller's test about presence
+  instead of about a field. }
+function DocOf(uri: DocUri; var d: Document): boolean;
+var here: boolean;
+begin
+  NoDocument(d);
+  here := MapHas(docs, uri, StrHash, StrEq);
+  if here then d := MapGet(DocMap, Document, docs, uri, d, StrHash, StrEq);
+  DocOf := here
 end;
 
 { A JSON string value copied out into a buffer of its own, which is how a
@@ -349,42 +369,28 @@ end;
 { Remember what the client says this document now contains, replacing what it
   said before. The old text is released here and nowhere else. }
 procedure Store(uri: DocUri; text: JsonPtr);
-var at: integer;
-    d: Document;
+var d: Document;
 begin
-  at := IndexOf(uri);
-  if at = 0 then begin
-    d.uri := uri;
-    d.uses_ := nil;
-    CharsOf(text, d.text);
-    VecPush(DocVec, docs, d)
-  end else begin
-    d := VecGet(DocVec, Document, docs, at);
+  { The text is being replaced, so what the compiler last said about it is
+    about a document that no longer exists (ADR-0252). }
+  if DocOf(uri, d) then begin
     JsonCharsFree(d.text);
-    { The text is being replaced, so what the compiler last said about it is
-      about a document that no longer exists (ADR-0252). }
-    if d.uses_ <> nil then SVecFree(d.uses_);
-    d.uses_ := nil;
-    CharsOf(text, d.text);
-    VecSet(DocVec, docs, at, d)
-  end
+    if d.uses_ <> nil then SVecFree(d.uses_)
+  end;
+  d.uri := uri;
+  d.uses_ := nil;
+  CharsOf(text, d.text);
+  MapPut(docs, uri, d, StrHash, StrEq)
 end;
 
 { Forget it, releasing its text. }
 procedure Forget(uri: DocUri);
-var at, i: integer;
-    d, last: Document;
+var d: Document;
 begin
-  at := IndexOf(uri);
-  if at = 0 then exit;
-  d := VecGet(DocVec, Document, docs, at);
+  if not DocOf(uri, d) then exit;
   JsonCharsFree(d.text);
   if d.uses_ <> nil then SVecFree(d.uses_);
-  { Close the gap by moving the tail down. Order does not matter to a lookup
-    that is linear anyway, but a vector with a hole in it would. }
-  for i := at to VecLen(DocVec, docs) - 1 do
-    VecSet(DocVec, docs, i, VecGet(DocVec, Document, docs, i + 1));
-  if not VecPop(DocVec, docs, last) then
+  if not MapDelete(docs, uri, StrHash, StrEq) then
     Note('a document vanished from the store while it was being removed')
 end;
 
@@ -813,16 +819,13 @@ end;
   is told the problems it was shown are gone, and a server that stays quiet
   leaves the previous set on the screen for ever. }
 procedure Analyse(uri: DocUri);
-var at: integer;
-    d: Document;
+var d: Document;
     out: CaptureText;
     note: JsonPtr;
     words: CommandLine;
     found: boolean;
 begin
-  at := IndexOf(uri);
-  if at = 0 then exit;
-  d := VecGet(DocVec, Document, docs, at);
+  if not DocOf(uri, d) then exit;
   if not WriteScratch(d.text) then exit;
   { The document's *real* path, not the scratch one: the sidecars name the
     file the client is editing, and the scratch file is a copy of its bytes
@@ -1175,7 +1178,7 @@ end;
   largest thing in the tree was a test case. }
 procedure Outline(id: JsonPtr; params: JsonPtr);
 var uri: DocUri;
-    at, i, depth, lastDepth, symLine, symCol, symLen: integer;
+    i, depth, lastDepth, symLine, symCol, symLen: integer;
     d: Document;
     lines: StrVecPtr;
     cmd: CommandLine;
@@ -1197,9 +1200,7 @@ begin
     for it. }
   result := JsonNewArray;
   uri := UriOf(params);
-  at := IndexOf(uri);
-  if at <> 0 then begin
-    d := VecGet(DocVec, Document, docs, at);
+  if DocOf(uri, d) then begin
     { A scratch path that cannot be written leaves the outline empty rather
       than stopping the server, which is what the answer below already is for
       a document nobody opened. }
@@ -1387,7 +1388,7 @@ end;
   answers with the document's own URI for that case, which is the common one. }
 function FindUse(uri: DocUri; line, col: integer;
                  var hit: UseHit; var path: PathName): boolean;
-var at, i, ul, uc, un: integer;
+var i, ul, uc, un: integer;
     d: Document;
     lines: StrVecPtr;
     cmd, words: CommandLine;
@@ -1397,9 +1398,7 @@ var at, i, ul, uc, un: integer;
 begin
   hit.found := false;
   path := '';
-  at := IndexOf(uri);
-  if at = 0 then exit(false);
-  d := VecGet(DocVec, Document, docs, at);
+  if not DocOf(uri, d) then exit(false);
   if not WriteScratch(d.text) then exit(false);
   { The document's real path, as Analyse uses it: the sidecar names the file
     the client is editing and the scratch file is a copy of its bytes. }
@@ -1422,7 +1421,7 @@ begin
       exit(false)
     end;
     d.uses_ := lines;
-    VecSet(DocVec, docs, at, d)
+    MapPut(docs, uri, d, StrHash, StrEq)
   end;
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);
@@ -1465,16 +1464,13 @@ end;
   document this server is holding. }
 procedure AskedAt(params: JsonPtr; uri: DocUri; var line, col: integer);
 var p: JsonPtr;
-    at: integer;
     d: Document;
     source: DiagLine;
 begin
   p := JsonMember(params, 'position');
   line := JsonIntegerOr(JsonMember(p, 'line'), -1) + 1;
   col := 0;
-  at := IndexOf(uri);
-  if (at <> 0) and (line >= 1) then begin
-    d := VecGet(DocVec, Document, docs, at);
+  if DocOf(uri, d) and (line >= 1) then begin
     LineOf(d.text, line, source);
     col := ByteColumn(source, JsonIntegerOr(JsonMember(p, 'character'), 0))
   end
@@ -1489,7 +1485,7 @@ end;
   reported the same way, there being nothing else the protocol can be told. }
 procedure Definition(id: JsonPtr; params: JsonPtr);
 var uri: DocUri;
-    line, col, at: integer;
+    line, col: integer;
     hit: UseHit;
     path: PathName;
     d: Document;
@@ -1517,9 +1513,7 @@ begin
           left of the name and never to a wrong line. }
         source := '';
         if hit.declFile = 0 then begin
-          at := IndexOf(uri);
-          if at <> 0 then begin
-            d := VecGet(DocVec, Document, docs, at);
+          if DocOf(uri, d) then begin
             LineOf(d.text, hit.declLine, source)
           end
         end;
@@ -1547,7 +1541,7 @@ end;
   reader as if it meant something. }
 procedure Hover(id: JsonPtr; params: JsonPtr);
 var uri: DocUri;
-    line, col, at: integer;
+    line, col: integer;
     hit: UseHit;
     path: PathName;
     d: Document;
@@ -1561,12 +1555,8 @@ begin
   AskedAt(params, uri, line, col);
   if (line >= 1) and (col >= 1) then
     if FindUse(uri, line, col, hit, path) then begin
-      at := IndexOf(uri);
       source := '';
-      if at <> 0 then begin
-        d := VecGet(DocVec, Document, docs, at);
-        LineOf(d.text, hit.line, source)
-      end;
+      if DocOf(uri, d) then LineOf(d.text, hit.line, source);
       name := '';
       if (hit.col >= 1) and (hit.len > 0)
          and (hit.col + hit.len - 1 <= length(source)) then
@@ -2004,12 +1994,10 @@ end;
   answer: folding is asked once when a document is opened or changed, where a
   hover is asked on every cursor pause. }
 function StatementsOf(uri: DocUri; var lines: StrVecPtr): boolean;
-var at: integer; d: Document; cmd: CommandLine; r: RunResult;
+var d: Document; cmd: CommandLine; r: RunResult;
 begin
   StatementsOf := false;
-  at := IndexOf(uri);
-  if at = 0 then exit;
-  d := VecGet(DocVec, Document, docs, at);
+  if not DocOf(uri, d) then exit;
   if not WriteScratch(d.text) then exit;
   if not CompilerCommand(' --dump-stmts', '', scratchPath, cmd) then exit;
   SVecNew(lines, 64);
@@ -2089,7 +2077,7 @@ var uri: DocUri; lines: StrVecPtr;
     positions, pos_, reply, result, chain, obj: JsonPtr;
     q: StmtRow;
     pl, pc: integer;
-    at: integer; d: Document;
+    d: Document;
     source, endSource: DiagLine;
     used: array [1..StmtMax] of boolean;
     rows: array [1..StmtMax] of StmtRow;
@@ -2097,11 +2085,9 @@ begin
   reply := NewResponse(id);
   result := JsonNewArray;
   uri := UriOf(params);
-  at := IndexOf(uri);
   positions := JsonMember(params, 'positions');
   have := 0;
-  if (at <> 0) and StatementsOf(uri, lines) then begin
-    d := VecGet(DocVec, Document, docs, at);
+  if DocOf(uri, d) and StatementsOf(uri, lines) then begin
     for i := 1 to SVecLen(lines) do
       if StmtParse(SVecGet(lines, i), q) then
         if have < StmtMax then begin
@@ -2276,7 +2262,7 @@ end;
 procedure Formatting(id: JsonPtr; params: JsonPtr; lo, hi: integer);
 var reply, result, edit, rng, a, b, text: JsonPtr;
     uri: DocUri;
-    at, i, n, lines: integer;
+    i, n, lines: integer;
     d: Document;
     cmd: CommandLine;
     r: RunResult;
@@ -2284,9 +2270,7 @@ begin
   reply := NewResponse(id);
   result := JsonNewArray;
   uri := UriOf(params);
-  at := IndexOf(uri);
-  if at <> 0 then begin
-    d := VecGet(DocVec, Document, docs, at);
+  if DocOf(uri, d) then begin
     if WriteScratch(d.text) and FormatCommand(scratchPath, lo, hi, cmd) then begin
       r := Run(cmd);
       if not r.ok then
@@ -2448,7 +2432,7 @@ begin
   if transport = tpMcp then rootPath := PathOr(WorkingDirectory, '')
   else rootPath := '';
   LspOpen(reader, StdIn);
-  VecInit(DocVec, docs, 4);
+  MapInit(DocMap, docs, 4);
   running := true;
   while running do begin
     JsonCharsNew(body);
@@ -2540,14 +2524,19 @@ begin
   end;
   { Everything this program allocated, given back -- so a run of it balances
     under PASHEAP_BALANCE the way a corpus case does (ADR-0183). }
-  for i := 1 to VecLen(DocVec, docs) do begin
-    d := VecGet(DocVec, Document, docs, i);
-    JsonCharsFree(d.text);
-    { And what the compiler last said about it (ADR-0252). A document the
-      client never closed still holds one, and `heap-balance` is what said so:
-      the sessions open documents and end without a didClose, which is what an
-      editor does when it is killed. }
-    if d.uses_ <> nil then SVecFree(d.uses_)
-  end;
-  VecFree(DocVec, docs)
+  { A slot walk rather than a list: `MapSlots` is the capacity and
+    `MapLiveAt` says which of them hold a pair. The `DocOf` inside it cannot
+    answer false -- a live slot has a key -- and is written anyway because the
+    alternative is a second way to read the store. }
+  for i := 1 to MapSlots(DocMap, docs) do
+    if MapLiveAt(DocMap, docs, i) then
+      if DocOf(MapKeyAt(DocMap, DocUri, docs, i), d) then begin
+        JsonCharsFree(d.text);
+        { And what the compiler last said about it (ADR-0252). A document the
+          client never closed still holds one, and `heap-balance` is what said
+          so: the sessions open documents and end without a didClose, which is
+          what an editor does when it is killed. }
+        if d.uses_ <> nil then SVecFree(d.uses_)
+      end;
+  MapFree(DocMap, docs)
 end.

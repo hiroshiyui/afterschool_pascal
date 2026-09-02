@@ -4066,6 +4066,11 @@ three arguments for choosing a server over the text-mode IDE it proposed first.
 It produced five findings on the day it was written, of which the bound is one.
 `PasContainer`'s `MapKey` is 63 characters and a document URI is past that
 before the file name starts, so the store is a vector searched linearly.
+[Corrected on 2026-09-02: that reason was wrong. The map had been generic over
+its key type since ADR-0254 and never had the bound; what had it was the
+ready-made hash, and ADR-0290 widened congruity so the pair serves any
+capacity. The store is a map now. This sentence is left as it was written
+because this section is the findings **as they were recorded**.]
 `JsonLine` is 255 and a URI is not a line. There is no `getpid` anywhere in
 this tree and no `mkstemp`, so a scratch file cannot be given a name no other
 process will choose — and `rewrite` on a name that cannot be created is a

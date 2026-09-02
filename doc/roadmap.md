@@ -403,11 +403,16 @@ worth reading for is that it was **wrong** and what found that out.
   can check a sentence, which is why writing the probe is the only method
   there is — and it is cheap, and it was not done for eleven increments.
 
-  `lsp/pasls.pas` still holds its documents in the vector, with a comment
-  giving the reason that has just stopped being true. Converting it is a
-  separate change and is not urgent: a handful of open documents is what an
-  editor has, so the map is not measurably faster. The reason to make it is
-  the comment.
+  `lsp/pasls.pas` was converted the same day, and the conversion is the last
+  word on the entry: it **removed** code rather than adding it — `Store` went
+  from two paths to one, and `Forget` from closing a gap in the vector by hand
+  to deleting a key — and the nine `at: integer` declarations it left behind
+  were named by the unused-variable warning rather than by a reader. Nothing
+  got faster and nothing was meant to: an editor holds a handful of documents.
+  The two mutations are what the change rests on, and they fail differently —
+  a `Forget` that does not delete is a **double free** in three sessions, the
+  text having been released while the entry stayed; a shutdown walk that frees
+  nothing moves `heap_balance.txt`.
 
 - **`JsonLine` is 255 characters and a URI is not a line.** Three modules pick
   255 for "a string a caller hands over in one piece", which is right for a
