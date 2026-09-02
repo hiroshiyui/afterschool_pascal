@@ -130,6 +130,11 @@ def corpus(root):
         # sentence the dialect group above carries, met a second time. Its
         # `.components` sidecar is read by the branch below like any other.
         [root / "lsp" / "pasls.pas"],
+        # The examples (ADR-0295): a corpus of programs written to be read,
+        # each also a case. They resolve their imports by `.importpath`
+        # rather than `.components`, so this group is what drives the
+        # resolver over the whole library from outside tests/.
+        sorted((root / "examples").glob("*.pas")),
     ]
     for files in groups:
         for f in files:

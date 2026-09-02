@@ -28,6 +28,7 @@ part that never changes was the first 2,000 lines a reader met.
 | [What the roadmap answered](#what-the-roadmap-answered) | the questions that page carried and closed, and what each found on its first run |
 | [Cross-platform support](#cross-platform-support-measured) | what the x86-64 lock turned out to be, measured over twenty-five targets |
 | [The text model](#the-text-model) | AP 6.4.15 in four increments, and where its oracle story ends |
+| [The examples](#the-examples-and-what-writing-them-found) | twelve programs written to be read, each a case, and the seven findings writing them produced (ADR-0295) |
 | [The oracles turned on themselves](#the-oracles-turned-on-themselves) | eight gates that check another gate's blind spot, five of them checking a *document* |
 | [The compiler becomes three program-components](#the-compiler-becomes-three-program-components) | ADR-0233 — why one source file stopped being the answer, and why the count is three rather than two |
 | [A second processor answers the corpus](#a-second-processor-answers-the-corpus) | Free Pascal under `-Miso`, the last of the roadmap's tasks, taken because the option was shrinking |
@@ -6476,3 +6477,51 @@ x86-64 header unless told otherwise, and has never been through
 `llc-second-backend`. macOS stays a disabled matrix entry with the reason
 beside it: nobody has built the compiler on one, and a platform is run before
 it is shipped.
+
+## The examples, and what writing them found
+
+`doc/roadmap.md`'s chapter *What would make this practical to pick up* was
+written on 2026-09-02 with four sections, and the row its last sentence
+said to take first — *the examples are the one that pays twice* — closed the
+next day (ADR-0295). It is moved here with what closing it cost, because the
+row was a report about the tree and the tree no longer answers to it.
+
+`examples/` holds twelve programs of a page each, every one a `ctest` case:
+`hello_args`, `word_count`, `word_freq`, `dir_sizes`, `json_pretty`,
+`parse_errors`, `owned_list`, `graphemes`, `pipeline_tasks`, `fetch_http`,
+`c_function` and `defer_cleanup`. Seven resolve the library by an
+`.importpath` sidecar rather than a `.components`, which makes them the first
+cases to drive ADR-0244's resolver over the whole dialect library from
+outside `tests/`, and seven sweeps that enumerate Pascal by root gained the
+directory. Two harness defects came out of registering them: `heap_balance.py`
+could not see a module reached by name, and its `--write` had dropped a
+case that failed to run without a word.
+
+**What writing them found is the part worth keeping**, and it is the
+sentence the row above it in the roadmap kept making — the next finding
+comes from somebody writing a program. Seven, all in ADR-0295 and now in the
+roadmap's *Writing a daily program*: a task cannot close the channel
+downstream of it and a program that tries deadlocks silently; a map lookup
+is seven arguments, two of them types the call already knows; four of the
+twelve programs collided with a library noun on their first draft, and one
+of the four diagnostics named a type the source does not hold; an owned
+pointer refuses `p := nil` without naming `dispose`; `PasJson` writes `0.75`
+as `7.500000000000E-01`; a `MapKey` is 63 characters; and a program wanting
+somewhere writable must ask `argcount` first. No compiler defect, no crash
+and no wrong answer — which is itself a measurement, taken by the first
+twelve programs anyone wrote here to be read rather than to pin a clause.
+
+### The row as it stood
+
+- **No program to read that is not a test.** There is no `examples/`
+  directory. The programs in the tree that are not test cases are the
+  compiler's three sources, thirty-one library modules and one language
+  server — 50 690 lines, and not one of them is short enough to read over
+  coffee. *What a daily program cannot reach for* says the next finding
+  will come from somebody writing a program, and the last three defects
+  closed here were found by probes of a few lines each (ADR-0290, ADR-0291,
+  ADR-0292). A dozen complete programs of a page each — read a file, walk a
+  directory, fetch a URL, parse JSON, spawn a task, bind a C function —
+  would be the corpus that finds the next `JsonLine`, and it is the one row
+  here that pays twice: every example is also a case, and a case that fails
+  is a finding.

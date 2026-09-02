@@ -23,6 +23,20 @@ appears below in the release where it still existed.
   `tools/release.sh` builds and checks the archive, `release-archive` runs
   both halves under `ctest`, and `tests/checks/install_layout.sh --prefix`
   checks an unpacked prefix. `APASCAL_STATIC_PASCALC` is the CMake option.
+- **`examples/`** (ADR-0295): twelve complete programs of a page each,
+  written to be read by someone who knows Turbo Pascal, every one a `ctest`
+  case (`example-<name>`) with a golden, and swept by the same gates as the
+  rest of the corpus. Writing them found seven things — a task cannot close
+  the channel downstream of it and a program that tries deadlocks silently,
+  a map lookup writes two types the call already knows, four of twelve
+  programs collided with a library noun — recorded in the ADR and in
+  `doc/roadmap.md` rather than fixed here.
+- `tests/checks/heap_balance.py` measures a case that resolves its imports
+  by `.importpath`, and `--write` refuses to write a catalogue when a case
+  did not run instead of striking it in silence.
+- `diagnostic-coverage` and `foreign-layout` read nothing when the checkout
+  is itself a `.claude/worktrees` tree, their worktree filter having tested
+  the absolute path; both now test the path below the root.
 
 ## [3.4.0] - 2026-09-01
 

@@ -168,7 +168,10 @@ def goldens(root):
         # would read a second copy of every golden -- harmless here, since a
         # golden naming a diagnostic twice still names it, but skipped so this
         # gate measures one tree.
-        if ".claude" not in p.parts
+        # Below `root`, not in the absolute path: a checkout that *is* such a
+        # worktree would otherwise read no golden and report every diagnostic
+        # unnamed.
+        if ".claude" not in p.relative_to(root).parts
     )
 
 

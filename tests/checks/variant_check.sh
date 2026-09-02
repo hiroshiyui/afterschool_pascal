@@ -114,7 +114,7 @@ fi
 # sources that are *not* ignored stay in scope: a case added and not yet
 # staged is exactly what a sweep should reach.
 sources="$work/sources.txt"
-find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" \
+find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" "$root/examples" \
      -name '*.pas' | sort > "$sources"
 if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
   # check-ignore exits 1 when nothing matched, which is the ordinary case.

@@ -114,7 +114,12 @@ are registered by a `file(GLOB)` at configure time, and `tests/`,
 `tests/extended/` and `tests/dialect/` are globbed separately. The split used
 to say which standard each was compiled under; since ADR-0232 it says only
 which names the ctest cases have, and buys `tests/dialect/` the per-case
-`TIMEOUT` a program that opens a socket needs.
+`TIMEOUT` a program that opens a socket needs. **`examples/` is a fourth glob**
+(ADR-0295), registered as `example-<name>` with the same timeout: twelve
+programs written to be read, each a case with a `.out`, resolving the library
+by `.importpath` rather than `.components` — and the sweeps that enumerate
+Pascal by root (`format_check.py`, `variant_check.sh`, `coverage.py`,
+`heap_balance.py`, `fuzz.py`, `sanitize.sh`, `irtest.sh`) name it too.
 
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
 a non-zero exit is then required), `foo.warn` (expected *warnings*, for a

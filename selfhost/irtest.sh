@@ -202,7 +202,10 @@ fi
 if [[ $# -gt 0 ]]; then
   files=("$@")
 else
-  mapfile -t files < <(find "$root/tests" -name '*.pas' | sort)
+  # ...and the examples (ADR-0295), which are cases with goldens like any
+  # under tests/ and would otherwise be the one corpus the fixed point's
+  # compiler never ran.
+  mapfile -t files < <(find "$root/tests" "$root/examples" -name '*.pas' | sort)
 fi
 
 # --- the golden suite, run against what a given stage-1 compiler produces ---

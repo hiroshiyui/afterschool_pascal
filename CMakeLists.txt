@@ -908,3 +908,19 @@ foreach(t ${APASCAL_DIALECT_TESTS})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
                        TIMEOUT 300)
 endforeach()
+
+# The examples (ADR-0295): complete programs of a page each, written to be
+# read rather than to pin a clause, and every one of them a case -- so an
+# example that stops working fails here rather than in a reader's editor.
+# Globbed on its own for the reason tests/dialect/ is: one of them opens a
+# socket, and a hang has to be a failed case rather than a stalled suite.
+# Prefixed, because an example may well share a name with a test.
+file(GLOB APASCAL_EXAMPLES ${CMAKE_SOURCE_DIR}/examples/*.pas)
+foreach(t ${APASCAL_EXAMPLES})
+  get_filename_component(name ${t} NAME_WE)
+  add_test(NAME example-${name}
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
+  set_tests_properties(example-${name} PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}" TIMEOUT 300)
+endforeach()

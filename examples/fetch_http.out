@@ -1,0 +1,10 @@
+send: no error
+  > GET /hello HTTP/1.1
+  > Host: localhost
+  > Accept: text/plain
+  > Connection: close
+receive: no error
+status 200 OK
+content-type: text/plain
+body: [hello
+world]

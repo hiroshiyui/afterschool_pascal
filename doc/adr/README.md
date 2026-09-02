@@ -302,4 +302,5 @@ the alternatives that were rejected and why.
 | [0291](0291-a-path-is-not-a-line.md) | A path is not a line, in three programs | Accepted |
 | [0292](0292-the-line-the-language-would-have-read-whole.md) | The line the language would have read whole | Accepted |
 | [0294](0294-the-question-asked-backwards.md) | The question asked backwards | Accepted |
+| [0295](0295-a-corpus-written-to-be-read.md) | A corpus written to be read | Accepted |
 | [0296](0296-a-tag-ships-an-archive.md) | A tag ships an archive | Accepted |

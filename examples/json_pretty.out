@@ -1,0 +1,17 @@
+{
+  "name": "afterschool",
+  "version": 3,
+  "tags": [
+    "pascal",
+    "llvm"
+  ],
+  "author": {
+    "first": "Hui-Hong",
+    "last": "You"
+  },
+  "empty": {},
+  "none": null,
+  "quoted": "say \"hi\"\tnow",
+  "ratio": 7.500000000000E-01
+}
+-- 8 top-level members, "name" is -1 (absent members read as the default)

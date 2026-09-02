@@ -23,7 +23,7 @@ nobody has decided yet.
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
-| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no examples, no tour, a trap that names no line, a server that completes nothing — every row measured on 2026-09-02 with its command beside it |
+| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, and [the findings of its that are still open](#the-first-findings) — that section keeps the count, and this row deliberately does not |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
@@ -243,18 +243,11 @@ it. None of these is a language feature and none needs a spelling.
   cheap half, and the afternoon went on making the script fail on every push
   rather than at the tag.
 
-- **No program to read that is not a test.** There is no `examples/`
-  directory. The programs in the tree that are not test cases are the
-  compiler's three sources, thirty-one library modules and one language
-  server — 50 690 lines, and not one of them is short enough to read over
-  coffee. [What a daily program cannot reach
-  for](#what-a-daily-program-still-cannot-reach-for) says the next finding
-  will come from somebody writing a program, and the last three defects closed here were found by
-  probes of a few lines each (ADR-0290, ADR-0291, ADR-0292). A dozen complete
-  programs of a page each — read a file, walk a directory, fetch a URL, parse
-  JSON, spawn a task, bind a C function — would be the corpus that finds the
-  next `JsonLine`, and it is the one row here that pays twice: every example
-  is also a case, and a case that fails is a finding.
+- ~~**No program to read that is not a test.**~~ **Built** (ADR-0295):
+  `examples/` holds twelve programs of a page each, every one a case, and
+  writing them found seven things, all in *Writing a daily program* below.
+  The row as it stood is in
+  [`doc/history.md`](history.md#the-examples-and-what-writing-them-found).
 
 - **No tour.** `doc/afterschool-pascal-spec.md` is an amendment in ISO
   numbering, `doc/adr/` is an audit trail, and `README.md`'s language section
@@ -312,6 +305,43 @@ it. None of these is a language feature and none needs a spelling.
   things the first real server written with tasks will want in its first
   hour.
 
+- **A task cannot close the channel downstream of it, and the program that
+  tries deadlocks in silence** (ADR-0295, finding 1). `release(c)` on a
+  channel a task was *handed* drops that task's reference and does not
+  close — `runtime/pasrt_task.c`'s `pas_chan_unref` says so and nothing a
+  program's author reads does — so a pipeline of stages each closing the
+  next is unwritable by close, and the first draft of
+  `examples/pipeline_tasks.pas` hung at once. The command that shows it:
+  give a stage `k := release(out)` after its loop and run it under
+  `timeout 5`. The example ends its stages on a sentinel. The cheap answer is
+  a compile-time refusal of `release` on a channel parameter inside a task;
+  the other is a sentence in AP 6.9.3.13.
+
+- **The library has not caught up with the language's inference, measured
+  again** (ADR-0295, finding 2). `MapGet(CountMap, integer, counts, w, 0,
+  StrHash, StrEq)` is seven arguments for a lookup, two of them types the
+  call already knows, because a type appearing only in the result must be
+  written and ADR-0254's rule is then all or nothing. `MapPut` beside it
+  writes none. `examples/word_freq.pas` is the measurement the row above
+  asked for, and it reads as a program about `MapGet`'s signature.
+
+- **Four of twelve example programs collided with a library name on their
+  first draft** (ADR-0295, finding 3). Pascal folds case, so `info: InfoResult`
+  is a second declaration of `PasFS.Info` and `parts: Parts(16)` of
+  `PasText.Parts`. The names are the nouns a caller reaches for first —
+  `Info`, `Dir`, `List`, `Parts`, `Stream` — and `tests/dialect/lib_dir.pas`
+  already carried a comment warning about one of them. Three of the four
+  diagnostics were exact; `info := Info(child)` reports *cannot assign
+  integer to a variable of type inforesult*, naming a type nothing in the
+  source holds, and that one is the compiler's.
+
+- **Three smaller reports from the same pass** (ADR-0295, findings 4 to 6):
+  an owned pointer refuses `p := nil` where a handle takes it as its early
+  release, and the refusal does not name `dispose`; `PasJson` renders `0.75`
+  as `7.500000000000E-01`, which `examples/json_pretty.out` now holds so the
+  day it changes is visible; and a `MapKey` is 63 characters, so a map keyed
+  by text from outside needs a guard the example has to explain.
+
 ### Tooling
 
 - **The server answers thirteen methods and none of them completes a name.**
@@ -347,10 +377,12 @@ it. None of these is a language feature and none needs a spelling.
   `README.md` only as a consequence of the install layout. It belongs in the
   tour.
 
-**If one row from each section were taken first**: a line in every trap,
-`codeAction`, and the examples — the binary was the first section's row and
-is done (ADR-0296), and `references` was the tooling row until ADR-0294 took
-it. The examples are the one that pays twice.
+**If one row from each section were taken first**: a binary, a line in every
+trap, `references`, and the examples. Three of the four were taken the next
+day — the binary (ADR-0296), `references` (ADR-0294) and the examples
+(ADR-0295), which paid twice as the sentence said: twelve cases, and seven
+findings in *Writing a daily program* above. The line in every trap is what
+is left, and `codeAction` is the tooling row now.
 
 ---
 

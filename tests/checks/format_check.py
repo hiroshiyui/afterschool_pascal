@@ -102,7 +102,7 @@ def strip_positions(text, keep_from, squeeze=False):
 # out, a background agent's worktree being a whole second copy of every source
 # inside the checkout. An untracked source that is not ignored stays in scope:
 # a case added and not yet staged is exactly what a sweep should reach.
-ROOTS = ("tests", "selfhost", "lib", "lsp")
+ROOTS = ("tests", "selfhost", "lib", "lsp", "examples")
 
 
 def pascal_sources(root: Path) -> list:

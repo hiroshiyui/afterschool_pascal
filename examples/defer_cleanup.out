@@ -1,0 +1,8 @@
+run to the end:
+  wrote a file; it exists: TRUE
+  reached the end of the block
+  after cleanup, directory exists: FALSE
+leave early:
+  wrote a file; it exists: TRUE
+  leaving early
+  after cleanup, directory exists: FALSE
