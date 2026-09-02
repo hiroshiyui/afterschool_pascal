@@ -114,6 +114,23 @@ endforeach()
 file(GLOB APASCAL_SEED_LL ${CMAKE_SOURCE_DIR}/seed/*.ll)
 list(SORT APASCAL_SEED_LL)
 
+# **A release archive links the compiler statically** (ADR-0296), so that the
+# one binary runs on any Linux of its architecture with a glibc no older than
+# the runner's -- the archive is otherwise a binary built on one distribution
+# and handed to every other. Off by default: a developer's tree links as it
+# always has, and the release job is what turns it on. It reaches `pascalc`
+# only; the seed compiler is not shipped, and `libpasrt.a` is an archive of
+# objects already, linked by the user's own clang against the user's own C
+# library. `-static` is a glibc affair and does not exist on macOS, which is
+# one of the reasons that platform is a disabled matrix entry rather than a
+# job.
+option(APASCAL_STATIC_PASCALC
+       "Link bin/pascalc with -static, for a release archive (ADR-0296)" OFF)
+set(APASCAL_PASCALC_LINK)
+if(APASCAL_STATIC_PASCALC)
+  set(APASCAL_PASCALC_LINK -static)
+endif()
+
 add_custom_command(
   OUTPUT ${APASCAL_SEED_CC}
   # Both binaries, not just this one: if the seed fails to assemble, the rule
@@ -136,8 +153,8 @@ add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
   ${APASCAL_TRANSLATE}
-  COMMAND ${APASCAL_CLANG} -Wno-override-module ${APASCAL_MODULES}
-          $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
+  COMMAND ${APASCAL_CLANG} -Wno-override-module ${APASCAL_PASCALC_LINK}
+          ${APASCAL_MODULES} $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
   DEPENDS ${APASCAL_SEED_CC} pasrt ${APASCAL_SOURCES}
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
   COMMENT "Building pascalc from the three program-components with the seed"
@@ -340,6 +357,17 @@ if(Python3_FOUND)
   # directory.
   add_test(NAME install-layout
            COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/install_layout.sh
+                   ${CMAKE_BINARY_DIR})
+
+  # ADR-0296: does `tools/release.sh` still produce an archive that checks
+  # out? The script runs at a tag and nowhere else if nothing drives it
+  # between tags, and this tree has learned twice what happens to shell only a
+  # tag exercises (seed_current.sh, ADR-0282). So every run builds an archive
+  # from this tree under the version the compiler prints and checks it the
+  # way the tag job will: the digest, one directory, the licences, and every
+  # question install-layout asks of a prefix.
+  add_test(NAME release-archive
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/release_archive.sh
                    ${CMAKE_BINARY_DIR})
 
   # ADR-0183: the oracle none of the others can be. Every gate here reads what

@@ -18,6 +18,12 @@
 # **Is this compiler installable anywhere?** (ADR-0244)
 #
 #   install_layout.sh <build-directory>
+#   install_layout.sh --prefix <installed-prefix>
+#
+# The second form skips the `cmake --install` and asks every other question of
+# a prefix something else laid out -- a release archive, unpacked
+# (`tools/release.sh --check`, ADR-0296). One script for both, so a file added
+# to the layout is added to one list.
 #
 # Every other harness here drives the compiler out of the build tree, with
 # PASCALC and AFTERSCHOOL_PASCAL_RUNTIME saying where that tree is -- which is
@@ -39,18 +45,26 @@
 # what it should, all four hold at once.
 set -u
 
-build=${1:-build}
-[[ -d $build ]] || { echo "install-layout: no build directory '$build'" >&2
-                     exit 1; }
-
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-prefix=$work/prefix
-if ! cmake --install "$build" --prefix "$prefix" >"$work/install.log" 2>&1; then
-  echo "--- cmake --install failed ---" >&2
-  cat "$work/install.log" >&2
-  exit 1
+if [[ ${1:-} == --prefix ]]; then
+  prefix=${2:-}
+  [[ -d $prefix ]] || { echo "install-layout: no prefix '$prefix'" >&2
+                        exit 1; }
+  how="the prefix at $prefix"
+else
+  build=${1:-build}
+  [[ -d $build ]] || { echo "install-layout: no build directory '$build'" >&2
+                       exit 1; }
+  prefix=$work/prefix
+  if ! cmake --install "$build" --prefix "$prefix" >"$work/install.log" 2>&1
+  then
+    echo "--- cmake --install failed ---" >&2
+    cat "$work/install.log" >&2
+    exit 1
+  fi
+  how="installed to a prefix"
 fi
 
 # The layout, named here rather than only in CMakeLists.txt: a file that stops
@@ -132,5 +146,5 @@ if [[ $modules -lt 20 ]]; then
   exit 1
 fi
 
-echo "install-layout: installed to a prefix, found on PATH," \
+echo "install-layout: $how, found on PATH," \
      "$modules library modules reachable by name"

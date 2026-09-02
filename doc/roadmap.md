@@ -235,16 +235,13 @@ it. None of these is a language feature and none needs a spelling.
 
 ### Getting it and learning it
 
-- **No release carries a binary.** `gh release view v3.4.0 --json assets`
-  answers `[]`, and so does every tag before it. The first step for every
-  newcomer is therefore `cmake`, `clang` and a self-hosting bootstrap, which
-  is the right first step for a contributor and the wrong one for a user.
-  What ships would be `pascalc`, `pascalcc`, `libpasrt.a` and `lib/` in one
-  archive — exactly what `cmake --install` lays out and what `install-layout`
-  already checks (ADR-0244). x86-64 Linux is the one target the seed is
-  generated for; aarch64 *works* on every push and is not shipped, and the
-  cross-platform chapter says why that distinction is kept. **Guess**: an
-  afternoon, most of it the CI job.
+- ~~**No release carries a binary.**~~ — **done** (ADR-0296), and moved to
+  [`doc/history.md`](history.md#the-first-archive). A `v*` tag now attaches
+  an `x86_64-linux` and an `aarch64-linux` archive to its release, each
+  checked the way `install-layout` checks a prefix before it is uploaded.
+  The guess was an afternoon, most of it the CI job; the CI job was the
+  cheap half, and the afternoon went on making the script fail on every push
+  rather than at the tag.
 
 - **No program to read that is not a test.** There is no `examples/`
   directory. The programs in the tree that are not test cases are the
@@ -348,9 +345,9 @@ it. None of these is a language feature and none needs a spelling.
   `README.md` only as a consequence of the install layout. It belongs in the
   tour.
 
-**If one row from each section were taken first**: a binary, a line in every
-trap, `references`, and the examples. The examples are the one that pays
-twice.
+**If one row from each section were taken first**: a line in every trap,
+`references`, and the examples — the binary was the first section's and is
+done. The examples are the one that pays twice.
 
 ---
 
@@ -777,11 +774,17 @@ tried, which makes it the cheapest unknown in the chapter.
 
 ### What is not claimed
 
-**aarch64 works; it is not supported.** No release ships an aarch64 binary,
-`seed/*.ll` is generated for x86-64, and `seed/README.md`'s target lock
-stands. CI establishes that the port *works* — the seed retargets textually,
-the layout rules hold for a second machine, the runtime's constants clear it —
-not that an artefact is maintained for it.
+**aarch64 works and is shipped; it is not seeded.** Since ADR-0296 every
+release attaches an `aarch64-linux` archive, built and put through the whole
+suite on an arm64 runner. What that archive does not claim is written in the
+record and worth repeating: `seed/*.ll` is generated for x86-64 and
+`seed/README.md`'s target lock stands, the compiler in the archive writes an
+x86-64 header unless `--target=` or `AFTERSCHOOL_PASCAL_TARGET` says
+otherwise (clang overrides it when it assembles, so a program is right and a
+`pascalcc -S` file names the wrong machine), and CI establishes that the port
+*works* — the seed retargets textually, the layout rules hold for a second
+machine, the runtime's constants clear it — not that every oracle has run
+there.
 
 **Not every oracle follows.** `llc-second-backend` skips on the arm64 job, and
 the SMT proofs are about the lowering *model*, the same file on either machine.

@@ -115,25 +115,31 @@ When performing release engineering, always follow these steps:
 7. **Commit the release** — stage `CMakeLists.txt`, `CHANGELOG.md`, and any
    README/ADR updates together and commit as `chore: release vX.Y.Z`.
 
-8. **Tag the release** — create an annotated tag
+8. **Rehearse the archive before tagging** (ADR-0296). The tag job runs
+   `tools/release.sh`, and the same text runs here:
+   ```sh
+   tools/release.sh --notes vX.Y.Z              # the CHANGELOG section, or a refusal
+   tools/release.sh --archive build-rel vX.Y.Z  # refuses a tag that is not --version
+   tools/release.sh --check afterschool-pascal-vX.Y.Z-x86_64-linux.tar.gz
+   ```
+   `--notes` refusing means step 6 was skipped; `--archive` refusing means
+   step 5 was. `--check` is what the job runs against the archive it is about
+   to upload, and `release-archive` runs both halves under `ctest` on every
+   push, so a script that has stopped working is found before this step.
+
+9. **Tag the release** — create an annotated tag
    (`git tag -a vX.Y.Z -m "vX.Y.Z"`) and push both the commit and the tag
    (`git push && git push --tags`). Skip if no remote is configured and report
    the local tag instead.
 
-9. **Consider what a binary release would even mean** — *only when producing a
-   downloadable artifact; the project ships source and tags today, so skip this
-   for a source-only release.* `pascalc` is not self-contained: it emits IR and
-   nothing else, so a user needs `clang` to assemble it (ADR-0009, ADR-0085) and
-   `libpasrt.a` to link against, found through `AFTERSCHOOL_PASCAL_RUNTIME`.
-   `tools/pascalcc` is the piece that ties those together and would have to ship
-   with it. A binary tarball must therefore ship the runtime
-   library alongside the compiler and document the `clang` and LLVM runtime
-   requirements, or it will fail on the user's first compile in a way that looks
-   like a compiler bug. Verify any candidate tarball by unpacking it somewhere
-   with a different path and compiling `hello.pas` from there.
-
-10. **Create a GitHub release** — if a GitHub remote is configured, use
-    `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."` with the
-    corresponding `CHANGELOG.md` section as the release notes. Use `--notes`
-    (not `--body`). Attach any artifacts from step 9 with
-    `gh release upload vX.Y.Z <file>`.
+10. **The tag does the rest** (ADR-0296, `.github/workflows/ci.yml`). Once
+    every oracle job is green, `release` creates the GitHub release **as a
+    draft** with the CHANGELOG section as its notes, `package` builds a
+    statically linked compiler on an x86-64 and an arm64 runner, runs the
+    whole suite over each, archives, checks, and attaches
+    `afterschool-pascal-vX.Y.Z-<arch>.tar.gz` with its `.sha256`, and
+    `publish` undrafts. Nothing to do by hand but watch it: a red `package`
+    leaves a draft to re-run, and a release created by hand before the tag
+    only gains assets. `pascalc` is not self-contained — it emits IR and
+    nothing else, so a user needs `clang` (ADR-0009, ADR-0085) — and the
+    archive's own `README` says so.

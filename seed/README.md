@@ -128,7 +128,12 @@ own count. So nothing inside a seed module is x86-64's but those two lines. What
 build is `PAS_JUMP_SIZE` in the *runtime*, `jmp_buf` being 200 bytes here and
 312 there. `doc/roadmap.md`'s
 [Cross-platform support](../doc/roadmap.md#cross-platform-support) has the
-numbers and what they come to. None of it has been run, only linked.
+numbers and what they come to. It was linked and not run when this was
+written; since ADR-0159 CI builds and runs the whole suite that way on an
+arm64 runner on every push, and since ADR-0296 a release **ships** the
+result as an `aarch64-linux` archive. That archive is a product of this seed
+and not a second seed: the lock above stands, and the compiler in it writes
+this seed's x86-64 header unless `--target=` says otherwise.
 
 ## Its licence
 

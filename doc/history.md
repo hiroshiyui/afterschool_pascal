@@ -6408,3 +6408,44 @@ because how each was answered is the useful part; none of it is a queue:
 | **The text model** | **Done** (ADR-0189 – ADR-0193, ADR-0196, ADR-0199, AP 6.4.15). Nothing of the clause is left, and the row's own offer — *a wider character type or a text type* — turned out not to be a choice: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap. What was built instead, what it cost, and the one argued-rather-than-measured decision in it — refusing an integer index — are in [`doc/history.md`](history.md#the-text-model). **That refusal has since had its first external test** (ADR-0237): LSP counts positions in UTF-16 code units, a fourth unit this page said nothing answers in, and the count never needed the index — a scalar below U+10000 is one code unit and one at or above it is two, so the conversion is a walk over the scalar view, unchanged |
 | **The memory model** | **Answered by the construct rather than by a model** (ADR-0268). It could not be designed before the safety model, shared mutable state being where the two meet; the safety model narrowed it, ADR-0201's construct being share-nothing, and building that construct answered what was left. A task takes only transferable values and channels, may name only its own variables (AP 6.7.8.2), and is joined before the block that spawned it releases anything — so there is no shared mutable state for a memory model to be about, and what a value crossing between two threads guarantees is that it was *copied*. What is not claimed: `ThreadSanitizer` is the oracle this rests on and it is not a gate, and the missing join is caught by no case (`doc/sop.md` §7). |
 | ~~**How far the C++ reference front end follows**~~ (ADR-0108) | **Answered by deletion** (ADR-0232). It was frozen at the conformance surface — `difftest` skipped every dialect source — and when the conformance surface went, `difftest` had nothing left to compare and `src/` had no reader. Both are gone. The question the row was really about survives as [open question §1](roadmap.md#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one) and as `doc/sop.md` §7's largest entry: nothing now compares this front end with a second answer. |
+
+---
+
+## The first archive
+
+`doc/roadmap.md`'s *What would make this practical to pick up* opened on
+2026-09-02 with a row saying no release had ever carried a binary — `gh
+release view v3.4.0 --json assets` answered `[]`, and so did every tag before
+it — and guessed it at an afternoon, most of it the CI job. It closed the
+next day (ADR-0296): a `v*` tag now attaches
+`afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an `aarch64-linux` one,
+each with a `.sha256`, to its GitHub release, in the layout `install-layout`
+already checked (ADR-0244), with `pascalc` linked statically and `clang`
+still needed at use time because the compiler links nothing (ADR-0085).
+
+Three things doing it found. **The CI job was the cheap half.** Every piece
+was already in the tree — the install layout, the gate that drives it with
+the environment emptied, an arm64 runner that had run the suite on every push
+since ADR-0159, and a job that already ran only at a tag — and the workflow
+is three jobs and three `gh` calls. What took the afternoon was the other
+half: the logic went into `tools/release.sh` so that a `ctest` case could run
+it on every push, because this tree had twice watched shell that only a tag
+exercises fail at the tag (`seed_current.sh`, ADR-0282). **And running it found two defects the tag
+would have met**: the first `--check` printed *checks out* and then `work:
+unbound variable`, an `EXIT` trap naming a `local` that was gone by the time
+it ran, so the check passed and left its temporary directory behind every
+time; and the static check reported the static binary it was written for as
+dynamic, because `ldd` exits 1 on one and `pipefail` made that the pipeline's
+answer whatever `grep` found. **The mutation is the gate's own list**: an
+archive with `lib/afterschool/` deleted and a fresh digest stops `--check`
+with `install-layout: lib/afterschool/pastext.pas was not installed`, because
+`--check` hands the unpacked prefix to `install_layout.sh --prefix` rather
+than keeping a second list of what an archive holds.
+
+The aarch64 archive is shipped, and the sentence the cross-platform chapter
+kept — *works, not supported* — became *works and is shipped, not seeded*:
+the archive is built from the x86-64 seed retargeted by `clang`, writes an
+x86-64 header unless told otherwise, and has never been through
+`llc-second-backend`. macOS stays a disabled matrix entry with the reason
+beside it: nobody has built the compiler on one, and a platform is run before
+it is shipped.

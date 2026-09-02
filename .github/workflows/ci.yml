@@ -555,3 +555,182 @@ jobs:
           # the check applies -- and the shell spelling of it is what let a
           # force-push kill this job in run 32131932455.
           python3 tests/checks/model_drift.py "$base" "${{ github.sha }}"
+
+  # ---- A tag ships an archive (ADR-0296) ------------------------------------
+  #
+  # No release before v3.5.0 carried a binary: `gh release view v3.4.0 --json
+  # assets` answered `[]`, and every tag before it the same, so the first step
+  # for every newcomer was cmake, clang and a self-hosting bootstrap. The
+  # three jobs below make a `v*` tag produce
+  # `afterschool-pascal-<tag>-<arch>.tar.gz` with a `.sha256` beside it, in
+  # exactly the layout `install-layout` checks, attached to the GitHub release
+  # for the tag.
+  #
+  # **The logic is in `tools/release.sh` and not here**, for the reason
+  # `seed-is-current` gives above: a `run:` block at a tag runs nowhere else,
+  # and twice now shell living in this file has failed for want of anywhere to
+  # be exercised first. `--archive` and `--check` are driven on every push by
+  # the `release-archive` ctest case; what this file adds is the tag's name
+  # and three `gh` calls, `gh` being on every hosted runner -- which is also
+  # why these jobs run on the runner image rather than in the minimal
+  # containers the jobs above use, and why no third-party release action is
+  # involved.
+  #
+  # **Draft first, publish last.** `release` creates the release as a draft
+  # with the CHANGELOG section as its notes; each `package` leg attaches its
+  # archive; `publish` undrafts once every leg has. A user never sees a
+  # release with half its archives, and a red `package` leaves a draft to
+  # re-run rather than a published release with a hole in it. A release
+  # created by hand before the tag is left as it is and only gains assets.
+  #
+  # **The release needs every oracle green**, not only `test`: a tag that
+  # fails `sanitizers` or `second-backend` is not one to ship. The cost is
+  # that a transient -- unicode.org unreachable -- blocks the release until
+  # the failed job is re-run, which is the right side to err on.
+  release:
+    name: the GitHub release for the tag, as a draft
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, aarch64, seed-is-current, sanitizers, unoptimised,
+            second-backend, unicode-conformance, fpc-differential]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the release as a draft, unless one already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists already; it will gain assets and nothing else"
+          else
+            tools/release.sh --notes "$TAG" >notes.md
+            gh release create "$TAG" --draft --title "$TAG" --notes-file notes.md
+          fi
+        # `--notes` refuses a tag with no CHANGELOG.md section, so a release
+        # nobody wrote an entry for fails here, before anything is built.
+
+  package:
+    # One leg per architecture, and each builds, tests and checks the very
+    # binary it uploads: the suite runs over the statically linked compiler
+    # the archive holds, not over the dynamically linked one `test` built in
+    # a container, and `--check` unpacks the archive into a fresh directory
+    # and drives the installed compiler with PATH and nothing else.
+    #
+    # **What the aarch64 archive claims, and what it does not** (ADR-0296).
+    # It is built and the whole suite is run on GitHub's arm64 runner, as the
+    # `aarch64` job above has done on every push since ADR-0159. It is built
+    # from the x86-64 seed, clang retargeting it -- there is no aarch64 seed
+    # and `seed/README.md`'s lock stands; the compiler in it writes an x86-64
+    # header unless `--target=` or AFTERSCHOOL_PASCAL_TARGET says otherwise,
+    # which clang overrides when it assembles; and `llc-second-backend` has
+    # never run on that machine (doc/sop.md 7). The suite is run with the
+    # target set so that the arm ADR-0156 added is what is tested, and the
+    # archive is checked with nothing set, which is what a user gets.
+    name: a release archive for ${{ matrix.arch }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64-linux
+            target: x86_64-pc-linux-gnu
+          - runner: ubuntu-24.04-arm
+            arch: aarch64-linux
+            target: aarch64-linux-gnu
+          # macOS is **disabled, deliberately, and untried**. The roadmap says
+          # it is the cheapest unknown in the tree -- the runtime's five
+          # non-ISO names are all there -- and nobody has ever built this
+          # compiler on one, so a leg here would be the first run of the port
+          # and a release archive at the same time, which is the wrong order:
+          # a platform is run before it is shipped. Two things are known to
+          # differ and the script already allows for both -- there is no
+          # `-static` on macOS, so APASCAL_STATIC_PASCALC would have to be
+          # OFF and RELEASE_REQUIRE_STATIC unset, and there is no `ldd`, so
+          # `--check` reports the link kind as unknown -- and what else
+          # differs is exactly what a first run would find. Enable it as a
+          # push job first, then here.
+          #
+          # - runner: macos-latest
+          #   arch: arm64-darwin
+          #   target: ''            # no darwin target admitted yet (ADR-0156)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to package on the wrong machine
+        run: |
+          uname -m; uname -s
+          test "$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]')" = "${{ matrix.arch }}"
+        # `runs-on` is a request. An archive named for one architecture and
+        # holding another would be found by the first person to download it.
+
+      - name: Record which toolchain built it
+        run: |
+          clang --version | head -1
+          cmake --version | head -1
+
+      - name: Configure, with the compiler linked statically
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAPASCAL_STATIC_PASCALC=ON
+        # -static reaches bin/pascalc alone. The runtime the archive ships is
+        # an archive of objects the user's own clang links against the user's
+        # own C library, so the one thing a static link changes is that the
+        # compiler binary no longer requires this runner's glibc or newer.
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test the compiler that will be shipped
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        env:
+          AFTERSCHOOL_PASCAL_TARGET: ${{ matrix.target }}
+        # Not a repeat of `test`: that job's binary was built in a container
+        # and linked dynamically, and this one is what goes into the archive.
+
+      - name: Archive
+        run: tools/release.sh --archive build "${{ github.ref_name }}" "${{ matrix.arch }}" dist
+        # Refuses a tag that is not the version `pascalc --version` prints.
+
+      - name: Check the archive, the way install-layout checks a prefix
+        env:
+          RELEASE_REQUIRE_STATIC: '1'
+        run: tools/release.sh --check "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz"
+        # RELEASE_REQUIRE_STATIC turns the link-kind report into a failure:
+        # a job that configured -static and shipped a dynamic binary would
+        # otherwise pass with one line in a log saying so.
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz" \
+            "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz.sha256" \
+            --clobber
+        # --clobber so that a re-run of a leg replaces its archive rather than
+        # failing on the one it uploaded before.
+
+  publish:
+    name: the release is published
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Undraft, now that every archive is attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+        # No checkout: the one command needs the repository's name and the
+        # token, and both are in the environment. A release that was
+        # published by hand before the tag is unchanged by this.

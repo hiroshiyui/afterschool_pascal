@@ -22,6 +22,26 @@ features can land in rather than a destination.
 
 ## Building
 
+**Getting a binary.** Every release from v3.5.0 carries
+`afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an `aarch64-linux` one,
+each with a `.sha256` beside it (ADR-0296). Unpack it anywhere, put its `bin`
+on `PATH`, and compile:
+
+```sh
+tar -xzf afterschool-pascal-v3.5.0-x86_64-linux.tar.gz
+export PATH=$PWD/afterschool-pascal-v3.5.0-x86_64-linux/bin:$PATH
+pascalcc hello.pas -o hello
+```
+
+You still need **`clang`** (15 or later): `pascalc` writes LLVM IR and links
+nothing (ADR-0009, ADR-0085), and `pascalcc` is what hands the IR to `clang`
+and links `lib/libpasrt.a` beside it. The compiler binary itself is linked
+statically, so it runs on any Linux of its architecture. The aarch64 archive
+is built and tested on an arm64 runner from the x86-64 seed; it writes an
+x86-64 header unless told otherwise, and `clang` overrides that when it
+assembles, so a program is right and a `pascalcc -S` file names the wrong
+machine. Or build from source:
+
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j

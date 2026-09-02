@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A release archive on every tag** (ADR-0296). Pushing a `v*` tag now
+  attaches `afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an
+  `aarch64-linux` one, each with a `.sha256`, to the GitHub release: the
+  `cmake --install` layout, `LICENSE`, `COPYING.RUNTIME` and a short `README`,
+  with `pascalc` linked statically. `clang` is still needed at use time.
+  `tools/release.sh` builds and checks the archive, `release-archive` runs
+  both halves under `ctest`, and `tests/checks/install_layout.sh --prefix`
+  checks an unpacked prefix. `APASCAL_STATIC_PASCALC` is the CMake option.
+
 ## [3.4.0] - 2026-09-01
 
 The release that emptied `doc/roadmap.md`'s *What would make this easier to
