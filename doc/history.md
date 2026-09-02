@@ -4516,6 +4516,198 @@ with it, unfixed and unrecorded.
   and no procedure. Both were invisible to reasoning and immediate in a
   golden.
 
+**Seven entries moved here together on 2026-09-02**, the day the roadmap's
+rule became *what is done goes to history*. Six had been kept in place after
+closing, on the argument that what each was worth reading for was what closing
+it found; that is still what they are worth reading for, and it reads the same
+here. The seventh is the third of the usability findings, closed in both its
+halves within four days of being written. They are in the words they were
+written in, strikethrough and all.
+
+- **A program may not mix `writeln` with a descriptor write.** `output` is
+  buffered and `PasIO.WriteText` is not, so the two appear in an order that
+  depends on when the buffer flushes, and neither standard gives a program a
+  `flush`. A program that speaks a descriptor protocol has to say *everything*
+  that way, including its own diagnostics — which is what
+  `tests/dialect/lib_lsp.pas` does and says at the top. Nothing is wrong here;
+  it is a thing a writer has to know and nothing tells them.
+
+  **The server closed this one by construction rather than by care.**
+  `lsp/pasls.pas` declares *no program-parameters at all*, and §6.9.1 makes the
+  default file of `write` a program-parameter — so a stray `writeln` in it is a
+  compile-time error and not a corrupted frame. The discipline is enforced by
+  the compiler; the finding stands for every other program that speaks a
+  descriptor protocol.
+
+- ~~**`PasContainer`'s map cannot key on a URI.**~~ **Closed by ADR-0290, and
+  the sentence was wrong.** It read: *`MapKey` is 63 characters and
+  `file:///home/someone/projects/afterschool_pascal/selfhost/apfront.pas` is
+  69, so the document store is a vector searched linearly* — and the map has
+  been generic over its key type since ADR-0254. A probe keys one on a
+  200-character string and stores the 69-character URI in it, so the map could
+  always have held the document store and the entry named a limitation the
+  library did not have.
+
+  **What was true is one layer down.** `StrHash` and `StrEq` — the ready-made
+  pair — were declared over `MapKey`, and ISO/IEC 10206:1991 §6.7.3.6 makes a
+  procedural parameter's congruity exact, so a map keyed on any other capacity
+  got the pair refused and its client wrote eight lines of its own. AP 6.7.3.6
+  lets a schematic `string` value formal stand where a produced string type is
+  written, the pair is schematic now, and a client writes nothing.
+
+  **This is the second entry in this chapter to be corrected by a probe rather
+  than by a test**, after the `T ! E` one above, and both corrections say the
+  same thing: *the language could do it and the convenience layer could not*.
+  The first illustration here was 44 characters and did not fit the claim; the
+  claim itself then turned out not to fit the library. Nothing in this tree
+  can check a sentence, which is why writing the probe is the only method
+  there is — and it is cheap, and it was not done for eleven increments.
+
+  `lsp/pasls.pas` was converted the same day, and the conversion is the last
+  word on the entry: it **removed** code rather than adding it — `Store` went
+  from two paths to one, and `Forget` from closing a gap in the vector by hand
+  to deleting a key — and the nine `at: integer` declarations it left behind
+  were named by the unused-variable warning rather than by a reader. Nothing
+  got faster and nothing was meant to: an editor holds a handful of documents.
+  The two mutations are what the change rests on, and they fail differently —
+  a `Forget` that does not delete is a **double free** in three sessions, the
+  text having been released while the entry stayed; a shutdown walk that frees
+  nothing moves `heap_balance.txt`.
+
+- ~~**`JsonLine` is 255 characters and a URI is not a line.**~~ **Closed by
+  ADR-0291, and it was recorded as a bound that had not yet cost anything.** It
+  had, three times over, and the entry named the least of them.
+
+  What it said is that the server holds its document key at 255 *deliberately*,
+  `DiagPublish` taking one, so a URI the server could hold and that module could
+  not would be a truncation at the boundary instead of a refusal at the door.
+  True, and two floors below it the same bound was doing worse. **The library
+  did not truncate, it stopped the program** — §6.4.6 c)'s error at the call,
+  `a string of length 300 does not fit a capacity of 255`. **The server answered
+  go-to-definition with a URI naming a different file**, `PathToUri` appending
+  under a `< LineMax` test and simply stopping, which a client resolves with
+  nothing on either stream to say it was cut. **And the compiler had the same
+  bound and it was the sharpest**: `nameStr` was 255 and its own comment read
+  *"a file name or a command-line argument"*, so `pascalc` at a 310-character
+  path stopped at `pas_str_fits` **naming no file**. A checkout a few
+  directories deeper than usual is the whole of what it takes.
+
+  Two comments in this tree had walked up to it and stopped. `compiler.pas`
+  says of `envMax` that *"nameStr … is 255 and is the bound on one path"* and
+  then never asks whether 255 is right for one path; `pasls.pas` says of
+  `ItemMax` that four of this program's findings are *"bounds chosen by
+  counting what the largest thing in the tree needed at the time"*. **A comment
+  that names a hazard is not a check**, and the number sitting next to it was
+  wrong in both.
+
+  It closed as three schematic-parameter changes, one derived constant, one new
+  gate — `long-path`, because no test case can choose its own path — and an
+  **out-of-cycle reseed**: `BindingType`'s capacity for a program is decided by
+  the compiler translating it, so the shipped `pascalc` went on reading its own
+  arguments into a 255-character field however the source read. That is
+  ADR-0126's sentence about the seed, met for a value rather than a buffer.
+
+- ~~**`PasStrVec.ItemMax` is 255 and a dump line carrying a path crosses it.**~~
+  **Closed by ADR-0292, and the design it asked for was not needed.** The
+  entry proposed a container generic over its element's capacity, on the
+  reading that the server needed one vector to hold both 40 821 short rows and
+  a handful of paths. It needed **two**, sized by the two different facts, and
+  the thing that had to be replaced was not the container at all.
+
+  It was the *reader*. `PasProcess.CaptureLines` cuts every line at `ItemMax`
+  — its contract says so, and the contract is right for the 40 000 rows it was
+  reached for — and the server used it for a dump one of whose rows carries an
+  absolute path. **Pascal's own `readln` reads a line into a string variable of
+  whatever capacity the reader declared**, so the fix was to write the dump to
+  a file and read it with the language rather than with the library: no
+  container, no generic, no new capability, and one bound fewer than before.
+
+  **The probe that found this took two minutes and the entry had proposed a
+  language feature.** That is the third time in this chapter — after `T ! E`
+  and the map — and all three corrections say the same thing a different way:
+  the reach for a library convenience is what introduced the bound, and the
+  language underneath it had none.
+
+  The warning it left — `readln`'s silent truncation, and `PasFile.ReadLine` still handing back 255 characters — is open and stays in the roadmap.
+
+- **The compiler does not keep the spelling a programmer wrote.** Not a
+  defect and not a gap — the lexer case-folds an identifier and the string pool
+  holds one copy, which is the whole of what makes `CaseTest` and `casetest`
+  one name. It is here because an outline is the first thing that ever wanted
+  the other spelling back, and the answer shows what a compiler's report is
+  for: `--dump-symbols` gives a position and a length beside the folded name,
+  and the caller holding the document slices the written spelling out of its
+  own copy. Retaining both in the pool would have moved the one array whose
+  headroom this tree measures (ADR-0126) for a display string. **The parse tree
+  has no *extent* either** — a declaration's start was recorded and its end was
+  not, which is why `range` and `selectionRange` were both the name. **That is
+  closed** (ADR-0253): `ParseBlock` records the position past its closing
+  `end`, `--dump-symbols` writes it, and a procedure's range now reaches its
+  `end` where its `selectionRange` stays on the name. **And so is the other
+  half** (ADR-0258): a statement carries its own extent, `--dump-stmts`
+  reports it, and the server answers `foldingRange` and `selectionRange` from
+  it — so expanding a selection steps outward through nested statements
+  instead of jumping to the declaration.
+
+  The answer did **not** have the same shape, which is the part worth keeping.
+  A block ends at the token *past* its `end`, and that is right because the
+  token there is the `;` or `.` immediately after it. A statement is followed
+  by `;`, `end`, `else`, `until` or `otherwise`, routinely lines later and
+  with comments between — and a comment is not a token, so the same convention
+  would swallow whatever a reader wrote after the statement. A statement had
+  to end at its own last token, and the token record could not say where that
+  was: `len` is a length in the string *pool*, zero for most tokens and
+  different from the source length for a literal. The token gained an end
+  column before a statement could have an extent. Both wrong answers are
+  staged as mutations and each is caught twice.
+
+- ~~**`binding(f).bound` is not a readiness test, and reads exactly like one.**~~
+  **Closed by ADR-0240 — eight hours after this entry was written, and the
+  entry never said so.** The trap it describes is real and unchanged:
+  `doc/implementation-defined.md` E.16 binds a variable when the external name
+  *exists*, so a file about to be created reports `false` and one already
+  written reports `true`, which is the opposite of what a "can I write here?"
+  check wants in both directions. The first `WriteScratch` asked it and
+  refused to write anything at all.
+
+  What the entry went on to say — *nothing else does either, which is why it
+  survived to be met by the first program that needed it* — stopped being true
+  the same afternoon. AP 6.4.3.4.7 gives `BindingType` a third field,
+  `writable`, which is the question `bound` reads like and is not, and both
+  `lib/pasfile.pas` and `lsp/pasls.pas` ask it where they mean the write side.
+  §6.4.3.4 NOTE 7 admits the extension, so it needed no spelling.
+
+  **The finding here is about the register and not the language.** This entry
+  was written at 04:55 and the record answering it landed at 13:22 on the same
+  day, and nothing linked them for four days — long enough for the entry to be
+  read three times as an open question. A chapter that says *a finding recorded
+  and left is a finding wasted* has to mean a finding left **unlinked** too:
+  what stays worth knowing is the trap, which no fix removes, and a reader
+  needed to be told in the same paragraph that the answer exists.
+
+- **A comment in the client is the third finding, and both halves of it were
+  wrong within four days.** It read: `MapKey` is 63 characters, so the document
+  store is a vector searched linearly; `JsonLine` is 255, so a URI is held as a
+  line — and the *reason* they are tolerable is the same reason `…Or` is, the
+  program being small enough that linear search and a per-type helper cost
+  nothing.
+
+  Neither was tolerable and neither was about size. The first was not a bound
+  at all (ADR-0290): the map had been generic over its key since ADR-0254 and
+  the refusal belonged to the ready-made hash, and the store is a map now with
+  *less* code than the vector had. The second was three silent defects
+  (ADR-0291, ADR-0292), one of which answered go-to-definition with a location
+  in a file nobody named. **They were tolerable because nobody had run the
+  program from a deep enough directory**, which is a different sentence
+  entirely and not an ergonomic one.
+
+  The entry is kept because that is the finding now. An ergonomic pass asks
+  *what was unpleasant*, and unpleasantness is judged against the program you
+  have; a bound nothing has met yet reads as a preference rather than as a
+  defect. **None of these three findings would have been found by a program
+  that was merely correct** — and this one shows the converse too: the pass
+  that finds them can also file a defect as a taste.
+
 ### The chapter as it stood, and the argument it was made on
 
 **The IDE was withdrawn on 2026-09-01**, which closes the argument below
