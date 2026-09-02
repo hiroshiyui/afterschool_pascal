@@ -142,9 +142,9 @@ type
 
     Three payloads and no more: what a routine here answers is a day count, a
     stamp, or the text of one. }
-  DayResult = DayNumber ! ErrorCode;
-  StampResult = TimeStamp ! ErrorCode;
-  TextResult = StampText ! ErrorCode;
+  DayResult = Fallible(DayNumber);
+  StampResult = Fallible(TimeStamp);
+  TextResult = Fallible(StampText);
 
 { --- questions about the calendar, which cannot fail ---------------------- }
 

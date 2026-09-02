@@ -84,10 +84,12 @@ function WorkingDirectory = r: PathResult;
 
 **A fallible type**, `T ! E` (AP 6.4.13) — which *is* that result record, with
 the field names fixed by the language, so the shape is no longer a convention
-each module copies:
+each module copies — and, since ADR-0297, always a production of `PasError`'s
+one schema, so that every module's result type is the same type where the
+value type is:
 
 ```pascal
-PathResult = PathName ! ErrorCode;
+PathResult = Fallible(PathName);    { PasError: Fallible(T: type) = T ! ErrorCode }
 ```
 
 ADR-0118 makes its tag authoritative: reading `r.val` when `r.ok` is false
@@ -125,9 +127,16 @@ other call in these modules can fail.
 
 ## Two conveniences, and their names are fixed
 
-- **`XOr(r, whenBad)`** takes a result and a default, for a caller who has a
-  sensible answer and does not want to branch: `LookupOr`, `PathOr`, `CountOr`,
-  `IntOr`, `RealOr`. Always the result first and the default second.
+- **`ValueOr(r, whenBad)`** takes a result and a default, for a caller who
+  has a sensible answer and does not want to branch. One routine, in
+  `PasError`, generic over the result's value type and inferred at the call
+  (AP 6.7.3.10.4) — which is why every result type here is a production of
+  `PasError.Fallible`, `IntResult = Fallible(integer)` and the rest, and why a
+  new one must be too: a type written `T ! ErrorCode` on its own is a type
+  `ValueOr` cannot take (ADR-0297). The four per-type accessors it replaced —
+  `IntOr`, `PathOr`, `CountOr`, `RealOr` — are gone. `LookupOr` is the same
+  shape over an absent variable, which is not a failure, and stands. Always
+  the result first and the default second.
 - **`<Result>Text(r)`** — `IntResultText`, `CountResultText` — renders a result
   as a sentence, for a caller composing a message. Named for the result type
   and not `ResultText` alone, because two modules exporting one spelling is

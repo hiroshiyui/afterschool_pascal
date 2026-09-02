@@ -56,7 +56,7 @@ export PasFS = (MaxPath, PathName, PathResult,
                 FileKind, fkRegular, fkDirectory, fkOther,
                 FileInfo, InfoResult,
                 Remove, Rename, MakeDirectory, RemoveDirectory, Exists,
-                WorkingDirectory, LinkTarget, PathOr, Info, TemporaryPath);
+                WorkingDirectory, LinkTarget, Info, TemporaryPath);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -78,7 +78,7 @@ type
     only succeeding or failing -- and since AP 6.4.13 the language writes the
     record, so `ok`, `val` and `cause` are its field names here and in every
     other module (ADR-0176). }
-  PathResult = PathName ! ErrorCode;
+  PathResult = Fallible(PathName);
 
   { The buffer the two of them lend to C, and it is **packed** deliberately.
     ADR-0125 refuses a slice of a packed array of char -- `b[1..n]` there is
@@ -107,7 +107,7 @@ type
     kind: FileKind
   end;
 
-  InfoResult = FileInfo ! ErrorCode;
+  InfoResult = Fallible(FileInfo);
 
 { A routine with nothing to return still has to be able to fail, and ADR-0120's
   result record cannot serve it: the safety there comes from the *payload*
@@ -196,11 +196,6 @@ function LinkTarget(path: PathName) = r: PathResult;
   where `dir` is not a directory the program may write, or where the names
   were all taken. }
 function TemporaryPath(dir, prefix: PathName) = r: PathResult;
-
-{ The path of a successful result, or `whenBad` for a failed one. Reading
-  `path` here is safe for the reason the dialect makes it safe: the read is
-  inside the arm the tag selects. }
-function PathOr(r: PathResult; whenBad: PathName): PathName;
 
 end;
 
@@ -352,11 +347,6 @@ begin
     t := b;
     r := t[1..trunc(n)]
   end
-end;
-
-function PathOr;
-begin
-  if r.ok then PathOr := r.val else PathOr := whenBad
 end;
 
 end.

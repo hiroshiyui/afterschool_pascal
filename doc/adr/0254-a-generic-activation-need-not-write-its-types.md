@@ -4,7 +4,11 @@ Date: 2026-08-30
 
 ## Status
 
-Accepted, 2026-08-30.
+Accepted, 2026-08-30. *The degradation recorded under Consequences — a generic
+whose parameter-form names a schema the caller cannot see infers nothing — was
+closed by [ADR-0297](0297-the-library-uses-the-feature-it-asked-for.md), which
+resolves the schema's name in the generic's own region; and it had never been
+graceful, the next actual determining the type instead.*
 
 It answers the deferral
 [ADR-0211](0211-a-routine-may-be-generic-over-a-type.md) recorded and

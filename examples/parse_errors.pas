@@ -6,7 +6,7 @@
   ErrorCode` (AP 6.4.13): `r.ok` says which arm was written, `r.val` is the
   value, `r.cause` the reason, and reading the arm that was not written
   stops the program -- so a forgotten check is a halt, not a stale value.
-  Uses PasParse (ParseInt, IntOr), PasError (ErrorText) and PasText (Split). }
+  Uses PasParse (ParseInt), PasError (ErrorText, ValueOr) and PasText (Split). }
 program parse_errors(output);
 
 import PasError; PasParse; PasText;
@@ -40,6 +40,6 @@ begin
   Report('1,99999999999');       { errRange: past maxint }
 
   { The other way round: the caller has a default and does not care why. }
-  writeln('width = ', IntOr(ParseInt('80'), 72):1);
-  writeln('width = ', IntOr(ParseInt('wide'), 72):1)
+  writeln('width = ', ValueOr(ParseInt('80'), 72):1);
+  writeln('width = ', ValueOr(ParseInt('wide'), 72):1)
 end.

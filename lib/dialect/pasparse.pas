@@ -27,7 +27,7 @@
 module PasParse;
 
 export PasParse = (ParseMax, ParseLine, IntResult,
-                   ParseInt, IntOr, IntResultText);
+                   ParseInt, IntResultText);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part:
   what a module exports is part of its heading and what it imports is not. }
@@ -43,7 +43,7 @@ type
     `T ! E` denotes the record this module used to declare -- tag `ok`, value
     `val`, reason `cause` -- so the shape is one type rather than a convention
     each module copies, and the field names are the same in every module. }
-  IntResult = integer ! ErrorCode;
+  IntResult = Fallible(integer);
 
 { `s` as an integer, or the reason it is not one.
 
@@ -53,12 +53,6 @@ type
   -maxint..maxint, detected *before* it is formed, because forming it would
   trap (ADR-0014). }
 function ParseInt(s: ParseLine) = r: IntResult;
-
-{ The value of a successful result, or `whenBad` for a failed one -- the
-  ParseIntOr shape, kept because a caller with a sensible default should not
-  have to write the case. Reading `num` here is safe for the reason the dialect
-  makes it safe: the read is inside the arm the tag selects. }
-function IntOr(r: IntResult; whenBad: integer): integer;
 
 { A result as a sentence, for a caller assembling a message rather than
   branching. }
@@ -121,11 +115,6 @@ begin
     r := -acc
   else
     r := acc
-end;
-
-function IntOr;
-begin
-  if r.ok then IntOr := r.val else IntOr := whenBad
 end;
 
 function IntResultText;

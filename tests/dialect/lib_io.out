@@ -15,4 +15,4 @@ open missing  = the operation was refused
 read closed   = the operation was refused
 text          = the operation was refused
 failed at end = no
-CountOr       = -7
+ValueOr       = -7

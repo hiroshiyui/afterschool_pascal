@@ -1,0 +1,8 @@
+adr: 0297
+file: selfhost/apfront.pas
+kills: schema_typearg_shadow
+why: The defect as it stood. The discriminant has just been declared into the body's scope, so looking the argument node up finds the discriminant itself -- a type with no type -- whenever the argument is spelled like it, which every generic whose type parameter shares the schema's spelling does. The body is then resolved over nil, Assignable answers yes to a nil side, and the code generator dereferences it. generic_infer_errors kills it too, by the mismatch it then accepts; the harness names one case, and this is the one with no generic in it. Reading the tuple, which has carried the type since ADR-0254, cannot see the scope at all.
+--- old
+                disc^.stype := tv^.ty;
+--- new
+                disc^.stype := TypeArgument(arg);

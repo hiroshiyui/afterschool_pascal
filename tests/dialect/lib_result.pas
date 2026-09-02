@@ -44,8 +44,8 @@ begin
 
   { IntOr is the ParseIntOr shape kept: a caller with a default should not have
     to write the case, and does not have to know the read is guarded. }
-  writeln('or 0 of ''55''  = ', IntOr(ParseInt('55'), 0):1);
-  writeln('or 0 of ''--''  = ', IntOr(ParseInt('--'), 0):1);
+  writeln('or 0 of ''55''  = ', ValueOr(ParseInt('55'), 0):1);
+  writeln('or 0 of ''--''  = ', ValueOr(ParseInt('--'), 0):1);
 
   { Failed reads the intent rather than the comparison. }
   r := ParseInt('nope');

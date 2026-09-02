@@ -4810,6 +4810,41 @@ and it is the one whose measurement changed the task it named.
   export-part from the compiler's token stream and refuses to pass by
   reading nothing. A collision is now a failed build and not a comment
   beside an import.
+- ~~**The dialect's error-handling constructs are unused by its largest
+  client.**~~ **Closed by ADR-0297 on 2026-09-03**, four days after the
+  feature it asked for had landed. As written: `lsp/pasls.pas` contained no
+  `T ! E` and no `try`, and reached for the accessor instead — `IntOr`
+  eighteen times, `JsonIntegerOr` eight, `LookupOr` three, `PathOr` once,
+  thirty calls against zero. The entry had corrected itself once already,
+  from *a generic over the fallible type cannot be written* to *the helpers
+  are a workaround for missing inference*, and ADR-0254 landed inference with
+  that paragraph as its cause. Then nothing used it: the four fallible
+  accessors stood, the twelve result types in `lib/` were twelve separate
+  `T ! ErrorCode` denoters that §6.4.1 makes twelve types, and
+  `grep -rn ValueOr lib lsp` found nothing.
+
+  Closing it was a library change — `PasError` exports
+  `Fallible(T: type) = T ! ErrorCode` and one `ValueOr`, every result type is
+  a production of it under its old name, the four accessors are retired and
+  27 call sites moved — and it found **two compiler defects** on the way,
+  because the probe was written in the library's shape before the library
+  was touched. A production whose argument is spelled like the discriminant
+  read the discriminant itself and resolved its body over nil, which is the
+  *natural* spelling for a generic over `Fallible(T)` and had been avoided
+  by every case in the tree by accident of declaration order; and ADR-0254's
+  "graceful degradation" for a schema the caller cannot see was not one — the
+  next actual bound the type instead. Both are Sema fixes with named killers.
+
+  **The measurement, retaken with the feature present**: 19 accessor calls
+  became 19 `ValueOr` calls and the `try` count stayed at zero — which is the
+  answer. A server must respond to every request, `try` leaves the routine,
+  and there is no place in the server where that is the right shape; there
+  are two shapes, propagate and default, and this program is entirely the
+  second. `tests/dialect/try_depth.pas` answers the other half the chapter
+  had left open, four `try`s deep across two modules: it reads well, a cause
+  crosses every level unnamed, and the one thing a reader has to know is that
+  `try` is a function that leaves the block, which nothing at the call site
+  says.
 
 ### The chapter as it stood, and the argument it was made on
 
