@@ -387,7 +387,7 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Thirty-one gates make that mechanical — **count the rows below rather than
+Thirty-two gates make that mechanical — **count the rows below rather than
 this sentence**, which has now been wrong by four in one direction and by
 three in the other, the last reader to add a gate having incremented a number
 that was already too big — and each fails in **both**
