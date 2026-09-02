@@ -1,0 +1,8 @@
+héllo, 世界: 9 characters in 14 bytes
+composed = decomposed: TRUE
+  element 1 = h
+  element 2 = é
+  element 3 = l
+family: 1 element, 5 code points, 18 bytes
+fold(Straße) = strasse, equal to fold(STRASSE): TRUE
+bad byte: not of the expected form

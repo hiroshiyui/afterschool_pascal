@@ -1,0 +1,5 @@
+strlen("hello")  = 5
+atoi(" 42abc")   = 42
+cbrt(27.0)       = 3.000
+modf(3.75)       = 3.00 and 0.75
+toupper, by char = PASCAL

@@ -1,0 +1,6 @@
+sum of [1,2,3] = 6
+sum of [10, 20, 30] = 60
+sum of [4,x,6] failed: not of the expected form
+sum of [1,99999999999] failed: outside the representable range
+width = 80
+width = 72

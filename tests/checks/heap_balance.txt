@@ -14,12 +14,18 @@ case_ranges 0
 complex 0
 container_ceiling 0
 defer 0
+defer_cleanup 0
+dir_sizes 0
 dynbounds_subrange 0
 fallible 0
+fetch_http 0
 funcaccess 4
 generic_constraints 0
 generic_procparam 0
+graphemes 0
+import_by_name 0
 index_span 0
+json_pretty 0
 lib_container 0
 lib_dir 0
 lib_json 0
@@ -38,6 +44,8 @@ new_threatens_result 5
 new_variants 0
 owned 0
 owned_borrow 0
+owned_list 0
+parse_errors 0
 pasls 0
 pointer_domain_shadow 2
 pointer_typedisc 0
@@ -54,3 +62,4 @@ typeinquiry_access 0
 variant_disc 0
 variant_otherwise 0
 withheap 0
+word_freq 0

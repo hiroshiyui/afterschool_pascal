@@ -62,6 +62,13 @@ def components_of(source):
 def uses_heap(source):
     if NEW_CALL.search(source.read_text(errors="replace")):
         return True
+    # A case resolving its imports by name (ADR-0244) names no file this
+    # grep could read, so what it links is unknown here; it is measured,
+    # because a filtered case that turns out not to allocate is a balance
+    # of zero and not a failure, where skipping it would leave a leak in
+    # PasJson or PasContainer visible to no example (ADR-0295).
+    if source.with_suffix(".importpath").exists():
+        return True
     for comp in components_of(source):
         if comp.exists() and NEW_CALL.search(comp.read_text(errors="replace")):
             return True
@@ -84,7 +91,7 @@ LSP = ROOT / "lsp" / "pasls.pas"
 def cases():
     """Every corpus case that runs -- a `.out` and no `.err` -- using the heap."""
     found = []
-    for directory in ("tests", "tests/extended", "tests/dialect"):
+    for directory in ("tests", "tests/extended", "tests/dialect", "examples"):
         for source in sorted((ROOT / directory).glob("*.pas")):
             if not source.with_suffix(".out").exists():
                 continue
@@ -191,6 +198,16 @@ def main():
         measured[source.stem] = live
 
     if args.write:
+        # A case that did not run is not a case to drop from the catalogue
+        # in silence: the first regeneration after ADR-0295 struck `pasls`
+        # because the language server's harness had failed under a shell
+        # environment ctest does not use, and the only trace was one line
+        # missing from a diff. Say so, and write nothing.
+        if problems:
+            for p in problems:
+                print("heap-balance: " + p)
+            print("heap-balance: not written -- every case must run first")
+            return 1
         write_catalogue(measured)
         print("heap-balance: %d cases recorded" % len(measured))
         return 0

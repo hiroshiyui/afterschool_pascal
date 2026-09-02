@@ -173,7 +173,11 @@ def main():
         # `.claude/worktrees` is a background agent's own git worktree, which
         # this harness puts inside the checkout: walking it would compile a
         # second copy of every annotated record and report each finding twice.
-        if "build" in source.parts or ".claude" in source.parts:
+        # ...and the test is on the path *below* ROOT, because ROOT itself
+        # may be such a worktree, and a filter over the absolute path then
+        # skipped every source and reported "no claim anywhere".
+        if "build" in source.relative_to(ROOT).parts \
+                or ".claude" in source.relative_to(ROOT).parts:
             continue
         text = source.read_text(encoding="utf-8", errors="replace")
         if "@cstruct:" not in text:

@@ -126,6 +126,7 @@ def seeds(root):
     mutant has none, so every one of these is compiled alone."""
     out = []
     for pat in ("tests/*.pas", "tests/extended/*.pas", "tests/dialect/*.pas",
+                "examples/*.pas",
                 "selfhost/badparse/*.pas", "selfhost/badsema/*.pas"):
         out += sorted(root.glob(pat))
     out.append(root / "selfhost" / "torture.pas")

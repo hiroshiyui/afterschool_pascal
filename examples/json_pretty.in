@@ -1,0 +1,3 @@
+{"name":"afterschool","version":3,"tags":["pascal","llvm"],
+ "author":{"first":"Hui-Hong","last":"You"},"empty":{},"none":null,
+ "quoted":"say \"hi\"\tnow","ratio":0.75}

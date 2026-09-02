@@ -145,6 +145,31 @@ tools/pascalcc prog.pas -o prog             # ...or wherever the library went
 tools/pascalcc --import-path ./mine prog.pas -o prog   # ...or just this once
 ```
 
+### Examples
+
+**`examples/` holds twelve complete programs of a page each** (ADR-0295),
+written to be read by someone who knows Turbo Pascal and not this dialect,
+and every one of them is a test case with a golden — so an example that stops
+working fails `ctest`. Each starts with a comment saying what it shows and
+which modules it uses; the ones that import the library carry a
+`.importpath` sidecar naming `lib/` and `lib/dialect/`, which is the
+`--import-path` line above written down.
+
+| Example | What it shows |
+| --- | --- |
+| `hello_args.pas` | `argcount` and `argument(k)`, and a substring |
+| `word_count.pas` | `wc`: a text read line by line into a `string(4096)` |
+| `word_freq.pas` | `PasContainer`'s generic `Map` and `PasStrVec`, with inferred type arguments |
+| `dir_sizes.pas` | `du`: `PasDir` and `PasFS.Info` over a tree, recursively |
+| `json_pretty.pas` | `PasJson`: parse standard input, walk the tree, print it indented |
+| `parse_errors.pas` | `T ! E` read with `try`, and with an `…Or` accessor |
+| `owned_list.pas` | a sorted linked list on `owned ^Node` and `take`, disposed by its block |
+| `graphemes.pas` | `utf8(n)`, `for g in t`, and `PasUnicode`'s scalar view and folding |
+| `pipeline_tasks.pas` | two tasks and a channel, ended by a sentinel |
+| `fetch_http.pas` | an HTTP GET with `PasHttp`, against a server the program is itself |
+| `c_function.pas` | `external`: `strlen`, `atoi`, `cbrt`, `modf` from the C library |
+| `defer_cleanup.pas` | `defer` removing a file and a directory on every way out of a block |
+
 **A program that binds a foreign library says so at the link.** An `external`
 declaration names a symbol and nothing here decides where that symbol comes
 from, so a program using `PasTls` — or any module binding a library beyond the

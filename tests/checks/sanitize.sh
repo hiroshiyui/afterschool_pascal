@@ -81,7 +81,7 @@ done <"$root/tests/checks/heap_balance.txt"
 clean=0; failed=0; known=0; reported=0
 noout=0; needsargs=0; unbuilt=0
 for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
-           "$root"/tests/dialect/*.pas; do
+           "$root"/tests/dialect/*.pas "$root"/examples/*.pas; do
   [[ -f $src ]] || continue
   name=$(basename "$src" .pas)
   dir=$(dirname "$src")
