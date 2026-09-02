@@ -162,6 +162,23 @@ own exception and compare by length instead.
   than for a buffer. What it did not fix is `PasStrVec.ItemMax`, which is 255
   for a good reason (40 821 dump lines whose longest is 62) and wrong for the
   one row in that dump carrying a path.
+- **The line the language would have read whole** (ADR-0292). That last row
+  closed three hours later, and the design ADR-0291 said it would take — a
+  container generic over its element's capacity — was not built. The server
+  reached for `PasProcess.CaptureLines`, whose contract is to cut at
+  `ItemMax`, for a dump one of whose rows holds a path; Pascal's `readln`
+  reads a line into a string variable of whatever capacity the *reader*
+  declared, so the dump is written to a file and read with the language. Two
+  vectors sized by the two facts, not one vector of a chosen capacity —
+  `Vec`'s genericity over the element *type* (ADR-0254) was already enough.
+  `DumpLineMax` is derived as `MaxPath + 32` because `readln` truncates
+  **silently**, §6.9.1 skipping the rest of the line, which makes a declared
+  capacity a decision rather than a formality. `definition_far` is the case, at
+  a 292-character path, and the one-line mutation kills it alone —
+  `definition_deep` passes under it, the two sessions pinning a long *path* and
+  a long *URI* separately. The lesson is the third of its shape in
+  `doc/roadmap.md`'s language-server chapter: the bound belonged to the
+  convenience layer and not to the language, and a two-minute probe said so.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the

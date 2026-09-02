@@ -1,0 +1,9 @@
+Content-Length: -
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/a_directory_named_at_length_so_that_the_path_of_a_file_inside_it_passes_255_characters_from_any_checkout_root_255_being_where_PasStrVec_ItemMax_cut_the_dump_row_that_names_it_and_the_answer_pointed_somewhere_else_ADR_0292/farclient.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":2,"result":{"uri":"file://%ROOT%/lsp/sessions/workspace/a_directory_named_at_length_so_that_the_path_of_a_file_inside_it_passes_255_characters_from_any_checkout_root_255_being_where_PasStrVec_ItemMax_cut_the_dump_row_that_names_it_and_the_answer_pointed_somewhere_else_ADR_0292/far.pas","range":{"start":{"line":18,"character":9},"end":{"line":18,"character":18}}}}Content-Length: -
+
+{"jsonrpc":"2.0","id":3,"result":null}

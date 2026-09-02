@@ -1,0 +1,14 @@
+# A document importing a module whose *path* is 292 characters, which is the
+# bound ADR-0291 did not reach. The `--dump-uses` file table names that path
+# in one row, the server read the dump with a routine whose contract is to
+# cut every line at 255, and go-to-definition answered a location in a file
+# nobody named -- with nothing on either stream to say the answer was cut.
+#
+# The directory is named at length rather than in a script because no test
+# case can choose its own path, and because the file has to be one the
+# *compiler* opened: the path in that row is the path it was handed.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/a_directory_named_at_length_so_that_the_path_of_a_file_inside_it_passes_255_characters_from_any_checkout_root_255_being_where_PasStrVec_ItemMax_cut_the_dump_row_that_names_it_and_the_answer_pointed_somewhere_else_ADR_0292/farclient.pas","languageId":"pascal","version":1,"text":"{ The client of the module beside it. Both are at a path past 255 characters,\n  so the row of the dump that names the declaration is the row that used to be\n  cut (ADR-0292). }\nprogram farclient(output);\n\nimport Far;\n\nbegin\n  writeln(FarAnswer)\nend.\n"}}}
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/a_directory_named_at_length_so_that_the_path_of_a_file_inside_it_passes_255_characters_from_any_checkout_root_255_being_where_PasStrVec_ItemMax_cut_the_dump_row_that_names_it_and_the_answer_pointed_somewhere_else_ADR_0292/farclient.pas"},"position":{"line":8,"character":10}}}
+{"jsonrpc":"2.0","id":3,"method":"shutdown"}

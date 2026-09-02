@@ -300,3 +300,4 @@ the alternatives that were rejected and why.
 | [0289](0289-the-last-legal-span-rather-than-the-first-illegal-one.md) | The last legal span, rather than the first illegal one | Accepted |
 | [0290](0290-one-hash-for-every-capacity.md) | One hash for every capacity | Accepted |
 | [0291](0291-a-path-is-not-a-line.md) | A path is not a line, in three programs | Accepted |
+| [0292](0292-the-line-the-language-would-have-read-whole.md) | The line the language would have read whole | Accepted |

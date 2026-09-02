@@ -1,0 +1,2 @@
+# This session names files on disk, so %ROOT% is substituted into the input
+# and written back out of the golden, and the Content-Lengths are blanked.

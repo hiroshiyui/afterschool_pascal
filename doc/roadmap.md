@@ -247,8 +247,8 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-seven entries so far, and **nineteen of them have been acted on** — three
-of the eight open are the usability findings below, which are recorded rather
+Twenty-seven entries so far, and **twenty of them have been acted on** — three
+of the seven open are the usability findings below, which are recorded rather
 than acted on because each names a design question and not a defect — which
 is the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
@@ -356,13 +356,13 @@ activity and had never been done. Three came out of one pass.
   were found by asking what writing it was like, which is what this chapter is
   for and what it had not done.
 
-The seven below are what a program of this size still runs into, and **four of
-them are closed**. What is left is a bound that has cost nothing yet, a rule
-about the language a writer has to know and nothing tells them, and a decision
-nobody has asked for twice. The closed ones are kept in place rather than moved
-to `doc/history.md`, because what each is now worth reading for is what closing
-it found — two of them were **wrong**, and the third was right and understated
-by a wide margin.
+The seven below are what a program of this size still runs into, and **five of
+them are closed**. What is left is a rule about the language a writer has to
+know and nothing tells them, and a decision nobody has asked for twice. The
+closed ones are kept in place rather than moved to `doc/history.md`, because
+what each is now worth reading for is what closing it found — two of them were
+**wrong**, one was right and understated by a wide margin, and the last was
+opened by closing that one and shut three hours later.
 
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
@@ -447,23 +447,35 @@ by a wide margin.
   arguments into a 255-character field however the source read. That is
   ADR-0126's sentence about the seed, met for a value rather than a buffer.
 
-- **`PasStrVec.ItemMax` is 255 and a dump line carrying a path crosses it**,
-  which is what closing the entry above ran into and did not fix. The server
-  reads `--dump-uses` into a `StrVec` whose element is `string(ItemMax)`, and
-  the file table at the head of that dump holds absolute paths — so a path over
-  255 characters is cut there, before anything that widened can see it.
+- ~~**`PasStrVec.ItemMax` is 255 and a dump line carrying a path crosses it.**~~
+  **Closed by ADR-0292, and the design it asked for was not needed.** The
+  entry proposed a container generic over its element's capacity, on the
+  reading that the server needed one vector to hold both 40 821 short rows and
+  a handful of paths. It needed **two**, sized by the two different facts, and
+  the thing that had to be replaced was not the container at all.
 
-  It is **not** the same defect and the same fix would be wrong. That dump is
-  40 821 lines on the largest source here and the longest is 62 characters:
-  255 is already four times what every line but one kind needs, and widening
-  the element to a path's capacity takes a document's cached answer from 10 MB
-  to 167 MB. The bound is right for what the vector holds and wrong for one row
-  in it. What would close it is either a capture that separates the file table
-  or a **container generic over its element's capacity** — `Vec` has been
-  generic over the element *type* since ADR-0254, and what is missing is a
-  routine that can fill one without naming the capacity, which is the same
-  sentence ADR-0290 wrote about a hash. A design question with a caller, which
-  is what ADR-0116 asks for before anything is built.
+  It was the *reader*. `PasProcess.CaptureLines` cuts every line at `ItemMax`
+  — its contract says so, and the contract is right for the 40 000 rows it was
+  reached for — and the server used it for a dump one of whose rows carries an
+  absolute path. **Pascal's own `readln` reads a line into a string variable of
+  whatever capacity the reader declared**, so the fix was to write the dump to
+  a file and read it with the language rather than with the library: no
+  container, no generic, no new capability, and one bound fewer than before.
+
+  **The probe that found this took two minutes and the entry had proposed a
+  language feature.** That is the third time in this chapter — after `T ! E`
+  and the map — and all three corrections say the same thing a different way:
+  the reach for a library convenience is what introduced the bound, and the
+  language underneath it had none.
+
+  What it leaves is a warning rather than a gap. `readln` truncates
+  **silently** at the variable's capacity, §6.9.1 skipping the rest of the
+  line, so the capacity a reader declares is a decision and not a formality —
+  which is why `DumpLineMax` is derived from `MaxPath` and not counted. And
+  `PasFile.ReadLine` and `ForEachLine` still hand a caller a `FileLine` of 255
+  and cut the rest away without a word. No client here has been bitten by that
+  one, so it is written down and not fixed: ADR-0116's bar, applied to the
+  module next door.
 
 - **A bindable file cannot cross a parameter**, which came out of fixing the
   above and is open. §6.4.1 makes `bindable` part of a *variable-declaration*

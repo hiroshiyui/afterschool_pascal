@@ -176,6 +176,14 @@ const
     the same line as an inner one is still the larger of the two. }
   StmtLineWeight = 100000;
 
+  { The widest row a `--dump-uses` can hold: `file `, an index, a space, and a
+    path as long as this program can open one. Derived and not chosen, for the
+    reason `UriMax` below is -- and here the reason has teeth, because
+    `readln` cuts at the variable's capacity **silently**, §6.9.1 skipping the
+    rest of the line. A number picked by counting would be the defect this
+    routine exists to remove, one layer up (ADR-0292). }
+  DumpLineMax = MaxPath + 32;
+
   { A URI as long as one naming a file this program can open. It is derived
     and not chosen: a `file://` URI is that scheme's seven characters and then
     the path percent-escaped, and every byte of a path may need escaping, so
@@ -212,6 +220,16 @@ type
     project somebody has, not an attack. }
   DocUri = string(UriMax);
 
+  { The file table at the head of a `--dump-uses`, which is the one place that
+    dump carries a *path* rather than a name. Its own vector, and not a few
+    more rows in the one below, because the two are sized by different facts:
+    that dump is 40 821 lines on the largest source here and the longest is 62
+    characters, so `ItemMax` at 255 is already four times what a `use` line
+    needs, while a `file` line holds an absolute path. Widening the elements
+    the *other* rows live in would take a cached answer from 10 MB to 167 MB
+    to make room for a handful of paths (ADR-0292). }
+  PathVec = ^Vec(PathName);
+
   { What the client last told us a document contains. The text is a `JsonChars`
     because a source file is not a line and has no bound worth naming. }
   Document = record
@@ -227,7 +245,10 @@ type
       It is emptied wherever the text is replaced, which is `Store` and
       `Forget` and nowhere else — a cache invalidated in two places is a cache
       whose validity is a property of the record rather than of a caller. }
-    uses_: StrVecPtr
+    uses_: StrVecPtr;
+    { The `file` rows of that same dump, at a path's capacity. Emptied with
+      `uses_` and never without it: they are two halves of one answer. }
+    files: PathVec
   end;
 
   DocMap = ^Map(DocUri, Document);
@@ -325,7 +346,8 @@ procedure NoDocument(var d: Document);
 begin
   d.uri := '';
   d.text := nil;
-  d.uses_ := nil
+  d.uses_ := nil;
+  d.files := nil
 end;
 
 { What this URI names, and whether it names anything. Two hashes rather than
@@ -392,10 +414,12 @@ begin
     about a document that no longer exists (ADR-0252). }
   if DocOf(uri, d) then begin
     JsonCharsFree(d.text);
-    if d.uses_ <> nil then SVecFree(d.uses_)
+    if d.uses_ <> nil then SVecFree(d.uses_);
+    if d.files <> nil then VecFree(PathVec, d.files)
   end;
   d.uri := uri;
   d.uses_ := nil;
+  d.files := nil;
   CharsOf(text, d.text);
   MapPut(docs, uri, d, StrHash, StrEq)
 end;
@@ -407,6 +431,7 @@ begin
   if not DocOf(uri, d) then exit;
   JsonCharsFree(d.text);
   if d.uses_ <> nil then SVecFree(d.uses_);
+  if d.files <> nil then VecFree(PathVec, d.files);
   if not MapDelete(docs, uri, StrHash, StrEq) then
     Note('a document vanished from the store while it was being removed')
 end;
@@ -773,18 +798,29 @@ end;
   program leaving something behind (ADR-0241). Under LSP the two are the same
   path and the parameter costs nothing. }
 function CompilerCommand(flags: CommandLine; imports: CommandLine;
-                        source: PathName; var cmd: CommandLine): boolean;
+                        source: PathName; dumpTo: PathName;
+                        var cmd: CommandLine): boolean;
 begin
   cmd := '';
   { Checked rather than concatenated: a variable-string assignment past its
     capacity is a run-time error, and the pieces here are all a caller's. }
   if length(compilerCmd) + length(flags) + length(imports) + length(source)
-     + length(scratchPath) + 32 > CommandMax then begin
+     + length(scratchPath) + length(dumpTo) + 32 > CommandMax then begin
     Note('the compiler command line would be longer than this program holds');
     exit(false)
   end;
   cmd := compilerCmd + flags + imports + ' ''' + source + ''' -o '''
-         + scratchPath + '.ll'' 2>&1';
+         + scratchPath + '.ll''';
+  { The empty `dumpTo` is the ordinary case and the pipe is the answer: what
+    the compiler wrote comes back through `Capture` or `CaptureLines`. A named
+    one is for a dump whose lines are not all lines -- the `--dump-uses` file
+    table holds paths, and the per-line bound of a vector sized for 40 000
+    short rows would cut them (ADR-0292). Both streams either way, because
+    this compiler writes its diagnostics to `output`: no standard Pascal
+    program has a second one. }
+  if length(dumpTo) > 0 then
+    cmd := cmd + ' >''' + dumpTo + '''';
+  cmd := cmd + ' 2>&1';
   CompilerCommand := true
 end;
 
@@ -793,7 +829,7 @@ var cmd: CommandLine;
     r: RunResult;
 begin
   out := '';
-  if not CompilerCommand('', imports, scratchPath, cmd) then exit(false);
+  if not CompilerCommand('', imports, scratchPath, '', cmd) then exit(false);
   r := Capture(cmd, out);
   if not r.ok then begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
@@ -1230,7 +1266,7 @@ begin
     if WriteScratch(d.text)
        { No imports: the flag stops after the parse and a name is a name
          whether or not the module it came from was found. }
-       and CompilerCommand(' --dump-symbols', '', scratchPath, cmd) then begin
+       and CompilerCommand(' --dump-symbols', '', scratchPath, '', cmd) then begin
       SVecNew(lines, 64);
       r := CaptureLines(cmd, lines);
       if not r.ok then
@@ -1409,12 +1445,78 @@ end;
   document's own -- the dump names file 0 by the path it was handed, which is
   the *scratch* copy and not a file the client has ever heard of. The caller
   answers with the document's own URI for that case, which is the common one. }
+{ Read a `--dump-uses` the compiler wrote to `dumpPath`, sorting it into the
+  two vectors that hold it: the `file` rows into `files`, at a path's
+  capacity, and everything else into `lines`.
+
+  **It is `readln` and not `CaptureLines`, and that is the point** (ADR-0292).
+  The library routine cuts every line at `ItemMax`, which is right for what it
+  is for and wrong for a row carrying an absolute path -- and the cut was
+  silent, so a definition in a deeply nested component came back as a URI
+  naming a different file. Pascal's own `readln` reads a line into a string
+  variable of whatever capacity the reader declared, so reading the dump here
+  needs no library and has no bound but the one this program chose.
+
+  The other rows *are* cut, deliberately and by this program rather than by a
+  routine that did not know what it held: a `use` line is nine short fields
+  and a type name, and the longest in the largest source here is 62
+  characters. Doing it with `substr` rather than by assignment is what keeps a
+  freak long one from stopping the server, an over-capacity assignment being
+  6.4.6 c)'s error.
+
+  False where the file is not there, and where the file table is not the dense
+  ascending run this indexes it as -- answering nothing beats answering a
+  location in the wrong file, which is the defect this routine exists to end. }
+function ReadUses(dumpPath: PathName; var lines: StrVecPtr;
+                  var files: PathVec): boolean;
+var f: bindable text;
+    b: BindingType;
+    line: string(DumpLineMax);
+    k, ix: integer;
+    ok: boolean;
+begin
+  b := binding(f);
+  b.name := dumpPath;
+  bind(f, b);
+  { E.16: bound says the external entity exists, which is the question here --
+    `reset` on a name nothing is at stops the program. }
+  if not binding(f).bound then begin
+    unbind(f);
+    exit(false)
+  end;
+  reset(f);
+  ok := true;
+  while ok and not eof(f) do begin
+    readln(f, line);
+    if (length(line) > 5) and (substr(line, 1, 5) = 'file ') then begin
+      k := 6;
+      while (k <= length(line)) and (line[k] <> ' ') do k := k + 1;
+      ix := IntOr(ParseInt(substr(line, 6, k - 6)), -1);
+      if ix <> VecLen(PathVec, files) then
+        ok := false
+      else if k >= length(line) then
+        ok := false
+      else
+        VecPush(PathVec, files, substr(line, k + 1, length(line) - k))
+    end
+    else if length(line) > ItemMax then
+      SVecPush(lines, substr(line, 1, ItemMax))
+    else
+      SVecPush(lines, line)
+  end;
+  unbind(f);
+  if not ok then Note('the compiler''s file table was not the run this reads');
+  ReadUses := ok
+end;
+
 function FindUse(uri: DocUri; line, col: integer;
                  var hit: UseHit; var path: PathName): boolean;
 var i, ul, uc, un: integer;
     d: Document;
     lines: StrVecPtr;
+    files: PathVec;
     cmd, words: CommandLine;
+    dump: PathName;
     r: RunResult;
     text: StrItem;
     found: boolean;
@@ -1426,7 +1528,8 @@ begin
   { The document's real path, as Analyse uses it: the sidecar names the file
     the client is editing and the scratch file is a copy of its bytes. }
   found := ImportsFor(UriToPath(uri), words);
-  if not CompilerCommand(' --dump-uses', words, scratchPath, cmd) then
+  dump := scratchPath + '.uses';
+  if not CompilerCommand(' --dump-uses', words, scratchPath, dump, cmd) then
     exit(false);
   { A list of lines and not one buffer, for ADR-0239's reason met a second
     time: this answer is one line per name in the file and `CaptureMax` was
@@ -1434,16 +1537,27 @@ begin
   { ...and kept, because the next question is about the same text (ADR-0252).
     The document owns the list from here: it is freed where the text is
     replaced and not at the end of this routine. }
-  if d.uses_ <> nil then lines := d.uses_
+  if d.uses_ <> nil then begin
+    lines := d.uses_;
+    files := d.files
+  end
   else begin
     SVecNew(lines, 64);
-    r := CaptureLines(cmd, lines);
+    VecInit(PathVec, files, 4);
+    r := Run(cmd);
     if not r.ok then begin
       Note('could not run the compiler: ' + ErrorText(r.cause));
       SVecFree(lines);
+      VecFree(PathVec, files);
+      exit(false)
+    end;
+    if not ReadUses(dump, lines, files) then begin
+      SVecFree(lines);
+      VecFree(PathVec, files);
       exit(false)
     end;
     d.uses_ := lines;
+    d.files := files;
     MapPut(docs, uri, d, StrHash, StrEq)
   end;
   for i := 1 to SVecLen(lines) do begin
@@ -1469,16 +1583,14 @@ begin
         end
     end
   end;
-  { A second pass, and only when there is something to look up: the file table
-    is at the head of the dump and the index that selects from it is not known
-    until the answer is. Nothing is held between the two but an integer. }
+  { The file table is a lookup and no longer a second pass: `ReadUses` has
+    already put row `k` at position `k + 1`, so the index the answer carries
+    selects directly. A `declFile` past the end is not a thing the compiler
+    writes; the guard is here because answering nothing beats answering a
+    location in the wrong file. }
   if hit.found and (hit.declFile > 0) then
-    for i := 1 to SVecLen(lines) do begin
-      text := SVecGet(lines, i);
-      if SymField(text, 1) = 'file' then
-        if IntOr(ParseInt(SymField(text, 2)), -1) = hit.declFile then
-          path := SymRest(text, 3)
-    end;
+    if hit.declFile < VecLen(PathVec, files) then
+      path := VecGet(PathVec, PathName, files, hit.declFile + 1);
   { Not freed here: the document owns it now (ADR-0252). }
   FindUse := hit.found
 end;
@@ -1846,9 +1958,9 @@ begin
     words := '';
     if name = 'diagnostics' then found := ImportsFor(path, words);
     if name = 'outline' then
-      found := CompilerCommand(' --dump-symbols', '', path, cmd)
+      found := CompilerCommand(' --dump-symbols', '', path, '', cmd)
     else
-      found := CompilerCommand('', words, path, cmd);
+      found := CompilerCommand('', words, path, '', cmd);
     if not found then
       JsonPut(reply, 'result',
               TextContent(JsonNewText('the compiler command line would be '
@@ -2022,7 +2134,7 @@ begin
   StatementsOf := false;
   if not DocOf(uri, d) then exit;
   if not WriteScratch(d.text) then exit;
-  if not CompilerCommand(' --dump-stmts', '', scratchPath, cmd) then exit;
+  if not CompilerCommand(' --dump-stmts', '', scratchPath, '', cmd) then exit;
   SVecNew(lines, 64);
   r := CaptureLines(cmd, lines);
   if r.ok then StatementsOf := true
@@ -2559,7 +2671,8 @@ begin
           client never closed still holds one, and `heap-balance` is what said
           so: the sessions open documents and end without a didClose, which is
           what an editor does when it is killed. }
-        if d.uses_ <> nil then SVecFree(d.uses_)
+        if d.uses_ <> nil then SVecFree(d.uses_);
+        if d.files <> nil then VecFree(PathVec, d.files)
       end;
   MapFree(DocMap, docs)
 end.
