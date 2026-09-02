@@ -1270,6 +1270,38 @@ is built on both and declares no foreign anything at all.
 caller declares and the module fills, so what a program holds is a variable
 that closes itself and never the address.
 
+**Every file variable is bindable** (ADR-0299). ISO/IEC 10206:1991 puts
+`bindable` in a type-denoter and refuses `bind` of a file without it, so a
+`var f: text` parameter could not be bound inside its body — the standard's own
+example `procedure bindfile(var f: text)` did not compile — and neither could
+`p^` for `p: ^text`, a `text` field or a `text` element. Here the file-type is
+the whole of the question:
+
+```pascal
+procedure bindfile(var f: text);           { §6.7.6.8's example, as printed }
+var b: BindingType;
+begin
+  b.name := 'log.txt';
+  bind(f, b)
+end;
+
+var p: ^text;
+    r: record log: text end;
+begin
+  new(p);
+  bindfile(p^);                            { no word in the domain }
+  bindfile(r.log)                          { none on the field }
+end.
+```
+
+`bindable` is still accepted wherever the standard admits it and is redundant
+on a file. On anything else it means what it did — a `bindable integer` may
+not drive a `for` statement — and `bind` refuses it on purpose, saying
+*only a file variable is bindable*; what binding an integer would mean is
+left undecided. Every conforming program keeps its meaning; what moved is that
+a refusal the standard requires is no longer made, which is the first time the
+dialect has used its freedom that way rather than to add a construct.
+
 **The runtime has a second surface** (ADR-0131). `pas_` names are what the
 compiler emits calls to and are refused as foreign names; `pasx_` names are
 what a *program* may bind. It was one routine wide when that record was
@@ -1884,17 +1916,19 @@ binding    var f: bindable text — a variable that may be bound to
            the only way a program names a file while it is *running* —
            ISO 7185 binds the program parameters before it starts and
            gives it no other way out
-           Bindability belongs to the variable-access, so a bindable
-           *field* and a bindable array *component* may each be bound:
-           bind(r.log, b) and bind(pool[i], b) (§6.4.3.4, §6.4.3.5)
+           Every file variable is bindable here, the word or not
+           (ADR-0299): a `var f: text` parameter, `p^` for `p: ^text`,
+           a field and an array component — bind(r.log, b) and
+           bind(pool[i], b) — may each be bound, and `bindable text` is
+           accepted and means the same as `text`
            A program-parameter is bindable without saying so (§6.5.1),
            and binding(p).name is the command-line argument it was given
            (§6.7.6.8) — so a program can read its own command line, and
            an unbound one is how it counts the arguments there were
-           A bindable variable may not be a `for` statement's control
-           variable (§6.9.3.9.1), and `bind` here needs a *file* variable:
-           §6.7.5.6 admits any bindable one, and that restriction is
-           recorded in `doc/implementation-defined.md` §6
+           A bindable non-file variable may not be a `for` statement's
+           control variable (§6.9.3.9.1), and `bind` needs a *file*
+           variable: §6.7.5.6 admits any bindable one, and that refusal
+           is a decision, recorded in `doc/implementation-defined.md` §6
 modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            a module: a heading that says what it exports and a block that
            implements it, either written together or as separate
