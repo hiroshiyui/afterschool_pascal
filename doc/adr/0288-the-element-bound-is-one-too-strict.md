@@ -7,6 +7,10 @@ Date: 2026-09-02
 Accepted, 2026-09-02. Records a `langspec-audit` of ADR-0287's readings. The
 over-strictness it found is **not fixed here**; see *What is not done*.
 
+**Fixed by [ADR-0289](0289-the-last-legal-span-rather-than-the-first-illegal-one.md)**,
+2026-09-02, which does everything *What is not done* lists. The three
+CONFIRMED readings stand unchanged.
+
 ## Context
 
 ADR-0287 gave Sema a bound on a type's storage and moved the layout arithmetic

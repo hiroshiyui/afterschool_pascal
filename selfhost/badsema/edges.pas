@@ -1,11 +1,11 @@
 { Boundaries that the ordinary corpus never reaches: the full range of char as
-  an index type, an *unpacked* array of char (which is not a string type), and
-  an index spanning exactly maxint -- one value too many. }
+  an index type, an *unpacked* array of char (not a string type), and an index
+  spanning maxint + 1 -- one too many, maxint itself being legal (ADR-0289). }
 program edges(output);
 type bychar = array [char] of integer;
      loose = array [1..3] of char;
      tight = packed array [1..3] of char;
-     huge = array [0..maxint] of char;
+     huge = array [-1..maxint] of char;
      { The other half of the same boundary: the elements bound above counts
        *values* and this counts bytes. Two nested maxint arrays of a four-byte
        element want 1.8e19 of them, which is past what a size can hold -- and

@@ -2849,7 +2849,7 @@ function OrdinalLo(t: typePtr): integer;
 
 function OrdinalHi(t: typePtr): integer;
 
-function TypeLength(t: typePtr): integer;
+function TypeLength(t: typePtr): int64;
 
 { 6.7.3.2: "If the parameter-form of the value-parameter-specification
   contains a type-name or a type-inquiry ... [the value] shall be
@@ -3936,7 +3936,12 @@ begin
 end;
 
 function TypeLength;
-begin TypeLength := t^.hi - t^.lo + 1 end;
+{ Widened because the bound above it admits maxint + 1 components: an
+  index-type may span maxint values, and a span is one less than a count
+  (ADR-0289). The subtraction is done against an int64 so that the count
+  is formed in the wide type rather than overflowing on its way there. }
+var lo: int64;
+begin lo := t^.lo; TypeLength := t^.hi - lo + 1 end;
 
 { 6.7.3.2: "If the parameter-form of the value-parameter-specification
   contains a type-name or a type-inquiry ... [the value] shall be

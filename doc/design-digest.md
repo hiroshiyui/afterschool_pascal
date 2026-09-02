@@ -109,6 +109,20 @@ own exception and compare by length instead.
   product, the sum and both propagation paths. What is *not* bounded is the
   target: a global above about 2 GB is the linker's `relocation truncated to
   fit`, which this does not address.
+- **The other bound counts values, and was one too strict** (ADR-0289). An
+  array's index-type may span at most `maxint`, because `emitAddress` subtracts
+  `i - lo` unchecked and that difference has to be a value of `-maxint..maxint`
+  — so `= maxint` is the last legal span and Sema refused it. Nothing failed:
+  the compiler simply declined `array [0..maxint] of T`, which is how a program
+  spells an index as wide as one goes, while accepting a larger record two
+  lines away. **`verify/iso.py` said `<` as well**, its own docstring giving the
+  `<=` reason, so the formal oracle agreed with the defect and every rule
+  passed — a precondition is a hypothesis, and a narrower one only makes a
+  proof easier. `TypeLength` is `int64` because a span of `maxint` is a count of
+  `maxint + 1`; without that the relaxed bound just moves ADR-0287's crash one
+  function along, which is what the second mutation shows.
+  `tests/index_span.pas` is the case, and it allocates the shape whose offsets
+  reach exactly `maxint`.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the

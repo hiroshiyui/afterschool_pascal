@@ -9475,16 +9475,27 @@ begin
   { The C++ writes this subtraction in a 64-bit type. Here both bounds are
     integers and their difference need not be one -- the full integer type
     spans 2*maxint -- so the test is rearranged to stay inside the type, the
-    same move the lexer's overflow check had to make (ADR-0022). With lo above
-    zero the span cannot reach maxint at all; otherwise maxint + lo is in
-    range, and hi - lo >= maxint exactly when hi >= maxint + lo. }
+    same move the lexer's overflow check had to make (ADR-0022). With lo at
+    zero or above the span cannot exceed maxint at all, hi being a value of
+    the type; below it maxint + lo is in range, and hi - lo > maxint exactly
+    when hi > maxint + lo.
+
+    The comparison is strict, and was not until ADR-0289: what the lowering
+    needs is that hi - lo *is* a value of the type, so a span of exactly
+    maxint is the last legal one rather than the first illegal one. Refusing
+    it cost `array [0..maxint] of T`, which is how a program spells an index
+    as wide as one goes, on a ground the standards do not supply -- a
+    2 GB array was refused for its element count while a 2.4 GB record was
+    accepted. verify/iso.py's precondition said `<` here too and its own
+    docstring gave the `<=` reason, so the model agreed with the defect and
+    no gate could see it. }
   { A dynamic index type has no span to measure here. It does not need one:
     the array the actual brings was produced from constants and checked when it
     was produced, so `i - lo` is a value of the type for every array that can
     reach a schematic formal parameter. }
   else if (index^.loDisc = nil) and (index^.hiDisc = nil) and
-          (OrdinalLo(index) <= 0) and
-          (OrdinalHi(index) >= maxint + OrdinalLo(index)) then begin
+          (OrdinalLo(index) < 0) and
+          (OrdinalHi(index) > maxint + OrdinalLo(index)) then begin
     ErrorAt(dim^.line, dim^.col);
     writeln('this array has too many elements: an index type may span at ',
             'most maxint values');

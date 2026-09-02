@@ -160,8 +160,22 @@ def offset_selects_the_right_element(i, lo, hi, offset):
 def index_span_is_representable(lo, hi, maxint):
     """The condition Sema enforces on an array's index range: the distance
     between the bounds must itself be a value of the integer type, since the
-    lowering subtracts them. Without it, `i - lo` can wrap."""
-    return wide(hi) - wide(lo) < z3.BitVecVal(maxint, wide(lo).size())
+    lowering subtracts them. Without it, `i - lo` can wrap.
+
+    The comparison is inclusive because that is what the sentence above says:
+    a span *equal* to maxint is a value of the type. It was strict until
+    ADR-0289, agreeing with a Sema check that was strict for no stated reason,
+    so this file proved the lowering sound under a precondition one narrower
+    than its own justification and nothing could tell the two apart.
+
+    Nothing checks this against the compiler, so the condition it restates is
+    written out for the eye: `ResolveArray` refuses when
+
+        (OrdinalLo(index) < 0) and (OrdinalHi(index) > maxint + OrdinalLo(index))
+
+    which is `hi - lo > maxint` rearranged to stay inside the integer type.
+    """
+    return wide(hi) - wide(lo) <= z3.BitVecVal(maxint, wide(lo).size())
 
 
 def is_a_value_of_the_subrange(v, lo, hi):

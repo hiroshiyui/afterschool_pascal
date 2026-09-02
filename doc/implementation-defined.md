@@ -598,26 +598,36 @@ only for the walkers after it. A program's own block is one of the levels, so
 
 **A type may need at most `maxint64` bytes of storage, and an array's index
 type may span at most `maxint` values.** Two bounds and they count different
-things — the second is a number of elements and the first a number of bytes —
-so a type can pass either and fail the other. `array [0..maxint] of char` is
-one element too many and is refused for the count; two nested `array
-[1..maxint]` of a four-byte element is 1.8e19 bytes and is refused for the
-storage.
+things — the second is a distance between two index values and the first a
+number of bytes — so a type can pass either and fail the other.
+`array [-1..maxint] of char` spans one value too many and is refused for the
+count; two nested `array [1..maxint]` of a four-byte element is 1.8e19 bytes
+and is refused for the storage.
 
 The element bound is the older one and is not arbitrary: `verify/`'s
 `accepted-index-selects-the-right-element` rule proves that an accepted
 subscript selects the right element, and its precondition is that `i - lo` is a
-value of the integer type. The storage bound is what the compiler can lay out
-(ADR-0287). Both are reported where the type is written, with a position, and
-neither had an entry here until ADR-0287 — the element bound had been enforced
-since the conformance sweeps and documented nowhere a user would look.
+value of the integer type. That is why the bound is a **span** and not a count:
+`hi - lo` must be a value of `-maxint..maxint`, so the largest array is
+`maxint + 1` components and `array [0..maxint] of char` — 2 GB, and how a
+program spells an index as wide as one goes — is the last legal one rather
+than the first illegal one. It was refused until ADR-0289, on a ground no
+clause supplies: a refusal at that size is defensible only as a capacity, and
+this processor accepts a larger record. The storage bound is what the compiler
+can lay out (ADR-0287). Both are reported where the type is written, with a
+position, and neither had an entry here until ADR-0287 — the element bound had
+been enforced since the conformance sweeps and documented nowhere a user would
+look, which is most of why it went eleven increments without anyone comparing
+it against the record beside it.
 
 **What is *not* bounded here is what the machine can hold.** A global variable
 above about 2 GB is refused by the linker's small code model — `relocation
 truncated to fit`, a message from `ld` naming no source line — and a heap
 object by the memory available. Neither is a fact this processor could state
 for every target `--target=` admits, so neither is stated. A type between 2 GB
-and `maxint64` is accepted and works on the heap.
+and `maxint64` is accepted and works on the heap, which is now the only place
+an array at the element bound can live: `tests/index_span.pas` allocates one,
+indexes both ends and disposes it.
 
 ### 6.1 Programs accepted that the standard requires to be rejected
 
