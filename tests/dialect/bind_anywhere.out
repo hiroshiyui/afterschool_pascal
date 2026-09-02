@@ -1,0 +1,10 @@
+.param: through a parameter (bound=TRUE)
+.param: after unbind bound=FALSE
+.deref: through a pointer (bound=TRUE)
+.deref: after unbind bound=FALSE
+.field: through a field (bound=TRUE)
+.field: after unbind bound=FALSE
+.with: bound=TRUE
+.elem: through an element (bound=TRUE)
+.elem: after unbind bound=FALSE
+.ints: 42 (bound=TRUE)

@@ -38,6 +38,24 @@ appears below in the release where it still existed.
   is itself a `.claude/worktrees` tree, their worktree filter having tested
   the absolute path; both now test the path below the root.
 
+### Changed
+
+- **Every file variable is bindable** (AP 6.5.1, ADR-0299). `bind`, `unbind`
+  and `binding` accept any variable-access that denotes a file, whether or not
+  its type-denoter says `bindable`: a `var f: text` parameter — §6.7.6.8's own
+  example `bindfile` — a dereference of `^text`, a `text` field and a `text`
+  element. The word is still accepted wherever §6.4.1 admits it and is
+  redundant on a file; on a non-file it keeps its meaning and `bind` refuses
+  it by design. ISO/IEC 10206:1991 programs keep their meaning; what moves is
+  that a refusal the standard requires is no longer made. The diagnostic
+  *'f' is not bindable; only a variable whose type-denoter says 'bindable'
+  can be bound to something outside the program* is gone with the rule, and
+  *'bind' needs a file variable, found integer* now ends *: only a file
+  variable is bindable*.
+
+- **`PasFile` takes the file through a parameter.** Three helpers take
+  `var f: text`; every exported name and answer is unchanged.
+
 ## [3.4.0] - 2026-09-01
 
 The release that emptied `doc/roadmap.md`'s *What would make this easier to

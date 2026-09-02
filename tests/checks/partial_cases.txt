@@ -205,13 +205,11 @@ stdProcKind:spUnpack unused
 # and it would fail all of them at once, which is the point.
 IsDesignator:nodeKind:1 chains 6 of 64
 IsConstantAccess:nodeKind:1 chains 4 of 64
-DesignatorBindable:nodeKind:1 chains 4 of 64
 RootDesignator:nodeKind:1 chains 3 of 64
 ContainerOf:nodeKind:1 chains 3 of 64
 PackedComponent:nodeKind:1 chains 3 of 64
 ConstAccessNode:nodeKind:1 chains 3 of 64
 IsCallValue:nodeKind:1 chains 2 of 64
-NotBindable:nodeKind:1 chains 2 of 64
 VariantSelector:nodeKind:1 chains 2 of 64
 ThreatSym:nodeKind:1 chains 2 of 64
 EvalConstAccess:nodeKind:1 chains 2 of 64

@@ -874,11 +874,20 @@ about that. And a **directory** answers false, which needs asking without
 `access` is the whole of it (ADR-0186's catalogue holds a function and never a
 type).
 
-**A bindable file cannot cross a parameter**, and it is worth knowing before
-factoring one out. §6.4.1 makes `bindable` part of a *variable-declaration*
-and not of a type-denoter, so no formal parameter accepts one — `var f: text`
-compiles and `bind(f, b)` inside it is then refused. `lib/pasfile.pas`'s four
-writers are one routine with two flags for exactly that reason.
+**Every file variable is bindable** (AP 6.5.1, ADR-0299), and the word
+`bindable` decides nothing about a file. §6.4.1 puts the word in a
+type-denoter and §6.7.5.6 made `bind` of a file without it a
+dynamic-violation, so `var f: text` in a heading — §6.7.6.8's own `bindfile`
+— `p^` for `p: ^text`, a `text` field and a `text` element were all refused
+or, for the pointer, accepted by accident. Now `DesignatorBindable` answers
+true for any designator whose type is a file, `bind`, `unbind` and `binding`
+ask only `IsFile`, and `lib/pasfile.pas`'s helpers take `var f: text`. What
+the word still decides is a **non-file**: `bindable integer` is accepted,
+refused as a `for` control variable, and refused by `bind` *by design* — the
+message says *only a file variable is bindable* — with its meaning
+deliberately undesigned. This is the first dialect decision that admits a
+program the standard requires rejected rather than adding a construct; the
+test it passes is AP 6.0.1's, that no conforming program changes meaning.
 
 **How a Pascal program has a command line at all** is the part worth knowing.
 §6.5.1 makes every program-parameter possess "the bindability that is

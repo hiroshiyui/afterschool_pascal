@@ -449,25 +449,15 @@ and the probe written before touching it found two compiler defects that
 four cases and a green suite had not; it is in the register with the
 retaken measurement. The one that remains:
 
-Seven entries stood below this line and **six of them are closed**; they
+Seven entries stood below this line and **all seven are closed**; they
 moved to
 [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)
-on 2026-09-02, each with what closing it found, and the register there is
-where to read them — two were **wrong**, one was right and understated by a
-wide margin, one was opened by closing that one and shut three hours later,
-and the last had been answered eight hours after it was written by a record
-nobody came back to link. What is left is one decision nobody has asked for
-twice.
-
-- **A bindable file cannot cross a parameter**, which came out of fixing
-  `JsonLine`'s bound (ADR-0291) and is open. §6.4.1 makes `bindable` part of
-  a *variable-declaration* and not of a type-denoter, so `var f: text`
-  compiles and `bind(f, b)` inside it is then refused, which is why
-  `lib/pasfile.pas`'s four writers are one routine with two flags. It is one
-  of four shapes of a single decision — what bindability *is* once no clause
-  fixes it — and the four are one entry under
-  [Known limitations](#known-limitations) since 2026-09-02. Nothing has asked
-  for it twice.
+on 2026-09-02 and 2026-09-03, each with what closing it found, and the
+register there is where to read them — two were **wrong**, one was right and
+understated by a wide margin, one was opened by closing that one and shut
+three hours later, one had been answered eight hours after it was written by
+a record nobody came back to link, and the last was a decision nobody had
+asked for twice until the count was taken (ADR-0299).
 
 **The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
 and by decision rather than by discovery: the language server is the better
@@ -789,28 +779,7 @@ trap a program can meet:
 | a set's base type must have its values in 0..255, every set being one 256-bit word — so `set of integer` is refused, and so is `set of 1..m` for a bound the block evaluates, which cannot be checked against 0..255 before the program runs | ADR-0028, ADR-0133; §6 |
 | string concatenation draws from an arena released at the end of every statement, so one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
 
-**Two decisions, and neither has a record yet:**
-
-- **What bindability is, once no clause fixes it to the variable-declaration.**
-  Three shapes were recorded here under ISO/IEC 10206:1991 and a fourth in
-  the language-server chapter, and they are one question. A dereference is
-  answered `bindable` without asking, so `bind(p^, b)` compiles for
-  `p: ^text` as well as for `p: ^bindable text` — the register's §6.1 carries
-  it as a program accepted that the standard rejects. A `var` parameter of
-  file-type would take its bindability from the actual, §6.7.3.3 NOTE 1
-  saying *dynamically*, and §6.7.6.8's own worked example
-  `procedure bindfile(var f: text)` is the program this refuses — which is
-  why `lib/pasfile.pas`'s four writers are one routine with two flags, and
-  is the entry the language-server chapter holds. And `bind` of a non-file
-  bindable variable, `var clock: bindable integer`, is refused, §6.7.5.6's
-  "otherwise" branch presupposing it legal and what it would mean being
-  undesigned. The dialect can answer any of three ways: enforce the clause at
-  the dereference and carry a bindability word with every `var` file
-  parameter, the seventh thing here that travels as two words; make every
-  file variable bindable, which dissolves all four shapes at once and is the
-  answer a dialect with no conformance claim is free to give; or leave it.
-  ADR-0167's reader is where the shapes were found, and nothing has asked for
-  the decision twice (ADR-0116).
+**One decision, and it has no record yet:**
 
 - **`string(5)` as a parameter form** (ADR-0171). §6.7.3.1 admits
   `type-name | schema-name | type-inquiry`, so `procedure q(x: string)` is

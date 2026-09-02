@@ -420,27 +420,31 @@ list, so two arms holding files at one address would leak the first buffer and
 link one list node twice (ADR-0070).
 
 **`bind`, `unbind` and `binding` are refused for a variable that is not a
-file.** ISO/IEC 10206:1991 §6.7.5.6 makes the file case the *conditional* one
-and the other case unconditional: "If the variable-access f possesses a
-file-type, it shall be a dynamic-violation if the variable does not possess the
-bindability that is bindable; **otherwise, the variable shall possess the
-bindability that is bindable**" — the same sentence in `unbind`, and §6.7.6.8
-for `binding`. So `var i: bindable integer` may be bound, and here
-`bind(i, b)` is refused with *'bind' needs a file variable, found integer*.
+file, and that is a design since AP 6.5.1 (ADR-0299).** ISO/IEC 10206:1991
+§6.7.5.6 makes the file case the *conditional* one and the other case
+unconditional: "If the variable-access f possesses a file-type, it shall be a
+dynamic-violation if the variable does not possess the bindability that is
+bindable; **otherwise, the variable shall possess the bindability that is
+bindable**" — the same sentence in `unbind`, and §6.7.6.8 for `binding`. So
+`var i: bindable integer` may be bound under the standard, and here
+`bind(i, b)` is refused with *'bind' needs a file variable, found integer:
+only a file variable is bindable*.
 
 Nothing is lost silently: the declaration is accepted and §6.9.3.9.1's
 nonbindable rule is enforced against it (ADR-0170), so the bindability of a
 non-file variable is a real property that only the three procedures decline to
-act on. What binding such a variable would *mean* is implementation-defined and
-§6.7.5.6's NOTE 2 provides `binding` "to test the success", so a conforming
-answer could be as small as one that always fails — that is why this is
-recorded as a restriction rather than defended as a design.
+act on. What binding such a variable would *mean* is implementation-defined
+and AP 6.5.1's second paragraph declines to define it, which is the one
+restriction that clause states; until ADR-0299 this entry called it a
+restriction rather than a design because no record had decided it. The other
+half of the same clause — every *file* variable is bindable, the word or not —
+is an acceptance rather than a restriction and is in §6.1 below.
 
-Found by ADR-0167's third reader and carried in `doc/roadmap.md` ever since, as
-a design owed rather than a bug. What was missing is this entry: a restriction
-§5.1 c) does not permit belongs in **this** list whether or not it is also on a
-work queue, and reaching it a second time while probing ADR-0170 is what showed
-that §6 could not be searched for it.
+Found by ADR-0167's third reader and carried in `doc/roadmap.md` until
+ADR-0299, as a design owed rather than a bug. What was missing for a long time
+was this entry: a restriction §5.1 c) does not permit belongs in **this** list
+whether or not it is also on a work queue, and reaching it a second time while
+probing ADR-0170 is what showed that §6 could not be searched for it.
 
 **The accuracy of a real-valued constant-expression is the accuracy of the
 same operation at run time.** ISO/IEC 10206:1991 §6.8.2 NOTE 2 requires this
@@ -643,21 +647,26 @@ right. The suite is gone (ADR-0232) and this list is now maintained here,
 by hand, which is worth knowing before trusting its completeness: what found
 these entries can no longer be re-run.
 
-**One is currently known.** ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 require
-the variable-access given to `bind`, `unbind` and `binding` to possess the
-bindability that is bindable, and this compiler does not ask that of a
-**dereference**: `bind(p^, b)` compiles whatever the domain-type denotes. It is
-right for `p: ^bindable text`, which §6.4.4 permits and which is why the
-dereference answers `bindable` rather than the reverse, and it is wrong for
-`p: ^text` — a program the clause requires to be rejected. Found by reading
-(ADR-0167's third reader) rather than by the suite, which is ISO 7185 only and
-has no binding at all.
+**One was known here until ADR-0299, and it is now the rule.**
+ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 require the variable-access given to
+`bind`, `unbind` and `binding` to possess the bindability that is bindable,
+and this compiler did not ask that of a **dereference**: `bind(p^, b)`
+compiled whatever the domain-type denoted — right for `p: ^bindable text`,
+which §6.4.4 permits, and wrong for `p: ^text`, a program the clause requires
+to be rejected. Found by reading (ADR-0167's third reader) rather than by the
+suite, which was ISO 7185 only and had no binding at all; carried here from
+ADR-0170, which fixed the field and the component and not the pointer, whose
+domain reaches Sema through `ResolvePointer`'s deferred paths where the denoter
+that knew is out of hand.
 
-Not fixed with the field and the component, which were the same defect and are:
-a pointer's domain reaches Sema through `ResolvePointer`'s deferred and pending
-paths, where the denoter that knows the bindability is no longer in hand, so
-carrying it there is a change of its own. `doc/roadmap.md` has it.
-`tests/extended/binding_errors.pas` compiles the program.
+AP 6.5.1 makes **every file variable bindable**, so the program is accepted by
+decision and this list has no entry for it: `bind(p^, b)` for `p: ^text`, a
+`var f: text` formal bound inside its body — §6.7.6.8's own example — a
+`text` field and a `text` element are all programs of this dialect, and the
+word `bindable` on a file is accepted and redundant. Every conforming program
+keeps its meaning (AP 6.0.1); what moved is only that a refusal the standard
+requires is not made. `tests/dialect/bind_anywhere.pas` is the program and
+ADR-0299 the record.
 
 **The rest is empty**, and the emptiness is a claim about what is
 *known* rather than a proof. The BSI suite's `DEVIANCE` category has no program

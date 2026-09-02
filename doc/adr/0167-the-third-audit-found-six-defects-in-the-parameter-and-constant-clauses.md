@@ -6,6 +6,9 @@ Date: 2026-08-22
 
 Accepted. The third run of `.claude/skills/langspec-audit/`; ADR-0101 and
 ADR-0107 record the first, ADR-0162 the second.
+*Reader C's five findings under "What is not done" are answered by
+[ADR-0299](0299-every-file-variable-is-bindable.md), which makes every file
+variable bindable rather than carrying the bindability word.*
 
 ## Context
 

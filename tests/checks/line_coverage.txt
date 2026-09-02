@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 394
-instrumented 19255
+uncovered 390
+instrumented 19212
 
 accept 0/4
 accumulate 0/84
@@ -93,7 +93,7 @@ checkarguments 6/235
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
-checkcall 12/275
+checkcall 12/270
 checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -135,7 +135,7 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/11
-checkstdproc 19/367
+checkstdproc 19/366
 checkstmt 2/247
 checkstorage 0/3
 checkstringargs 0/13
@@ -170,7 +170,7 @@ conststrcmpn 0/10
 conststreq 0/1
 conststrlen 0/4
 conststrlt 0/4
-containerof 1/8
+containerof 0/8
 containsfile 0/11
 containshandle 0/10
 containsownedpointer 0/10
@@ -191,7 +191,7 @@ deferflag 0/4
 deferrecord 0/4
 deferstmtof 0/4
 definekeyword 0/6
-designatorbindable 0/18
+designatorbindable 1/9
 determine 0/11
 determinearg 0/4
 determinetuple 0/6
@@ -560,10 +560,9 @@ newblock 0/2
 newnode 0/87
 newresultslot 0/7
 newsymbol 0/97
-newtype 0/41
+newtype 0/40
 nextformal 0/4
 nonvarying 3/42
-notbindable 3/29
 noteblockdeclarations 0/1
 notedeclarationsto 0/6
 notedefining 0/7
@@ -584,7 +583,7 @@ ordinallo 0/3
 otherlistsparameter 0/1
 overlaps 0/7
 ownrelid 0/13
-packedcomponent 1/8
+packedcomponent 0/8
 pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
@@ -709,7 +708,7 @@ requiredfunc 0/2
 requiredfuncwide 0/166
 requiredtype 0/6
 reservedforeignname 4/16
-resolvearray 0/26
+resolvearray 0/25
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
@@ -741,6 +740,7 @@ satisfiescat 0/6
 schemahastypedisc 0/6
 schemaisbusy 0/6
 schematicformal 0/3
+schematicstandsfor 0/3
 sel 0/51
 selectedsize 0/14
 seq 0/25
