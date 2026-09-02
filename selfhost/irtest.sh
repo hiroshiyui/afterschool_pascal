@@ -289,7 +289,13 @@ golden() {
         failed=$((failed + 1))
         continue
       fi
-      if ! diff -u "$expected_err" "$work/actual.err" >"$work/delta"; then
+      # The source path is rewritten as tests/run_test.sh rewrites it: since
+      # ADR-0293 a trap names the file it happened in, and a golden must not
+      # depend on where the checkout lives. Both harnesses must normalise
+      # the same way or a case means two things.
+      if ! diff -u "$expected_err" \
+             <(sed -e "s|$f|<source>|g" -e "s|$(dirname "$f")/|<dir>/|g" \
+                   "$work/actual.err") >"$work/delta"; then
         echo "--- $stage/$name: runtime error message differs ---" >&2
         head -20 "$work/delta" >&2
         failed=$((failed + 1))

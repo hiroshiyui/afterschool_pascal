@@ -167,8 +167,10 @@ def goldens(root):
         # A background agent's worktree lives inside the checkout, so a walk
         # would read a second copy of every golden -- harmless here, since a
         # golden naming a diagnostic twice still names it, but skipped so this
-        # gate measures one tree.
-        if ".claude" not in p.parts
+        # gate measures one tree. Relative to the root, because a checkout
+        # that *is* a worktree has `.claude` in every absolute path, and the
+        # gate then read no golden at all and reported 663 unnamed.
+        if ".claude" not in p.relative_to(root).parts
     )
 
 

@@ -1,1 +1,1 @@
-runtime error: succ: the result is not a value of integer
+runtime error: succ: the result is not a value of integer at <source>:44:36

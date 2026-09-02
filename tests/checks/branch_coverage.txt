@@ -16,8 +16,8 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 865
-instrumented 10736
-decisions 5368
+instrumented 10748
+decisions 5374
 
 accept 0/4
 accumulate 1/32
@@ -147,7 +147,7 @@ confarraytype 0/4
 confbound 0/2
 conformable 8/20
 conformantformal 0/2
-congruous 2/42
+congruous 2/40
 constaccessnode 15/42
 constaddress 0/10
 constantlyfalse 0/2
@@ -248,7 +248,7 @@ emitforin 1/10
 emitframealiases 0/6
 emitframeglobal 0/2
 emitframetype 0/10
-emitglobals 0/10
+emitglobals 0/2
 emitgoto 1/4
 emithandletest 1/4
 emitif 0/8
@@ -262,6 +262,7 @@ emitnewselectors 1/6
 emitnewtuple 2/10
 emitoptionaltest 1/4
 emitownrels 1/10
+emitposglobals 0/2
 emitprocargument 1/6
 emitprocbody 0/14
 emitprocs 1/8
@@ -579,11 +580,13 @@ pooliswide 1/8
 poolput 1/2
 poolsame 0/6
 poolstarts 1/10
+posconst 0/2
 procactualsym 0/2
 producefromschema 6/100
 protectable 1/16
 pushstmt 0/4
 put 0/2
+putcchar 0/8
 putdescparamtypes 0/6
 putdesctype 0/2
 puthex 0/4
@@ -645,6 +648,7 @@ sametuple 2/12
 schemahastypedisc 0/6
 schemaisbusy 0/4
 schematicformal 0/2
+schematicstandsfor 0/10
 sel 4/18
 selectedsize 0/10
 seq 0/10

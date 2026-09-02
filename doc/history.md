@@ -5421,6 +5421,36 @@ records. Asked whether it was given project documentation, a reader in the
 repository names this project and its path; one in the sandbox answers no.
 
 
+## What would make this practical to pick up
+
+`doc/roadmap.md` opened this chapter on 2026-09-02 for someone working *with*
+the compiler rather than on it. Its first row closed the next day.
+
+### A runtime error names no position — closed (ADR-0293)
+
+The row said sixty-eight trap messages carried no file or line and that the
+fix was the compiler passing what it already held. Half right. The inline
+checks -- subscript, subrange, nil, `case`, arithmetic -- do hold the node,
+and pass the file, line and column as three arguments into the cold block.
+The other half is raised *inside* the runtime, which knows nothing about the
+source, and a call graph over `runtime/pasrt*.c` said that is **72 of the 127
+routines the emitter calls, every `write` among them** through
+`pas_check_open`. So every such call is bracketed: a store of a position
+record's address into a thread-local word before it, a clear after -- the
+clear being what makes a forgotten bracket report *no* position rather than
+the previous call's. Three things the row could not have known: the position
+has to trail the message, because five harnesses recognise a trap by its
+prefix and the sanitizer gate tells this runtime's trap from UBSan's by
+UBSan's position coming first; the path cannot pass through the 255-character
+message buffer or the string pool, so the file is one constant per module;
+and the seed calls the old two-word entry points, which stay as positionless
+wrappers until the reseed rather than reading a file pointer out of a register
+that never held one. The cost is size and not time -- the compiler's text
++28%, its compile of `apfront.pas` unchanged within noise -- and all 97
+goldens gained a suffix and nothing else. Two cases hold it: two subscripts on
+one line where only the second column is right, and a `**` whose operand is a
+function that makes bracketed calls of its own.
+
 ## What a daily program could not reach for, and now can
 
 `doc/roadmap.md` carried a chapter of this name from version 2 until version

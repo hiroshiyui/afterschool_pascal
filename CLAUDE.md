@@ -1222,7 +1222,14 @@ bound being what keeps the result fixed-width (ADR-0065). The six subranges of
 through `checkedArith` and stop the program on overflow rather than wrapping —
 they carry no `nsw`. `chr` outside 0..255, `succ`/`pred` at the ends of their
 type, `div` by zero, `INT_MIN div -1`, and `trunc`/`round` of a real outside the
-integer range (or of a NaN) all reach `pas_runtime_error` (stderr, exit 1).
+integer range (or of a NaN) all reach `pas_runtime_error` (stderr, exit 1)
+-- **and every trap names its position** (ADR-0293): `... at file:line:col`
+after the message, the construct's own. An inline check passes it as three
+arguments; a call into a runtime routine that can trap is bracketed with
+`EmitAt`/`EmitAtDone`, a store and a clear of the runtime's thread-local
+`pas_at`, so **a new call into a routine that can trap needs the bracket** or
+its message names nothing -- never the wrong place, which is what the clear
+is for.
 The integer type is **-maxint..maxint**, narrower than the `i32` behind it, so
 `INT_MIN` is not a value of the type and a literal above `maxint` is a
 compile-time error.
