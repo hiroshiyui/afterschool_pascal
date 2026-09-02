@@ -21096,7 +21096,7 @@ function InstantiateGeneric;
 var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     given: typePtr; found, ip: instPtr;
     saveTop, mark: entryPtr; saveDepth, savePos, saveImport: integer;
-    saveCur: symPtr; saveFile: nameStr;
+    saveCur: symPtr; saveFile: pathStr;
     ok: boolean; ts: symPtr;
     n: nodePtr; c: numPtr; bs: typeBindings;
     nTypes, nFormals, firstType, nArgs, k, before: integer;
@@ -22427,7 +22427,7 @@ end;
   it back before Sema runs), so it is set from the node and put back here
   rather than at each of the several places that write a message. }
 procedure CheckModule(m: nodePtr);
-var info: modRecPtr; saveFile: nameStr;
+var info: modRecPtr; saveFile: pathStr;
 begin
   saveFile := curFile;
   if m^.mdFileIdx > 0 then curFile := importName[m^.mdFileIdx];

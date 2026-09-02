@@ -140,6 +140,28 @@ own exception and compare by length instead.
   by. And congruity acquired an **orientation**: it reverses one level in, so
   `Congruous` swaps its arguments in the recursion — invisible while the
   relation was symmetric.
+- **A path is not a line, and three programs held one in the other's
+  capacity** (ADR-0291). `pathMax` is 4096 and `pathStr` is the compiler's own
+  path type; `nameStr` was `string(strMax)` — 255 — and its own comment read
+  *a file name or a command-line argument*, so `pascalc` at a 310-character
+  path stopped at `pas_str_fits` **naming no file**. `bindNameCap` is derived
+  from it, because §6.4.3.4's implementation-defined string-type is the only
+  channel a program has to its command line (ADR-0081) and said *a file name's
+  worth* while being 255. The library's one-piece string parameters are
+  schematic — `s: string`, ADR-0115's admission and ADR-0290's lesson, with
+  `JsonLine` kept as a ready-made capacity the way `MapKey` was — and the
+  server's `UriMax` is **derived** as `7 + 3 * MaxPath`, every byte of a path
+  being escapable, which is what lets `PathToUri` concatenate with no bound
+  test: the bound cannot be met rather than being met and reported. Four
+  mutations, four cases, and the one that matters most is `definition_deep`,
+  where the answer was a URI naming a *different file* with nothing on either
+  stream to say so. It forced an **out-of-cycle reseed**: `BindingType`'s
+  capacity for a program is decided by the compiler translating it, so the
+  shipped compiler read its own arguments into a 255-character field however
+  the source read — ADR-0126's sentence about the seed, met for a value rather
+  than for a buffer. What it did not fix is `PasStrVec.ItemMax`, which is 255
+  for a good reason (40 821 dump lines whose longest is 62) and wrong for the
+  one row in that dump carrying a path.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the

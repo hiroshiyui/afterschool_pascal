@@ -23,6 +23,7 @@ index_span 0
 lib_container 0
 lib_dir 0
 lib_json 0
+lib_json_wide 0
 lib_list 0
 lib_lsp 0
 lib_lsp_jsonl 0

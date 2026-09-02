@@ -247,7 +247,7 @@ the language, which is the product the chapter was for.
 
 ### The first findings
 
-Twenty-six entries so far, and **eighteen of them have been acted on** — three
+Twenty-seven entries so far, and **nineteen of them have been acted on** — three
 of the eight open are the usability findings below, which are recorded rather
 than acted on because each names a design question and not a defect — which
 is the discipline this chapter is for: a finding recorded and left is a finding
@@ -356,13 +356,13 @@ activity and had never been done. Three came out of one pass.
   were found by asking what writing it was like, which is what this chapter is
   for and what it had not done.
 
-The six below are what a program of this size still runs into, and the first of
-them is closed. One is a bound that has not yet cost anything, one is a rule
-about the language a writer has to know and nothing tells them, one is a
-limitation of the parse tree, one is a clause that reads like a readiness test
-and is not, and one is a decision nobody has asked for twice. The closed one is
-kept in place rather than moved to `doc/history.md`, because what it is now
-worth reading for is that it was **wrong** and what found that out.
+The seven below are what a program of this size still runs into, and **four of
+them are closed**. What is left is a bound that has cost nothing yet, a rule
+about the language a writer has to know and nothing tells them, and a decision
+nobody has asked for twice. The closed ones are kept in place rather than moved
+to `doc/history.md`, because what each is now worth reading for is what closing
+it found — two of them were **wrong**, and the third was right and understated
+by a wide margin.
 
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
@@ -414,13 +414,56 @@ worth reading for is that it was **wrong** and what found that out.
   text having been released while the entry stayed; a shutdown walk that frees
   nothing moves `heap_balance.txt`.
 
-- **`JsonLine` is 255 characters and a URI is not a line.** Three modules pick
-  255 for "a string a caller hands over in one piece", which is right for a
-  message and wrong for an identifier that happens to be a path. The server
-  uses `JsonLine` for its document key *deliberately* — `DiagPublish` takes
-  one, so a URI the server could hold and that module could not would be a
-  truncation at the boundary instead of a refusal at the door — and reports and
-  ignores a document whose URI is longer.
+- ~~**`JsonLine` is 255 characters and a URI is not a line.**~~ **Closed by
+  ADR-0291, and it was recorded as a bound that had not yet cost anything.** It
+  had, three times over, and the entry named the least of them.
+
+  What it said is that the server holds its document key at 255 *deliberately*,
+  `DiagPublish` taking one, so a URI the server could hold and that module could
+  not would be a truncation at the boundary instead of a refusal at the door.
+  True, and two floors below it the same bound was doing worse. **The library
+  did not truncate, it stopped the program** — §6.4.6 c)'s error at the call,
+  `a string of length 300 does not fit a capacity of 255`. **The server answered
+  go-to-definition with a URI naming a different file**, `PathToUri` appending
+  under a `< LineMax` test and simply stopping, which a client resolves with
+  nothing on either stream to say it was cut. **And the compiler had the same
+  bound and it was the sharpest**: `nameStr` was 255 and its own comment read
+  *"a file name or a command-line argument"*, so `pascalc` at a 310-character
+  path stopped at `pas_str_fits` **naming no file**. A checkout a few
+  directories deeper than usual is the whole of what it takes.
+
+  Two comments in this tree had walked up to it and stopped. `compiler.pas`
+  says of `envMax` that *"nameStr … is 255 and is the bound on one path"* and
+  then never asks whether 255 is right for one path; `pasls.pas` says of
+  `ItemMax` that four of this program's findings are *"bounds chosen by
+  counting what the largest thing in the tree needed at the time"*. **A comment
+  that names a hazard is not a check**, and the number sitting next to it was
+  wrong in both.
+
+  It closed as three schematic-parameter changes, one derived constant, one new
+  gate — `long-path`, because no test case can choose its own path — and an
+  **out-of-cycle reseed**: `BindingType`'s capacity for a program is decided by
+  the compiler translating it, so the shipped `pascalc` went on reading its own
+  arguments into a 255-character field however the source read. That is
+  ADR-0126's sentence about the seed, met for a value rather than a buffer.
+
+- **`PasStrVec.ItemMax` is 255 and a dump line carrying a path crosses it**,
+  which is what closing the entry above ran into and did not fix. The server
+  reads `--dump-uses` into a `StrVec` whose element is `string(ItemMax)`, and
+  the file table at the head of that dump holds absolute paths — so a path over
+  255 characters is cut there, before anything that widened can see it.
+
+  It is **not** the same defect and the same fix would be wrong. That dump is
+  40 821 lines on the largest source here and the longest is 62 characters:
+  255 is already four times what every line but one kind needs, and widening
+  the element to a path's capacity takes a document's cached answer from 10 MB
+  to 167 MB. The bound is right for what the vector holds and wrong for one row
+  in it. What would close it is either a capture that separates the file table
+  or a **container generic over its element's capacity** — `Vec` has been
+  generic over the element *type* since ADR-0254, and what is missing is a
+  routine that can fill one without naming the capacity, which is the same
+  sentence ADR-0290 wrote about a hash. A design question with a caller, which
+  is what ADR-0116 asks for before anything is built.
 
 - **A bindable file cannot cross a parameter**, which came out of fixing the
   above and is open. §6.4.1 makes `bindable` part of a *variable-declaration*

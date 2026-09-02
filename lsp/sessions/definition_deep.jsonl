@@ -1,0 +1,19 @@
+# A document in a directory named in Japanese, which is how a *short* path
+# becomes a *long* URI: 81 bytes of directory name percent-escape to 243
+# characters, so the URI passes 255 while the path stays at 153.
+#
+# Two claims, and they failed differently before ADR-0291. The `didOpen` URI
+# is one the client sent: it did not fit `DocUri`, and the document was
+# dropped with a line on standard error and no diagnostics ever published.
+# The `definition` URI is one the server *built* from a path: `PathToUri`
+# appended under a `< LineMax` test and simply stopped at 255, so the client
+# would have been sent to a file nobody named, with nothing on either stream
+# to say so.
+#
+# The round trip is the third thing pinned: the server decodes the escapes
+# to find the file on disk and encodes them again to name the answer.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E3%81%AE%E5%90%8D%E5%89%8D%E3%81%8C%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%A7%E3%82%82URI%E3%81%AF%E6%AD%A3%E3%81%97%E3%81%8F%E5%BE%80%E5%BE%A9%E3%81%99%E3%82%8B_ADR_0291/deepclient.pas","languageId":"pascal","version":1,"text":"{ The client of the module beside it. Opening this file and asking where\n  `DeepAnswer` is declared makes the server hold one URI it was sent and build\n  a second one itself, both longer than the 255 characters it used to hold\n  (ADR-0291). }\nprogram deepclient(output);\n\nimport Deep;\n\nbegin\n  writeln(DeepAnswer)\nend.\n"}}}
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E3%81%AE%E5%90%8D%E5%89%8D%E3%81%8C%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%A7%E3%82%82URI%E3%81%AF%E6%AD%A3%E3%81%97%E3%81%8F%E5%BE%80%E5%BE%A9%E3%81%99%E3%82%8B_ADR_0291/deepclient.pas"},"position":{"line":9,"character":10}}}
+{"jsonrpc":"2.0","id":3,"method":"shutdown"}

@@ -66,10 +66,13 @@ import PasError; PasContainer;
 const
   { A key is a key. `errFull` rather than a silent truncation past this. }
   NameMax = 255;
-  { What a caller hands in and takes out in one piece. A document larger than
-    this goes through `JsonChars`, which is bounded by PasContainer's CapMax
-    and says so: `JsonCharsFull` is how a caller asks, and until ADR-0276 this
-    comment claimed there was no bound and a buffer past it trapped. }
+  { A ready-made capacity for a caller that wants one, and **not** a bound
+    this module imposes: every routine below that takes a string in one piece
+    takes a schematic one, so the capacity is the caller's (ADR-0291). A
+    document larger than any string goes through `JsonChars`, which is bounded
+    by PasContainer's CapMax and says so: `JsonCharsFull` is how a caller
+    asks, and until ADR-0276 this comment claimed there was no bound and a
+    buffer past it trapped. }
   LineMax = 255;
   { Nesting, so a hostile document cannot exhaust the stack -- the parser is
     recursive descent and this is the compiler's own answer (ADR-0020) at a
@@ -127,8 +130,10 @@ procedure JsonCharsFree(var b: JsonChars);
 
 procedure JsonCharsAdd(var b: JsonChars; c: char);
 
-{ Append a whole string, which is how a caller assembles a document to parse. }
-procedure JsonCharsAddLine(var b: JsonChars; s: JsonLine);
+{ Append a whole string, which is how a caller assembles a document to parse.
+  Schematic, so a caller holding a longer capacity than `JsonLine` is not
+  refused at this boundary (ADR-0291). }
+procedure JsonCharsAddLine(var b: JsonChars; s: string);
 
 function JsonCharsLen(var b: JsonChars): integer;
 
@@ -153,8 +158,9 @@ function JsonCharsInto(var b: JsonChars; var s: string): ErrorCode;
   the value on success. A successful result owns a tree the caller must free. }
 function JsonParseChars(var b: JsonChars; var at: integer) = r: JsonResult;
 
-{ The same, for a document that fits in one string. }
-function JsonParse(s: JsonLine; var at: integer) = r: JsonResult;
+{ The same, for a document that fits in one string -- of whatever capacity
+  the caller declared. }
+function JsonParse(s: string; var at: integer) = r: JsonResult;
 
 { Dispose a value and everything under it, and leave `v` nil. }
 procedure JsonFree(var v: JsonPtr);
@@ -204,7 +210,7 @@ function JsonNewNull: JsonPtr;
 function JsonNewBoolean(b: boolean): JsonPtr;
 function JsonNewNumber(x: real): JsonPtr;
 function JsonNewInteger(n: integer): JsonPtr;
-function JsonNewText(s: JsonLine): JsonPtr;
+function JsonNewText(s: string): JsonPtr;
 function JsonNewArray: JsonPtr;
 function JsonNewObject: JsonPtr;
 
@@ -216,9 +222,9 @@ procedure JsonAppend(arr: JsonPtr; item: JsonPtr);
   ownership, as `JsonAppend` does. }
 procedure JsonPut(obj: JsonPtr; name: JsonName; item: JsonPtr);
 
-{ Append to a string value, which is how a caller builds one longer than
-  `LineMax`. }
-procedure JsonTextAdd(v: JsonPtr; s: JsonLine);
+{ Append to a string value, which is how a caller builds one longer than any
+  capacity it can declare. }
+procedure JsonTextAdd(v: JsonPtr; s: string);
 
 { --- writing -------------------------------------------------------------- }
 

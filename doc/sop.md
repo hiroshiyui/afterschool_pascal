@@ -789,6 +789,28 @@ only grows is a register nobody trusts:
   documented flags whose thirty-one walker procedures were entered by no case
   at all, so nothing checked they did not crash (ADR-0103).
 
+**A sixth shape, found on 2026-09-02 by ADR-0291: a constant the seed decides
+rather than the source.** ADR-0126 recorded this for a fixed *buffer* — the
+array that has to hold this source is the seed's, so raising the constant here
+does not raise the one that matters — and it is not only true of buffers. It is
+true of a constant that shapes a type the compiler **synthesises** and then
+**uses on itself**. `BindingType` is the whole of that class today and cost an
+out-of-cycle reseed: the compiler declares `b: BindingType` to read its own
+arguments (ADR-0081), and that variable's layout was decided by whatever
+compiled `compiler.pas` — the seed. `dateLen` and `timeLen` are *not* in it,
+though they look alike: the compiler emits them into the program it compiles
+and declares no `TimeStamp` of its own, so the value it uses is the one its own
+source gave it.
+
+Nothing checks it, and the failure is silent in the worst direction: the source
+says 4096, every reader believes it, the suite is green, and the shipped
+compiler behaves as though it still said 255 — while every program that
+compiler *builds* gets the new number, which is what makes it look fixed. An
+ordinary array bound written in the source does not have this property at all.
+The two look identical in the source and differ in who evaluates them, so the
+test to apply by hand, until something can apply it, is: **does this constant
+shape a type this compiler synthesises and also declares a variable of?**
+
 ## 8. What this document is not
 
 It is not a substitute for the skills that do the work. `code-review`,

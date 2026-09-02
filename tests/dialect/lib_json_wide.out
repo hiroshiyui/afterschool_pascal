@@ -1,0 +1,7 @@
+handed over: 300
+new text: 302
+after add: 602
+parse ok=TRUE at=309
+read back ok=TRUE len=300
+buffer: 308
+narrow: 15

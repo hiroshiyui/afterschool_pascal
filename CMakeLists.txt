@@ -318,6 +318,18 @@ if(Python3_FOUND)
   set_tests_properties(stale-component PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+  # ADR-0291: can this compiler open a file whose path is longer than a name?
+  # `nameStr` was 255 and held an identifier and a file name alike, so a
+  # source at a 310-character path stopped the compiler at `pas_str_fits`
+  # naming no file. It needs a harness because **no test case can choose its
+  # own path**: every case is compiled where it sits, and every path a harness
+  # passes is short -- stale-component's argument met a second time.
+  add_test(NAME long-path
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/long_path.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(long-path PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+
   # ADR-0244: can this compiler be put somewhere and found there? Every other
   # harness drives it out of the build tree with PASCALC and
   # AFTERSCHOOL_PASCAL_RUNTIME saying where that tree is, which is exactly the

@@ -1,7 +1,7 @@
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
-%frame1 = type { ptr, i1, i32, i32, [1000000 x i8], i32, i32, i32, i32, i1, i1, i32, ptr, ptr, ptr, i32, ptr, i1, { i32, [255 x i8] }, i1, ptr, ptr, [15 x i64], [15 x i64], [32 x { i32, [255 x i8] }], i1, i1, i1, i32, i1, i1, i1, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, { i32, [255 x i8] }, i32, i1, i1, { i32, [255 x i8] }, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32 }
+%frame1 = type { ptr, i1, i32, i32, [1000000 x i8], i32, i32, i32, i32, i1, i1, i32, ptr, ptr, ptr, i32, ptr, i1, { i32, [255 x i8] }, i1, ptr, ptr, [15 x i64], [15 x i64], [32 x { i32, [4096 x i8] }], i1, i1, i1, i32, i1, i1, i1, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, { i32, [4096 x i8] }, i32, i1, i1, { i32, [4096 x i8] }, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32 }
 %frame2 = type { ptr, ptr }
 %frame3 = type { ptr, ptr, i8 }
 %frame4 = type { ptr, i8 }
@@ -77,7 +77,7 @@ target triple = "x86_64-pc-linux-gnu"
 %frame74 = type { ptr, ptr, i32, ptr, i32 }
 %frame75 = type { ptr, ptr, i32 }
 %frame76 = type { ptr, ptr, i32 }
-%frame77 = type { ptr, ptr, i32 }
+%frame77 = type { ptr, ptr, i64, i64 }
 %frame78 = type { ptr, ptr, ptr, i1 }
 %frame79 = type { ptr, ptr, i32, ptr }
 %frame80 = type { ptr, ptr, i32, i32, ptr, ptr, ptr }
@@ -86,7 +86,7 @@ target triple = "x86_64-pc-linux-gnu"
 %frame83 = type { ptr, ptr, ptr, i32, ptr }
 %frame84 = type { ptr, ptr, ptr, ptr, ptr }
 %frame85 = type { ptr, ptr, i32, ptr, ptr, i32, i1 }
-%frame86 = type { ptr, { i32, [255 x i8] }, i32, i32 }
+%frame86 = type { ptr, { i32, [4096 x i8] }, i32, i32 }
 %frame87 = type { ptr, ptr, ptr, ptr, i1 }
 %frame88 = type { ptr, ptr, ptr, { i32, [255 x i8] }, i32, i1 }
 %frame89 = type { ptr, [16 x i8], i32, i32 }
@@ -120,7 +120,7 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.programsym = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 21)
 @v.aptypes.ircode = alias [15 x i64], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 22)
 @v.aptypes.imports = alias [15 x i64], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 23)
-@v.aptypes.importname = alias [32 x { i32, [255 x i8] }], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 24)
+@v.aptypes.importname = alias [32 x { i32, [4096 x i8] }], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 24)
 @v.aptypes.dumping = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 25)
 @v.aptypes.warnon = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 26)
 @v.aptypes.keeptrivia = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 27)
@@ -136,11 +136,11 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.chaintail = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 37)
 @v.aptypes.taghead = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 38)
 @v.aptypes.tagtail = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 39)
-@v.aptypes.curfile = alias { i32, [255 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 40)
+@v.aptypes.curfile = alias { i32, [4096 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 40)
 @v.aptypes.curimportidx = alias i32, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 41)
 @v.aptypes.notinguses = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 42)
 @v.aptypes.notingstmts = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 43)
-@v.aptypes.mainfile = alias { i32, [255 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 44)
+@v.aptypes.mainfile = alias { i32, [4096 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 44)
 @v.aptypes.maintokbase = alias i32, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 45)
 @v.aptypes.instdeclhead = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 46)
 @v.aptypes.inttype = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 47)
@@ -149,7 +149,7 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.stringschema = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 50)
 @v.aptypes.handleclosers = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 51)
 
-define void @m.aptypes.afterschool.1b47805a152d821c.init() {
+define void @m.aptypes.afterschool.2ed694c516ee18bd.init() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
@@ -190,7 +190,7 @@ L1:
   %v20 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 29
   store i1 false, ptr %v20
   %v21 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 40
-  call void @pas_str_store_var(ptr %v21, i32 255, ptr @s3, i32 0)
+  call void @pas_str_store_var(ptr %v21, i32 4096, ptr @s3, i32 0)
   %v22 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 41
   store i32 0, ptr %v22
   %v23 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 42
@@ -198,7 +198,7 @@ L1:
   %v24 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 43
   store i1 false, ptr %v24
   %v25 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 44
-  call void @pas_str_store_var(ptr %v25, i32 255, ptr @s4, i32 0)
+  call void @pas_str_store_var(ptr %v25, i32 4096, ptr @s4, i32 0)
   %v26 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 46
   store ptr null, ptr %v26
   %v27 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 50
@@ -208,7 +208,7 @@ L1:
   ret void
 }
 
-define void @m.aptypes.afterschool.1b47805a152d821c.fini() {
+define void @m.aptypes.afterschool.2ed694c516ee18bd.fini() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 22
@@ -218,7 +218,7 @@ L1:
   ret void
 }
 
-; strclear 2948
+; strclear 2973
 define void @p.aptypes.strclear(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -242,7 +242,7 @@ L3:
   ret void
 }
 
-; strappend 2957
+; strappend 2982
 define void @p.aptypes.strappend(ptr %link, ptr %a0, i8 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -311,7 +311,7 @@ L3:
   ret void
 }
 
-; put 2973
+; put 2998
 define void @p.aptypes.put(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -338,7 +338,7 @@ L4:
   ret void
 }
 
-; putlit 2980
+; putlit 3005
 define internal void @p89(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -430,7 +430,7 @@ L14:
   ret void
 }
 
-; putirlit 2992
+; putirlit 3017
 define void @p.aptypes.putirlit(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -523,7 +523,7 @@ L14:
   ret void
 }
 
-; putint 3004
+; putint 3029
 define internal void @p90(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -704,7 +704,7 @@ L30:
   ret void
 }
 
-; errorat 3037
+; errorat 3062
 define void @p.aptypes.errorat(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -760,9 +760,9 @@ L10:
   br label %L6
 L5:
   %v24 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 40
-  %v25 = getelementptr inbounds { i32, [255 x i8] }, ptr %v24, i32 0, i32 0
+  %v25 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v24, i32 0, i32 0
   %v26 = load i32, ptr %v25
-  %v27 = getelementptr inbounds { i32, [255 x i8] }, ptr %v24, i32 0, i32 1
+  %v27 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v24, i32 0, i32 1
   call void @pas_write_str(ptr @pas.output, ptr %v27, i32 %v26, i32 -1)
   call void @pas_write_char(ptr @pas.output, i8 58, i32 -1)
   %v28 = icmp slt i32 1, 0
@@ -792,7 +792,7 @@ L6:
   ret void
 }
 
-; warnat 3048
+; warnat 3073
 define void @p.aptypes.warnat(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -832,9 +832,9 @@ L8:
   br label %L4
 L3:
   %v15 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 40
-  %v16 = getelementptr inbounds { i32, [255 x i8] }, ptr %v15, i32 0, i32 0
+  %v16 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v15, i32 0, i32 0
   %v17 = load i32, ptr %v16
-  %v18 = getelementptr inbounds { i32, [255 x i8] }, ptr %v15, i32 0, i32 1
+  %v18 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v15, i32 0, i32 1
   call void @pas_write_str(ptr @pas.output, ptr %v18, i32 %v17, i32 -1)
   call void @pas_write_char(ptr @pas.output, i8 58, i32 -1)
   %v19 = icmp slt i32 1, 0
@@ -864,7 +864,7 @@ L4:
   ret void
 }
 
-; pooladd 3062
+; pooladd 3087
 define i32 @p.aptypes.pooladd(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1015,7 +1015,7 @@ L6:
   ret i32 %v80
 }
 
-; writepool 3079
+; writepool 3104
 define void @p.aptypes.writepool(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1088,7 +1088,7 @@ L9:
   ret void
 }
 
-; pooliswide 3092
+; pooliswide 3117
 define i1 @p.aptypes.pooliswide(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1247,7 +1247,7 @@ L13:
   ret i1 %v80
 }
 
-; poolis 3108
+; poolis 3133
 define i1 @p.aptypes.poolis(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1416,7 +1416,7 @@ L13:
   ret i1 %v89
 }
 
-; poolstarts 3128
+; poolstarts 3153
 define internal i1 @p91(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1585,7 +1585,7 @@ L13:
   ret i1 %v89
 }
 
-; reservedforeignname 3171
+; reservedforeignname 3196
 define i1 @p.aptypes.reservedforeignname(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2101,7 +2101,7 @@ L101:
   ret i1 %v269
 }
 
-; poolsame 3224
+; poolsame 3249
 define i1 @p.aptypes.poolsame(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2229,7 +2229,7 @@ L4:
   ret i1 %v69
 }
 
-; poolput 3242
+; poolput 3267
 define void @p.aptypes.poolput(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2278,7 +2278,7 @@ L3:
   ret void
 }
 
-; internword 3252
+; internword 3277
 define void @p.aptypes.internword(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2394,7 +2394,7 @@ L16:
   ret void
 }
 
-; internwide 3264
+; internwide 3289
 define void @p.aptypes.internwide(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2510,7 +2510,7 @@ L16:
   ret void
 }
 
-; internwide2 3278
+; internwide2 3303
 define void @p.aptypes.internwide2(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2742,7 +2742,7 @@ L39:
   ret void
 }
 
-; internresultname 3297
+; internresultname 3322
 define void @p.aptypes.internresultname(ptr %link, i32 %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2854,7 +2854,7 @@ L16:
   ret void
 }
 
-; internbindingname 3310
+; internbindingname 3335
 define void @p.aptypes.internbindingname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3050,7 +3050,7 @@ L31:
   ret void
 }
 
-; interncallresultname 3329
+; interncallresultname 3354
 define void @p.aptypes.interncallresultname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3245,7 +3245,7 @@ L31:
   ret void
 }
 
-; interntryname 3350
+; interntryname 3375
 define void @p.aptypes.interntryname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3424,7 +3424,7 @@ L29:
   ret void
 }
 
-; internwithname 3366
+; internwithname 3391
 define void @p.aptypes.internwithname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3604,7 +3604,7 @@ L29:
   ret void
 }
 
-; internboundsname 3392
+; internboundsname 3417
 define void @p.aptypes.internboundsname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3783,7 +3783,7 @@ L29:
   ret void
 }
 
-; internforname 3408
+; internforname 3433
 define void @p.aptypes.internforname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3962,7 +3962,7 @@ L29:
   ret void
 }
 
-; newtype 3437
+; newtype 3462
 define ptr @p.aptypes.newtype(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4383,7 +4383,7 @@ L79:
   ret ptr %v176
 }
 
-; base 3487
+; base 3512
 define ptr @p.aptypes.base(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4454,7 +4454,7 @@ L12:
   ret ptr %v31
 }
 
-; isinteger 3502
+; isinteger 3527
 define i1 @p.aptypes.isinteger(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4494,7 +4494,7 @@ L3:
   ret i1 %v20
 }
 
-; isreal 3509
+; isreal 3534
 define i1 @p.aptypes.isreal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4529,7 +4529,7 @@ L3:
   ret i1 %v16
 }
 
-; isint64 3515
+; isint64 3540
 define i1 @p.aptypes.isint64(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4564,7 +4564,7 @@ L3:
   ret i1 %v16
 }
 
-; iscomplex 3518
+; iscomplex 3543
 define i1 @p.aptypes.iscomplex(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4599,7 +4599,7 @@ L3:
   ret i1 %v16
 }
 
-; isvarstring 3523
+; isvarstring 3548
 define i1 @p.aptypes.isvarstring(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4634,7 +4634,7 @@ L3:
   ret i1 %v16
 }
 
-; istext 3528
+; istext 3553
 define i1 @p.aptypes.istext(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4669,7 +4669,7 @@ L3:
   ret i1 %v16
 }
 
-; isstringrep 3542
+; isstringrep 3567
 define i1 @p.aptypes.isstringrep(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4720,7 +4720,7 @@ L3:
   ret i1 %v23
 }
 
-; isoptional 3548
+; isoptional 3573
 define i1 @p.aptypes.isoptional(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4755,7 +4755,7 @@ L3:
   ret i1 %v16
 }
 
-; isfallible 3555
+; isfallible 3580
 define i1 @p.aptypes.isfallible(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4805,7 +4805,7 @@ L7:
   ret i1 %v22
 }
 
-; ishandlebirth 3558
+; ishandlebirth 3583
 define i1 @p.aptypes.ishandlebirth(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4848,7 +4848,7 @@ L3:
   ret i1 %v20
 }
 
-; isslice 3567
+; isslice 3592
 define i1 @p.aptypes.isslice(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4883,7 +4883,7 @@ L3:
   ret i1 %v16
 }
 
-; sliceof 3575
+; sliceof 3600
 define ptr @p.aptypes.sliceof(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4926,7 +4926,7 @@ L5:
   ret ptr %v20
 }
 
-; isnumeric 3584
+; isnumeric 3609
 define i1 @p.aptypes.isnumeric(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4961,7 +4961,7 @@ L5:
   ret i1 %v17
 }
 
-; isarith 3591
+; isarith 3616
 define i1 @p.aptypes.isarith(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4988,7 +4988,7 @@ L3:
   ret i1 %v13
 }
 
-; isboolean 3594
+; isboolean 3619
 define i1 @p.aptypes.isboolean(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5028,7 +5028,7 @@ L3:
   ret i1 %v20
 }
 
-; ischar 3601
+; ischar 3626
 define i1 @p.aptypes.ischar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5068,7 +5068,7 @@ L3:
   ret i1 %v20
 }
 
-; isenum 3608
+; isenum 3633
 define i1 @p.aptypes.isenum(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5108,7 +5108,7 @@ L3:
   ret i1 %v20
 }
 
-; isarray 3615
+; isarray 3640
 define i1 @p.aptypes.isarray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5143,7 +5143,7 @@ L3:
   ret i1 %v16
 }
 
-; isrecord 3618
+; isrecord 3643
 define i1 @p.aptypes.isrecord(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5178,7 +5178,7 @@ L3:
   ret i1 %v16
 }
 
-; ispointer 3621
+; ispointer 3646
 define i1 @p.aptypes.ispointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5213,7 +5213,7 @@ L3:
   ret i1 %v16
 }
 
-; isfile 3624
+; isfile 3649
 define i1 @p.aptypes.isfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5248,7 +5248,7 @@ L3:
   ret i1 %v16
 }
 
-; ishandle 3631
+; ishandle 3656
 define i1 @p.aptypes.ishandle(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5283,7 +5283,7 @@ L3:
   ret i1 %v16
 }
 
-; ischannel 3634
+; ischannel 3659
 define i1 @p.aptypes.ischannel(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5318,7 +5318,7 @@ L3:
   ret i1 %v16
 }
 
-; isowned 3643
+; isowned 3668
 define i1 @p.aptypes.isowned(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5345,7 +5345,7 @@ L3:
   ret i1 %v13
 }
 
-; isownedpointer 3648
+; isownedpointer 3673
 define i1 @p.aptypes.isownedpointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5379,7 +5379,7 @@ L3:
   ret i1 %v15
 }
 
-; isaffine 3656
+; isaffine 3681
 define i1 @p.aptypes.isaffine(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5406,7 +5406,7 @@ L3:
   ret i1 %v13
 }
 
-; istextfile 3660
+; istextfile 3685
 define i1 @p.aptypes.istextfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5440,7 +5440,7 @@ L3:
   ret i1 %v15
 }
 
-; isnil 3664
+; isnil 3689
 define i1 @p.aptypes.isnil(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5475,7 +5475,7 @@ L3:
   ret i1 %v16
 }
 
-; isset 3667
+; isset 3692
 define i1 @p.aptypes.isset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5510,7 +5510,7 @@ L3:
   ret i1 %v16
 }
 
-; isproctype 3671
+; isproctype 3696
 define i1 @p.aptypes.isproctype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5545,7 +5545,7 @@ L3:
   ret i1 %v16
 }
 
-; isemptyset 3676
+; isemptyset 3701
 define i1 @p.aptypes.isemptyset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5580,7 +5580,7 @@ L3:
   ret i1 %v16
 }
 
-; isrestricted 3685
+; isrestricted 3710
 define i1 @p.aptypes.isrestricted(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5615,7 +5615,7 @@ L3:
   ret i1 %v16
 }
 
-; underlying 3690
+; underlying 3715
 define ptr @p.aptypes.underlying(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5654,7 +5654,7 @@ L4:
   ret ptr %v17
 }
 
-; isstructured 3701
+; isstructured 3726
 define i1 @p.aptypes.isstructured(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5743,7 +5743,7 @@ L4:
   ret i1 %v41
 }
 
-; ismemory 3709
+; ismemory 3734
 define i1 @p.aptypes.ismemory(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5824,7 +5824,7 @@ L4:
   ret i1 %v38
 }
 
-; protectable 3721
+; protectable 3746
 define i1 @p.aptypes.protectable(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5965,7 +5965,7 @@ L4:
   ret i1 %v61
 }
 
-; isordinal 3743
+; isordinal 3768
 define i1 @p.aptypes.isordinal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6036,7 +6036,7 @@ L4:
   ret i1 %v35
 }
 
-; ischararray 3776
+; ischararray 3801
 define i1 @p.aptypes.ischararray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6168,7 +6168,7 @@ L17:
   ret i1 %v60
 }
 
-; isstringtype 3790
+; isstringtype 3815
 define i1 @p.aptypes.isstringtype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6195,7 +6195,7 @@ L3:
   ret i1 %v13
 }
 
-; isstringorchar 3796
+; isstringorchar 3821
 define i1 @p.aptypes.isstringorchar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6222,7 +6222,7 @@ L3:
   ret i1 %v13
 }
 
-; isordered 3801
+; isordered 3826
 define i1 @p.aptypes.isordered(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6265,7 +6265,7 @@ L7:
   ret i1 %v21
 }
 
-; isequatable 3811
+; isequatable 3836
 define i1 @p.aptypes.isequatable(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6341,7 +6341,7 @@ L13:
   ret i1 %v38
 }
 
-; satisfiescat 3818
+; satisfiescat 3843
 define i1 @p.aptypes.satisfiescat(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6396,7 +6396,7 @@ L8:
   ret i1 %v25
 }
 
-; writecatname 3831
+; writecatname 3856
 define void @p.aptypes.writecatname(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6430,7 +6430,7 @@ L8:
   ret void
 }
 
-; writecatadmits 3849
+; writecatadmits 3874
 define void @p.aptypes.writecatadmits(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6464,7 +6464,7 @@ L7:
   ret void
 }
 
-; stringvalueformal 3889
+; stringvalueformal 3914
 define i1 @p.aptypes.stringvalueformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6525,7 +6525,7 @@ L9:
   ret i1 %v28
 }
 
-; foreignstringformal 3901
+; foreignstringformal 3926
 define i1 @p.aptypes.foreignstringformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6584,7 +6584,7 @@ L9:
   ret i1 %v26
 }
 
-; enumcount 3907
+; enumcount 3932
 define i32 @p.aptypes.enumcount(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6651,7 +6651,7 @@ L6:
   ret i32 %v32
 }
 
-; ordinallo 3921
+; ordinallo 3946
 define i32 @p.aptypes.ordinallo(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6716,7 +6716,7 @@ L6:
   ret i32 %v26
 }
 
-; ordinalhi 3928
+; ordinalhi 3953
 define i32 @p.aptypes.ordinalhi(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6850,8 +6850,8 @@ L6:
   ret i32 %v54
 }
 
-; typelength 3938
-define i32 @p.aptypes.typelength(ptr %link, ptr %a0) {
+; typelength 3963
+define i64 @p.aptypes.typelength(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %frame = alloca %frame77
@@ -6859,7 +6859,7 @@ L1:
   store ptr %link, ptr %v2
   %v3 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 3
   %v5 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 1
   %v6 = load ptr, ptr %v5
   %v7 = icmp eq ptr %v6, null
@@ -6868,45 +6868,52 @@ L2:
   call void @pas_runtime_error(ptr @s310)
   unreachable
 L3:
-  %v8 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i1, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v6, i32 0, i32 10
+  %v8 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i1, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v6, i32 0, i32 9
   %v9 = load i32, ptr %v8
-  %v10 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 1
-  %v11 = load ptr, ptr %v10
-  %v12 = icmp eq ptr %v11, null
-  br i1 %v12, label %L4, label %L5
+  %v10 = sext i32 %v9 to i64
+  store i64 %v10, ptr %v4
+  %v11 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
+  %v12 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 1
+  %v13 = load ptr, ptr %v12
+  %v14 = icmp eq ptr %v13, null
+  br i1 %v14, label %L4, label %L5
 L4:
   call void @pas_runtime_error(ptr @s311)
   unreachable
 L5:
-  %v13 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i1, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v11, i32 0, i32 9
-  %v14 = load i32, ptr %v13
-  %v15 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v9, i32 %v14)
-  %v16 = extractvalue { i32, i1 } %v15, 0
-  %v17 = extractvalue { i32, i1 } %v15, 1
-  %v18 = icmp eq i32 %v16, -2147483648
-  %v19 = or i1 %v17, %v18
-  br i1 %v19, label %L6, label %L7
+  %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i1, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 10
+  %v16 = load i32, ptr %v15
+  %v17 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 3
+  %v18 = load i64, ptr %v17
+  %v19 = sext i32 %v16 to i64
+  %v20 = call { i64, i1 } @llvm.ssub.with.overflow.i64(i64 %v19, i64 %v18)
+  %v21 = extractvalue { i64, i1 } %v20, 0
+  %v22 = extractvalue { i64, i1 } %v20, 1
+  %v23 = icmp eq i64 %v21, -9223372036854775808
+  %v24 = or i1 %v22, %v23
+  br i1 %v24, label %L6, label %L7
 L6:
   call void @pas_runtime_error(ptr @s312)
   unreachable
 L7:
-  %v20 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v16, i32 1)
-  %v21 = extractvalue { i32, i1 } %v20, 0
-  %v22 = extractvalue { i32, i1 } %v20, 1
-  %v23 = icmp eq i32 %v21, -2147483648
-  %v24 = or i1 %v22, %v23
-  br i1 %v24, label %L8, label %L9
+  %v25 = sext i32 1 to i64
+  %v26 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %v21, i64 %v25)
+  %v27 = extractvalue { i64, i1 } %v26, 0
+  %v28 = extractvalue { i64, i1 } %v26, 1
+  %v29 = icmp eq i64 %v27, -9223372036854775808
+  %v30 = or i1 %v28, %v29
+  br i1 %v30, label %L8, label %L9
 L8:
   call void @pas_runtime_error(ptr @s313)
   unreachable
 L9:
-  store i32 %v21, ptr %v4
-  %v25 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
-  %v26 = load i32, ptr %v25
-  ret i32 %v26
+  store i64 %v27, ptr %v11
+  %v31 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
+  %v32 = load i64, ptr %v31
+  ret i64 %v32
 }
 
-; padstofixedstring 3960
+; padstofixedstring 3990
 define i1 @p.aptypes.padstofixedstring(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7019,11 +7026,11 @@ L23:
 L26:
   %v53 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
   %v54 = load ptr, ptr %v53
-  %v55 = call i32 @p.aptypes.typelength(ptr @frame.aptypes, ptr %v54)
+  %v55 = call i64 @p.aptypes.typelength(ptr @frame.aptypes, ptr %v54)
   %v56 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
   %v57 = load ptr, ptr %v56
-  %v58 = call i32 @p.aptypes.typelength(ptr @frame.aptypes, ptr %v57)
-  %v59 = icmp ne i32 %v55, %v58
+  %v58 = call i64 @p.aptypes.typelength(ptr @frame.aptypes, ptr %v57)
+  %v59 = icmp ne i64 %v55, %v58
   br label %L27
 L27:
   %v60 = phi i1 [ true, %L23 ], [ %v59, %L26 ]
@@ -7036,7 +7043,7 @@ L17:
   ret i1 %v63
 }
 
-; armatin 3973
+; armatin 4003
 define ptr @p.aptypes.armatin(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7091,7 +7098,7 @@ L4:
   ret ptr %v26
 }
 
-; findfieldin 3982
+; findfieldin 4012
 define internal ptr @p92(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7242,7 +7249,7 @@ L4:
   ret ptr %v75
 }
 
-; findfield 3998
+; findfield 4028
 define ptr @p.aptypes.findfield(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7364,7 +7371,7 @@ L18:
   ret ptr %v62
 }
 
-; armat 4013
+; armat 4043
 define internal ptr @p93(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7491,7 +7498,7 @@ L6:
   ret ptr %v59
 }
 
-; armsat 4035
+; armsat 4065
 define ptr @p.aptypes.armsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7547,7 +7554,7 @@ L4:
   ret ptr %v27
 }
 
-; fieldsat 4046
+; fieldsat 4076
 define ptr @p.aptypes.fieldsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7603,7 +7610,7 @@ L4:
   ret ptr %v27
 }
 
-; tagfieldat 4060
+; tagfieldat 4090
 define i32 @p.aptypes.tagfieldat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7659,7 +7666,7 @@ L4:
   ret i32 %v27
 }
 
-; tagtypeat 4071
+; tagtypeat 4101
 define ptr @p.aptypes.tagtypeat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7715,7 +7722,7 @@ L4:
   ret ptr %v27
 }
 
-; fileindexof 4082
+; fileindexof 4112
 define i32 @p.aptypes.fileindexof(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7723,17 +7730,17 @@ L1:
   %v2 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
   %v3 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 1
-  call void @pas_str_store_var(ptr %v3, i32 255, ptr %a0, i32 %a1)
+  call void @pas_str_store_var(ptr %v3, i32 4096, ptr %a0, i32 %a1)
   %v4 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 2
   store i32 0, ptr %v4
   %v5 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 1
-  %v6 = getelementptr inbounds { i32, [255 x i8] }, ptr %v5, i32 0, i32 0
+  %v6 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v5, i32 0, i32 0
   %v7 = load i32, ptr %v6
-  %v8 = getelementptr inbounds { i32, [255 x i8] }, ptr %v5, i32 0, i32 1
+  %v8 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v5, i32 0, i32 1
   %v9 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 44
-  %v10 = getelementptr inbounds { i32, [255 x i8] }, ptr %v9, i32 0, i32 0
+  %v10 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v9, i32 0, i32 0
   %v11 = load i32, ptr %v10
-  %v12 = getelementptr inbounds { i32, [255 x i8] }, ptr %v9, i32 0, i32 1
+  %v12 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v9, i32 0, i32 1
   %v13 = call i32 @pas_str_cmp_pad(ptr %v8, i32 %v7, ptr %v12, i32 %v11)
   %v14 = icmp ne i32 %v13, 0
   br i1 %v14, label %L2, label %L3
@@ -7747,9 +7754,9 @@ L4:
   br i1 %v17, label %L5, label %L7
 L5:
   %v18 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 1
-  %v19 = getelementptr inbounds { i32, [255 x i8] }, ptr %v18, i32 0, i32 0
+  %v19 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v18, i32 0, i32 0
   %v20 = load i32, ptr %v19
-  %v21 = getelementptr inbounds { i32, [255 x i8] }, ptr %v18, i32 0, i32 1
+  %v21 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v18, i32 0, i32 1
   %v22 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 24
   %v23 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 3
   %v24 = load i32, ptr %v23
@@ -7762,10 +7769,10 @@ L9:
   unreachable
 L10:
   %v28 = sub i32 %v24, 1
-  %v29 = getelementptr inbounds [32 x { i32, [255 x i8] }], ptr %v22, i32 0, i32 %v28
-  %v30 = getelementptr inbounds { i32, [255 x i8] }, ptr %v29, i32 0, i32 0
+  %v29 = getelementptr inbounds [32 x { i32, [4096 x i8] }], ptr %v22, i32 0, i32 %v28
+  %v30 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v29, i32 0, i32 0
   %v31 = load i32, ptr %v30
-  %v32 = getelementptr inbounds { i32, [255 x i8] }, ptr %v29, i32 0, i32 1
+  %v32 = getelementptr inbounds { i32, [4096 x i8] }, ptr %v29, i32 0, i32 1
   %v33 = call i32 @pas_str_cmp_pad(ptr %v21, i32 %v20, ptr %v32, i32 %v31)
   %v34 = icmp eq i32 %v33, 0
   br i1 %v34, label %L11, label %L12
@@ -7793,7 +7800,7 @@ L3:
   ret i32 %v42
 }
 
-; writeordinalname 4099
+; writeordinalname 4129
 define void @p.aptypes.writeordinalname(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8040,7 +8047,7 @@ L7:
   ret void
 }
 
-; writeboundname 4145
+; writeboundname 4175
 define internal void @p94(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8091,7 +8098,7 @@ L4:
   ret void
 }
 
-; writetypename 4151
+; writetypename 4181
 define void @p.aptypes.writetypename(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8892,7 +8899,7 @@ L4:
   ret void
 }
 
-; writedistincttypenote 4347
+; writedistincttypenote 4377
 define void @p.aptypes.writedistincttypenote(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at

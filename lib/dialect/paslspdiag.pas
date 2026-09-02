@@ -155,8 +155,11 @@ function DiagJson(d: Diagnostic; line: DiagLine; enc: PosEncoding): JsonPtr;
 
 { A `textDocument/publishDiagnostics` notification for `uri`, over an array
   `diags` the caller built with `JsonNewArray` and `JsonAppend`. The array
-  becomes part of the result and must not be freed separately. }
-function DiagPublish(uri: JsonLine; diags: JsonPtr): JsonPtr;
+  becomes part of the result and must not be freed separately.
+
+  The URI is schematic because it is a path and not a line: a client that can
+  hold a longer one must not meet a shorter bound here (ADR-0291). }
+function DiagPublish(uri: string; diags: JsonPtr): JsonPtr;
 
 end;
 

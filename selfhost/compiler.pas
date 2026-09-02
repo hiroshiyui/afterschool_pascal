@@ -82,11 +82,15 @@ const
     is the route that scales. Going over is reported here rather than
     silently dropping a directory (ADR-0110). }
   maxPaths = 32;
-  { The capacity AFTERSCHOOL_PASCAL_PATH is read into. Not nameStr, which is
-    255 and is the bound on one *path*: a list of them is longer by however
-    many there are, and ADR-0123 makes a value that does not fit the capacity
-    an error -- so reading a list into a name-sized string would turn a long
-    variable into a trap rather than a diagnostic. }
+  { The capacity AFTERSCHOOL_PASCAL_PATH is read into. Not pathStr, which is
+    the bound on one *path*: a list of them is longer by however many there
+    are, and ADR-0123 makes a value that does not fit the capacity an error --
+    so reading a list into a one-path string would turn a long variable into a
+    trap rather than a diagnostic.
+
+    This comment named the hazard, named the number, and stopped one step
+    short of asking whether the number was right for one path either. It was
+    not: ADR-0291. }
   envMax = 8192;
 
 type
@@ -159,7 +163,7 @@ var
     header. }
   newTuple: discValPtr;
   { The command line, once read. }
-  srcName, outName: nameStr;
+  srcName, outName: pathStr;
   importCount: integer;
   { Where an `import` name is looked for when no --import supplied it
     (ADR-0244). Three sources, in this order: the directory the source being
@@ -175,7 +179,7 @@ var
     follows and the only thing a search can be built on without opening every
     file in the directory to see what it declares. }
   pathCount: integer;
-  pathDir: array [1..maxPaths] of nameStr;
+  pathDir: array [1..maxPaths] of pathStr;
   { Which entries of importName have been read, so a cycle in the import graph
     is a diagnostic from Sema rather than a compiler that does not return, and
     so a component named twice is read once. It is indexed the same way
@@ -323,7 +327,7 @@ var
   name, not a subscript, so there is no way to say "the k'th". One arm each, and
   argMax + 1 of them: the last is the sentinel that makes an over-long command
   line detectable rather than silently short. }
-function Arg(k: integer; var s: nameStr): boolean;
+function Arg(k: integer; var s: pathStr): boolean;
 var b: BindingType;
 begin
   b.bound := false;
@@ -420,7 +424,7 @@ end;
 
   One test decides it, so one message covers every way of getting it wrong --
   a letter in it, no colon, a zero, or the ends the wrong way round. }
-procedure ParseRange(protected var spec: nameStr);
+procedure ParseRange(protected var spec: pathStr);
 var i, v, lo: integer; ok: boolean;
 begin
   lo := 0; v := 0; ok := length(spec) > 0;
@@ -444,7 +448,7 @@ begin
   end
 end;
 
-function TargetIndex(protected var name: nameStr): integer;
+function TargetIndex(protected var name: pathStr): integer;
 begin
   if EQ(name, 'x86_64-pc-linux-gnu') then TargetIndex := tgtX86
   { Both spellings, because they name one machine and a reader will type
@@ -458,7 +462,7 @@ begin
   else TargetIndex := 0
 end;
 
-procedure TargetName(ix: integer; var name: nameStr);
+procedure TargetName(ix: integer; var name: pathStr);
 begin
   case ix of
     tgtX86: name := 'x86_64-pc-linux-gnu';
@@ -542,7 +546,7 @@ end;
   operand with spaces and 6.7.6.7's EQ compares the lengths too: `-o` and
   `-o ` are not the same flag. }
 procedure ParseArgs;
-var k: integer; a: nameStr; dot: integer; k2: integer; tname: nameStr;
+var k: integer; a: pathStr; dot: integer; k2: integer; tname: pathStr;
 begin
   srcName := '';
   outName := '';
@@ -746,7 +750,7 @@ end;
 { Bind a file variable to a name the command line gave. 6.7.5.6's bind is the
   only way a program names a file while it is running, and this compiler could
   not have been written without it: every name below was computed. }
-procedure BindTo(var f: bindText; protected var n: nameStr);
+procedure BindTo(var f: bindText; protected var n: pathStr);
 var b: BindingType;
 begin
   b := binding(f);
@@ -11244,7 +11248,7 @@ end;
   empty prefix is exactly that. Written out rather than taken from a library:
   this component imports ApTypes and ApFront and nothing else, and PasFS is
   not available to a compiler that has to build from the seed. }
-function SourceDir: nameStr;
+function SourceDir: pathStr;
 var k: integer;
 begin
   k := length(srcName);
@@ -11258,7 +11262,7 @@ end;
   path is full (ADR-0110) and skipped when it is empty -- an empty entry in
   AFTERSCHOOL_PASCAL_PATH would name the working directory, which POSIX says
   of PATH and which is a surprise nobody wants from a compiler. }
-procedure AddPath(d: nameStr);
+procedure AddPath(d: pathStr);
 begin
   if length(d) > 0 then
     if pathCount >= maxPaths then begin
@@ -11286,8 +11290,8 @@ end;
   a flag. A flag between them is how a caller overrides an installed module
   with one of its own, which is the only reason the middle exists. }
 procedure BuildSearchPath;
-var flags: array [1..maxPaths] of nameStr;
-    n, i, at: integer; got: optEnvText; list: envText; piece: nameStr;
+var flags: array [1..maxPaths] of pathStr;
+    n, i, at: integer; got: optEnvText; list: envText; piece: pathStr;
 begin
   { The flags were pushed onto pathDir as they were read, because the source
     name may come after them on the command line and the source's directory
@@ -11338,7 +11342,7 @@ end;
   `imports` is the variable, which is also what ReadOne reads through --
   binding is not opening, so asking about a dozen candidates costs nothing and
   disturbs nothing. }
-function FileThere(path: nameStr): boolean;
+function FileThere(path: pathStr): boolean;
 var b: BindingType;
 begin
   b := binding(imports);
@@ -11368,8 +11372,8 @@ end;
   The pooled spelling is the *folded* one, which is what makes this work at
   all: a program writing `import PasError` and one writing `import paserror`
   are the same program (6.1.2), and they must find the same file. }
-function ResolveName(at, len: integer; var path: nameStr): boolean;
-var i, k: integer; base, cand: nameStr; found: boolean;
+function ResolveName(at, len: integer; var path: pathStr): boolean;
+var i, k: integer; base, cand: pathStr; found: boolean;
 begin
   base := '';
   for k := at to at + len - 1 do
@@ -11429,7 +11433,7 @@ end;
 { Where `path` sits in importName, or 0. A file resolved twice -- two modules
   importing a third -- is read once, and a file the command line already named
   is not read a second time under another name. }
-function ImportIndex(path: nameStr): integer;
+function ImportIndex(path: pathStr): integer;
 var i, at: integer;
 begin
   at := 0;
@@ -11447,7 +11451,7 @@ procedure ReadOne(idx: integer; var head, tail: nodePtr;
   own name and must not go looking for a file. }
 procedure ReadImportsIn(blk, own: nodePtr; var head, tail: nodePtr;
                         var count: integer);
-var spec: nodePtr; path: nameStr; at: integer;
+var spec: nodePtr; path: pathStr; at: integer;
 begin
   if blk <> nil then begin
     spec := blk^.blImports;

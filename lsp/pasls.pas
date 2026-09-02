@@ -176,6 +176,20 @@ const
     the same line as an inner one is still the larger of the two. }
   StmtLineWeight = 100000;
 
+  { A URI as long as one naming a file this program can open. It is derived
+    and not chosen: a `file://` URI is that scheme's seven characters and then
+    the path percent-escaped, and every byte of a path may need escaping, so
+    three characters per byte of `MaxPath` is the largest one `PathToUri` can
+    produce. Deriving it is what lets that routine concatenate without a
+    guard -- the bound cannot be met, rather than being met and reported
+    (ADR-0291).
+
+    Being wider than the path it escapes is the point. A URI arriving from a
+    client is not obliged to name a file at all, so `UriOf` still reports one
+    that does not fit; what cannot happen any more is a URI this program built
+    itself being cut. }
+  UriMax = 7 + 3 * MaxPath;
+
   { How far below the workspace root a `.components` file is looked for. This
     tree is three deep at its deepest (`tests/dialect/components/`); eight is
     room without a checkout of somebody's whole home directory being walked
@@ -188,12 +202,15 @@ type
     is the framing, the method names and who is asking (ADR-0241). }
   TransportKind = (tpLsp, tpMcp);
 
-  { A URI as far as this program can hold one. It is `JsonLine` deliberately
-    and not a wider string of its own: `DiagPublish` takes one, so a URI this
-    program could hold and that module could not would be a truncation at the
-    boundary rather than a refusal at the door. 255 is short for a URI and
-    that is a finding, not a design. }
-  DocUri = JsonLine;
+  { A URI as far as this program can hold one, which is now as far as a path
+    goes. It was `JsonLine` -- 255 characters -- because `DiagPublish` took
+    one, so a URI this program could hold and that module could not would have
+    been a truncation at the boundary rather than a refusal at the door. The
+    library's one-piece string parameters are schematic since ADR-0291, so the
+    capacity is this program's to choose and it chooses the path's: nine
+    nested directories of ordinary length is 286 characters, and that is a
+    project somebody has, not an attack. }
+  DocUri = string(UriMax);
 
   { What the client last told us a document contains. The text is a `JsonChars`
     because a source file is not a line and has no bound worth naming. }
@@ -502,7 +519,7 @@ end;
   that is not there. The empty string for anything else: a URI with a host
   part, or a scheme this server cannot open, is a document it cannot find on
   disk, and the caller reads the empty answer as "no imports". }
-function UriToPath(uri: JsonLine): PathName;
+function UriToPath(uri: DocUri): PathName;
 var out: PathName;
     i, n, hi, lo: integer;
     taken: boolean;
@@ -539,7 +556,15 @@ end;
 
   Everything outside RFC 3986's unreserved set is percent-escaped, `/` apart.
   Escaping more than is required is always legal and never ambiguous, which
-  is the safe direction for a rule this program has one reader of. }
+  is the safe direction for a rule this program has one reader of.
+
+  There is no bound test in the loop, and its absence is the change ADR-0291
+  made: `UriMax` is derived from the largest thing this can be handed, so the
+  result cannot fail to fit. The tests it replaced silently *dropped* the
+  characters past 255 and answered a URI naming a different file -- which is
+  the shape of defect that costs most here, a client resolving the answer and
+  opening something the server was never asked about. If the derivation is
+  ever wrong the concatenation traps, which is the failure to prefer. }
 function PathToUri(path: PathName): DocUri;
 var out: DocUri;
     i, b: integer;
@@ -552,13 +577,11 @@ begin
     plain := ((c >= 'a') and (c <= 'z')) or ((c >= 'A') and (c <= 'Z'))
              or ((c >= '0') and (c <= '9'))
              or (c = '-') or (c = '.') or (c = '_') or (c = '~') or (c = '/');
-    if plain then begin
-      if length(out) < LineMax then out := out + c
-    end
+    if plain then
+      out := out + c
     else begin
       b := ord(c);
-      if length(out) + 3 <= LineMax then
-        out := out + '%' + HexDigit(b div 16) + HexDigit(b mod 16)
+      out := out + '%' + HexDigit(b div 16) + HexDigit(b mod 16)
     end
   end;
   PathToUri := out
@@ -864,7 +887,7 @@ end;
   server then reads only a sidecar sitting beside the document. }
 procedure FindRoot(params: JsonPtr);
 var folders, one: JsonPtr;
-    uri: JsonLine;
+    uri: DocUri;
 begin
   rootPath := '';
   uri := '';

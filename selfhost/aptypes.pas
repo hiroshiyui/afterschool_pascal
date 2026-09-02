@@ -41,7 +41,7 @@
 module ApTypes;
 
 export ApTypes = (
-  strMax, realDigits, vgNone, vgRead, vgWrite, kwWidth, bindNameCap,
+  strMax, pathMax, realDigits, vgNone, vgRead, vgWrite, kwWidth, bindNameCap,
   dateLen, timeLen, apVersion, maxImports, argMax, wordWidth, msgWidth,
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
@@ -49,7 +49,7 @@ export ApTypes = (
   fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
   taskSetSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
-  lnkForeign, strLen, nameStr, bindText, str, kwLit, wordLit, msgLit,
+  lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
   textLit, tokenKind, token, ctxKind, labelWhat, binaryOp, unaryOp,
   nodeKind, symKind, fileBinding, typeKind, builtinKind, stdProcKind,
   typePtr, symPtr, constitPtr, ifacePtr, modRecPtr, producedPtr, instPtr,
@@ -153,6 +153,19 @@ const
     in LexIdentOrKeyword. Stated in doc/implementation-defined.md 6, which
     5.1 c) asks for. }
   strMax   = 255;
+  { The longest file name this compiler will open, and the capacity of a
+    command-line argument -- which is the same number because an argument is
+    how a file name arrives. It is Linux's PATH_MAX and the roomiest of the
+    shorter limits every other system has, the same reading `PasFS.MaxPath`
+    takes.
+
+    It was `strMax` until ADR-0291, on the reading that a name is a name: a
+    path of 310 characters then reached `pas_str_fits` and stopped the
+    compiler with `a string of length 310 does not fit a capacity of 255`,
+    naming no file, from a program that had asked to compile one. A checkout
+    a few directories deeper than usual is all it takes, and nothing in this
+    tree could see it -- every path a harness passes is short. }
+  pathMax  = 4096;
   { The total-width a folded real is written back with (ADR-0227). 6.10.3.4.2's
     floating-point representation spends six characters on the sign, the point
     and the exponent, so this asks for 24 significant digits where 17 are what
@@ -173,8 +186,12 @@ const
   kwWidth  = 9;      { 'procedure', the longest reserved word }
   { The capacity of BindingType.name. ISO/IEC 10206:1991 6.4.3.4 makes the
     field "an implementation-defined variable-string-type" and says nothing
-    more, so the number is this compiler's; it is a file name's worth. }
-  bindNameCap = 255;
+    more, so the number is this compiler's; it is a file name's worth -- and
+    it said so while being 255, which is not one. Derived from `pathMax` since
+    ADR-0291, so the sentence and the number agree: this is the field a
+    program reads an argument out of (ADR-0081), and an argument that did not
+    fit stopped the program rather than being reported. }
+  bindNameCap = pathMax;
   { 6.7.6.9 gives each result "an implementation-defined length", singular --
     one length for the implementation and not one per value -- so the two
     representations are fixed-width ISO 8601: YYYY-MM-DD and HH:MM:SS. Being
@@ -357,11 +374,19 @@ const
 
 type
   strLen = 0..strMax;
-  { A file name or a command-line argument. 6.7.3.1 makes a parameter's type a
+  { An identifier's worth of text -- a word the formatter writes, a real
+    written back by `writestr`. It said "a file name or a command-line
+    argument" and was used for both, which is the whole of ADR-0291's finding:
+    a path is not a name, and holding one in the other's capacity is a trap
+    waiting for a deep enough checkout. 6.7.3.1 makes a parameter's type a
     type-*name*, so the production needs a name of its own before it can be
     passed; the schema-name `string` would take any capacity but then the
     variables holding one would each need their own descriptor. }
   nameStr = string(strMax);
+  { A file name or a command-line argument, which is the same thing arriving.
+    Named for the same reason `nameStr` is, and sized by `pathMax` rather than
+    by an identifier's bound. }
+  pathStr = string(pathMax);
   { A bindable text, named because 6.7.3.1 wants a type-name here too and
     because 6.4.1 makes `bindable` part of the type-denoter (ADR-0052). }
   bindText = bindable text;
@@ -2272,7 +2297,7 @@ var
     concatenated into a single program parameter, because a program that cannot
     name a file cannot open several (ADR-0079). It can now. }
   imports: bindText;
-  importName: array [1..maxImports] of nameStr;
+  importName: array [1..maxImports] of pathStr;
   { Which stages to dump, if any. Dumping is *off* by default: a compiler is
     quiet when it succeeds. It was on unconditionally for as long as there
     were two compilers to compare, because the dumps were what
@@ -2331,7 +2356,7 @@ var
   { The file a diagnostic belongs to: the source, or whichever already-
     translated component is being read (6.13). Only the human-readable format
     names it -- inside a dump the file is the one the harness passed. }
-  curFile: nameStr;
+  curFile: pathStr;
   { Which --import is being read, for the module nodes built while reading it
     (0 = the source named on the command line). Parse-time only: Sema reads
     nkModule's own copy, the parser having moved on by then. }
@@ -2359,7 +2384,7 @@ var
     already maintained for that purpose -- CheckModule sets curFile from the
     module's own file and puts it back -- so nothing new has to be kept in
     step with it, which a shadow index would have been. }
-  mainFile: nameStr;
+  mainFile: pathStr;
   { Where the source named on the command line begins in the token array.
     Everything before it belongs to an --import and is kept rather than
     overwritten (ADR-0212), so the two places that mean *this source* -- the
@@ -2911,7 +2936,7 @@ procedure WriteOrdinalName(t: typePtr; value_: integer);
   asking it beats keeping a second variable that says the same thing and can
   stop agreeing with it. It is asked once per defining-point and only when
   --dump-uses is set, which is a few thousand short comparisons at most. }
-function FileIndexOf(n: nameStr): integer;
+function FileIndexOf(n: pathStr): integer;
 
 { ------------------------------------------------------------- type names }
 procedure WriteTypeName(t: typePtr);

@@ -110,7 +110,7 @@ both compilers (ADR-0062).
 | 10206 | 7185 | Feature | This processor |
 |---|---|---|---|
 | E.15 | E.7 | when file operations are actually performed | At the call, through C stdio; `reset`, `rewrite` and `extend` open or reopen the stream, `get` and `put` transfer one component. One component of lookahead is held (ADR-0021), so the stream is one component ahead of the program. |
-| E.14 | — | the variable-string-type of `BindingType.name` | `string(255)`. |
+| E.14 | — | the variable-string-type of `BindingType.name` | `string(4096)`, which is a file name's worth: Linux's PATH_MAX and the roomiest of the shorter limits every other system has. It was `string(255)` while its own comment said *a file name's worth*, and since this field is the only channel a program has to its command line (ADR-0081) an argument longer than that stopped the compiler rather than being reported (ADR-0291). |
 | — | — | the additional fields of `BindingType` (§6.4.3.4 NOTE 7) | One: `writable`, of type `Boolean`, true exactly when the bound external entity could be opened for writing at the moment `binding` was applied — and false where the variable is bound to nothing, as `bound` is. It is §5's extension rather than an implementation-defined choice, and it is here because a reader looking up binding will look here. AP 6.4.3.4.7, ADR-0240. |
 | E.16 | — | what `bind(f, b)` binds to | The file whose pathname is `b.name`, with trailing spaces trimmed; the file is thereafter an external one, as a program parameter is (ADR-0052). **The variable is bound to an external entity when that entity exists**, asked whenever `binding` is called — so `bound` is false for a name nothing is at, and true for the same variable once `rewrite` has created the file. §6.7.5.6 makes the binding implementation-defined and its NOTE 2 makes `binding(f).bound` the test of success, which is what lets a conforming program ask whether there is anything to read before `reset` stops it. Readability is not asked: that is the open's own question. The name is kept whatever the answer, so an unchecked `reset` still stops at the file that was named rather than reading a scratch file, and a second `bind` is the dynamic-violation only when the first is bound to something (ADR-0172). `tests/extended/bind_missing.pas`. |
 | E.19 | — | the value `binding(f)` returns | `bound` says whether the variable is bound to an external entity and `name` is the pathname it is bound to, or the null string when it is not. **A program-parameter that was given a command-line argument is bound, and `name` is that argument** — §6.7.6.8's NOTE 2 makes `binding` the way "to determine the result of any binding of program-parameters prior to activation of the main program", and it is the only channel either standard gives a program to its own command line (ADR-0081). A program-parameter with no argument is unbound, which is how a program counts the arguments it was given. **`input` and `output` answer as unbound**: they are bound to an external entity, but to one with no pathname, and reporting a name `bind` could not reproduce would be worse than reporting none. `unbind` clears the binding §6.12 made, as it clears one the program made. `tests/extended/bindprogparam.pas`. |
@@ -186,8 +186,8 @@ the search path. A name the search does not find is not an error in itself —
 §6.11.3 reports it as an interface nothing supplies, which is the diagnostic a
 program that meant to pass `--import` wants. And the search path is bounded at
 32 directories, reported rather than silently shortened, as every other bound
-here is; a single directory longer than 255 characters is refused for the same
-reason.
+here is; a single directory longer than 4096 characters is refused for the
+same reason.
 
 **Resolution finds an interface and not an object.** `--dump-imports` writes
 the components a translation read, one to a line in activation order, so the
