@@ -357,24 +357,6 @@ Feature: Scopes and activations
       TRUE TRUE
       """
 
-  # And the same rule answering the other way, which is what says the question
-  # is being asked of the component rather than assumed.
-  @extended:6.7.5.6
-  Scenario: a field whose type-denoter does not say bindable may not
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var r: record plain: text end;
-          b: BindingType;
-      begin bind(r.plain, b) end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      'plain' is not bindable
-      """
-
   # §6.2.3.3's last paragraph, which is the clause's own and not its heading's:
   # within an activation, an applied occurrence of a variable-identifier denotes
   # *that activation's* variable, and the exception is that a function-identifier

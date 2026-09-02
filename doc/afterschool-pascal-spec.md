@@ -1630,6 +1630,65 @@ pointers is as unsendable as a pointer.
 
 ### 6.5 Declarations and denotations of variables
 
+#### 6.5.1 Variable-declarations [extended]
+
+Every variable that possesses a file-type shall possess the bindability that
+is bindable, whether or not the type-denoter from which it takes its type
+contains the word-symbol `bindable`. This shall hold of every variable-access
+that denotes a file: an entire-variable, a component-variable (6.5.3), an
+identified-variable (6.5.4), a variable denoted by the formal parameter of a
+variable-parameter-specification (6.7.3.3), and a variable a module exports
+(6.11).
+
+The bindability of a variable that does not possess a file-type shall be as
+ISO/IEC 10206:1991 §6.5.1 gives it: bindable if its type-denoter contains
+`bindable`, and nonbindable otherwise. 6.9.3.9.1 shall refuse a bindable
+variable as a control-variable and 6.4.3.4 shall keep one out of a
+variant-denoter, whatever its type. What it would mean to bind such a variable
+to an external entity is not defined by this document: the required procedures
+`bind` and `unbind` (§6.7.5.6) and the required function `binding` (§6.7.6.8)
+shall each require a variable-access that possesses a file-type, and a
+processor shall report an activation of one whose variable-access does not.
+
+NOTE 1 — §6.7.5.6 makes the file case the conditional one: *"If the
+variable-access f possesses a file-type, it shall be a dynamic-violation if
+the variable does not possess the bindability that is bindable."* Under this
+clause a file variable always possesses it, so the dynamic-violation cannot
+occur and the processor makes no check; §6.7.6.8 says the same of `binding`
+and the same follows. The *"otherwise"* branch of both sentences presupposes a
+non-file bindable variable and this clause declines to give one a meaning,
+which is the one restriction it states and the reason it is stated here rather
+than left to a processor.
+
+NOTE 2 — §6.7.3.3 requires a formal variable parameter to *"possess the
+bindability that is possessed by the actual-parameter"*, and its NOTE 1 makes
+that determined dynamically. For a file both are bindable, so nothing travels
+with the parameter and nothing is checked at the call; §6.7.6.8's own example
+`procedure bindfile(var f: text)` is a program of this dialect, and was refused
+before this clause. A conforming processor of ISO/IEC 10206:1991 would carry
+the bindability of the actual with every `var` file parameter and check it at
+run time, which is what this clause makes unnecessary (ADR-0299).
+
+NOTE 3 — The word `bindable` remains accepted wherever §6.4.1 admits it. On a
+type-denoter denoting a file-type it denotes nothing the type does not already,
+so every ISO/IEC 10206:1991 program keeps its meaning (6.0.1). What changes is
+which programs are accepted: a program the standard requires to be rejected
+because `bind`, `unbind` or `binding` is applied to a file variable whose
+type-denoter does not say `bindable` is accepted here — including one whose
+file is reached through a pointer, which the processor had never refused and
+`doc/implementation-defined.md` §6.1 carried as its one known such program
+until this clause made it the rule.
+
+NOTE 4 — §6.5.3.1 makes the components of a string nonbindable and §6.5.5 a
+buffer-variable; neither is a file (§6.4.3.6 admits no file component), so each
+is refused by the file-type requirement of the paragraph above, and the
+nonbindability adds nothing a processor has to ask.
+
+NOTE 5 — Nothing is spelled. This is a rule about what a position the language
+already has admits, as 6.7.7.6.1's record at an `external` heading and
+6.7.3.6's schematic string formal are, and there is no second place for the
+truth to live (ADR-0140, ADR-0299).
+
 #### 6.5.3 Component-variables [extended]
 
 ##### 6.5.3.2 Indexed-variables [extended]
@@ -3418,3 +3477,4 @@ nothing but a requirement no processor here could meet.
 | 5.6, 6.4.15 | ADR-0189 |
 | 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |
 | 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |
+| 6.5.1 | ADR-0299 |

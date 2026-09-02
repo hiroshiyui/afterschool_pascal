@@ -354,6 +354,7 @@ afterschool	6.5	structural	introduces the variable-denotation additions
 extended	6.5.1	testable	Variable-declarations
 extended	6.5.2	structural	one production naming what an entire-variable is; what one denotes is 6.2.2.11's and what declares one is 6.5.1's, so nothing can fail here alone
 extended	6.5.3	structural	introduces the subclauses below it; states no requirement of its own
+afterschool	6.5.1	testable	
 afterschool	6.5.3	structural	introduces the component-variable additions
 extended	6.5.3.1	testable	Component-variables / General
 extended	6.5.3.2	testable	Indexed-variables

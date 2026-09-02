@@ -4752,6 +4752,31 @@ written in, strikethrough and all.
   that was merely correct** — and this one shows the converse too: the pass
   that finds them can also file a defect as a taste.
 
+- ~~**A bindable file cannot cross a parameter**~~ — **closed by ADR-0299 on
+  2026-09-03, and the entry was half wrong.** It said §6.4.1 makes `bindable`
+  part of a variable-declaration, so no formal parameter accepts one and
+  `lib/pasfile.pas`'s four writers had to be one routine with two flags. A
+  two-minute probe showed `type BText = bindable text; procedure P(var f:
+  BText)` had bound inside its body all along — §6.4.1 puts the word in a
+  *type-denoter* and a type-name hands it on — so what the library could not
+  offer was a helper its callers could reach with a plain `text`, which is a
+  different sentence. The entry sat here as *one decision nobody has asked
+  for twice*, and the count was wrong too: this module asked, the server's
+  `WriteScratch` asked, and §6.7.6.8's own worked example
+  `procedure bindfile(var f: text)` had asked in 1991.
+
+  What closed it dissolved four shapes at once rather than the one this
+  chapter held: every file variable is bindable (AP 6.5.1), so a `var f:
+  text` formal, `p^` for `p: ^text`, a `text` field and a `text` element all
+  bind without the word, and `bind` asks nothing but whether it was given a
+  file. It is the first dialect decision that *admits* a program the
+  standard requires rejected instead of adding a construct, and the test it
+  passes is AP 6.0.1's — no conforming program changes meaning. The
+  library's `Attach`, `Found` and `Opened` now take the file, the flags are
+  gone, and `NotBindable` — the one message `bind`, `unbind` and `binding`
+  shared — is deleted rather than catalogued, no program being able to
+  reach it. Five cases die when the standard's refusal is put back.
+
 ### The chapter as it stood, and the argument it was made on
 
 **The IDE was withdrawn on 2026-09-01**, which closes the argument below

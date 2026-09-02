@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 865
-instrumented 10736
-decisions 5368
+uncovered 855
+instrumented 10708
+decisions 5354
 
 accept 0/4
 accumulate 1/32
@@ -85,7 +85,7 @@ checkarguments 10/184
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 2/10
-checkcall 21/192
+checkcall 21/188
 checkcase 2/38
 checkcomponentvalue 0/10
 checkconstdecl 0/18
@@ -125,7 +125,7 @@ checksetexpr 0/8
 checksetmember 2/12
 checksetvalue 1/12
 checkspawn 3/8
-checkstdproc 30/312
+checkstdproc 30/310
 checkstmt 16/240
 checkstorage 0/2
 checkstringargs 1/14
@@ -147,7 +147,7 @@ confarraytype 0/4
 confbound 0/2
 conformable 8/20
 conformantformal 0/2
-congruous 2/42
+congruous 2/40
 constaccessnode 15/42
 constaddress 0/10
 constantlyfalse 0/2
@@ -159,7 +159,7 @@ conststrcmpn 2/14
 conststreq 0/2
 conststrlen 1/6
 conststrlt 0/2
-containerof 3/16
+containerof 1/16
 containsfile 1/16
 containshandle 1/14
 containsownedpointer 2/14
@@ -174,7 +174,7 @@ declareschema 5/28
 deferbase 0/2
 deferstmtof 2/8
 definekeyword 1/4
-designatorbindable 6/22
+designatorbindable 5/12
 determine 8/20
 determinearg 5/10
 determinetuple 1/6
@@ -498,7 +498,6 @@ nestwith 0/2
 newresultslot 2/8
 nextformal 1/8
 nonvarying 8/58
-notbindable 5/20
 notedeclarationsto 0/8
 notedefining 2/8
 noteexportedinterface 1/8
@@ -513,7 +512,7 @@ ordinallo 0/4
 otherlistsparameter 0/14
 overlaps 0/10
 ownrelid 0/8
-packedcomponent 3/18
+packedcomponent 1/18
 padstofixedstring 2/18
 parameterof 1/6
 parseactualparameters 0/6
@@ -645,6 +644,7 @@ sametuple 2/12
 schemahastypedisc 0/6
 schemaisbusy 0/4
 schematicformal 0/2
+schematicstandsfor 0/10
 sel 4/18
 selectedsize 0/10
 seq 0/10

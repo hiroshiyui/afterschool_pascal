@@ -256,7 +256,9 @@ do: name equivalence would make the two unassignable (ADR-0047).
 **Bindable / binding.** §6.4.1's `bindable` and §6.7.5.6's `bind`. The external
 entity here is a *file name*, which is the one thing ISO 7185 could not express:
 §6.10 binds the program parameters before the program starts. A bound file is a
-program parameter that named itself (ADR-0052).
+program parameter that named itself (ADR-0052). Every file variable is bindable
+in this dialect, the word or not (AP 6.5.1, ADR-0299); the word still matters
+on a non-file, where `bind` refuses it by design.
 
 **Complex.** §6.4.2.2 e) makes it a *simple* type, so it is a value — assigned
 with a store, passed in a register, returned from a function — and none of the

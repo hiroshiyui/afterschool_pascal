@@ -1,3 +1,0 @@
-<source>:19:15: error: 'plainfile' is not bindable; only a variable whose type-denoter says 'bindable' can be bound to something outside the program
-<source>:20:17: error: 'plainfile' is not bindable; only a variable whose type-denoter says 'bindable' can be bound to something outside the program
-<source>:21:26: error: 'plainfile' is not bindable; only a variable whose type-denoter says 'bindable' can be bound to something outside the program

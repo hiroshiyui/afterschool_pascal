@@ -1,86 +1,52 @@
-{ What binding refuses, and the clause each rule comes from. }
+{ What binding refuses, and the clause each rule comes from.
+
+  Fewer than there were. Until AP 6.5.1 (ADR-0299) this file also refused
+  `bind` of a `text` variable, a `text` field and a `text` element for want of
+  §6.4.1's word -- eight diagnostics, all of them ISO/IEC 10206:1991
+  §6.7.5.6's dynamic-violation. Every file variable is bindable now, so those
+  lines compile and live in tests/dialect/bind_anywhere.pas; what stays here
+  is the arity, the argument types, and the one refusal the dialect keeps on
+  purpose: a variable that is not a file. }
 program BindingErrors(output);
 type btext = bindable text;
-     plainarr = array [1..2] of text;
-var f: text;
-    g: btext;
+var g: btext;
     n: integer;
     b: BindingType;
     s: string(5);
-    { 6.4.3.4 gives a field "the type, bindability, and initial state denoted
-      by the type-denoter of the record-section", and 6.4.3.5 says the same of
-      an array's component -- so `log` and every element of `pool` are
-      bindable and `plain` and every element of `flat` are not. Bindability is
-      a property of the *variable-access*, not of the entire-variable it
-      selects from, and asking the entire-variable was wrong in both
-      directions: it refused the two that are bindable and named the container
-      while doing it. }
+    { bindable integer is still a declaration the language accepts -- 6.9.3.9.1
+      asks about it -- and still not something `bind` will take. }
+    i: bindable integer;
     r: record log: btext; plain: text end;
-    pool: array [1..3] of btext;
     flat: array [1..3] of text;
-    { A dereference is the one shape still answered without asking. 6.4.4 lets
-      a domain-type carry a bindability, so `p^` here really is bindable and
-      the accepted line below is the right answer -- but `q^[1]` is not, and it
-      is accepted too, because a pointer's domain reaches Sema through the
-      deferred-domain machinery and the denoter's bindability does not travel
-      with it. doc/implementation-defined.md 6.1 carries that as a program
-      accepted that the standard requires to be rejected; the diagnostic below
-      is the one it *does* produce, for a designator with no name to write. }
-    pb: ^btext;
-    pf: ^plainarr;
-
-{ legal since ADR-0115: the callee's prologue converts, so this contributes no
-  diagnostic. `padded` stood beside it until ADR-0171, refusing a shorter
-  actual for a *fixed*-string formal — a lowering written down as a rule, and
-  §6.7.3.2 says the opposite. tests/extended/fixedstring_param.pas is where
-  that pair now lives, and it belongs there rather than here: nothing about it
-  was ever a question about binding. }
-procedure takes(v: string(5));
-begin
-  writeln(v)
-end;
 
 begin
-  { §6.7.5.6: "If the variable-access f possesses a file-type, it shall be a
-    dynamic-violation if the variable does not possess the bindability that is
-    bindable." §6.4.1's `bindable` is the only thing that gives it — and a
-    required type-identifier such as `text` never does. }
-  bind(f, b);
-  unbind(f);
-  b := binding(f);
   { the first argument is a file variable and the second a BindingType }
   bind(n, b);
   bind(g, n);
   bind(g);
   unbind(g, b);
   n := binding(n);
-  { A field and a component that are *not* bindable, which is the same rule
-    answering the other way. The name written is the field, and for an element
-    it is the array -- which is the right name now that the question is asked
-    of the component and not of the container. }
-  bind(r.plain, b);
-  bind(flat[1], b);
-  unbind(r.plain);
-  { A component of a dereference: no entire-variable to name, so the message
-    has none to write. }
-  new(pf);
-  bind(pf^[1], b);
-  { §6.4.3.4 gives BindingType exactly two required fields }
+  { AP 6.5.1: bindability is a property of a file variable and of nothing
+    else, so §6.7.5.6's "otherwise" branch -- a non-file that says bindable --
+    is refused by design, and the message says which design. }
+  bind(i, b);
+  unbind(i);
+  b := binding(i);
+  { A substring is nonbindable under §6.5.3.1 and is refused here for the
+    simpler reason that it is not a file. }
+  bind(s[1..2], b);
+  { §6.4.3.4 gives BindingType exactly two required fields, and the dialect a
+    third; `size` is none of them }
   n := b.size;
-  { And the three that are legal and were refused. A `with` binding is a field
-    of the record the with opened, so it answers as the written selection does. }
+  { And the ones that are legal: the word where §6.4.1 puts it, and -- since
+    AP 6.5.1 -- the same shapes without it. }
   b.name := '/tmp/binding_errors_log';
   bind(r.log, b);
-  bind(pool[2], b);
+  bind(r.plain, b);
+  bind(flat[1], b);
   with r do writeln('log bound = ', binding(log).bound);
-  writeln('pool bound = ', binding(pool[2]).bound);
   unbind(r.log);
-  unbind(pool[2]);
-  { 6.4.4's domain-type may denote a bindability, so this one is legal. }
-  new(pb);
-  b.name := '/tmp/binding_errors_pb';
-  bind(pb^, b);
-  writeln('pb bound = ', binding(pb^).bound);
-  unbind(pb^);
+  unbind(r.plain);
+  unbind(flat[1]);
   writeln(n:1, s)
 end.

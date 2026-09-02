@@ -6270,57 +6270,45 @@ begin
 end;
 
 { Whether the variable a designator denotes possesses the bindability that is
-  bindable -- ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8 both ask this of `bind`,
-  `unbind` and `binding`, and it is a property of the *variable-access* and not
-  of the entire-variable it selects from.
+  bindable. Two things ask: the for-statement, which 6.9.3.9.1 forbids a
+  bindable control-variable, and -- until ADR-0299 -- `bind`, `unbind` and
+  `binding`, which ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8 make a
+  dynamic-violation for a nonbindable file.
 
-  It used to be asked of the entire-variable, through RootDesignator, and that
-  was wrong in both directions at once. 6.4.3.4 gives a field "the type,
-  bindability, and initial state denoted by the type-denoter of the
-  record-section" and 6.4.3.5 says the same of an array's component, so
-  `bind(r.log, b)` and `bind(pool[i], b)` are legal for a bindable field and a
-  bindable element -- and both were refused with a message naming the
-  *container*, `'r' is not bindable`, which is the defect announcing itself.
-  Meanwhile a dereference has no nkVar under it at all, so the old walk found
-  nothing to ask and let every `p^` through.
+  **Every file variable is bindable** (AP 6.5.1, ADR-0299), and that is the
+  first arm: a designator whose type is a file-type answers true whatever its
+  declaration said, so `var f: text` in a heading, `p^` for `p: ^text`, a
+  record's `text` field and an array's `text` element are all bindable without
+  the word. 6.7.5.6's dynamic-violation therefore cannot occur, and the three
+  routines no longer ask this at all -- what they ask is IsFile, which is the
+  one refusal AP 6.5.1 keeps: a substring (6.5.3.1) and a buffer-variable
+  (6.5.5) are nonbindable under the standard and are refused here for the
+  simpler reason that neither is a file.
 
-  A dereference still answers true, which is the under-strict half and is
-  deliberately unfinished: a pointer's domain reaches this through the deferred
-  and pending-domain machinery of ResolvePointer, so carrying the denoter's
-  bindability to it is its own change. doc/implementation-defined.md 6.1 has it
-  as a program accepted that the standard requires to be rejected.
-
-  A substring is nonbindable by 6.5.3.1 -- "the components of a variable
-  possessing a string-type shall have the bindability that is nonbindable" --
-  and so is a buffer-variable by 6.5.5. Both fall to the closing `false`. }
+  What is left is the *word* on a non-file variable, `var i: bindable integer`,
+  which the for-statement still refuses, and the for-statement is now the
+  only asker. 6.9.3.9.1 makes a control-variable an entire-variable, so the
+  one shape here is nkVar: a declared name, which answers from its symbol, or
+  a name bound by a `with`, which is a field of the record the with opened
+  and answers for itself. The field, component and qualified-name arms
+  ADR-0170 wrote for `bind` -- 6.4.3.4 and 6.4.3.5 giving each "the type,
+  bindability, and initial state denoted by the type-denoter" -- had no
+  caller left and are gone with `elemBindable`, the flag the component arm
+  read; a for-statement cannot reach a field selection or a subscript, and
+  `bind` no longer asks. A dereference of a non-file answers false, and
+  nothing asks that either. }
 function DesignatorBindable(e: nodePtr): boolean;
 begin
   DesignatorBindable := false;
   if e <> nil then
-    if e^.kind = nkVar then begin
-      { A name bound by a `with` is a field of the record the with opened, and
-        vrField is that field -- so it answers for itself, exactly as a written
-        field selection does. }
+    if (e^.ntype <> nil) and IsFile(e^.ntype) then
+      DesignatorBindable := true
+    else if e^.kind = nkVar then begin
       if e^.vrField <> nil then
         DesignatorBindable := e^.vrField^.isBindable
       else if e^.vrSym <> nil then
         DesignatorBindable := e^.vrSym^.isBindable
     end
-    else if e^.kind = nkField then begin
-      { 6.11.3's qualified name denotes one symbol and has no base to select
-        from, so it answers as an entire-variable does. }
-      if e^.fdQualified <> nil then
-        DesignatorBindable := e^.fdQualified^.isBindable
-      else if e^.fdResolved <> nil then
-        DesignatorBindable := e^.fdResolved^.isBindable
-    end
-    else if e^.kind = nkIndex then begin
-      if e^.ixBase <> nil then
-        if e^.ixBase^.ntype <> nil then
-          DesignatorBindable := e^.ixBase^.ntype^.elemBindable
-    end
-    else if e^.kind = nkDeref then
-      DesignatorBindable := true
 end;
 
 { The entire-variable a designator selects from. A subscript and a field
@@ -6335,57 +6323,6 @@ begin
     if e^.fdQualified <> nil then RootDesignator := e
     else RootDesignator := RootDesignator(e^.fdBase)
   else RootDesignator := e
-end;
-
-{ 6.7.5.6's and 6.7.6.8's refusal, in one place because the three procedures
-  and the one function all ask the same question and had been asking it in two
-  copies. The name written is the *thing that is not bindable*: a field where
-  the designator ends in one, the entire-variable otherwise -- which for
-  `pool[i]` is `pool`, and is the right name now that the question is asked of
-  the component rather than of the container. Before this, `'pool' is not
-  bindable` was printed about an array whose components were. }
-procedure NotBindable(a: nodePtr);
-var root: nodePtr; named: boolean;
-begin
-  ErrorAt(a^.line, a^.col);
-  named := false;
-  if a^.kind = nkField then begin
-    if a^.fdQualified <> nil then begin
-      write('''');
-      WritePool(a^.fdQualified^.at, a^.fdQualified^.len);
-      named := true
-    end
-    else if a^.fdResolved <> nil then begin
-      write('''');
-      WritePool(a^.fdResolved^.at, a^.fdResolved^.len);
-      named := true
-    end
-  end
-  else if a^.kind = nkVar then begin
-    if a^.vrField <> nil then begin
-      write('''');
-      WritePool(a^.vrField^.at, a^.vrField^.len);
-      named := true
-    end
-    else if a^.vrSym <> nil then begin
-      write('''');
-      WritePool(a^.vrSym^.at, a^.vrSym^.len);
-      named := true
-    end
-  end
-  else begin
-    root := RootDesignator(a);
-    if root <> nil then
-      if root^.kind = nkVar then
-        if root^.vrSym <> nil then begin
-          write('''');
-          WritePool(root^.vrSym^.at, root^.vrSym^.len);
-          named := true
-        end
-  end;
-  if named then write(''' ') else write('this variable ');
-  writeln('is not bindable; only a variable whose type-denoter says ',
-          '''bindable'' can be bound to something outside the program')
 end;
 
 { ISO 7185 6.6.3.3 and ISO/IEC 10206:1991 6.7.3.3 carry these two sentences
@@ -9567,7 +9504,6 @@ begin
     t^.elem := ResolveArray(d, dim^.next)
   else begin
     t^.elem := ResolveType(d^.arElem);
-    t^.elemBindable := BindableOf(d^.arElem)
   end;
   { The bytes, where the elements bound above is the count. Asked here rather
     than of every variable of the type, so it is reported once and at the
@@ -14265,7 +14201,7 @@ end;
 
 procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last: nodePtr; t: typePtr;
-    n, at2, len2: integer; bad, stepped: boolean;
+    n, at2, len2: integer; stepped: boolean;
 begin
   { 6.11.3's qualified name. A required function is never one of the answers,
     so this returns whatever the interface holds or nothing at all. }
@@ -14390,6 +14326,11 @@ begin
         end
         else begin
           a := c^.clArgs;
+          { AP 6.5.1 (ADR-0299): a file variable is bindable however it was
+            declared, so the file-type test is the whole of the check, and
+            the refusal says why a non-file is refused -- bindability is a
+            property of a file variable and of nothing else here, whatever
+            6.7.6.8's "otherwise" branch presupposes. }
           if not IsDesignator(a) or
              ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
             ErrorAt(a^.line, a^.col);
@@ -14398,19 +14339,12 @@ begin
               write(', found ');
               WriteTypeName(a^.ntype)
             end;
-            writeln
+            writeln(': only a file variable is bindable')
           end
           else begin
-            bad := false;
-            if not DesignatorBindable(a) then begin
-              bad := true;
-              NotBindable(a)
-            end;
-            if not bad then begin
-              InternBindingName(currentProc^.frameCount, at2, len2);
-              c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingTy,
-                                        currentProc)
-            end
+            InternBindingName(currentProc^.frameCount, at2, len2);
+            c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingTy,
+                                      currentProc)
           end
         end
       end
@@ -16674,6 +16608,12 @@ begin
     end
     else begin
       a := p^.pcArgs;
+      { AP 6.5.1 (ADR-0299): every file variable is bindable, so 6.7.5.6's
+        dynamic-violation cannot occur and the file-type test is the whole
+        of the check. A `var f: text` formal, a `p^`, a field and an element
+        all pass here without the word; a substring and a buffer-variable are
+        refused because neither is a file, which is the reason the message
+        gives for every non-file. }
       if not IsDesignator(a) or
          ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
         ErrorAt(a^.line, a^.col);
@@ -16684,10 +16624,9 @@ begin
           write(', found ');
           WriteTypeName(a^.ntype)
         end;
-        writeln
+        writeln(': only a file variable is bindable')
       end
       else begin
-        if not DesignatorBindable(a) then NotBindable(a);
         { 6.9.4 j): "S is a procedure-statement that specifies the activation
           of the required procedure bind or unbind, and V is the
           variable-access f". Both write the binding of f, so both threaten
@@ -18725,7 +18664,10 @@ begin
         ps^.isProtected := g^.grIsProtected;
         { 6.7.3.3: a var parameter's form is a type-name, and 6.4.1 makes a
           type-name denote the bindability of its definition -- so a parameter
-          of a bindable type is bindable and one of `text` is not. }
+          of `bindable integer`'s type-name is bindable. For a *file* the word
+          decides nothing: AP 6.5.1 makes every file variable bindable, so
+          `var f: text` binds (ADR-0299) and this flag matters only to
+          6.9.3.9.1. }
         ps^.isBindable := BindableOf(g^.grType);
         AppendSym(into^.params, into^.paramTail, ps);
         n := n^.next

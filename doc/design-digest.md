@@ -1137,9 +1137,12 @@ able to make.
     7185 could not express — §6.10 binds the parameters before the program
     starts.
   - **`bindable` belongs to the type-denoter and a type-name hands it on**
-    (§6.4.1), which is why `type btext = bindable text` is how a bindable
-    *parameter* is written: `text` is a required identifier and never is.
-    `bindableOf` is `initialStateOf`'s shape.
+    (§6.4.1), which is why `type btext = bindable text` was how a bindable
+    *parameter* had to be written: `text` is a required identifier and never
+    is. `bindableOf` is `initialStateOf`'s shape. **Since ADR-0299 the word
+    decides nothing about a file**: every file variable is bindable
+    (AP 6.5.1), so `var f: text` in a heading binds inside its body and the
+    type-name spelling is one of two.
   - **A real is rounded away from zero, on its exact decimal expansion**
     (ISO 7185 6.9.3.4.1-2, ISO/IEC 10206:1991 6.10.3.4.1-2, ADR-0169). The
     clauses prescribe `abs(e) + 0.5 * 10.0 pow(-FracDigits)` and then Truncate,
@@ -1294,15 +1297,30 @@ able to make.
     component beside the initial state (§6.4.1 names the three in one breath),
     and not on the type — `type bt = bindable text` hands it on without making
     a type distinct from `text`, so a flag there would answer the same for
-    both spellings. `DesignatorBindable` is the walk and `NotBindable` the one
-    message all four routines share. The dereference is **left** as it is: for
-    `^bindable text` it is right, for `^text` it is not, and a pointer's domain
-    reaches Sema through the deferred and pending paths where the denoter that
-    knows is out of hand — `doc/implementation-defined.md` §6.1 carries it as
-    the one program accepted that the standard requires rejected. `tests/extended/bind_qualified.pas`
-    is the case; dropping the field arm fails `binding_errors`. It used to
-    fail `difftest` and `dialect-containment` too, and both gates went with
-    the conformance modes (ADR-0232), so one golden is now the whole of it.
+    both spellings. `DesignatorBindable` is the walk; `NotBindable`, the one
+    message all four routines shared, is gone. The dereference was **left**
+    answering true — right for `^bindable text`, wrong for `^text`, a
+    pointer's domain reaching Sema through the deferred and pending paths
+    where the denoter that knows is out of hand — and
+    `doc/implementation-defined.md` §6.1 carried it as the one program
+    accepted that the standard requires rejected, until ADR-0299 made it the
+    rule. `tests/extended/bind_qualified.pas` is the case for the qualified
+    arm, and `bind_qualified_plain.pas` its twin without the word.
+  - **Every file variable is bindable** (AP 6.5.1, ADR-0299), which is the
+    decision the four shapes above were waiting on and the first use of
+    ADR-0232's freedom to *admit* a program the standard requires rejected
+    rather than to add a construct. `DesignatorBindable` answers true for any
+    designator whose type is a file-type before it reads a declaration, so
+    `var f: text` in a heading — §6.7.6.8's own `bindfile` — `p^` for
+    `p: ^text`, a `text` field and a `text` element all bind, and `bind`,
+    `unbind` and `binding` ask nothing but `IsFile`, which was already their
+    first test. What the word still decides is a **non-file**: `bindable
+    integer` is accepted, 6.9.3.9.1 refuses it as a control-variable, and
+    `bind` refuses it by design with a message that says so — *only a file
+    variable is bindable*. Its meaning is deliberately not designed.
+    `lib/pasfile.pas` is the client: three helpers taking `var f: text`
+    replaced one routine with two flags. `tests/dialect/bind_anywhere.pas`;
+    the mutation that puts the standard's refusal back kills five cases.
   - **`binding(f)` is built in a hidden frame slot** — the `with` mechanism —
     because it is the only required function returning a record and this
     compiler returns none. The call is then a designator, so `b := binding(f)`

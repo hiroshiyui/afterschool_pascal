@@ -106,6 +106,7 @@
 6.4.16.2	A channel is a handle
 6.4.16.3	What a channel may carry
 6.5	Declarations and denotations of variables
+6.5.1	Variable-declarations
 6.5.3	Component-variables
 6.5.3.2	Indexed-variables
 6.5.6	Substring-variables

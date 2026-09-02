@@ -989,13 +989,6 @@ type
       itself. File: the component type. Sharing the field is what a variant
       record would do, which is where the C++ one was going. }
     elem, indexType, host, tagType: typePtr;
-    { Whether `elem` was written with a bindability of bindable -- 6.4.3.5's
-      "each component shall have the type, bindability, and initial state
-      denoted by the type-denoter" for an array, said about the component
-      rather than about the component's type, for fieldRec::isBindable's
-      reason. A pointer's domain uses the same slot and does not set it yet;
-      doc/implementation-defined.md 6.1 has why. }
-    elemBindable: boolean;
     isPacked: boolean;
     { ISO 7185 6.7.1: a set-constructor with members "shall denote either a
       value of the unpacked-canonical-set-of-T-type or, if the context so
@@ -3465,7 +3458,6 @@ begin
   new(t);
   t^.kind := k;
   t^.elem := nil;
-  t^.elemBindable := false;
   t^.indexType := nil;
   t^.host := nil;
   t^.tagType := nil;
