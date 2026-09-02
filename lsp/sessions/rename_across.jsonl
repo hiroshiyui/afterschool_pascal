@@ -1,0 +1,38 @@
+# A rename across a program-component (ADR-0294): one TextDocumentEdit per
+# file the name is written in, the document first, in `documentChanges`
+# rather than `changes` -- the latter is keyed by URI and `JsonName` is 255
+# characters, which a URI passed with ADR-0291.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file://%ROOT%","capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","languageId":"pascal","version":1,"text":"{ The top of the workspace: a program, with `client.components` beside it\n  naming the two modules under it and not naming this file.\n\n  That is the ordinary shape -- a case and its sidecar -- and the answer for\n  it is every entry the sidecar holds. The shape it does *not* cover is\n  `selfhost/compiler.components`, which sits beside `compiler.pas` and names\n  it: there the answer is the prefix, because handing a component its own\n  interface is what `tests/run_test.sh` is careful not to do. }\nprogram client(output);\n\nimport Middle;\n\nbegin\n  writeln(Doubled:1)\nend.\n"}}}
+
+# `Doubled` becomes `Twice`: one edit here and four in middle.pas -- the
+# export list, the heading, the block completing it and the result
+# assignment. A rename that reached only the document would leave a program
+# that does not compile.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/rename","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":13,"character":10},"newName":"Twice"}}
+
+# 6.11.3's qualified name. The compiler reports `Middle.Doubled` as one span
+# (ADR-0246) and the edit must cover the constituent alone: the last seven
+# characters, the point standing immediately before them.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","version":2},"contentChanges":[{"text":"program client(output);\n\nimport Middle;\n\nbegin\n  writeln(Middle.Doubled:1)\nend.\n"}]}}
+
+{"jsonrpc":"2.0","id":3,"method":"textDocument/prepareRename","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":5,"character":19}}}
+
+{"jsonrpc":"2.0","id":4,"method":"textDocument/rename","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":5,"character":19},"newName":"Twice"}}
+
+# The interface itself, from the qualifier: `import Middle;`, the qualifier,
+# and the export-part in middle.pas that declared it. `module Middle;` is not
+# among them -- a module's name and an interface's are different things
+# (6.11.1), and only the second is being renamed.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/rename","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":5,"character":11},"newName":"Mid"}}
+
+# Written with spaces around the point, the wider span stops short of the
+# constituent (ADR-0246) and the edit cannot be placed. A report would answer
+# the span whole; an edit that might land on the wrong characters is refused.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","version":3},"contentChanges":[{"text":"program client(output);\n\nimport Middle;\n\nbegin\n  writeln(Middle . Doubled:1)\nend.\n"}]}}
+
+{"jsonrpc":"2.0","id":6,"method":"textDocument/rename","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":5,"character":20},"newName":"Twice"}}
+
+{"jsonrpc":"2.0","id":7,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

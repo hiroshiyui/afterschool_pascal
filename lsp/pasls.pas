@@ -12,7 +12,9 @@
   (ADR-0239), `textDocument/formatting` (ADR-0279), and
   `textDocument/definition` and `textDocument/hover`, which
   are one question asked twice -- what the name under this position denotes,
-  and where it was written (ADR-0246). The roadmap's sentence for the first of
+  and where it was written (ADR-0246) -- and `textDocument/references` and
+  `textDocument/rename`, which are that question asked backwards
+  (ADR-0294). The roadmap's sentence for the first of
   them is *"a server that does nothing whatever but publishDiagnostics is
   producing findings on the first day"*, and it has produced more since.
 
@@ -971,6 +973,14 @@ begin
     one edit over the whole document and never a diff. }
   JsonPut(caps, 'documentFormattingProvider', JsonNewBoolean(true));
   JsonPut(caps, 'documentRangeFormattingProvider', JsonNewBoolean(true));
+  { ADR-0294: the `use` rows read backwards -- every occurrence of one
+    defining-point -- and a rename is that list with an edit per row.
+    `prepareProvider` says the range and spelling of the name are answered
+    before the client asks for a new one. }
+  JsonPut(caps, 'referencesProvider', JsonNewBoolean(true));
+  info := JsonNewObject;
+  JsonPut(info, 'prepareProvider', JsonNewBoolean(true));
+  JsonPut(caps, 'renameProvider', info);
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -1713,6 +1723,634 @@ begin
   JsonFree(reply)
 end;
 
+{ A whole file, so that a line of it can be found without reopening it.
+
+  `PasFile.ReadLine` is the routine for one line and is the wrong shape here:
+  it reopens and rescans, which over the 1 624 symbols of
+  `selfhost/apfront.pas` is 1 624 passes over 22 102 lines. The document is
+  read once into a `JsonChars`, which grows on the heap and so needs no
+  capacity guessed at, and `LineOf` -- written for the LSP side, where the
+  document is already in hand -- answers from it unchanged. }
+function ReadWhole(path: PathName; var b: JsonChars): boolean;
+var f: bindable text; bt: BindingType; c: char;
+begin
+  JsonCharsNew(b);
+  bt := binding(f);
+  bt.name := path;
+  bind(f, bt);
+  if not binding(f).bound then begin
+    unbind(f);
+    exit(false)
+  end;
+  reset(f);
+  while not eof(f) do
+    if eoln(f) then begin
+      JsonCharsAdd(b, chr(10));
+      readln(f)
+    end
+    else begin
+      read(f, c);
+      JsonCharsAdd(b, c)
+    end;
+  unbind(f);
+  ReadWhole := true
+end;
+
+{ --- every occurrence of one name ------------------------------------------ }
+
+{ `textDocument/references`, `textDocument/prepareRename` and
+  `textDocument/rename`, which are the question above asked backwards
+  (ADR-0294): not *where was this name declared* but *where else is the
+  declared thing named*. Every `use` row the document already caches carries
+  a defining-point, so the rows sharing the defining-point of the name under
+  the cursor are the occurrences of one thing -- and a rename is that list
+  with one edit per row.
+
+  **The unit is the translation and not the workspace.** A `--dump-uses`
+  reports the occurrences in the document it was handed and the
+  defining-points they resolved to, which may lie in a component the
+  compilation read. So a name declared in a component is followed *into* the
+  components: each entry of the document's file table is compiled again, with
+  the entries before it as its imports -- the table is in the order the
+  `--import`s were given, which is dependency order -- and its rows are
+  matched against the same defining-point, by path. What no compilation here
+  can see is a second open document importing the same module: that is
+  another translation, and the protocol named the method for the workspace
+  it does not cover.
+
+  **A field has no row of its own.** ADR-0250 reports a block's declarations
+  by walking the scope, and 6.4.3.3's record region is not one, so a field's
+  defining occurrence -- and a schema discriminant's -- is nowhere in the
+  dump. The declaration is therefore added by *position* when no row already
+  stands at the defining-point, which is the same rule that adds one in a
+  component the client never opened.
+
+  **A report may be partial and an edit may not.** `references` answers what
+  was found; `rename` refuses, with LSP 3.17's `RequestFailed` and a message
+  the editor shows, wherever an occurrence could be missing or misplaced: a
+  required identifier, whose defining-point is nowhere (6.2.2.10) and whose
+  key would collide with every other one's; a component whose dump could not
+  be taken; a qualified name written with spaces around its point, whose span
+  stops short (ADR-0246) and cannot be placed; and a new name the compiler's
+  own lexer does not read as exactly one identifier. }
+
+const
+  { LSP 3.17's RequestFailed: a well-formed request this server declines,
+    with a message for the person who asked. `null` would be legal in every
+    case it is used for and says nothing, and a rename that silently does
+    nothing is one a reader retries. }
+  RequestFailed = -32803;
+
+  { How many occurrences of one name an answer holds. The most-used name in
+    the compiler's own sources has 2037 occurrences in `compiler.pas`
+    (measured on 2026-09-02 over `--dump-uses`), so this is four times the
+    largest answer this tree can ask for; past it the list is cut, and a
+    rename is refused rather than half done. }
+  RefMax = 8192;
+
+type
+  { One occurrence, in the coordinates of the file it is in. `inFile` indexes
+    the document's file table, so 0 is the document itself. }
+  RefRow = record
+    inFile, line, col, len: integer;
+    { It stands at the defining-point, so it is the declaration. }
+    isDecl: boolean
+  end;
+
+  { What is being looked for, and what has been found. }
+  RefSet = record
+    { The defining-point, as the document's compilation numbered it. }
+    declFile, declLine, declCol, declLen: integer;
+    n: integer;
+    { More occurrences than `RefMax` holds. }
+    over: boolean;
+    { A component's dump could not be taken, so the list may be short. }
+    partial: boolean;
+    rows: array [1..RefMax] of RefRow
+  end;
+
+{ Record one occurrence, unless one already stands at that position: a
+  schema's body is reported once per production (ADR-0249), so a position can
+  arrive twice, and two edits over one range is a WorkspaceEdit a client
+  refuses. }
+procedure AddRef(var s: RefSet; inFile, line, col, len: integer);
+var i: integer;
+begin
+  for i := 1 to s.n do
+    if (s.rows[i].inFile = inFile) and (s.rows[i].line = line)
+       and (s.rows[i].col = col) then exit;
+  if s.n >= RefMax then begin
+    s.over := true;
+    exit
+  end;
+  s.n := s.n + 1;
+  s.rows[s.n].inFile := inFile;
+  s.rows[s.n].line := line;
+  s.rows[s.n].col := col;
+  s.rows[s.n].len := len;
+  s.rows[s.n].isDecl := (inFile = s.declFile) and (line = s.declLine)
+                        and (col = s.declCol)
+end;
+
+{ Every `use` row of one dump that resolves to the defining-point, where
+  `keyFile` is that point's index in *this* dump's file table and `inFile` is
+  the file the rows are occurrences in, numbered as the document's table
+  numbers it. The defining-point is compared on all three of its numbers: the
+  line alone would take `x, y: integer` for one name. }
+procedure CollectRefs(lines: StrVecPtr; keyFile, inFile: integer;
+                      var s: RefSet);
+var i: integer;
+    text: StrItem;
+begin
+  for i := 1 to SVecLen(lines) do begin
+    text := SVecGet(lines, i);
+    if SymField(text, 1) = 'use' then
+      if (IntOr(ParseInt(SymField(text, 5)), -1) = keyFile)
+         and (IntOr(ParseInt(SymField(text, 6)), 0) = s.declLine)
+         and (IntOr(ParseInt(SymField(text, 7)), 0) = s.declCol) then
+        AddRef(s, inFile, IntOr(ParseInt(SymField(text, 2)), 0),
+               IntOr(ParseInt(SymField(text, 3)), 0),
+               IntOr(ParseInt(SymField(text, 4)), 0))
+  end
+end;
+
+{ Does `a` come before `b` in the answer: file by file and then in source
+  order. The rows arrive in the order Sema resolved them, which puts a
+  block's declarations after its body. }
+function RefBefore(a, b: RefRow): boolean;
+begin
+  if a.inFile <> b.inFile then RefBefore := a.inFile < b.inFile
+  else if a.line <> b.line then RefBefore := a.line < b.line
+  else RefBefore := a.col < b.col
+end;
+
+{ An insertion sort: the list is one name's occurrences, not a file's. }
+procedure SortRefs(var s: RefSet);
+var i, j: integer;
+    r: RefRow;
+begin
+  for i := 2 to s.n do begin
+    r := s.rows[i];
+    j := i - 1;
+    while (j >= 1) and RefBefore(r, s.rows[j]) do begin
+      s.rows[j + 1] := s.rows[j];
+      j := j - 1
+    end;
+    s.rows[j + 1] := r
+  end
+end;
+
+{ Drop the declaration, which is what `includeDeclaration: false` asks. }
+procedure DropDecl(var s: RefSet);
+var i, k: integer;
+begin
+  k := 0;
+  for i := 1 to s.n do
+    if not s.rows[i].isDecl then begin
+      k := k + 1;
+      s.rows[k] := s.rows[i]
+    end;
+  s.n := k
+end;
+
+{ The index of `path` in a dump's file table, or -1 where the translation did
+  not read it -- in which case nothing in it can name the thing. }
+function FileIndexOf(files: PathVec; path: PathName): integer;
+var i: integer;
+begin
+  FileIndexOf := -1;
+  for i := 1 to VecLen(PathVec, files) do
+    if VecGet(PathVec, PathName, files, i) = path then exit(i - 1)
+end;
+
+{ The `--dump-uses` of component `k` of the document's file table, compiled
+  where it lies with the entries before it as its imports. The table is in
+  the order the `--import`s were given and a `.components` is in dependency
+  order, so the prefix is what `ReadSidecar` would have answered -- and it is
+  what the *document's* translation actually read, rather than a second
+  lookup free to answer differently. The dump goes to the file the document's
+  own went to, that one having been read into the cache already. }
+function UsesOfComponent(docFiles: PathVec; k: integer;
+                         var lines: StrVecPtr; var files: PathVec): boolean;
+var words, cmd: CommandLine;
+    dump, path, one: PathName;
+    j: integer;
+    r: RunResult;
+begin
+  UsesOfComponent := false;
+  words := '';
+  for j := 1 to k - 1 do begin
+    one := VecGet(PathVec, PathName, docFiles, j + 1);
+    if length(words) + length(one) + 13 > CommandMax then begin
+      Note('a component''s imports would not fit on a command line');
+      exit(false)
+    end;
+    words := words + ' --import ''' + one + ''''
+  end;
+  path := VecGet(PathVec, PathName, docFiles, k + 1);
+  dump := scratchPath + '.uses';
+  if not CompilerCommand(' --dump-uses', words, path, dump, cmd) then
+    exit(false);
+  SVecNew(lines, 64);
+  VecInit(PathVec, files, 4);
+  r := Run(cmd);
+  if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
+  else if ReadUses(dump, lines, files) then exit(true);
+  SVecFree(lines);
+  VecFree(PathVec, files)
+end;
+
+{ Everything that names what `hit` names, across the translation. The
+  document's own rows first; then, for a defining-point in a component, every
+  component's rows -- a name the document declares cannot be named by
+  anything the document imports, so those compilations are skipped. }
+procedure Gather(var d: Document; protected var hit: UseHit;
+                 includeDecl: boolean; var s: RefSet);
+var k, kf: integer;
+    keyPath: PathName;
+    lines: StrVecPtr;
+    files: PathVec;
+begin
+  s.declFile := hit.declFile;
+  s.declLine := hit.declLine;
+  s.declCol := hit.declCol;
+  s.declLen := hit.declLen;
+  s.n := 0;
+  s.over := false;
+  s.partial := false;
+  CollectRefs(d.uses_, hit.declFile, 0, s);
+  if (hit.declFile > 0) and (hit.declFile < VecLen(PathVec, d.files)) then
+  begin
+    keyPath := VecGet(PathVec, PathName, d.files, hit.declFile + 1);
+    for k := 1 to VecLen(PathVec, d.files) - 1 do
+      if UsesOfComponent(d.files, k, lines, files) then begin
+        kf := FileIndexOf(files, keyPath);
+        if kf >= 0 then CollectRefs(lines, kf, k, s);
+        SVecFree(lines);
+        VecFree(PathVec, files)
+      end
+      else
+        s.partial := true
+  end;
+  { The declaration, by position, where no row stands at it: a field's or a
+    discriminant's, which the dump never reports as an occurrence of itself.
+    `AddRef` declines a duplicate, so this is a no-op where a row does. }
+  if includeDecl then
+    AddRef(s, hit.declFile, hit.declLine, hit.declCol, hit.declLen)
+  else
+    DropDecl(s);
+  SortRefs(s)
+end;
+
+{ Where the identifier itself begins in a span. A row's length is the
+  identifier's except for 6.11.3's qualified name, which the compiler reports
+  as one span over `M.x` (ADR-0246): the constituent is then the last
+  `declLen` characters, when the point stands immediately before them. It
+  cannot be placed when it does not -- `M . x` is legal and the wider span
+  stops short of `x`. }
+function IdentIn(source: DiagLine; col, len, declLen: integer;
+                 var at: integer): boolean;
+var dot: integer;
+begin
+  at := col;
+  dot := col + len - declLen - 1;
+  if len = declLen then IdentIn := true
+  else if (len > declLen) and (dot >= 1) and (dot <= length(source))
+          and (source[dot] = '.') then begin
+    at := dot + 1;
+    IdentIn := true
+  end
+  else IdentIn := false
+end;
+
+{ The text of the file a row is in, which is the document for `inFile` 0 and
+  otherwise a component read from disk -- where the compiler read it too, so
+  the positions agree with the text. `own` says whether the caller frees it.
+  Read for the line, which is what the position converts against under
+  `utf-16` and what `IdentIn` looks at; without it a component's occurrence
+  would be right for an ASCII line and a little off for the rest. }
+procedure TextOfFile(var d: Document; inFile: integer;
+                     var chars: JsonChars; var own: boolean);
+begin
+  own := false;
+  chars := nil;
+  if inFile = 0 then chars := d.text
+  else if inFile < VecLen(PathVec, d.files) then begin
+    own := true;
+    if not ReadWhole(VecGet(PathVec, PathName, d.files, inFile + 1), chars)
+    then
+      Note('a component the compiler read could not be read back')
+  end
+end;
+
+{ The URI of the file a row is in. }
+function UriOfFile(var d: Document; inFile: integer): DocUri;
+begin
+  if (inFile > 0) and (inFile < VecLen(PathVec, d.files)) then
+    UriOfFile := PathToUri(VecGet(PathVec, PathName, d.files, inFile + 1))
+  else
+    UriOfFile := d.uri
+end;
+
+{ A request refused, LSP 3.17's way. }
+procedure Refuse(id: JsonPtr; why: DiagLine);
+var reply, err: JsonPtr;
+begin
+  reply := NewResponse(id);
+  err := JsonNewObject;
+  JsonPut(err, 'code', JsonNewInteger(RequestFailed));
+  JsonPut(err, 'message', JsonNewText(why));
+  JsonPut(reply, 'error', err);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ `textDocument/references`, as `Location[]` or `null`.
+
+  `null` where there is no name under the position, no document, or a
+  required identifier: the last has no defining-point (6.2.2.10), and every
+  required identifier shares the defining-point it has not got, so the rows
+  of `integer` and `writeln` are one key and the answer would be every
+  required identifier in the file. }
+procedure References(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    line, col, i, at, len, cur: integer;
+    hit: UseHit;
+    path: PathName;
+    d: Document;
+    s: RefSet;
+    chars: JsonChars;
+    own: boolean;
+    source: DiagLine;
+    reply, result, loc: JsonPtr;
+begin
+  reply := NewResponse(id);
+  result := nil;
+  uri := UriOf(params);
+  AskedAt(params, uri, line, col);
+  if (line >= 1) and (col >= 1) then
+    if FindUse(uri, line, col, hit, path) then
+      if (hit.declLine > 0) and DocOf(uri, d) then begin
+        Gather(d, hit,
+               JsonBooleanOr(JsonMember(JsonMember(params, 'context'),
+                                        'includeDeclaration'), false),
+               s);
+        if s.over then
+          Note('a name with more occurrences than this server holds was '
+               + 'answered with the first of them');
+        result := JsonNewArray;
+        cur := -1;
+        chars := nil;
+        own := false;
+        for i := 1 to s.n do begin
+          if s.rows[i].inFile <> cur then begin
+            if own then JsonCharsFree(chars);
+            cur := s.rows[i].inFile;
+            TextOfFile(d, cur, chars, own)
+          end;
+          source := '';
+          if chars <> nil then LineOf(chars, s.rows[i].line, source);
+          { A qualified span that cannot be placed is reported whole: a
+            worse answer and not a wrong one, which is a report's licence
+            and not an edit's. }
+          if IdentIn(source, s.rows[i].col, s.rows[i].len, s.declLen, at)
+          then len := s.declLen
+          else begin
+            at := s.rows[i].col;
+            len := s.rows[i].len
+          end;
+          loc := JsonNewObject;
+          JsonPut(loc, 'uri', JsonNewText(UriOfFile(d, cur)));
+          JsonPut(loc, 'range', NameRange(source, s.rows[i].line, at, len));
+          JsonAppend(result, loc)
+        end;
+        if own then JsonCharsFree(chars)
+      end;
+  if result = nil then result := JsonNewNull;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ Is `name` one identifier, as the compiler's own lexer reads it? Asked of
+  the compiler and not of a table copied out of it: which spellings are
+  word-symbols is the lexer's knowledge (6.1.2), and a second list here would
+  be a second reader free to drift -- the shape `foreign-reserved` broke on.
+  The name alone is written to a file beside the scratch one and
+  `--dump-tokens` must answer one `ident` and then `eof`; the folded spelling
+  it reports must be as long as what was given, which is what refuses a name
+  with a separator or a comment inside it. }
+function IsIdentifier(name: JsonLine): boolean;
+var bt: BindingType;
+    path: EnvText;
+    cmd: CommandLine;
+    lines: StrVecPtr;
+    r: RunResult;
+    ok: boolean;
+begin
+  IsIdentifier := false;
+  if length(scratchPath) + 5 > MaxValue then exit(false);
+  path := scratchPath + '.name';
+  bt := binding(scratchFile);
+  if bt.bound then unbind(scratchFile);
+  bt.name := path;
+  bind(scratchFile, bt);
+  if not binding(scratchFile).writable then begin
+    Note('nothing can be written at ' + path);
+    exit(false)
+  end;
+  rewrite(scratchFile);
+  writeln(scratchFile, name);
+  unbind(scratchFile);
+  if not CompilerCommand(' --dump-tokens', '', path, '', cmd) then exit(false);
+  SVecNew(lines, 4);
+  r := CaptureLines(cmd, lines);
+  ok := false;
+  if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
+  else if SVecLen(lines) = 2 then
+    ok := (SymField(SVecGet(lines, 1), 3) = 'ident')
+          and (length(SymField(SVecGet(lines, 1), 4)) = length(name))
+          and (SymField(SVecGet(lines, 2), 3) = 'eof');
+  SVecFree(lines);
+  IsIdentifier := ok
+end;
+
+{ The name under the position, as a rename would see it: the hit, the line it
+  is on and where the identifier begins in its span. False with `why` set
+  where a rename is refused before any edit is computed, and `nothing` where
+  the refusal is that there is no name there at all -- which `prepareRename`
+  answers with `null` rather than with an error, a position on a word-symbol
+  being a place a reader may well right-click. }
+function RenameTarget(uri: DocUri; params: JsonPtr; var hit: UseHit;
+                      var source: DiagLine; var at: integer;
+                      var nothing: boolean; var why: DiagLine): boolean;
+var line, col: integer;
+    path: PathName;
+    d: Document;
+begin
+  RenameTarget := false;
+  why := '';
+  nothing := false;
+  AskedAt(params, uri, line, col);
+  if not DocOf(uri, d) then why := 'no document is open at that URI'
+  else if (line < 1) or (col < 1)
+          or not FindUse(uri, line, col, hit, path) then begin
+    why := 'there is no name at this position';
+    nothing := true
+  end
+  else if hit.declLine = 0 then
+    why := 'a required identifier is declared in no source (6.2.2.10) and '
+           + 'cannot be renamed'
+  else begin
+    LineOf(d.text, hit.line, source);
+    if not IdentIn(source, hit.col, hit.len, hit.declLen, at) then
+      why := 'a qualified name with spaces around its point cannot be placed'
+    else
+      RenameTarget := true
+  end
+end;
+
+{ `textDocument/prepareRename`, as the range of the identifier and its
+  spelling as written. `null` is what a client that gets no answer shows
+  nothing for; the refusals are errors, so the reader learns *why* before
+  typing a name. }
+procedure PrepareRename(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    hit: UseHit;
+    source: DiagLine;
+    at: integer;
+    nothing: boolean;
+    why: DiagLine;
+    reply, result: JsonPtr;
+begin
+  uri := UriOf(params);
+  if not RenameTarget(uri, params, hit, source, at, nothing, why) then begin
+    if nothing then begin
+      reply := NewResponse(id);
+      JsonPut(reply, 'result', JsonNewNull);
+      Send(reply);
+      JsonFree(reply)
+    end
+    else Refuse(id, why)
+  end
+  else begin
+    reply := NewResponse(id);
+    result := JsonNewObject;
+    JsonPut(result, 'range', NameRange(source, hit.line, at, hit.declLen));
+    if (at >= 1) and (hit.declLen > 0)
+       and (at + hit.declLen - 1 <= length(source)) then
+      JsonPut(result, 'placeholder',
+              JsonNewText(source[at..at + hit.declLen - 1]))
+    else
+      JsonPut(result, 'placeholder', JsonNewText(''));
+    JsonPut(reply, 'result', result);
+    Send(reply);
+    JsonFree(reply)
+  end
+end;
+
+{ `textDocument/rename`, as a `WorkspaceEdit` with `documentChanges` -- one
+  `TextDocumentEdit` per file, in the order the file table has them, the
+  document first.
+
+  `documentChanges` and not `changes`, and the reason is a bound: `changes`
+  is an object keyed by URI, `JsonName` is 255 characters, and a URI this
+  server holds is as long as a path (ADR-0291) -- `definition_deep`'s is 309.
+  A `TextDocumentEdit` carries its URI as a value, which `JsonNewText` takes
+  at any length. The version is `null`: this server keeps no document
+  versions, and the field admits saying so. }
+procedure RenameSymbol(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    newName: JsonLine;
+    hit: UseHit;
+    source: DiagLine;
+    at, i, cur: integer;
+    nothing: boolean;
+    why: DiagLine;
+    d: Document;
+    s: RefSet;
+    chars: JsonChars;
+    own, placed: boolean;
+    reply, result, changes, change, tdoc, edits, edit: JsonPtr;
+begin
+  uri := UriOf(params);
+  if JsonTextInto(JsonMember(params, 'newName'), newName) <> errNone then begin
+    Refuse(id, 'the new name is missing, or longer than this server holds');
+    exit
+  end;
+  if not RenameTarget(uri, params, hit, source, at, nothing, why) then begin
+    Refuse(id, why);
+    exit
+  end;
+  if not IsIdentifier(newName) then begin
+    Refuse(id, '`' + newName + '` is not an identifier of this language');
+    exit
+  end;
+  { Fetched again after `RenameTarget`, whose `FindUse` is what filled the
+    document's cache. }
+  if not DocOf(uri, d) then begin
+    Refuse(id, 'no document is open at that URI');
+    exit
+  end;
+  Gather(d, hit, true, s);
+  if s.over then begin
+    Refuse(id, 'the name has more occurrences than this server can rename');
+    exit
+  end;
+  if s.partial then begin
+    Refuse(id, 'a component of the translation could not be compiled, so '
+               + 'the occurrences in it are not known');
+    exit
+  end;
+  result := JsonNewObject;
+  changes := JsonNewArray;
+  JsonPut(result, 'documentChanges', changes);
+  edits := nil;
+  cur := -1;
+  chars := nil;
+  own := false;
+  placed := true;
+  for i := 1 to s.n do
+    if placed then begin
+      if s.rows[i].inFile <> cur then begin
+        if own then JsonCharsFree(chars);
+        cur := s.rows[i].inFile;
+        TextOfFile(d, cur, chars, own);
+        tdoc := JsonNewObject;
+        JsonPut(tdoc, 'uri', JsonNewText(UriOfFile(d, cur)));
+        JsonPut(tdoc, 'version', JsonNewNull);
+        edits := JsonNewArray;
+        change := JsonNewObject;
+        JsonPut(change, 'textDocument', tdoc);
+        JsonPut(change, 'edits', edits);
+        JsonAppend(changes, change)
+      end;
+      source := '';
+      if chars <> nil then LineOf(chars, s.rows[i].line, source);
+      if IdentIn(source, s.rows[i].col, s.rows[i].len, s.declLen, at) then
+      begin
+        edit := JsonNewObject;
+        JsonPut(edit, 'range', NameRange(source, s.rows[i].line, at, s.declLen));
+        JsonPut(edit, 'newText', JsonNewText(newName));
+        JsonAppend(edits, edit)
+      end
+      else
+        placed := false
+    end;
+  if own then JsonCharsFree(chars);
+  if not placed then begin
+    JsonFree(result);
+    Refuse(id, 'an occurrence is a qualified name with spaces around its '
+               + 'point, which cannot be placed; the rename was not made')
+  end
+  else begin
+    reply := NewResponse(id);
+    JsonPut(reply, 'result', result);
+    Send(reply);
+    JsonFree(reply)
+  end
+end;
+
 { --- MCP ------------------------------------------------------------------ }
 
 { The same program answering a different protocol (ADR-0241), and the reason
@@ -1836,39 +2474,6 @@ begin
     end
   end;
   LinesAsText := v
-end;
-
-{ A whole file, so that a line of it can be found without reopening it.
-
-  `PasFile.ReadLine` is the routine for one line and is the wrong shape here:
-  it reopens and rescans, which over the 1 624 symbols of
-  `selfhost/apfront.pas` is 1 624 passes over 22 102 lines. The document is
-  read once into a `JsonChars`, which grows on the heap and so needs no
-  capacity guessed at, and `LineOf` -- written for the LSP side, where the
-  document is already in hand -- answers from it unchanged. }
-function ReadWhole(path: PathName; var b: JsonChars): boolean;
-var f: bindable text; bt: BindingType; c: char;
-begin
-  JsonCharsNew(b);
-  bt := binding(f);
-  bt.name := path;
-  bind(f, bt);
-  if not binding(f).bound then begin
-    unbind(f);
-    exit(false)
-  end;
-  reset(f);
-  while not eof(f) do
-    if eoln(f) then begin
-      JsonCharsAdd(b, chr(10));
-      readln(f)
-    end
-    else begin
-      read(f, c);
-      JsonCharsAdd(b, c)
-    end;
-  unbind(f);
-  ReadWhole := true
 end;
 
 { The outline of a file on disk, rendered for a reader rather than for a
@@ -2495,6 +3100,9 @@ begin
   else if method = 'textDocument/selectionRange' then Selection(id, params)
   else if method = 'textDocument/formatting' then Formatting(id, params, 0, 0)
   else if method = 'textDocument/rangeFormatting' then RangeFormatting(id, params)
+  else if method = 'textDocument/references' then References(id, params)
+  else if method = 'textDocument/prepareRename' then PrepareRename(id, params)
+  else if method = 'textDocument/rename' then RenameSymbol(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

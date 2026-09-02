@@ -19,7 +19,7 @@
 <source>:148:3: error: undeclared identifier 'y'
 <source>:148:3: error: the left side of an assignment must be a variable
 <source>:151:9: error: cannot select a field of a value of type integer
-<source>:153:13: error: 'absent' was not imported through interface 't2'
+<source>:153:11: error: 'absent' was not imported through interface 't2'
 <source>:155:11: error: 'good.v' is not a function
 <source>:156:3: error: 'good.f' is not a procedure
 <source>:75:1: error: module 'orphan' has an interface but no implementation

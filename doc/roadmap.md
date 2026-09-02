@@ -317,20 +317,22 @@ it. None of these is a language feature and none needs a spelling.
 
 ### Tooling
 
-- **The server answers ten methods and none of them completes a name.**
+- **The server answers thirteen methods and none of them completes a name.**
   `grep -o "'textDocument/[a-zA-Z]*'" lsp/pasls.pas | sort -u` lists three
-  notifications and seven requests, and `completion`, `references`, `rename`
-  and `codeAction` are not among them. In order of what they cost, guessed:
+  notifications and ten requests, and `completion` and `codeAction` are not
+  among them. In order of what they cost, guessed:
 
   | Request | What it is made of |
   | --- | --- |
-  | `references` | the inverse of the `use` rows the server already caches per document (ADR-0246, ADR-0276): every occurrence resolving to one defining-point |
-  | `rename` | references, plus one edit per row, and the same refusal `--dump-uses` already makes for a required identifier |
   | `codeAction` | the four warnings each know the edit they want — add `protected`, delete the declaration, delete the statement after the one that leaves — and the compiler already has the positions (ADR-0272, ADR-0277, ADR-0278, ADR-0283) |
   | `completion` | the one an editor user misses within a minute, and the one with a design in it: the outline gives the names in scope after a parse, but what may follow a token is the parser's knowledge and `--dump-symbols` stops before Sema |
 
-  Completion is the row a person notices; references is the row that is
-  nearly free.
+  Completion is the row a person notices. `references` and `rename` stood
+  above these as the rows that were nearly free, and were (ADR-0294): the
+  cached `use` rows read backwards, plus one compilation per component for a
+  name declared in one. What doing them found is in `doc/history.md`, and
+  the sharpest part was not the server's — the compiler had reported every
+  qualified name in an expression from its point rather than its start.
 
 ### Platforms and packaging
 
@@ -349,8 +351,8 @@ it. None of these is a language feature and none needs a spelling.
   tour.
 
 **If one row from each section were taken first**: a binary, a line in every
-trap, `references`, and the examples. The examples are the one that pays
-twice.
+trap, `codeAction`, and the examples — `references` was the tooling row
+until ADR-0294 took it. The examples are the one that pays twice.
 
 ---
 

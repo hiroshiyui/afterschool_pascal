@@ -4752,6 +4752,33 @@ written in, strikethrough and all.
   that was merely correct** — and this one shows the converse too: the pass
   that finds them can also file a defect as a taste.
 
+- **`references` and `rename`** — answered (ADR-0294), and they were the two
+  rows the roadmap's Tooling table called nearly free. They were: every `use`
+  row the document caches carries a defining-point, so the rows sharing the
+  one under the cursor are the occurrences of one thing, and a rename is that
+  list with an edit per row. What was not free was the *unit*. The dump
+  reports no occurrence inside a component — `NotingHere` keeps it to the
+  document's text — so a rename asked from `client.pas` could see one
+  occurrence of `Doubled` and not the four in `middle.pas`, and the answer
+  was to compile each entry of the document's file table again with the
+  entries before it as its imports, which is exactly what the document's own
+  translation had read. A field's declaration is in no row at all and is
+  added by position.
+
+  **The finding was the compiler's, and it had been wrong since ADR-0246.**
+  An `nkField` stands at its point and `CheckExpr` passed that position to
+  `LookupName`, so every qualified name in an expression was reported from
+  the `.`: `Middle` in `Middle.Doubled` was inside neither span and `.Doubl`
+  hovered as the interface. Three dump goldens, five definition sessions and
+  an independent client had read those columns and none had stood on one.
+  The session that did was written for a rename, and its prediction differed
+  from the server's answer by a placeholder of `.Doubl` — visibly wrong, as
+  ADR-0250's was. Two call sites now pass the qualifier's position and
+  `tests/dumps/uses_module.dump` moved six rows, each by the qualifier's
+  length. `rename` is also the first method here that *refuses* rather than
+  answering `null`, with LSP's `RequestFailed` and a message, because a report
+  may be partial and an edit may not.
+
 ### The chapter as it stood, and the argument it was made on
 
 **The IDE was withdrawn on 2026-09-01**, which closes the argument below

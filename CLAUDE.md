@@ -150,7 +150,10 @@ expansion, which are a second such pair and come from one `--dump-stmts`
 (ADR-0258), and **formatting**, which comes from `--format` (ADR-0280) and now answers
 for a *range* as well (ADR-0284) — and they do not cost the same: the outline and the two extent answers stop after
 the parse and need no `--import`, where the diagnostics and the two `use`
-answers run Sema and do. Formatting is the only one whose answer is a
+answers run Sema and do — and since ADR-0294 the `use` rows are read
+backwards too, `references` and `rename` being every row sharing one
+defining-point, followed into the components by compiling each again with the
+file-table entries before it. Formatting is the only one whose answer is a
 *program* rather than a report, which is why its command redirects standard
 output to a file of its own instead of folding it into standard error the way
 every other one does: a diagnostic mixed into the text would be written

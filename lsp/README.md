@@ -203,6 +203,26 @@ file's layout — a boundary inside a construct forces a break there, which ever
 language server does — so what `format-check` asserts over ranges is the
 semantic claim, that the token stream on those lines is unchanged.
 
+**The same dump, read backwards**
+([ADR-0294](../doc/adr/0294-the-question-asked-backwards.md)).
+`textDocument/references` is every `use` row sharing the defining-point of
+the name under the cursor, and `textDocument/rename` is that list with one
+edit per row, grouped per file in a `WorkspaceEdit`'s `documentChanges`;
+`textDocument/prepareRename` gives the range and spelling of the name first.
+The unit is the *translation*: a name declared in a component is followed
+into every component the document's compilation read, each compiled again
+with the file-table entries before it as its imports — so renaming `Doubled`
+from `client.pas` edits the export list, the heading, the completing block and
+the result assignment in `middle.pas` too. A second open document importing
+the same module is another translation and is not asked. A field's
+declaration, which the dump never reports as an occurrence of itself, is
+added by position. `references` answers what it found; `rename` refuses, with
+a message the editor shows, wherever an edit could be missing or misplaced —
+a required identifier, a qualified name written with spaces around its point,
+a component whose dump could not be taken, or a new name the compiler's own
+lexer does not read as one identifier. The new name is judged by
+`--dump-tokens` and not by a table of word-symbols copied out of the lexer.
+
 **A change nobody will see the answer to is not compiled**
 ([ADR-0257](../doc/adr/0257-a-change-nobody-will-see-is-not-compiled.md)). A
 keystroke is a `didChange` carrying the whole document, so a reader typing

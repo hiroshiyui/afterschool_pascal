@@ -1,0 +1,27 @@
+Content-Length: 406
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: 123
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/shapes.pas","diagnostics":[]}}Content-Length: 140
+
+{"jsonrpc":"2.0","id":2,"error":{"code":-32803,"message":"a required identifier is declared in no source (6.2.2.10) and cannot be renamed"}}Content-Length: 140
+
+{"jsonrpc":"2.0","id":3,"error":{"code":-32803,"message":"a required identifier is declared in no source (6.2.2.10) and cannot be renamed"}}Content-Length: 106
+
+{"jsonrpc":"2.0","id":4,"error":{"code":-32803,"message":"`begin` is not an identifier of this language"}}Content-Length: 103
+
+{"jsonrpc":"2.0","id":5,"error":{"code":-32803,"message":"`9x` is not an identifier of this language"}}Content-Length: 110
+
+{"jsonrpc":"2.0","id":6,"error":{"code":-32803,"message":"`two words` is not an identifier of this language"}}Content-Length: 101
+
+{"jsonrpc":"2.0","id":7,"error":{"code":-32803,"message":"`` is not an identifier of this language"}}Content-Length: 38
+
+{"jsonrpc":"2.0","id":8,"result":null}Content-Length: 94
+
+{"jsonrpc":"2.0","id":9,"error":{"code":-32803,"message":"there is no name at this position"}}Content-Length: 93
+
+{"jsonrpc":"2.0","id":10,"error":{"code":-32803,"message":"no document is open at that URI"}}Content-Length: 119
+
+{"jsonrpc":"2.0","id":11,"error":{"code":-32803,"message":"the new name is missing, or longer than this server holds"}}Content-Length: 39
+
+{"jsonrpc":"2.0","id":12,"result":null}

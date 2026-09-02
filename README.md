@@ -338,7 +338,7 @@ tree.
 
 `lsp/` holds a Language Server Protocol server, written in this language and
 using this library. It publishes the compiler's diagnostics for every file you
-open or edit, without your having to save one, and answers six requests
+open or edit, without your having to save one, and answers nine requests
 besides:
 
 | Request | What you get |
@@ -350,6 +350,8 @@ besides:
 | `selectionRange` | expand-selection, outward through nested statements |
 | `formatting` | the document laid out by `pascalc --format` |
 | `rangeFormatting` | the lines you selected, laid out as they stand in the file |
+| `references` | every occurrence of a name, into the program-components the compilation read |
+| `rename` | those occurrences edited to a new name, the declaration included — or a refusal that says why |
 
 The outline and the two extent answers work on a document that **does not
 compile yet**, which is when they are most wanted: they stop after the parse.
