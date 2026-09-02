@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 866
-instrumented 10694
-decisions 5347
+uncovered 865
+instrumented 10736
+decisions 5368
 
 accept 0/4
 accumulate 1/32
@@ -29,6 +29,7 @@ addframevar 1/2
 addglobal 0/2
 addpath 0/6
 addressofsym 0/6
+addstorage 0/6
 addtoken 1/2
 advance 0/2
 append 0/2
@@ -126,6 +127,7 @@ checksetvalue 1/12
 checkspawn 3/8
 checkstdproc 30/312
 checkstmt 16/240
+checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
 checktake 0/12
@@ -335,7 +337,7 @@ fmtctlpush 1/2
 fmtdepth 0/2
 fmtenddecl 1/6
 fmtflush 0/12
-fmtglue 0/52
+fmtglue 0/66
 fmthasblock 4/26
 fmtnewline 0/2
 fmtownsanof 0/6
@@ -343,8 +345,8 @@ fmtpop 0/2
 fmtpretrivia 0/32
 fmtpush 0/2
 fmtput 0/2
-fmttoken 0/180
-fmttrivia 0/16
+fmttoken 0/182
+fmttrivia 0/26
 fmtwantatleast 0/2
 fmtwidthof 0/4
 foldintop 5/30
@@ -468,7 +470,7 @@ lexnumber 9/78
 lexoperator 0/56
 lexstring 1/16
 llalign 1/4
-llsize 2/4
+llsize 2/10
 lookslikestructuredvalue 4/34
 lookslikesubrange 1/46
 lookup 0/2
@@ -633,6 +635,7 @@ resolvevariantpart 4/78
 resulttypeof 2/8
 rootdesignator 1/10
 rootname 1/6
+roundup 0/2
 row 0/4
 runcodegen 1/40
 rundefersreversed 0/4
@@ -687,7 +690,7 @@ typeend 0/2
 underlying 0/2
 variantfieldname 1/10
 variantselector 1/18
-variantstorageat 2/10
+variantstorageat 1/10
 walkfiles 5/42
 warnat 1/2
 warnpartialresult 0/22

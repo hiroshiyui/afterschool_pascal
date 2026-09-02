@@ -52,9 +52,21 @@ export ApFront = (
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
   At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent, DumpTrivia,
-  FormatSource, SetFormatRange);
+  FormatSource, SetFormatRange,
+  RoundUp, LlSize, LlAlign, RecordLayout, VariantStorageAt,
+  SelectedSize, ArmSlotAt);
 
 import StandardOutput; ApTypes;
+
+const
+  { LlSize's answer for a type whose storage will not fit in int64. **A
+    saturating answer and not a trap**: this compiler stops the program on
+    integer overflow (ADR-0014), so computing the product to find out would
+    stop the *compiler* where a diagnostic belongs -- and CodeGen may report
+    no user-facing error (ADR-0008), so the number has to survive as far as
+    Sema. Every arithmetic below propagates it, and CheckStorage is what turns
+    it into a message. It is negative because no storage is. }
+  storageTooLarge = -1;
 
 var
 
@@ -122,6 +134,27 @@ function LastField(f: fieldPtr): fieldPtr;
   is defined -- the storage questions it answers are the ones 6.2.3.8 b)'s
   offer must not reach through a container (ADR-0134). }
 function DynamicExtent(t: typePtr): boolean;
+
+{ ---------------------------------------------------------- the data layout }
+
+{ **A type's storage is a fact about the source program**, so it lives here
+  rather than in the code generator (ADR-0008): CodeGen reports no user-facing
+  errors, and whether a type is too large to lay out is a question only a
+  diagnostic can answer. These were CodeGen's until that came up -- the C++
+  asked LLVM's DataLayout and there is no one to ask here, so the rules are
+  written out (ADR-0028), and both components now read the one copy. }
+function RoundUp(n: int64; a: integer): int64;
+function LlSize(t: typePtr): int64;
+function LlAlign(t: typePtr): integer;
+procedure ArmLayoutAt(rec: typePtr; path: numPtr;
+                      var size: int64; var align: integer);
+procedure VariantStorageAt(rec: typePtr; path: numPtr;
+                           var size: int64; var align: integer);
+procedure ArmSlotAt(rec: typePtr; path: numPtr; arm: integer;
+                    var size: int64; var align: integer);
+procedure RecordLayout(t: typePtr; var size: int64; var align: integer);
+function SelectedSize(rec: typePtr; path, selection: numPtr): int64;
+procedure CheckStorage(t: typePtr; l, c: integer);
 
 { ------------------------------------------------- assignment compatibility }
 
@@ -9479,6 +9512,10 @@ begin
     t^.elem := ResolveType(d^.arElem);
     t^.elemBindable := BindableOf(d^.arElem)
   end;
+  { The bytes, where the elements bound above is the count. Asked here rather
+    than of every variable of the type, so it is reported once and at the
+    denoter that names it. }
+  CheckStorage(t, dim^.line, dim^.col);
   ResolveArray := t
 end;
 
@@ -10020,6 +10057,7 @@ begin
   Tag;
   Arm(1, 0, 'val      ', vt);     { true  }
   Arm(0, 1, 'cause    ', ct);     { false }
+  CheckStorage(t, d^.line, d^.col);
   ResolveFallible := t
 end;
 
@@ -10056,6 +10094,10 @@ begin
                        t^.variants, t^.variantTail, t^.tagField, t^.tagType,
                        t^.discSelector, nil);
   recTop := recTop^.next;
+  { The sum, where the array check above is the product: two fields that each
+    fit need not fit together. Both are needed -- an array of a huge record is
+    caught by the array and a record of huge arrays by this. }
+  CheckStorage(t, d^.line, d^.col);
   ResolveRecord := t
 end;
 
@@ -25605,6 +25647,268 @@ end;
 { 6.2.3.6: this module's own state, cleared before the program-block it
   supplies is activated. It was the program's own first statements while
   there was one component (ADR-0233). }
+{ --------------------------------------------------------- the data layout }
+
+{ The C++ asks LLVM's DataLayout; there is no one to ask here, so the rules are
+  written out. They are only needed in two places -- the length of a whole-
+  variable copy and the size `new` allocates -- because a getelementptr names
+  the type it indexes and LLVM does the arithmetic. }
+
+function RoundUp;
+begin
+  if n = storageTooLarge then RoundUp := storageTooLarge
+  else RoundUp := ((n + a - 1) div a) * a
+end;
+
+
+{ **Where the sentinel becomes a diagnostic.** 6.4.3.2 bounds an array's
+  elements at maxint and nothing bounds the bytes, so a type can be written
+  whose storage no integer here can hold -- two nested maxint arrays of a
+  four-byte element want 1.8e19 of them. Reported where the type is written,
+  which is the position the elements bound already uses, and reported by Sema
+  because CodeGen may report nothing (ADR-0008).
+
+  What is *not* bounded here is what the target can hold: a global above about
+  2 GB is refused by the linker's small code model and a heap object by the
+  machine, and neither is a fact about the program this compiler could state
+  for every target it admits (ADR-0157). This bounds what the compiler can lay
+  out, which is a bound it can know. }
+procedure CheckStorage;
+begin
+  if LlSize(t) = storageTooLarge then begin
+    ErrorAt(l, c);
+    writeln('this type needs more storage than this compiler can lay out: ',
+            'at most maxint64 bytes')
+  end
+end;
+
+{ Two storage sizes added, saturating rather than trapping -- the sum of two
+  types that each fit need not fit. }
+function AddStorage(a, b: int64): int64;
+begin
+  if (a = storageTooLarge) or (b = storageTooLarge) or (a > maxint64 - b) then
+    AddStorage := storageTooLarge
+  else
+    AddStorage := a + b
+end;
+
+{ The struct a field-list is: its own fields, and -- when it ends with a
+  variant part -- the shared storage for that part as a last member. The record
+  and every arm are laid out by this one routine, because they have the same
+  shape. }
+procedure ArmLayoutAt;
+var f: fieldPtr; a, salign: integer; ssize: int64;
+begin
+  size := 0;
+  align := 1;
+  f := FieldsAt(rec, path);
+  while f <> nil do begin
+    a := LlAlign(f^.ftype);
+    size := AddStorage(RoundUp(size, a), LlSize(f^.ftype));
+    if a > align then align := a;
+    f := f^.next
+  end;
+  if ArmsAt(rec, path) <> nil then begin
+    VariantStorageAt(rec, path, ssize, salign);
+    size := AddStorage(RoundUp(size, salign), ssize);
+    if salign > align then align := salign
+  end;
+  size := RoundUp(size, align)
+end;
+
+{ The shared storage every arm at `path` is laid over: big enough for the
+  largest and aligned for the strictest.
+
+  AP 6.4.13.5 (ADR-0256) is the one type where they are not laid over one
+  another at all. `rec^.armsApart` says so, and then this answers the storage
+  every arm needs *side by side*, each rounded to its own alignment -- so the
+  handle in one arm and the cause in the other occupy different bytes and the
+  prologue's `pas_handle_init` cannot be half-overwritten by a cause. The
+  arms are still arms: the tag still selects, EmitVariantGuard still traps a
+  read of the inactive one, and 6.4.3.4's requirement is inherited unchanged.
+  Only where they sit has moved. }
+procedure VariantStorageAt;
+var v: variantPtr; a, i: integer; s: int64; sub: numPtr;
+begin
+  size := 0;
+  align := 1;
+  v := ArmsAt(rec, path);
+  i := 0;
+  while v <> nil do begin
+    sub := PathAppend(path, i);
+    ArmLayoutAt(rec, sub, s, a);
+    if rec^.armsApart then size := RoundUp(size, a) + s
+    else if s > size then size := s;
+    if a > align then align := a;
+    i := i + 1;
+    v := v^.next
+  end;
+  if size = 0 then align := 1 else size := RoundUp(size, align)
+end;
+
+{ The bytes one arm of a side-by-side variant part occupies. Only ever asked
+  of an armsApart record; the overlaid form has one block and no arm of its
+  own to measure. Where the arm *starts* is not asked and is not computed: the
+  arm is a member of the struct, so LLVM places it, which is the whole reason
+  this shape needs no offset arithmetic anywhere. }
+procedure ArmSlotAt;
+var v: variantPtr; i: integer;
+begin
+  size := 0;
+  align := 1;
+  v := ArmsAt(rec, path);
+  i := 0;
+  while v <> nil do begin
+    if i = arm then ArmLayoutAt(rec, PathAppend(path, i), size, align);
+    i := i + 1;
+    v := v^.next
+  end
+end;
+
+procedure RecordLayout;
+begin
+  ArmLayoutAt(t, nil, size, align)
+end;
+
+{ The bytes a record needs when only the arms `selection` names can be stored
+  in it -- `new(p, c1, ..., cn)`. The offsets are the full type's, so every
+  selected field still lies where the full layout puts it; only the tail, which
+  the unselected (possibly larger) arms would have needed, is trimmed off. }
+function SelectedSize;
+var f: fieldPtr; align, a, salign: integer; size, ssize: int64;
+begin
+  if (selection = nil) or (ArmsAt(rec, path) = nil) or rec^.armsApart then
+  begin
+    { Nothing left to select, or nothing to select from: the whole struct,
+      shared storage and all. AP 6.4.13.5's arms are the third case and give
+      the same answer for a different reason -- laid apart, every arm has
+      bytes of its own and there is no tail that only the unselected ones
+      would have needed, so a selection saves nothing and trimming would take
+      away storage a later assignment to the other arm still uses. }
+    ArmLayoutAt(rec, path, size, align);
+    SelectedSize := size
+  end
+  else begin
+    size := 0;
+    align := 1;
+    f := FieldsAt(rec, path);
+    while f <> nil do begin
+      a := LlAlign(f^.ftype);
+      size := AddStorage(RoundUp(size, a), LlSize(f^.ftype));
+      if a > align then align := a;
+      f := f^.next
+    end;
+    { the storage starts where the full layout puts it, so the fields before it
+      keep their offsets }
+    VariantStorageAt(rec, path, ssize, salign);
+    size := RoundUp(size, salign);
+    SelectedSize := AddStorage(size,
+        SelectedSize(rec, PathAppend(path, selection^.value_), selection^.next))
+  end
+end;
+
+function LlAlign;
+var b: typePtr; a: integer; s: int64;
+begin
+  b := Base(t);
+  if b = nil then
+    LlAlign := 1
+  else
+    case b^.kind of
+      tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
+      tyInteger, tyEnum: LlAlign := 4;
+      tyInt64, tyReal, tyPointer, tyFile, tyHandle: LlAlign := 8;
+      { <2 x double>: two doubles, and the target aligns a vector to its whole
+        size. }
+      tyComplex: LlAlign := 16;
+      tyRestricted: LlAlign := LlAlign(b^.elem);
+      { A text is laid out as a variable-string is (AP 6.4.15, ADR-0189): the
+        representation is shared and only the rules differ, which is why
+        IsStringRep exists and why these two arms are one. }
+      tyString, tyText: LlAlign := 4;
+      { ADR-0123's flag-then-value pair. The flag is an i32 rather than the
+        i8 a boolean field is, so the whole aligns at least as a length word
+        does and the value after it starts where LLVM puts it. }
+      tyOptional:
+        if LlAlign(b^.elem) > 4 then LlAlign := LlAlign(b^.elem)
+        else LlAlign := 4;
+      { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
+        it takes the largest one that is named, which is i128's -- and both
+        targets this compiler emits for say `i128:128`.
+
+        That is a fact about most targets rather than all, which the sweep
+        behind doc/roadmap.md's item 4 found: s390x names no i128 at all, so
+        the largest named is `i64:64` and an i256 aligns to 8 there. Its
+        `v128:64` moves a complex the same way. Nothing is wrong here today --
+        `target-layout` compares every admitted target's offsets on every run,
+        and s390x is not one -- but admitting a target whose datalayout names
+        no i128 means this line stops being a constant. }
+      tySet: LlAlign := 16;
+      { A procedural parameter is a pair of pointers: the code, and the static
+        link to call it with. ADR-0125's slice is the same two-word shape with
+        a length in the second word instead of a link. }
+      tyProc, tySlice: LlAlign := 8;
+      tyArray: LlAlign := LlAlign(b^.elem);
+      tyRecord: begin
+        RecordLayout(b, s, a);
+        LlAlign := a
+      end
+    end
+end;
+
+function LlSize;
+var b: typePtr; a: integer; s: int64;
+begin
+  b := Base(t);
+  if b = nil then
+    LlSize := 0
+  else
+    case b^.kind of
+      tyVoid, tySubrange: LlSize := 0;
+      tyBoolean, tyChar: LlSize := 1;
+      tyInteger, tyEnum: LlSize := 4;
+      tyInt64, tyReal, tyPointer: LlSize := 8;
+      tyComplex: LlSize := 16;
+      { 6.4.2.5 makes the states one-to-one, so the representation *is* the
+        underlying type's -- which is the whole of what CodeGen knows about
+        the feature. }
+      tyRestricted: LlSize := LlSize(b^.elem);
+      { A length beside a buffer: the shape ADR-0045 made expressible. Rounded
+        to the alignment like every other type, and it has to be -- a record
+        holding one puts its next field after the *rounded* size, so a short
+        answer here leaves that field outside a whole-record copy. }
+      tyString, tyText:
+        if b^.hi > 0 then LlSize := RoundUp(4 + b^.hi, 4) else LlSize := 4;
+      { The flag, the padding LLVM puts before a value that wants more
+        alignment than 4, the value, and the tail padding every type gets --
+        the same arithmetic RecordLayout does over two fields, written out
+        because an optional has no field list to walk. }
+      tyOptional:
+        LlSize := RoundUp(AddStorage(RoundUp(4, LlAlign(b^.elem)),
+                                     LlSize(b^.elem)), LlAlign(b));
+      tyFile: LlSize := fileSize;
+      tyHandle: LlSize := handleSize;
+      tySet: LlSize := setBits div 8;
+      tyProc, tySlice: LlSize := 16;
+      { 6.4.3.2 bounds the *elements* at maxint already and says nothing
+        about bytes, which is the other half: two nested maxint arrays of a
+        four-byte element need 1.8e19 of them. Asked before the multiply,
+        because the multiply would trap. }
+      tyArray: begin
+        s := LlSize(b^.elem);
+        if (s = storageTooLarge) or
+           ((s > 0) and (TypeLength(b) > maxint64 div s)) then
+          LlSize := storageTooLarge
+        else
+          LlSize := TypeLength(b) * s
+      end;
+      tyRecord: begin
+        RecordLayout(b, s, a);
+        LlSize := s
+      end
+    end
+end;
+
 to begin do
   begin
     fmtRangeLo := 0;

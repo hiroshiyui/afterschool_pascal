@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 396
-instrumented 19230
+uncovered 394
+instrumented 19255
 
 accept 0/4
 accumulate 0/84
@@ -27,6 +27,7 @@ addint 0/3
 addpath 0/7
 addressofsym 0/28
 addsimple 0/1
+addstorage 0/3
 addtext 0/3
 addtoken 3/14
 advance 0/8
@@ -136,6 +137,7 @@ checksetvalue 0/36
 checkspawn 0/11
 checkstdproc 19/367
 checkstmt 2/247
+checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
 checktake 0/20
@@ -220,7 +222,7 @@ dumpmodulesbefore 0/7
 dumpnames 0/11
 dumpoptional 0/7
 dumpproc 0/36
-dumpprogram 0/77
+dumpprogram 0/43
 dumprecordlayout 0/9
 dumpstmt 0/207
 dumpstmtlist 0/4
@@ -374,7 +376,7 @@ fmtctlpush 0/4
 fmtdepth 0/3
 fmtenddecl 0/3
 fmtflush 0/7
-fmtglue 0/10
+fmtglue 0/15
 fmthasblock 0/14
 fmtnewline 0/3
 fmtownsanof 0/1
@@ -382,9 +384,9 @@ fmtpop 0/4
 fmtpretrivia 0/5
 fmtpush 0/6
 fmtput 0/3
-fmttoken 0/113
+fmttoken 0/115
 fmttopkind 0/1
-fmttrivia 0/20
+fmttrivia 0/25
 fmtwantatleast 0/1
 fmtwidthof 0/3
 fmtword 0/1
@@ -522,8 +524,8 @@ lexnumber 0/100
 lexoperator 0/47
 lexstring 0/28
 linkstdfile 0/2
-llalign 2/17
-llsize 3/19
+llalign 1/17
+llsize 2/56
 lookslikestructuredvalue 0/20
 lookslikesubrange 0/23
 lookup 0/5
@@ -707,7 +709,7 @@ requiredfunc 0/2
 requiredfuncwide 0/166
 requiredtype 0/6
 reservedforeignname 4/16
-resolvearray 0/25
+resolvearray 0/26
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
@@ -717,7 +719,7 @@ resolvename 0/12
 resolveoptional 0/20
 resolvependingpointers 0/26
 resolvepointer 0/28
-resolverecord 0/19
+resolverecord 0/20
 resolverestricted 6/31
 resolveset 1/22
 resolveslice 0/14
@@ -728,7 +730,7 @@ resultnameclash 0/7
 resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
-roundup 0/1
+roundup 0/2
 row 0/57
 runcodegen 0/91
 rundefersreversed 0/4
@@ -775,7 +777,7 @@ suppliersof 0/23
 symhead 0/1
 symtail 0/1
 symtailto 0/3
-tag 0/29
+tag 0/30
 tagfieldat 0/4
 tagtypeat 0/4
 targetindex 0/4

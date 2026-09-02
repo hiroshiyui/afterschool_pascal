@@ -1,5 +1,9 @@
 <source>:8:20: error: this array has too many elements: an index type may span at most maxint values
-<source>:14:3: error: cannot assign integer to a variable of type array [chr(0)..chr(255)] of integer
-<source>:15:3: error: cannot assign loose to a variable of type tight
-<source>:16:10: error: operator '=' needs comparable operands, found loose and tight
-<source>:17:9: error: a value of type loose cannot be written
+<source>:15:21: error: this type needs more storage than this compiler can lay out: at most maxint64 bytes
+<source>:17:13: error: this type needs more storage than this compiler can lay out: at most maxint64 bytes
+<source>:22:21: error: this type needs more storage than this compiler can lay out: at most maxint64 bytes
+<source>:23:17: error: this type needs more storage than this compiler can lay out: at most maxint64 bytes
+<source>:29:3: error: cannot assign integer to a variable of type array [chr(0)..chr(255)] of integer
+<source>:30:3: error: cannot assign loose to a variable of type tight
+<source>:31:10: error: operator '=' needs comparable operands, found loose and tight
+<source>:32:9: error: a value of type loose cannot be written

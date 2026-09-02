@@ -596,6 +596,29 @@ only for the walkers after it. A program's own block is one of the levels, so
 999 remain inside it. Blocks began to count only after the same audit found
 1001 nested procedures indexing Sema's scope stack off its end.
 
+**A type may need at most `maxint64` bytes of storage, and an array's index
+type may span at most `maxint` values.** Two bounds and they count different
+things — the second is a number of elements and the first a number of bytes —
+so a type can pass either and fail the other. `array [0..maxint] of char` is
+one element too many and is refused for the count; two nested `array
+[1..maxint]` of a four-byte element is 1.8e19 bytes and is refused for the
+storage.
+
+The element bound is the older one and is not arbitrary: `verify/`'s
+`accepted-index-selects-the-right-element` rule proves that an accepted
+subscript selects the right element, and its precondition is that `i - lo` is a
+value of the integer type. The storage bound is what the compiler can lay out
+(ADR-0287). Both are reported where the type is written, with a position, and
+neither had an entry here until ADR-0287 — the element bound had been enforced
+since the conformance sweeps and documented nowhere a user would look.
+
+**What is *not* bounded here is what the machine can hold.** A global variable
+above about 2 GB is refused by the linker's small code model — `relocation
+truncated to fit`, a message from `ld` naming no source line — and a heap
+object by the memory available. Neither is a fact this processor could state
+for every target `--target=` admits, so neither is stated. A type between 2 GB
+and `maxint64` is accepted and works on the heap.
+
 ### 6.1 Programs accepted that the standard requires to be rejected
 
 The first three above are deviations this project chose, and the last three are

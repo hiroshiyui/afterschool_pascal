@@ -94,6 +94,21 @@ own exception and compare by length instead.
   does. The C++ compiler asked a TargetMachine; there is no TargetMachine now,
   which is why the line is written out — see `CLAUDE.md`'s CodeGen bullets, where
   ADR-0028 records the segfault that came of leaving it unstated.
+- **A type's storage is a fact about the source program** (ADR-0287), so the
+  layout arithmetic lives in ApFront and not in CodeGen, and a size is an
+  `int64`. It answered a Pascal `integer` until a channel of an 8 GB element
+  found it: any type above `maxint` bytes overflowed the compiler's *own*
+  checked arithmetic and stopped it with `runtime error: integer overflow in *`
+  — no file, no line, no column — and which programs it stopped depended on
+  their **use** of the type rather than on the type, a 2.1 GB array being fine
+  to index and fatal to copy. Widening alone would have moved that cliff to
+  int64 and left the failure there identical, which was measured; so
+  `storageTooLarge` is a saturating answer every arithmetic propagates and
+  `CheckStorage` is the one place it becomes a diagnostic. The test that fails
+  without either half is `selfhost/badsema/edges.pas`, which carries the
+  product, the sum and both propagation paths. What is *not* bounded is the
+  target: a global above about 2 GB is the linker's `relocation truncated to
+  fit`, which this does not address.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the

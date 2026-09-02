@@ -295,3 +295,5 @@ the alternatives that were rejected and why.
 | [0284](0284-the-printer-already-knows-where-it-is.md) | The printer already knows where it is | Accepted |
 | [0285](0285-the-formatter-is-not-ready-to-own-the-tree.md) | The formatter is not ready to own the tree | Accepted |
 | [0286](0286-the-tree-holds-itself-to-its-own-warnings.md) | The tree holds itself to its own warnings | Accepted |
+| [0287](0287-a-type-s-storage-is-a-fact-about-the-program.md) | A type's storage is a fact about the program | Accepted |
+| [0288](0288-the-element-bound-is-one-too-strict.md) | The element bound is one too strict, and the model agreed with it | Accepted |
