@@ -40,6 +40,24 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **A generic activation may write a prefix of its type arguments**
+  (AP 6.7.3.10.4, ADR-0304). ADR-0254 admitted two forms, every type argument
+  or none; an activation may now write the first *k* of them and leave the
+  rest to be inferred, so a routine whose type stands only in the **result** —
+  which §6.7.1 makes a type-name and not an actual, so nothing can determine
+  it — no longer makes its caller write the types the arguments already say.
+  `VecGet(char, b, i)` where `VecGet(JsonChars, char, b, i)` was required.
+  The arity says how many were written; the tie-break separating this from an
+  activation short of an argument is asked at the first *omitted* type
+  parameter. Every existing call keeps its meaning.
+- **`PasContainer.VecGet` and `MapKeyAt` take their result type first**
+  (ADR-0304). `VecGet(Elem, Ptr, …)` and `MapKeyAt(K, Ptr, …)`, so that the
+  one type an activation must name is the prefix and `VecGet(integer, v, 3)`
+  is the call. **This breaks a client** that wrote the old order. Nothing else
+  in `PasContainer` names a type at a call: `MapGet(m, k, 0, StrHash, StrEq)`
+  has been inferable since ADR-0254 and this module's own header said
+  otherwise.
+
 - **Every file variable is bindable** (AP 6.5.1, ADR-0299). `bind`, `unbind`
   and `binding` accept any variable-access that denotes a file, whether or not
   its type-denoter says `bindable`: a `var f: text` parameter — §6.7.6.8's own

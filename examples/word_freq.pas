@@ -6,9 +6,10 @@
   routine that may grow takes it as `var`. The map asks for a hash and an
   equality of its key as procedural parameters; `StrHash`/`StrEq` are the
   module's own pair for strings. Where the arguments already say what the
-  types are they are left out of the call (ADR-0254); `MapGet` names its
-  result type because nothing else does. PasStrVec keeps the distinct words
-  so they can be sorted -- the map's own order is the table's. Run it as
+  types are they are left out of the call (ADR-0254, ADR-0304), and here that
+  is every one of them -- `MapGet`'s value type is the type of the
+  `whenAbsent` it is handed. PasStrVec keeps the distinct words so they can
+  be sorted -- the map's own order is the table's. Run it as
 
       pascalcc word_freq.pas -o freq && ./freq < some.txt }
 program word_freq(input, output);
@@ -27,13 +28,13 @@ var
 procedure Count(w: MapKey);
 var n: integer;
 begin
-  n := MapGet(CountMap, integer, counts, w, 0, StrHash, StrEq);
+  n := MapGet(counts, w, 0, StrHash, StrEq);
   if n = 0 then SVecPush(words, w);       { first sighting }
   MapPut(counts, w, n + 1, StrHash, StrEq)
 end;
 
 begin
-  MapInit(CountMap, counts, 64);
+  MapInit(counts, 64);
   SVecNew(words, 64);
   while not eof do begin
     readln(line);
@@ -53,9 +54,9 @@ begin
   end;
   SVecSort(words);
   for k := 1 to SVecLen(words) do
-    writeln(MapGet(CountMap, integer, counts, SVecGet(words, k), 0,
-                   StrHash, StrEq):4, ' ', SVecGet(words, k));
-  writeln(MapCount(CountMap, counts):1, ' distinct words');
+    writeln(MapGet(counts, SVecGet(words, k), 0, StrHash, StrEq):4,
+            ' ', SVecGet(words, k));
+  writeln(MapCount(counts):1, ' distinct words');
   SVecFree(words);
-  MapFree(CountMap, counts)
+  MapFree(counts)
 end.

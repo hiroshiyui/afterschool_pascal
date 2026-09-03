@@ -308,3 +308,4 @@ the alternatives that were rejected and why.
 | [0297](0297-the-library-uses-the-feature-it-asked-for.md) | The library uses the feature it asked for | Accepted |
 | [0298](0298-no-two-library-modules-export-one-spelling.md) | No two library modules export one spelling | Accepted |
 | [0299](0299-every-file-variable-is-bindable.md) | Every file variable is bindable | Accepted |
+| [0304](0304-a-prefix-of-the-type-arguments.md) | A prefix of the type arguments | Accepted |

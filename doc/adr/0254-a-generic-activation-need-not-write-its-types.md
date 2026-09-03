@@ -8,7 +8,10 @@ Accepted, 2026-08-30. *The degradation recorded under Consequences — a generic
 whose parameter-form names a schema the caller cannot see infers nothing — was
 closed by [ADR-0297](0297-the-library-uses-the-feature-it-asked-for.md), which
 resolves the schema's name in the generic's own region; and it had never been
-graceful, the next actual determining the type instead.*
+graceful, the next actual determining the type instead. The all-or-nothing
+rule this record wrote was widened by
+[ADR-0304](0304-a-prefix-of-the-type-arguments.md): an activation may write a
+prefix of its type arguments, so the two forms below are the ends of a range.*
 
 It answers the deferral
 [ADR-0211](0211-a-routine-may-be-generic-over-a-type.md) recorded and

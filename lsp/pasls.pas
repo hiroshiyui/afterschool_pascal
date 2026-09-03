@@ -1594,7 +1594,7 @@ begin
     location in the wrong file. }
   if hit.found and (hit.declFile > 0) then
     if hit.declFile < VecLen(PathVec, files) then
-      path := VecGet(PathVec, PathName, files, hit.declFile + 1);
+      path := VecGet(PathName, files, hit.declFile + 1);
   { Not freed here: the document owns it now (ADR-0252). }
   FindUse := hit.found
 end;
@@ -1914,7 +1914,7 @@ var i: integer;
 begin
   FileIndexOf := -1;
   for i := 1 to VecLen(PathVec, files) do
-    if VecGet(PathVec, PathName, files, i) = path then exit(i - 1)
+    if VecGet(PathName, files, i) = path then exit(i - 1)
 end;
 
 { The `--dump-uses` of component `k` of the document's file table, compiled
@@ -1934,14 +1934,14 @@ begin
   UsesOfComponent := false;
   words := '';
   for j := 1 to k - 1 do begin
-    one := VecGet(PathVec, PathName, docFiles, j + 1);
+    one := VecGet(PathName, docFiles, j + 1);
     if length(words) + length(one) + 13 > CommandMax then begin
       Note('a component''s imports would not fit on a command line');
       exit(false)
     end;
     words := words + ' --import ''' + one + ''''
   end;
-  path := VecGet(PathVec, PathName, docFiles, k + 1);
+  path := VecGet(PathName, docFiles, k + 1);
   dump := scratchPath + '.uses';
   if not CompilerCommand(' --dump-uses', words, path, dump, cmd) then
     exit(false);
@@ -1975,7 +1975,7 @@ begin
   CollectRefs(d.uses_, hit.declFile, 0, s);
   if (hit.declFile > 0) and (hit.declFile < VecLen(PathVec, d.files)) then
   begin
-    keyPath := VecGet(PathVec, PathName, d.files, hit.declFile + 1);
+    keyPath := VecGet(PathName, d.files, hit.declFile + 1);
     for k := 1 to VecLen(PathVec, d.files) - 1 do
       if UsesOfComponent(d.files, k, lines, files) then begin
         kf := FileIndexOf(files, keyPath);
@@ -2031,7 +2031,7 @@ begin
   if inFile = 0 then chars := d.text
   else if inFile < VecLen(PathVec, d.files) then begin
     own := true;
-    if not ReadWhole(VecGet(PathVec, PathName, d.files, inFile + 1), chars)
+    if not ReadWhole(VecGet(PathName, d.files, inFile + 1), chars)
     then
       Note('a component the compiler read could not be read back')
   end
@@ -2041,7 +2041,7 @@ end;
 function UriOfFile(var d: Document; inFile: integer): DocUri;
 begin
   if (inFile > 0) and (inFile < VecLen(PathVec, d.files)) then
-    UriOfFile := PathToUri(VecGet(PathVec, PathName, d.files, inFile + 1))
+    UriOfFile := PathToUri(VecGet(PathName, d.files, inFile + 1))
   else
     UriOfFile := d.uri
 end;
@@ -3267,7 +3267,7 @@ begin
     alternative is a second way to read the store. }
   for i := 1 to MapSlots(DocMap, docs) do
     if MapLiveAt(DocMap, docs, i) then
-      if DocOf(MapKeyAt(DocMap, DocUri, docs, i), d) then begin
+      if DocOf(MapKeyAt(DocUri, docs, i), d) then begin
         JsonCharsFree(d.text);
         { And what the compiler last said about it (ADR-0252). A document the
           client never closed still holds one, and `heap-balance` is what said

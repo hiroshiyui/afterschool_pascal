@@ -10,10 +10,11 @@
       type IntVec = ^Vec(integer);       -- one line per element type
       var v: IntVec;
       begin
-        VecInit(IntVec, v, 8);
-        VecPush(IntVec, integer, v, 42);  -- grows past 8 by itself
+        VecInit(v, 8);
+        VecPush(v, 42);                  -- grows past 8 by itself
         ...
-        VecFree(IntVec, v)
+        writeln(VecGet(integer, v, 1):1);
+        VecFree(v)
       end
 
   **Why a pointer and not a value.** A growable container has to reallocate,
@@ -23,13 +24,20 @@
   Without that a generic container could be written at one fixed capacity and
   no other, which is not a container.
 
-  **Why two type arguments and not one.** `VecPush(IntVec, integer, v, x)`
-  names both the pointer type and the element type, and the second is
-  redundant -- it is `IntVec`'s own element and the compiler knows it. What
-  would remove it is `x: type of v^.a[1]`, and §6.4.9's type-inquiry accepts
-  only a simple name in this processor. That is a conformance gap rather than
-  a language limit and is in `doc/roadmap.md`; when it closes, the second
-  argument goes and no caller changes shape otherwise.
+  **Why hardly any call names a type.** This header wrote
+  `VecPush(IntVec, integer, v, x)` when the module was new, and two features
+  took both arguments away. AP 6.4.9's type-inquiry, as ADR-0215 widened it,
+  writes the element type as `type of v^.a[1]` in the heading rather than as a
+  second type argument; and AP 6.7.3.10.4 determines `Ptr` from `v`
+  (ADR-0254), so nothing is left to write.
+
+  The one shape that resisted is a type standing only in the **result**:
+  §6.7.1 makes a result-type a type-name and not an actual, so no argument
+  says what `VecGet` and `MapKeyAt` return, and they are the only two routines
+  here a caller writes a type for. They write *only* that type, an activation
+  being free to name a prefix of its type arguments and leave the rest to be
+  inferred (ADR-0304) -- which is why both declare their undeterminable type
+  parameter first.
 
   **What this does not replace.** `PasVector`, `PasStrVec` and `PasMap` are
   ordinary Extended Pascal and stay, because generics are the dialect's and a
@@ -39,10 +47,11 @@
   node and the list type -- three lines of its own, for a container that is
   worse at everything but `Push` (see that module's header).
 
-  **What is missing, and it is one thing.** The map's key is `MapKey` and not
-  a type argument, because a key must be hashed and compared and the dialect
-  has no way to say that of a type. That is a constraint, and the roadmap
-  carries it. }
+  **What is missing.** Nothing in the shape of a container. The map's key is a
+  type argument and has been since ADR-0254; a key is hashed and compared by
+  the pair of procedural parameters every map routine takes, which is the note
+  below rather than a gap. `MapKey` is still exported, as a ready-made key type
+  and not as a limit. }
 module PasContainer;
 
 export PasContainer = (Vec, Map, MapKey, KeyMax, CapMax,
@@ -126,8 +135,15 @@ procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);
 function VecPop(Ptr: type; var v: Ptr; var out: type of v^.a[1]): boolean;
 
 { The i'th element, 1-based. Out of range is the caller's error and traps,
-  exactly as an array subscript does. }
-function VecGet(Ptr: type; Elem: type; var v: Ptr; i: integer): Elem;
+  exactly as an array subscript does.
+
+  **The element type is written first because it is the one nothing can
+  determine.** It stands only in the result, and §6.7.1 makes a result-type a
+  type-name and not an actual, so no argument says what it is; `Ptr` is said by
+  `v`. AP 6.7.3.10.4 lets an activation write a *prefix* of the type arguments
+  (ADR-0304), so putting the undeterminable one first is what makes
+  `VecGet(char, b, i)` the call rather than `VecGet(JsonChars, char, b, i)`. }
+function VecGet(Elem: type; Ptr: type; var v: Ptr; i: integer): Elem;
 
 procedure VecSet(Ptr: type; var v: Ptr; i: integer; x: type of v^.a[1]);
 
@@ -173,9 +189,14 @@ procedure VecReserve(Ptr: type; var v: Ptr; want: integer);
   follow the map, so a hash for the wrong key type is refused by §6.7.3.6's
   congruence rather than accepted and misused. And AP 6.7.3.10.4 infers `Ptr`
   from `m` (ADR-0254), so `MapPut(m, 'k', 1, StrHash, StrEq)` names no type at
-  all. The two that must still be written are `MapGet`'s and `MapKeyAt`'s
-  element types, which stand only in a result -- §6.7.1 makes a result-type a
-  type-name and not an actual.
+  all. `MapGet` names none either, its `whenAbsent` being an `Elem` the caller
+  hands over -- this module said for four days that it had to name one, and
+  nobody had written the call. The one type argument left in the map is
+  `MapKeyAt`'s key type, which stands only in a result: §6.7.1 makes a
+  result-type a type-name and not an actual, so no argument can say what it is
+  and `MapKeyAt(MapKey, m, i)` writes it. It is written *first* because
+  AP 6.7.3.10.4 admits a prefix of the type arguments and infers the rest
+  (ADR-0304).
 
   Binding `K` as an ordinary type parameter was tried first and is worth the
   sentence: inference then took `K` from the *actual key*, so `MapPut(m, 'k3',
@@ -220,7 +241,7 @@ function MapLiveAt(Ptr: type; var m: Ptr; i: integer): boolean;
   field to `''`, which made a dead slot's key merely misleading rather than
   undefined; the contract was the same then and is stated here now that it has
   to be. }
-function MapKeyAt(Ptr: type; K: type; var m: Ptr; i: integer): K;
+function MapKeyAt(K: type; Ptr: type; var m: Ptr; i: integer): K;
 
 { The hash and the equality for a string key, which is what a map is keyed by
   most of the time. Exported so that the commonest case is `MapPut(m, name, 1,

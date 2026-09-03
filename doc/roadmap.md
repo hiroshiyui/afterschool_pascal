@@ -295,14 +295,6 @@ the first row here to close, the day after the chapter was written
   a compile-time refusal of `release` on a channel parameter inside a task;
   the other is a sentence in AP 6.9.3.13.
 
-- **The library has not caught up with the language's inference, measured
-  again** (ADR-0295, finding 2). `MapGet(CountMap, integer, counts, w, 0,
-  StrHash, StrEq)` is seven arguments for a lookup, two of them types the
-  call already knows, because a type appearing only in the result must be
-  written and ADR-0254's rule is then all or nothing. `MapPut` beside it
-  writes none. `examples/word_freq.pas` is the measurement the row above
-  asked for, and it reads as a program about `MapGet`'s signature.
-
 - **Four of twelve example programs collided with a library name on their
   first draft** (ADR-0295, finding 3). Pascal folds case, so `info: InfoResult`
   is a second declaration of `PasFS.Info` and `parts: Parts(16)` of

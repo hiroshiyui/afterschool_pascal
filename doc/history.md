@@ -6741,6 +6741,36 @@ somewhere writable must ask `argcount` first. No compiler defect, no crash
 and no wrong answer — which is itself a measurement, taken by the first
 twelve programs anyone wrote here to be read rather than to pin a clause.
 
+### The second of the seven, closed
+
+- ~~**The library has not caught up with the language's inference, measured
+  again.**~~ **Closed by ADR-0304 on 2026-09-03, and the reason the row gave
+  was wrong.** As written: `MapGet(CountMap, integer, counts, w, 0, StrHash,
+  StrEq)` is seven arguments for a lookup, two of them types the call already
+  knows, *because a type appearing only in the result must be written and
+  ADR-0254's rule is then all or nothing*.
+
+  The clause after *because* did not survive the first probe. `MapGet`'s
+  element type does not stand only in the result — `whenAbsent: Elem` is a
+  value parameter and AP 6.7.3.10.4 a) reads it — so `MapGet(counts, w, 0,
+  StrHash, StrEq)` had compiled since the day inference landed and nobody had
+  written it. What said otherwise was `lib/dialect/pascontainer.pas`'s own
+  header comment, and `examples/word_freq.pas` was written from the comment.
+  That is ADR-0297's four-day gap met a second time in the same module, and
+  the register's own lesson restated: **a row here is a report and not an
+  estimate**, and this one was an estimate about a compiler nobody had asked.
+
+  The row's *other* clause was right, for two routines and not for seven
+  arguments: `VecGet`'s element type and `MapKeyAt`'s key type stand only in
+  a result, §6.7.1 makes a result-type a type-name and not an actual, and
+  all-or-nothing then made the caller write the determinable types too.
+  ADR-0304 widened AP 6.7.3.10.4 to admit a **prefix** of the type arguments,
+  the two forms ADR-0254 had becoming the ends of a range; both routines
+  declare their undeterminable type parameter first; and `VecGet(JsonChars,
+  char, b, i)` is `VecGet(char, b, i)` at fifteen call sites, eight of them in
+  the language server. The example that measured it names one type and it is
+  in the type-definition.
+
 ### The row as it stood
 
 - **No program to read that is not a test.** There is no `examples/`
