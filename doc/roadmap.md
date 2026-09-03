@@ -359,8 +359,9 @@ the first row here to close, the day after the chapter was written
 trap, `references`, and the examples. Three of the four were taken the next
 day — the binary (ADR-0296), `references` (ADR-0294) and the examples
 (ADR-0295), which paid twice as the sentence said: twelve cases, and seven
-findings in *Writing a daily program* above. The line in every trap is what
-is left, and `codeAction` is the tooling row now.
+findings in *Writing a daily program* above. The fourth went the same day
+(ADR-0293), so all four are struck: what is left in this chapter is the tour,
+`codeAction` and `completion`, and the findings the examples produced.
 
 ---
 
