@@ -345,6 +345,23 @@ the first row here to close, the day after the chapter was written
   reason, which is that an owned pointer already has `dispose` and a handle has
   nothing else, and the message names it now.
 
+- **Inference cannot read a type parameter through a whole array**, only
+  through a slice-designator. `Determine`'s slice arm asks whether the
+  *actual's* type is a slice, and an ordinary array's is not — the conversion
+  happens at the call — so `Total(r)` against `function Total(T: type;
+  protected var xs: array of T)` is refused with *nothing in this call says
+  what 't' of 'total' is*, while `Total(r[1..3])`, `Total(digit, r)` and the
+  non-generic `Plain(r)` over `protected var a: array of digit` all compile and
+  run. The whole array **is** admitted where `array of T` stands; it is only
+  AP 6.7.3.10.4 c) that is narrower than the parameter it describes, so
+  ADR-0266's own example `procedure Sort(Elem: ordered type; var a: array of
+  Elem)` cannot be activated by inference from an array. Found by probe while
+  settling ADR-0315's open question, and **nothing in this tree had ever
+  written that call** — `generic_infer`'s one slice activation passes a
+  slice-designator — so no oracle here could have said so. That is ADR-0304's
+  own lesson a third time: the row that says a feature is unavailable is worth
+  less than the four lines that ask the compiler.
+
 ### Tooling
 
 - ~~**The server answers thirteen methods and none of them completes a

@@ -387,16 +387,70 @@ against methods while keeping the prefixed routines beside them is increment
 A's evidence. Whether the other thirty modules follow is a judgement to make
 after reading that one, not before.
 
-**The one technical question still open, and it gates increment B.** This
-record asserts that `T: Ord` leaves ADR-0304's inference untouched, because the
-bound sits in the slot `T: type` already occupies. That deserves proving rather
-than asserting: ADR-0304's prefix rule was designed to infer a type argument
-from an actual's type, and a bound makes inference a choice among *admissible*
-candidates rather than among all of them. Two readings are possible — the bound
-is checked after inference has chosen, or it narrows what inference may choose —
-and they differ for a call where two impls would both fit. It should be settled
-with a probe against the existing generic machinery before B is written, not
-during it.
+**The technical question that gated increment B is settled, by probe, and it
+was hiding a different one.** This record asserted that `T: Ord` leaves
+ADR-0304's inference untouched because the bound sits in the slot `T: type`
+already occupies, and said the assertion deserved proving. Four probes against
+the compiler as it stands:
+
+- **A bound cannot narrow inference, because inference has no candidates to
+  narrow.** `Determine` reads one type off the first determining actual and
+  `BindType` is **first-wins** — a second determining position holding a
+  different type is passed over in silence, and the actual there is then judged
+  against the type the first one bound. `Same(1, 'x')` against
+  `function Same(T: type; a, b: T)` is refused as *argument 2 of 'same' is
+  integer, but the value is char*, not as an ambiguity. So there is no set of
+  admissible candidates for a bound to filter: AP 6.7.3.10.5's category is
+  checked *after* the tuple is built, at the tuple walk in
+  `InstantiateGeneric`, and a trait bound takes exactly that position. The
+  first reading was right, and it is right for a duller reason than the one
+  given for it.
+
+- **First-wins is what method dispatch wants, for free.** The receiver is the
+  first parameter (a settled choice above), so the receiver is the determining
+  position by construction, and no rule has to say so.
+
+- **But the tuple holds the actual's *own* type, and that is the real
+  question.** For `type digit = 1..9` and `var d: digit`, `Wide(d)` against
+  `function Wide(T: type; x: T): T` whose body assigns `100` traps with
+  *value out of range (digit)*: inference bound `digit`, not `integer`. Every
+  one of the four categories goes through `Base(t)` — `IsNumeric`, `IsOrdinal`
+  and the two ADR-0266 added all ask the host — so **no constraint in this
+  language today can tell a subrange from its host**, and a trait bound is the
+  first one that could, being a lookup in a table of impls rather than a
+  predicate over a kind. A type-name for an existing type is not affected:
+  `type count = integer` denotes the same type object (§6.4.1), and `Wide(c)`
+  for `c: count` stores 100 without a check.
+
+  **The impl lookup follows `Base()`.** `impl Ord for integer` covers every
+  subrange of integer, which is ADR-0018's rule — *a subrange answers for its
+  host* — said once more, and the only reading consistent with the four
+  categories. The alternative, a lookup by type identity, would need
+  `impl Ord for digit` written out for a type whose whole point is that it
+  behaves like an integer, and every subrange in a program would be outside
+  every trait.
+
+  That has a cost, and it belongs in the clause rather than being discovered:
+  **a subrange cannot carry an implementation of its own**, since its host's
+  would be found first and its own never chosen. `impl Ord for digit` is
+  therefore an error at the heading — *a subrange takes its host's
+  implementation* — and the same argument applies wherever `Base()` is not the
+  identity.
+
+**And the probe found a gap nobody had tried, which is ADR-0304's own lesson a
+third time.** `Determine`'s slice arm requires the *actual's* type to be a
+slice already, so a whole array handed to `array of T` determines nothing:
+`Total(r)` against `function Total(T: type; protected var xs: array of T)` is
+refused with *nothing in this call says what 't' of 'total' is*, while
+`Total(r[1..3])`, `Total(digit, r)` and the non-generic `Plain(r)` over
+`protected var a: array of digit` all compile and run. The whole array **is**
+admitted where `array of T` stands; it is only inference that cannot read
+through it. Nothing in this tree had ever written that call — `generic_infer`'s
+one slice activation passes a slice-designator — so no oracle here could have
+said so. It is not this record's to fix, and AP 6.7.3.10.4 c) is narrower than
+the parameter it describes; ADR-0266's own example
+`procedure Sort(Elem: ordered type; var a: array of Elem)` cannot be activated
+by inference from an ordinary array.
 
 **One thing to watch that no gate will see.** `x.M(a)` resolving in the type's
 scope means a reader can no longer find a routine's declaration by searching
