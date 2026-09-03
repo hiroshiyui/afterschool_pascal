@@ -1,0 +1,118 @@
+word and
+word array
+word begin
+word case
+word const
+word div
+word do
+word downto
+word else
+word end
+word file
+word for
+word function
+word goto
+word if
+word in
+word label
+word mod
+word nil
+word not
+word of
+word or
+word packed
+word procedure
+word program
+word record
+word repeat
+word set
+word then
+word to
+word type
+word until
+word var
+word while
+word with
+word otherwise
+word pow
+word protected
+word value
+word bindable
+word module
+word export
+word import
+word only
+word qualified
+word restricted
+required procedure new
+required procedure dispose
+required procedure reset
+required procedure rewrite
+required procedure get
+required procedure put
+required procedure read
+required procedure readln
+required procedure write
+required procedure writeln
+required procedure pack
+required procedure unpack
+required type timestamp
+required type bindingtype
+required schema string
+required const epsreal
+required const minreal
+required const maxreal
+required const maxchar
+required const maxint64
+required const maxint
+required const false
+required const true
+required required argument
+required required argcount
+required required time
+required required date
+required required binding
+required required ge
+required required le
+required required gt
+required required lt
+required required ne
+required required eq
+required required trim
+required required substr
+required required index
+required required length
+required required empty
+required required lastposition
+required required position
+required required arg
+required required im
+required required re
+required required polar
+required required cmplx
+required required card
+required required eoln
+required required eof
+required required round
+required required trunc
+required required arctan
+required required exp
+required required ln
+required required cos
+required required sin
+required required sqrt
+required required pred
+required required succ
+required required chr
+required required ord
+required required odd
+required required sqr
+required required abs
+required schema utf8
+required type int64
+required type complex
+required type text
+required type char
+required type boolean
+required type real
+required type integer

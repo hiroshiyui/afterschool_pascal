@@ -1,4 +1,4 @@
-<source>:13:20: warning: 's' is never written through, so it could be protected
-<source>:20:21: warning: 'x' is never written through, so it could be protected
-<source>:20:33: warning: 'y' is never written through, so it could be protected
-<source>:32:23: warning: 's' is never written through, so it could be protected
+<source>:13:16: warning: 's' is never written through, so it could be protected
+<source>:20:17: warning: 'x' is never written through, so it could be protected
+<source>:20:29: warning: 'y' is never written through, so it could be protected
+<source>:32:19: warning: 's' is never written through, so it could be protected

@@ -1,0 +1,18 @@
+adr: 0300
+file: selfhost/apfront.pas
+kills: protected_hint
+why: ADR-0283's warning judged a parameter where 6.7.3.1's word belongs to the section, so `var written, read_: integer` with one name written through was advised to take `protected` -- advice that does not compile, since the word would protect `written` too. Judging the section by the last of its names restores exactly that: `Mixed` in tests/dialect/protected_hint.pas is warned about again and its .warn sidecar says nothing of it.
+--- old
+      whole := true;
+      r := q;
+      while (r <> nil) and (r^.sym^.paramSection = sec) do begin
+        if not ProtectableCandidate(r^.sym) then whole := false;
+        r := r^.next
+      end;
+--- new
+      whole := true;
+      r := q;
+      while (r <> nil) and (r^.sym^.paramSection = sec) do begin
+        whole := ProtectableCandidate(r^.sym);
+        r := r^.next
+      end;

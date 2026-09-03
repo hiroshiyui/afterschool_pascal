@@ -1,0 +1,8 @@
+adr: 0301
+file: selfhost/apfront.pas
+kills: dump-symbols
+why: --dump-symbols claims to report every name a source declares and reported no formal parameter at all until ADR-0301; nothing noticed, because an outline is not where a reader looks for one. A completion list inside a routine's body is, and without this walk the names most likely to be typed next are the ones missing. Removing it also empties `count`, `sink` and every parameter from lsp/sessions/completion.out.
+--- old
+    DumpSymParams(d^.pdParams, depth + 1);
+--- new
+    { mutated: parameters unreported }

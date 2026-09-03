@@ -1,0 +1,8 @@
+adr: 0300
+file: selfhost/apfront.pas
+kills: protected_hint
+why: 6.7.3.1 puts `protected` before the whole formal-parameter-section, so the position a code action inserts the word at is the section's and not the parameter's. Reporting the warning at the name again puts the diagnostic four columns to the right of the only place the edit can go -- and the server inserts at the position the diagnostic carries, so the quick fix would write `var protected n` and refuse to compile.
+--- old
+        WarnAt(s^.secLine, s^.secCol);
+--- new
+        WarnAt(s^.declLine, s^.declCol);

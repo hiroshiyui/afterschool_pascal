@@ -1,2 +1,2 @@
-<source>:19:21: warning: 'x' is never written through, so it could be protected
-<source>:19:33: warning: 'y' is never written through, so it could be protected
+<source>:19:17: warning: 'x' is never written through, so it could be protected
+<source>:19:29: warning: 'y' is never written through, so it could be protected

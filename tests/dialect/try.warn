@@ -1,4 +1,4 @@
 <source>:136:1: warning: function 'armed' does not write its result on every path
-<source>:171:23: warning: 'h' is never written through, so it could be protected
-<source>:176:23: warning: 'a' is never written through, so it could be protected
-<source>:181:22: warning: 'h' is never written through, so it could be protected
+<source>:171:19: warning: 'h' is never written through, so it could be protected
+<source>:176:19: warning: 'a' is never written through, so it could be protected
+<source>:181:18: warning: 'h' is never written through, so it could be protected

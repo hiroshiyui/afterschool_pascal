@@ -32,10 +32,13 @@ symbol 1 var 72 3 4 72 7 mood
 symbol 2 value 72 10 4 72 14 calm
 symbol 2 value 72 16 5 72 21 cross
 symbol 1 function 76 10 5 85 4 twice
+symbol 2 parameter 76 16 1 76 17 k
 symbol 2 var 77 5 7 77 12 doubled
 symbol 2 function 78 12 4 81 6 half
+symbol 3 parameter 78 17 1 78 18 m
 symbol 1 procedure 89 11 5 95 4 later
 symbol 2 const 90 7 6 90 13 inside
 symbol 2 var 91 5 3 91 8 sum
 symbol 1 procedure 98 11 5 98 16 trace
+symbol 2 parameter 98 17 1 98 18 n
 symbol 1 var 100 5 4 100 9 last

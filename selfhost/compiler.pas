@@ -216,6 +216,12 @@ var
     is wanted for a source Sema would reject, and --dump-all runs the
     whole pipeline. }
   dumpSymbolsOpt: boolean;
+  { --dump-words: the vocabulary, which is a property of *this compiler* and
+    not of the source it was handed (ADR-0301). It goes through ApFront's
+    `WantWords` rather than being read where the other dumps are read, because
+    the answer is written where the required identifiers are installed -- and
+    it is asked of a source only because a compiler is asked of a source. }
+  dumpWordsOpt: boolean;
   dumpStmtsOpt: boolean;
   { --dump-imports: the program-components this translation read, in
     activation order, for the build tool that has to translate and link them
@@ -532,6 +538,8 @@ begin
   writeln('                  its position and the token it precedes, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
   writeln('                  its kind, position and nesting, and stop');
+  writeln('  --dump-words    write every word-symbol and required identifier');
+  writeln('                  this compiler knows, and stop');
   writeln('  --dump-stmts    write where every statement of this source');
   writeln('                  begins and ends, and stop');
   writeln('  --dump-uses     check as usual, then write every name this');
@@ -583,6 +591,7 @@ begin
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
+  dumpWordsOpt := false;
   dumpStmtsOpt := false;
   dumpImportsOpt := false;
   dumpUsesOpt := false;
@@ -632,6 +641,7 @@ begin
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
+    else if EQ(a, '--dump-words') then dumpWordsOpt := true
     else if EQ(a, '--dump-stmts') then dumpStmtsOpt := true
     else if EQ(a, '--dump-imports') then dumpImportsOpt := true
     else if EQ(a, '--dump-uses') then dumpUsesOpt := true
@@ -740,7 +750,8 @@ begin
     reader is parsing. `kind-exhaustive` reads --dump-dispatch and stopped on
     the first warning ever written. }
   warnOn := not (dumpTokensOpt or dumpAstOpt or dumpSemaOpt or dumpAllOpt
-                 or dumpSymbolsOpt or dumpStmtsOpt or dumpUsesOpt
+                 or dumpSymbolsOpt or dumpWordsOpt or dumpStmtsOpt
+                 or dumpUsesOpt
                  or dumpImportsOpt or dumpDispatchOpt or dumpPredsOpt
                  or dumpLayoutOpt or dumpLimitsOpt or dumpTriviaOpt
                  or formatOpt);
@@ -12492,7 +12503,7 @@ begin
       all that is left, and it is unconditional for the same reason
       --dump-symbols is: whatever a caller asked this question for, it did not
       ask for an object file. }
-    go := not ((dumpSemaOpt or dumpUsesOpt) and not whole)
+    go := not ((dumpSemaOpt or dumpUsesOpt or dumpWordsOpt) and not whole)
   end;
 
   { --- emit --------------------------------------------------------------- }
@@ -12528,6 +12539,7 @@ begin
       anything is read, because a defining-point in an --import is declared
       while curFile names that import. }
     notingUses := dumpUsesOpt;
+    if dumpWordsOpt then WantWords;
     notingStmts := dumpStmtsOpt;
     mainFile := srcName;
     BindTo(source, srcName);
