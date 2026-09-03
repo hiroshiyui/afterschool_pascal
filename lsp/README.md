@@ -6,9 +6,11 @@ this repository can measure. It is not part of the compiler and it is not a
 feature — it invokes `pascalc` as a separate process, exactly as an editor
 would, and everything it uses is in `lib/`.
 
-It does one thing today: it publishes the compiler's diagnostics for every
-document a client opens or changes. ADR-0236 records why that is the first
-thing and what it deliberately leaves out.
+It began by doing one thing: publishing the compiler's diagnostics for every
+document a client opens or changes. ADR-0236 records why that was the first
+thing and what it deliberately left out. It now answers fifteen methods --
+three notifications and twelve requests -- and every one of them is a question
+the compiler answers, in the compiler's own words, through a flag.
 
 ## Building it
 
@@ -222,6 +224,43 @@ a required identifier, a qualified name written with spaces around its point,
 a component whose dump could not be taken, or a new name the compiler's own
 lexer does not read as one identifier. The new name is judged by
 `--dump-tokens` and not by a table of word-symbols copied out of the lexer.
+
+**The edit a warning asks for**
+([ADR-0300](../doc/adr/0300-the-edit-a-warning-already-knows.md)).
+`textDocument/codeAction` answers for two of the compiler's four warnings and
+declines the other two, and the split is which edit is *decidable from what
+the compiler reported* and cannot change what the program does. A statement
+that cannot be reached is deleted -- control was proved never to arrive, and
+`--dump-stmts` gives the extent; the `;` before it is left, §6.9.2.1 making
+that an empty statement. A `var` parameter nothing writes through takes
+`protected`, inserted at the position the warning stands at, which since
+ADR-0300 is the formal-parameter-section and not the name -- because §6.7.3.1
+puts the word before the whole section, and a warning that pointed at the name
+was advice a mixed group could not take. An unused local is **not** offered a
+deletion: `var c: (red, green)` declares two constants of its own (§6.4.2.3),
+so removing the declaration can remove names still in use. A function that
+does not write its result on every path has no mechanical edit at all. The
+diagnostics come back from the client in `context.diagnostics` and are matched
+by their text, which is the one place this server reads the compiler's prose;
+what holds that still is a `.warn` sidecar on every case that warns.
+
+**What may be written here**
+([ADR-0301](../doc/adr/0301-what-may-be-written-here.md)).
+`textDocument/completion` is the names in scope at the position, filtered out
+of the same `--dump-symbols` the outline is drawn from, plus the compiler's own
+vocabulary from `--dump-words` -- every word-symbol and required identifier it
+knows, asked once per session because it is a fact about the compiler and not
+about any document. The filtering is the design: the block that declares a name
+has to contain the position, which the rows' depths and ADR-0253's extents
+answer, and the defining-point has to precede it (§6.2.2.9), which this
+compiler enforces -- a body naming a variable declared after it is refused, so
+offering that name would offer one that does not compile. There is **no member
+completion**: what may follow a `.` is a question about the type at the
+position, which is Sema's, and this answer stops before Sema for the reason the
+outline does. A short list is better than a wrong one. Formal parameters are in
+it, which took teaching `--dump-symbols` to report one at all -- it never had,
+its own sentence being *every name a source declares* -- and this server drops
+them from both outlines, where nobody looks for them.
 
 **A change nobody will see the answer to is not compiled**
 ([ADR-0257](../doc/adr/0257-a-change-nobody-will-see-is-not-compiled.md)). A

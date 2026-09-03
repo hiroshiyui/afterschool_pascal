@@ -388,7 +388,7 @@ tree.
 
 `lsp/` holds a Language Server Protocol server, written in this language and
 using this library. It publishes the compiler's diagnostics for every file you
-open or edit, without your having to save one, and answers nine requests
+open or edit, without your having to save one, and answers eleven requests
 besides:
 
 | Request | What you get |
@@ -402,9 +402,15 @@ besides:
 | `rangeFormatting` | the lines you selected, laid out as they stand in the file |
 | `references` | every occurrence of a name, into the program-components the compilation read |
 | `rename` | those occurrences edited to a new name, the declaration included — or a refusal that says why |
+| `completion` | the names in scope where the cursor is, plus every word-symbol and required identifier |
+| `codeAction` | the edit a warning asks for, where the compiler has already proved it safe |
 
-The outline and the two extent answers work on a document that **does not
-compile yet**, which is when they are most wanted: they stop after the parse.
+The outline, the two extent answers and completion work on a document that
+**does not compile yet**, which is when they are most wanted: they stop after
+the parse. Completion offers nothing after a `.`, and that is the same
+decision from the other side — what may follow one is a question about the
+type at the cursor, which only the checker knows, and a list that is short is
+better than one that is wrong about scope.
 Formatting is the one that will not: a document whose tokens the compiler
 cannot read is answered with no edits at all, and your buffer is left as you
 left it.

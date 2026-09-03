@@ -4106,6 +4106,34 @@ nothing else. What it would lose, mechanism by mechanism:
   that to `LookupName`, and every qualified expression's two spans began at
   the `.` — `Middle` in `Middle.Doubled` was inside neither. Two call sites
   now pass the qualifier's position and `uses_module.dump` moved six rows.
+- **The edit a warning already knows, where the compiler proved it safe**
+  (ADR-0300). `textDocument/codeAction` answers for two of the four warnings
+  and declines the other two on a rule rather than on effort: the edit must be
+  decidable from what the compiler *reported* and must not be able to change
+  what the program does. An unreachable statement is deleted -- control was
+  proved never to arrive, and `--dump-stmts` gives the extent -- and a `var`
+  parameter nothing writes through takes `protected` at the position the
+  diagnostic carries. An unused local is refused a deletion because a
+  variable-declaration's type-denoter may declare names of its own
+  (§6.4.2.3's `var c: (red, green)`), and a partially written function result
+  has no mechanical edit at all. **It corrected the warning it acts on**:
+  §6.7.3.1 puts `protected` before the whole formal-parameter-section, so
+  advising it for one name of `var b, c` while the other is written through is
+  advice that does not compile — ADR-0283's own claim, true of a parameter and
+  false of a section. The warning is now judged and reported per section, at
+  the section's first token, which is also the only place the word can go.
+- **A completion list is a scope rule** (ADR-0301). The names in scope come
+  from the outline's own `--dump-symbols`, filtered by two things a row cannot
+  say: the block that declares a name must contain the position, which the
+  rows' depths and ADR-0253's extents answer, and the defining-point must
+  precede it (§6.2.2.9), which this compiler enforces. There is no member
+  completion, `p.`'s answer being a question about the type at the position
+  and so Sema's, which the outline deliberately stops before. Two compiler
+  changes came with it: `--dump-symbols` reports **formal parameters**, which
+  it never had though its own sentence is *every name a source declares*; and
+  `--dump-words` writes the word-symbols and the required identifiers out of
+  the compiler's own tables, so the server holds no copy — ADR-0294's refusal
+  of a word-symbol table met a second time.
 - **A statement has an extent** (ADR-0258), which is what `foldingRange` and
   `selectionRange` are answered from — one `--dump-stmts` for both, as one
   `--dump-uses` serves definition and hover. The trap is that ADR-0253's
@@ -4160,7 +4188,9 @@ nothing else. What it would lose, mechanism by mechanism:
   one pass over this tree reports 130 and seven passes report zero, having
   added the word 54 times. The test that fails when it is undone is
   `tests/dialect/protected_hint.pas`, whose two mutations name `Passed` (the
-  guard) and the four written-through shapes (the analysis).
+  guard) and the four written-through shapes (the analysis). **The unit was
+  wrong and ADR-0300 corrected it**: the word belongs to the
+  formal-parameter-section, so a section is judged whole and reported once.
 - **A comment is not a token, and a position is recorded rather than text**
   (ADR-0279). §6.1.8's comments are consumed by the lexer, so a formatter had
   nothing to put back. The lexer now records each comment's start, end and the

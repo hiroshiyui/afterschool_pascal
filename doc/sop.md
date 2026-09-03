@@ -396,6 +396,14 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**Nothing checks that a quick fix compiles** (ADR-0300). The language server
+offers two edits — delete an unreachable statement, add `protected` to a
+formal-parameter-section — and the argument that each is safe is a reading of
+the clause the warning rests on, plus one application by hand. A gate would
+have to apply an edit to a case and recompile it, which is a harness this tree
+does not have; what stands in its place is that both edits are decidable from
+what the compiler *reported* rather than from anything read out of the source.
+
 **Audited as a whole on 2026-08-25** (ADR-0197), for the first time in 57 rows — until
 then it had only been appended to, which is the decay a register is supposed to
 prevent happening to the register itself. Four rows had gone stale in a way

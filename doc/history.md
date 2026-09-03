@@ -5679,6 +5679,61 @@ goldens gained a suffix and nothing else. Two cases hold it: two subscripts on
 one line where only the second column is right, and a `**` whose operand is a
 function that makes bracketed calls of its own.
 
+### Tooling — closed (ADR-0300, ADR-0301)
+
+The chapter's Tooling section held two rows and both were struck on
+2026-09-03, which empties it. What each cost is not what the row said.
+
+**`codeAction`** was the row that had already been costed: *the four warnings
+each know the edit they want — add `protected`, delete the declaration, delete
+the statement after the one that leaves*. Two of those three are right and the
+third is the one that cannot be done: a variable-declaration's type-denoter
+may carry defining-points of its own, `var c: (red, green)` declaring two
+constants in the enclosing block (§6.4.2.3), so deleting an unused local's
+declaration can delete names the rest of the block still uses. The fourth
+warning, a function result written on one path and not another, has no
+mechanical edit at all. So the answer is two of four, and the rule that
+selects them is that the edit be decidable from what the compiler *reported*
+and unable to change what the program does.
+
+**And building it found the warning it acts on was wrong.** §6.7.3.1 puts
+`protected` before the whole formal-parameter-section, and ADR-0283 reported
+per parameter — so `var b, c: integer` with `b` written through was advised to
+take a word that then refuses to compile. ADR-0283's own sentence, *`not
+wasThreatened` is precisely the condition under which adding the word still
+compiles*, is true of a parameter and false of a section, and no source in
+this tree had a mixed section for any oracle to notice. The warning is now a
+question about a section, reported once at the section's first token — which
+is also the only position the edit can use. Twenty-four `.warn` goldens moved
+by the width of `var `.
+
+**`completion`** was *the row with a design in it*, and the roadmap named the
+difficulty correctly: the outline gives the names in scope after a parse, but
+what may follow a token is the parser's knowledge and `--dump-symbols` stops
+before Sema. That sentence holds two questions. The one it points at —
+member completion, what may follow a `.` — is not the parser's at all but the
+*type* at the position, which is Sema's, and it is refused rather than
+deferred. The other, what names are in scope here, is answered from the
+outline's own dump filtered by two rules a row cannot state: the block that
+declares a name must contain the position, and §6.2.2.9's order must put the
+defining-point before it. The second is not a nicety — this compiler refuses a
+body naming a variable declared after it, so the unfiltered list offers names
+that do not compile.
+
+Two things the compiler had to learn, and both were absences rather than
+work. `--dump-symbols` reported **no formal parameter**, though its own
+sentence is *every name a source declares*; nobody had noticed, because an
+outline is not where a reader looks for one and a completion list inside a
+body is nothing else. And the word-symbols and required identifiers had no
+reader outside the lexer, so `--dump-words` writes them — walked from
+`kwText`, from the outermost scope at the one moment it holds the required
+identifiers and nothing the source declared, and from the twelve required
+procedures `IsRequiredName` reads. ADR-0294 had refused a word-symbol table in
+the server as *correct today and silently wrong on the day a forty-sixth is
+reserved*; this is that refusal answered rather than repeated.
+
+The server now answers fifteen methods, three of them notifications.
+
 ## What a daily program could not reach for, and now can
 
 `doc/roadmap.md` carried a chapter of this name from version 2 until version

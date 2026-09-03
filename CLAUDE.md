@@ -149,12 +149,19 @@ the harness and compared byte for byte (ADR-0236). **It speaks two protocols**
 (ADR-0241): the same binary answers MCP over stdio when given `--mcp`, one
 message to a line instead of `Content-Length`, with two tools built on
 `--dump-symbols` and on a compilation. A session says which by a `name.mcp`
-marker. It answers eight questions about a document — the diagnostics, the
-outline (ADR-0239), go-to-definition and hover, which are one question asked
-twice and come from one `--dump-uses` (ADR-0246), folding and selection
-expansion, which are a second such pair and come from one `--dump-stmts`
-(ADR-0258), and **formatting**, which comes from `--format` (ADR-0280) and now answers
-for a *range* as well (ADR-0284) — and they do not cost the same: the outline and the two extent answers stop after
+marker. It answers **thirteen** questions about a document — count them in the table
+below rather than trusting this number, which has moved three times: the
+diagnostics, the outline (ADR-0239), go-to-definition and hover, which are one
+question asked twice and come from one `--dump-uses` (ADR-0246), folding and
+selection expansion, which are a second such pair and come from one
+`--dump-stmts` (ADR-0258), **formatting**, which comes from `--format`
+(ADR-0280) and answers for a *range* as well (ADR-0284), `references`,
+`rename` and `prepareRename`, which are the `use` rows read backwards
+(ADR-0294), **`codeAction`** (ADR-0300), which is the edit two of the four
+warnings ask for and a refusal for the other two, and **`completion`**
+(ADR-0301), which is the names in scope at a position — the outline's dump
+filtered by §6.2.2's nesting and §6.2.2.9's order — plus the compiler's own
+vocabulary from `--dump-words`. They do not cost the same: the outline, the two extent answers and completion stop after
 the parse and need no `--import`, where the diagnostics and the two `use`
 answers run Sema and do — and since ADR-0294 the `use` rows are read
 backwards too, `references` and `rename` being every row sharing one
@@ -273,6 +280,12 @@ be written later than the routine), and an exported one cannot be judged here
 at all. So candidates are recorded in `CheckProcBody` and emitted after
 `CheckMutualSupply`, sorted by declaration position — a nested body is checked
 before the block that declares it, so recording order is not source order.
+**The unit is the formal-parameter-section and not the parameter** (ADR-0300):
+§6.7.3.1 puts `protected` before the whole section, so `var b, c` takes the
+word for both names or neither, and advising it for `c` while `b` is written
+through was advice that does not compile — ADR-0283's own claim, true of a
+parameter and false of a section. A section is judged whole, reported once, at
+its own first token, which is where the code action inserts the word.
 **It is a fixed point and not a list**, which is the finding: §6.5.1 exempts a
 *protected* formal from being threatened, so protecting one parameter stops its
 callers' arguments from being threatened and exposes the next layer. A one-shot
@@ -997,7 +1010,13 @@ single cost of the dialect decision, and `unicode-conformance` — Unicode's own
 here that nobody in this project wrote.
 
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-trivia`, `--dump-ast`, `--dump-sema`,
-  `--dump-all`, `--dump-symbols`, `--dump-stmts`, `--dump-imports`, `--dump-uses` — and each stops at the stage it names. They were unconditional
+  `--dump-all`, `--dump-symbols`, `--dump-stmts`, `--dump-imports`,
+  `--dump-uses`, `--dump-words` — and each stops at the stage it names.
+  **`--dump-words` is the one that is not about the source at all** (ADR-0301):
+  the word-symbols §6.1.2 reserves and the required identifiers §6.2.2.10 puts
+  in a region enclosing the program, walked out of the lexer's own table and
+  the outermost scope at the moment it holds them and nothing else, so a caller
+  offering names to a person typing one holds no copy of either list. They were unconditional
   while there was a second binary to compare them against, which is the reason
   ADR-0025 gave for having no mode to select; it expired with stage 0. Each
   section reports what its own stage found and shows its result only when
@@ -1036,7 +1055,12 @@ here that nobody in this project wrote.
   means it needs no `--import`; and the name is the **folded** spelling, the
   position and length beside it being how a caller holding the source recovers
   what was typed. `lsp/pasls.pas` is the caller, and the first one here that is
-  not a gate.
+  not a gate. **It reported no formal parameter until ADR-0301**, though its
+  own sentence is *every name a source declares* and §6.2.2.10 gives one a
+  defining-point in the block: nobody looks in an outline for a parameter, and
+  a completion list inside a body is nothing but. One word, `parameter`, for
+  all four forms; the server drops them from the outline, where the choice
+  belongs.
 - **`--dump-uses` is the second question, and the surface generalised**
   (ADR-0246). ADR-0239 closed saying *hover wants a type, which is Sema's*,
   and it turned out to be two questions with one answer: `use <line> <col>

@@ -23,7 +23,7 @@ nobody has decided yet.
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
-| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
+| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it, and the server completes a name (ADR-0301) — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -336,22 +336,18 @@ the first row here to close, the day after the chapter was written
 
 ### Tooling
 
-- **The server answers thirteen methods and none of them completes a name.**
-  `grep -o "'textDocument/[a-zA-Z]*'" lsp/pasls.pas | sort -u` lists three
-  notifications and ten requests, and `completion` and `codeAction` are not
-  among them. In order of what they cost, guessed:
-
-  | Request | What it is made of |
-  | --- | --- |
-  | `codeAction` | the four warnings each know the edit they want — add `protected`, delete the declaration, delete the statement after the one that leaves — and the compiler already has the positions (ADR-0272, ADR-0277, ADR-0278, ADR-0283) |
-  | `completion` | the one an editor user misses within a minute, and the one with a design in it: the outline gives the names in scope after a parse, but what may follow a token is the parser's knowledge and `--dump-symbols` stops before Sema |
-
-  Completion is the row a person notices. `references` and `rename` stood
-  above these as the rows that were nearly free, and were (ADR-0294): the
-  cached `use` rows read backwards, plus one compilation per component for a
-  name declared in one. What doing them found is in `doc/history.md`, and
-  the sharpest part was not the server's — the compiler had reported every
-  qualified name in an expression from its point rather than its start.
+- ~~**The server answers thirteen methods and none of them completes a
+  name.**~~ — **done** (ADR-0300, ADR-0301), and moved to
+  [`doc/history.md`](history.md#tooling--closed-adr-0300-adr-0301). It answers
+  fifteen now, and this section is empty. Both rows found something the row
+  itself could not have: `codeAction` carries an edit for **two** of the four
+  warnings and not three — deleting an unused local's declaration can delete an
+  enumerated constant declared in its own type-denoter — and building it found
+  ADR-0283's warning advising a word that does not compile, `protected`
+  belonging to a formal-parameter-section and not to a parameter.
+  `completion` refuses member completion for the reason its own row named, and
+  needed `--dump-symbols` to start reporting formal parameters, which it never
+  had.
 
 ### Platforms and packaging
 
@@ -376,8 +372,9 @@ trap, `references`, and the examples. Three of the four were taken the next
 day — the binary (ADR-0296), `references` (ADR-0294) and the examples
 (ADR-0295), which paid twice as the sentence said: twelve cases, and seven
 findings in *Writing a daily program* above. The fourth went the same day
-(ADR-0293), so all four are struck: what is left in this chapter is the tour,
-`codeAction` and `completion`, and the findings the examples produced.
+(ADR-0293), so all four are struck — and the Tooling section closed the day
+after (ADR-0300, ADR-0301). What is left in this chapter is the tour and the
+findings the examples produced.
 
 ---
 
