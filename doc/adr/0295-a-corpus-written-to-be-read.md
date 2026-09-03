@@ -9,6 +9,11 @@ in `doc/roadmap.md`'s chapter *What would make this practical to pick up*,
 and opens the findings below where that chapter said the next one would
 come from: somebody writing a program.
 
+**Finding 6 is wrong about where the bound is**, and
+[ADR-0310](0310-the-key-capacity-is-the-programs.md) corrects it: the map has
+been generic over its key type since ADR-0254 and 63 is `MapKey`'s capacity,
+not the map's.
+
 ## Context
 
 Every Pascal source in this tree was one of four things: a test case, a

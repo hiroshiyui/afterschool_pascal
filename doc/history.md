@@ -6990,6 +6990,40 @@ not change and the message does -- it names `dispose` -- and AP 6.4.14.6 gains
 a NOTE saying why the two clauses differ. An asymmetry between two clauses is
 either a reason or a defect, and it has to be written down as one of the two.
 
+### And a second of them -- the bound was not the map's (ADR-0310)
+
+ADR-0295's sixth finding said a `MapKey` is 63 characters, so a map keyed by
+text from outside needs a guard, and filed itself as *a bound, recorded, not a
+defect*. It was the wrong bound. The map has been generic over its key type
+since ADR-0254, the ready-made `StrHash`/`StrEq` became schematic the day
+before the finding was written (ADR-0290), and a three-line probe keys a map at
+200 and puts a 130-character key in it. The 63 was `examples/word_freq.pas`
+reaching for the ready-made key type and then guarding against the capacity
+that type happens to have -- the program's own choice, reported as the
+library's. It is the second time the claim has been made: `lsp/pasls.pas` held
+its documents in a linearly searched vector for the same reason, and ADR-0290
+struck that comment.
+
+What was real is one step further in. A key type has a capacity whichever one
+is chosen, and a program keyed by text from *outside* has to answer for a
+length it did not choose -- in the caller's own argument list, where no library
+routine can see it. So the library exports nothing new and states the rule
+instead: size the key to a bound the program already has, guard against
+`m^.slots[1].key.capacity` where it has none and say what is dropped, and never
+clamp with `substr`, which turns two long keys sharing a prefix into one and is
+the only one of the three shapes that gives a wrong answer. A `MapKeyMax`
+helper was written out and rejected -- the language already answers it, and a
+generic body reading `.capacity` would be meaningful for a string key alone.
+
+`examples/word_freq.pas` is the shape-1 program and has no guard: one
+`LineMax` is the line, the word and the key, and the distinct words moved out of
+`PasStrVec` -- whose own 255 would have been a second capacity to guard --
+into the generic vector sorted through `PasSort.SortIndexed`. Its golden did
+not move. Writing the correction also found `doc/tour.md`'s generic fragment
+uncompilable, its `VecGet(IntVec, integer, v, k)` predating ADR-0304's argument
+order: ADR-0308's *a document can be an oracle*, arriving as the document being
+the thing that was wrong.
+
 ## The concurrency residue
 
 Two of the three rows ADR-0268 wrote about itself are closed, on 2026-09-03,

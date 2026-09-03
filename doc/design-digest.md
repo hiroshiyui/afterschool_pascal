@@ -4497,3 +4497,28 @@ The lowering is AP 6.4.12.7's two calls with the argument block between them:
 the type's own closer, so the task's block releases what it was given. The join
 is *not* what makes this correct — a moved handle is the spawning activation's
 no longer — which is why one position carries two rules.
+
+### The key capacity is the program's (ADR-0310)
+
+`PasContainer`'s map is generic over its key type (ADR-0254) and its ready-made
+`StrHash`/`StrEq` are schematic (ADR-0290), so `MapKey` — `string(63)` — is a
+ready-made key type and not a bound. It has been read as one twice, by
+`lsp/pasls.pas` and then by ADR-0295's sixth finding, and the correction is a
+three-line probe: a map keyed at 200 takes a 130-character key.
+
+What is real is the shape under the wrong claim. A key type has a capacity
+whichever one is chosen, and the trap for a longer value fires at the
+assignment of an *actual*, in the caller's block, where no library routine can
+see or report it. So the library exports nothing and states the rule: **size
+the key to a bound the program already has** — the buffer the text was read
+into, which is why `examples/word_freq.pas` has one `LineMax` for the line, the
+word and the key and no guard at all; **guard against
+`m^.slots[1].key.capacity`** where the input has no such bound, §6.4.3.3.3's
+discriminant being readable through the map so the number is never written
+twice; and **never clamp**, `substr` being the one shape of the three that
+turns two long keys sharing a prefix into one. A clamped *capacity* and a
+clamped *key* are different decisions, which is where `Claimed`'s policy stops.
+
+`tests/dialect/lib_container_key.pas` keys three maps at three capacities, none
+of them 63, and `0310-the-ready-made-pair-is-the-bound` puts `StrHash`'s
+`MapKey` parameter back.

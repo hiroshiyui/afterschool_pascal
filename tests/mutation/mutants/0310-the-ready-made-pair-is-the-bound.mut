@@ -1,0 +1,8 @@
+adr: 0310
+file: lib/dialect/pascontainer.pas
+kills: lib_container_key
+why: The ready-made hash declared over MapKey again, which is what ADR-0290 widened. The map stays generic over its key type, but §6.7.3.6's congruity is exact, so every map keyed at a capacity other than 63 loses the pair the module ships for it -- which is the refusal that was twice read as the map's own bound, by lsp/pasls.pas and by ADR-0295's sixth finding. It is caught here rather than only by the language server because this case keys three maps at three capacities, none of them 63.
+--- old
+function StrHash(key: string): integer;
+--- new
+function StrHash(key: MapKey): integer;

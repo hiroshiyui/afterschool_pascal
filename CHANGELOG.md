@@ -73,6 +73,17 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **`PasContainer` states how to choose a map's key type** (ADR-0310). Nothing
+  in the library changed and nothing new is exported: the map has been generic
+  over its key since ADR-0254 and `MapKey` (`string(63)`) is a ready-made key
+  type, not a bound — ADR-0295's sixth finding said otherwise and was wrong,
+  which a map keyed at 200 holding a 130-character key settles. What is real is
+  that a program keyed by text from outside must choose a capacity, so the
+  module header, `lib/dialect/README.md` and `doc/tour.md` now give the rule:
+  size the key to a bound the program already has, guard against
+  `m^.slots[1].key.capacity` where it has none, never clamp with `substr`.
+  `examples/word_freq.pas` is rewritten to the first shape and has no guard;
+  its output is unchanged.
 - **A generic activation may write a prefix of its type arguments**
   (AP 6.7.3.10.4, ADR-0304). ADR-0254 admitted two forms, every type argument
   or none; an activation may now write the first *k* of them and leave the

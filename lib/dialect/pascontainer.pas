@@ -51,7 +51,9 @@
   type argument and has been since ADR-0254; a key is hashed and compared by
   the pair of procedural parameters every map routine takes, which is the note
   below rather than a gap. `MapKey` is still exported, as a ready-made key type
-  and not as a limit. }
+  and not as a limit -- and what to key a map on when the text comes from
+  outside the program is a decision the client makes, written out at
+  `StrHash` below (ADR-0310). }
 module PasContainer;
 
 export PasContainer = (Vec, Map, MapKey, KeyMax, CapMax,
@@ -255,7 +257,38 @@ function MapKeyAt(K: type; Ptr: type; var m: Ptr; i: integer): K;
   searched vector; the map has been generic over its key since ADR-0254 and
   the bound was never its. `MapKey` and `KeyMax` remain exported as a
   ready-made key type for a client that wants one, and are no longer a limit
-  on anything. }
+  on anything.
+
+  **Choosing the key type is the client's decision and this is the rule for
+  it** (ADR-0310). A key type has a capacity, whichever one you pick, and
+  assigning something longer to it stops the program -- so a program keyed by
+  text from *outside* (a word from a file, a header from a socket) has to
+  answer for a key it did not choose the length of. Three shapes exist and
+  they are not equally good.
+
+  1. **Size the key to a bound the program already has.** Almost every such
+     program has one: the buffer it read the text into. A word is a piece of
+     a line, so a key as wide as the line buffer cannot be overrun by a word,
+     and there is nothing left to check. `examples/word_freq.pas` is written
+     this way and `lsp/pasls.pas` keys on its own `DocUri`. It costs that
+     capacity in every slot, which is the trade -- and the trade is usually
+     right, a map of a few thousand entries being kilobytes either way.
+  2. **Guard, where the input has no bound the program can state.**
+     `if length(k) <= …` before the put, and the put is skipped -- which
+     *drops* a datum, so a program doing this must say what it drops and
+     where. Write the bound as `m^.slots[1].key.capacity` and not as a
+     number: §6.4.3.3.3 gives a string schema a `capacity` discriminant, so
+     the guard reads the capacity off the map and cannot go stale when the
+     key type changes.
+  3. **Do not clamp.** `substr(k, 1, cap)` looks like the kind answer and is
+     the only one of the three that gives a *wrong* result: two long keys
+     that share a prefix become one key, so a count is silently added to
+     somebody else's entry. This module clamps a *capacity* request
+     (`Claimed`) because a container that is smaller than asked for still
+     answers correctly about what is in it; a clamped key does not.
+
+  Nothing here enforces any of that, and nothing could: the trap belongs to
+  the assignment, which happens in the caller's own argument. }
 function StrHash(key: string): integer;
 function StrEq(a, b: string): boolean;
 

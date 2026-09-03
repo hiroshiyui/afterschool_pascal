@@ -293,9 +293,15 @@ the first row here to close, the day after the chapter was written
 
 - **Two smaller reports from the same pass** (ADR-0295, findings 5 and 6):
   `PasJson` renders `0.75` as `7.500000000000E-01`, which
-  `examples/json_pretty.out` now holds so the day it changes is visible; and a
-  `MapKey` is 63 characters, so a map keyed by text from outside needs a guard
-  the example has to explain. ~~The third — an owned pointer refusing
+  `examples/json_pretty.out` now holds so the day it changes is visible; and
+  ~~a `MapKey` is 63 characters, so a map keyed by text from outside needs a
+  guard the example has to explain~~ — that one was **half wrong** and is
+  **done** (ADR-0310), moved to
+  [`doc/history.md`](history.md#the-capacity-is-the-callers). The map has been
+  generic over its key since ADR-0254 and 63 was `MapKey`'s capacity and never
+  the map's; what was real is that a program keyed by text from outside must
+  choose a capacity, and the rule for choosing it is now written where the
+  library is. ~~The third — an owned pointer refusing
   `p := nil`~~ — is **answered** (ADR-0307): the asymmetry with a handle has a
   reason, which is that an owned pointer already has `dispose` and a handle has
   nothing else, and the message names it now.

@@ -229,6 +229,20 @@ alternative is a truncation nothing reports, which is worse, and that choice is
 `PasEnv`'s own and deliberate. `PasOS.ErrorNumberText` has the same shape
 against `strerror` and is unreachable in practice rather than guarded.
 
+**A capacity the *caller* chose, which no rule above reaches.** `PasContainer`'s
+map is generic over its key type, so the key's capacity is the client's and not
+the library's — and a value longer than it stops the program at the assignment,
+which happens in the client's own argument list. There is nothing for a library
+routine to return, and `MapKey` (`string(63)`) is a ready-made key type rather
+than a bound: it has twice been read as one (ADR-0290, ADR-0310). So the module
+header states the rule instead — size the key to a bound the program already
+has, guard against `m^.slots[1].key.capacity` where it has none and say what is
+dropped, and never clamp with `substr`, which turns two long keys sharing a
+prefix into one. **A clamped capacity and a clamped key are not the same
+decision**: this library clamps a capacity request (`Claimed`) because a
+container smaller than asked for still answers correctly about what is in it,
+and a clamped key does not.
+
 **Nothing checks any of this.** Both rules are conventions, not gates: a new
 module returning a result record with a tag spelled `success` would compile,
 link and pass every test in this repository, and so would one answering an

@@ -1,0 +1,5 @@
+wide  cap=200 len=131 get=11 other=22 count=14
+wide  has=TRUE absent=FALSE deleted=TRUE count=13
+wide  found at length 131
+narrow cap=8 get=7
+ready  cap=63 keymax=63 get=3

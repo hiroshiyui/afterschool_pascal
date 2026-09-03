@@ -424,7 +424,7 @@ begin
   for k := 1 to 5 do
     VecPush(v, k * k);
   for k := 1 to VecLen(v) do
-    write(' ', VecGet(IntVec, integer, v, k):1);
+    write(' ', VecGet(integer, v, k):1);
   writeln;
   VecFree(v)
 end.
@@ -437,16 +437,32 @@ write its type arguments** when the other actuals determine them
 written with no types at all: the container variable says what they are.
 
 `VecGet` above is the exception, and it shows you the rule. Its element type
-appears **only in the result**, and nothing in the call determines it — so it
-must be written, and inference is all-or-nothing, so the pointer type has to
-be written beside it. When a generic call looks unreasonably wordy, that is
-almost always what has happened. `examples/word_freq.pas` counts words with a
-generic map and reads, deliberately, as a program about that signature.
+appears **only in the result**, and §6.7.1 makes a result-type a type-name and
+not an actual — so nothing in the call can determine it and you write it. You
+write *only* it: an activation may name a prefix of the type arguments and
+leave the rest to be inferred (ADR-0304), which is why the pointer type is
+absent from `VecGet(integer, v, k)`. When a generic call looks wordy, a type
+standing only in a result is almost always why.
 
-The map's key is a fixed `MapKey` of 63 characters rather than a type
-parameter, because a key must be hashed and compared and the language has no
-way yet to say that of a type. You pass the pair of routines instead:
-`MapPut(m, w, n, StrHash, StrEq)`.
+The map's key is a **type parameter like the element**, and there is no
+constraint saying it can be hashed and compared, because none is needed: you
+pass the two routines instead, `MapPut(m, w, n, StrHash, StrEq)`. `StrHash`
+and `StrEq` are the module's ready-made pair for a string key and they are
+*schematic*, so they serve a key of any capacity — `PasContainer.MapKey`
+(`string(63)`) is a ready-made key type for a program that wants one and is
+not a bound on the map.
+
+What you do have to decide is **how wide your own key type is**, because a
+string type traps on a value longer than its capacity. The rule, which
+`PasContainer`'s header states in full, is: size the key to a bound the
+program already has — the buffer it read the text into — and there is nothing
+left to check. `examples/word_freq.pas` counts words that way: one `LineMax`
+bounds the line, the word and the key, so a word out of a line cannot be too
+long for a slot. Where the input has no bound you can state, guard with
+`if length(k) <= m^.slots[1].key.capacity`, which reads the capacity off the
+map rather than repeating a number, and say what the program drops. Never
+clamp with `substr`: two long keys sharing a prefix become one key, which is a
+wrong answer where the other two shapes are merely a narrow one.
 
 ## 8. Concurrency: tasks and channels
 
