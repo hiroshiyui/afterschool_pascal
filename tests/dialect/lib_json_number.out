@@ -6,14 +6,20 @@ zero             -> {"n":0} reads=TRUE parses=TRUE
 negative         -> {"n":-2.5} reads=TRUE parses=TRUE
 whole as a real  -> {"n":3} reads=TRUE parses=TRUE
 ten              -> {"n":10} reads=TRUE parses=TRUE
-very large       -> {"n":1E+300} reads=TRUE parses=FALSE
+very large       -> {"n":1E+300} reads=TRUE parses=TRUE
 very small       -> {"n":1E-320} reads=TRUE parses=TRUE
-largest          -> {"n":1.7976931348623157E+308} reads=TRUE parses=FALSE
-smallest normal  -> {"n":2.2250738585072014E-308} reads=TRUE parses=FALSE
+largest          -> {"n":1.7976931348623157E+308} reads=TRUE parses=TRUE
+smallest normal  -> {"n":2.2250738585072014E-308} reads=TRUE parses=TRUE
 fixed at the end -> {"n":0.000001} reads=TRUE parses=TRUE
-exponent beyond  -> {"n":1E-7} reads=TRUE parses=FALSE
+exponent beyond  -> {"n":1E-7} reads=TRUE parses=TRUE
 twenty zeros     -> {"n":100000000000000000000} reads=TRUE parses=TRUE
 twenty-one       -> {"n":1E+21} reads=TRUE parses=TRUE
+denormal         -> {"n":4.9E-324} reads=TRUE parses=TRUE
+subnormal least  -> {"n":4.9E-324} reads=TRUE parses=TRUE
+pi times 1e-300  -> {"n":3.141592653589793E-300} reads=TRUE parses=TRUE
+two to the 53    -> {"n":9007199254740992} reads=TRUE parses=TRUE
+just past 2^53   -> {"n":9007199254740994} reads=TRUE parses=TRUE
+near a tie       -> {"n":1.0000000000000002} reads=TRUE parses=TRUE
 integer 3        -> {"n":3}
 integer 0        -> {"n":0}
 integer -7       -> {"n":-7}

@@ -304,8 +304,13 @@ the first row here to close, the day after the chapter was written
   the writer renders and reads its own output back and keeps the first
   spelling that returns the value it started from, and
   `examples/json_pretty.out` moved with it, which is what that golden was for.
-  What it uncovered is the *reader*: `JsonParse` scales a decade at a time and
-  is not correctly rounded, catalogued in the new case's second column. And
+  What it uncovered is the *reader*, and ~~`JsonParse` scales a decade at a
+  time and is not correctly rounded~~ — **done** (ADR-0314), in
+  [`doc/history.md`](history.md#a-decimal-is-the-languages-to-round): the
+  reader stops computing and hands the significand and exponent to §6.9.5's
+  `readstr`, which reaches the same correctly rounded conversion the writer's
+  own round-trip search had been consulting all along, so the case that
+  measured two converters disagreeing now has no FALSE in it. And
   ~~a `MapKey` is 63 characters, so a map keyed by text from outside needs a
   guard the example has to explain~~ — that one was **half wrong** and is
   **done** too (ADR-0310), in

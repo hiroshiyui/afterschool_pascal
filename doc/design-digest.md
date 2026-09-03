@@ -4597,6 +4597,28 @@ after the procedure returns is reading something only the join can have
 ordered. Its margin is a one-second sleep and not a construction that cannot
 race.
 
+### A decimal is the language's to round (ADR-0314)
+
+`PasJson`'s number reader does not convert. `ParseNumberNode` validates
+RFC 8259 §6's grammar — stricter than Pascal's — and normalises what it reads
+into a significand and a decimal exponent, then writes them as a Pascal
+real-literal with `writestr(text, sig, 'E', dexp:1)` and converts with
+`readstr(text, mant)`. §6.9.5's required procedures reach the same runtime
+routine `read(f, r)` uses, which is correctly rounded, so the reader and the
+writer's own round-trip search consult one converter instead of two.
+
+Two asymmetries are the whole of the normalisation. A leading zero contributes
+no digit — nothing at all before the point, and one place down after it. And a
+digit dropped for want of room leaves its place behind when it came from the
+integer part, so the exponent takes it, while one dropped from the fraction
+part cancels against the −1 that appending it would have carried. At most
+`SigMax` = 40 digits are kept; seventeen identify a double, so what is dropped
+matters only for a value built to sit at a halfway point.
+
+What it replaced scaled by ten once per decade, so a value was rounded as many
+times as its exponent had decades. The mutation that restores it turns eight
+of `tests/dialect/lib_json_number.pas`'s twenty-two round-trip columns FALSE.
+
 ### Waiting for whichever comes first (ADR-0313)
 
 AP 6.9.3.15's select-statement waits until one of several channels can

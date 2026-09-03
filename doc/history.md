@@ -7092,6 +7092,50 @@ nothing held ADR-0283's zero and gave a reason for declining a gate; the
 reason was an estimate, and it was wrong by the same margin as the three
 before it. **The rule does not exempt the document that states it.**
 
+## A decimal is the language's to round
+
+ADR-0314, closing the first item of ADR-0309's *What is not done* on the same
+day it was written down.
+
+**The finding is about which half of the trip had its own arithmetic.**
+ADR-0309's writer renders the shortest spelling that reads back, and the way
+it finds one is to render a candidate, read it back through the processor's own
+reader, and keep the first that returns the value it started from — so the
+writer had been consulting the language's converter all along. The reader had
+not: it accumulated digits into a `real` and scaled by ten once per decade, so
+a value was rounded as many times as its exponent had decades and a mantissa
+past 2⁵³ was inexact before the scaling began. `parses=FALSE` on four of
+sixteen values was therefore not a reader measured against a specification. It
+was **two converters disagreeing, one of which was the language's**, and the
+case could only ask the question because the writer had just been made honest.
+
+**The fix was to stop computing rather than to compute better.** The scan is
+untouched — it still validates RFC 8259 §6's grammar, which is stricter than
+Pascal's — and what it produces now is a significand and a decimal exponent
+written out as a real-literal, converted by `writestr` and `readstr` in two
+lines. §6.9.5's required procedures are how a program hands a value to the
+language's own number reading, and that reading is correctly rounded. The
+module gets the answer without owning the arithmetic.
+
+**The mutation is louder than the original defect.** Putting the
+decade-at-a-time scaling back turns eight of the twenty-two round-trip columns
+FALSE where the original defect turned four of sixteen — because six
+adversarial values were added while fixing it, chosen for what the old
+arithmetic could not have got right: two denormals, a value needing seventeen
+digits *and* a large exponent, and the two integers either side of 2⁵³. A
+defect found is a chance to make the case that found it sharper.
+
+**What is not exact is written down.** At most forty significant digits are
+kept and the rest move into the exponent; seventeen identify a double, so what
+is dropped can only matter for a value built to sit within 10⁻²³ of a halfway
+point. Keeping them all needs a string with no capacity and this language has
+none.
+
+The lesson had already been learned twice on this module and this is the third
+time: **a library that needs an answer the language already gives should ask
+the language.** ADR-0290's congruity rule and ADR-0310's key capacity were the
+same shape — a module having taken on a decision that belonged one level down.
+
 ## The concurrency residue
 
 All three rows ADR-0268 wrote about itself are closed, all on 2026-09-03, and

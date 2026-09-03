@@ -235,6 +235,26 @@ procedure JsonRender(v: JsonPtr; var out: JsonChars);
 
 end;
 
+{ --- reading a number ------------------------------------------------------ }
+
+const
+  { The significant digits a number is read from (ADR-0314). Seventeen
+    identify a double; this keeps more than twice as many, so what is dropped
+    can only matter where the value sits within 10^-23 of a halfway point.
+    Keeping every digit a document may write would need a string with no
+    capacity, and this language has none. }
+  SigMax = 40;
+
+type
+  JsonSig = string(SigMax);
+  { The significand, an `E`, and a decimal exponent. The scan bounds the
+    exponent it reads at five digits, and the significand can shift it by at
+    most `SigMax` more, so seven characters would hold it and this holds
+    fifteen: a margin is cheaper than the argument that the exact figure is
+    right, and overflowing a string capacity in a library is a trap rather
+    than a wrong answer. }
+  JsonNumText = string(SigMax + 16);
+
 { --- the buffer ----------------------------------------------------------- }
 
 procedure JsonCharsNew;
@@ -748,26 +768,80 @@ end;
   so a value above maxint is a number and not an overflow -- ADR-0014 makes
   integer arithmetic trap, and this is input a program did not write. `whole`
   is what says the integer form is there to be had. }
+{ RFC 8259 §6's number, read correctly rounded (ADR-0314).
+
+  **What this used to do and why it was wrong.** It accumulated the digits into
+  a `real` and then scaled by ten *once per decade*, so a value with a large
+  exponent was rounded as many times as its exponent had decades and a
+  mantissa past 2^53 was inexact before the scaling began. ADR-0309 made that
+  visible rather than causing it: the writer began rendering the shortest
+  spelling that reads back, so the case could ask whether the reader read its
+  own output, and the answer was FALSE for `1E+300`, `1E-7`,
+  `1.7976931348623157E+308` and `2.2250738585072014E-308`.
+
+  **What it does now is hand the value to the language.** The scan is
+  unchanged -- it still validates RFC 8259 §6's grammar exactly, which is
+  stricter than Pascal's, and still advances `i` -- but it no longer computes.
+  It normalises what it reads into a significand and a decimal exponent,
+  writes them as a Pascal real-literal, and `readstr` converts it. That goes
+  through ISO/IEC 10206:1991 §6.9.5 to the same routine `read(f, r)` uses,
+  which is correctly rounded, so this module gets the answer without owning
+  the arithmetic. Correctly rounding a decimal to a double is a decision with
+  its own arithmetic and the language had already taken it.
+
+  **The one place it is not exact is stated rather than hidden.** At most
+  `SigMax` significant digits are kept and the rest move into the exponent, so
+  a number written with more than that many is rounded from its first
+  `SigMax`. Seventeen identify a double, so the digits dropped can only matter
+  where the value sits within 10^-(SigMax-17) of a halfway point -- which a
+  document has to be built to hit. Keeping them all would need a string with
+  no capacity, and this language has none. }
 function ParseNumberNode(var b: JsonChars; var i: integer;
                          var e: ErrorCode): JsonPtr;
-var mant, scale: real; neg, ok, exneg, plain: boolean;
-    p: JsonPtr; ex, k: integer;
+var mant: real; neg, ok, exneg, plain, any: boolean;
+    p: JsonPtr; ex, dexp: integer;
+    sig: JsonSig; text: JsonNumText;
+
+  { A significant digit, or the place value of one there is no room for.
+    Dropping a digit of the integer part leaves its place behind, so the
+    exponent takes it; dropping one of the fraction part cancels against the
+    -1 that appending it would have carried, so nothing happens. }
+  procedure Keep(c: char; fraction: boolean);
+  begin
+    if (c = '0') and not any then begin
+      { A leading zero contributes no digit. Before the point it contributes
+        nothing at all; after it, it shifts what follows one place down. }
+      if fraction then dexp := dexp - 1
+    end
+    else begin
+      any := true;
+      if length(sig) < SigMax then begin
+        sig := sig + c;
+        if fraction then dexp := dexp - 1
+      end
+      else if not fraction then dexp := dexp + 1
+    end
+  end;
+
 begin
   ok := true;
   plain := true;
   neg := false;
-  mant := 0.0;
+  any := false;
+  dexp := 0;
+  sig := '';
   if Peek(b, i) = '-' then begin
     neg := true;
     i := i + 1
   end;
   if Peek(b, i) = '0' then begin
     i := i + 1;
+    Keep('0', false);
     if Digit(Peek(b, i)) then ok := false
   end
   else if Digit(Peek(b, i)) then
     while Digit(Peek(b, i)) do begin
-      mant := mant * 10.0 + (ord(JsonCharsAt(b, i)) - ord('0'));
+      Keep(JsonCharsAt(b, i), false);
       i := i + 1
     end
   else
@@ -776,13 +850,10 @@ begin
     plain := false;
     i := i + 1;
     if not Digit(Peek(b, i)) then ok := false;
-    scale := 1.0;
     while ok and Digit(Peek(b, i)) do begin
-      mant := mant * 10.0 + (ord(JsonCharsAt(b, i)) - ord('0'));
-      scale := scale * 10.0;
+      Keep(JsonCharsAt(b, i), true);
       i := i + 1
-    end;
-    if ok then mant := mant / scale
+    end
   end;
   if ok and ((Peek(b, i) = 'e') or (Peek(b, i) = 'E')) then begin
     plain := false;
@@ -794,20 +865,33 @@ begin
     ex := 0;
     while ok and Digit(Peek(b, i)) do begin
       { A document may write any exponent it likes; what this refuses is one
-        this arithmetic could not survive computing. }
+        the exponent arithmetic below could not hold. The bound is far past
+        the range of a double either way -- what is outside it is `inf` or
+        zero, which is what it was before. }
       if ex > 10000 then ok := false
       else ex := ex * 10 + (ord(JsonCharsAt(b, i)) - ord('0'));
       i := i + 1
     end;
     if ok then
-      for k := 1 to ex do
-        if exneg then mant := mant / 10.0 else mant := mant * 10.0
+      if exneg then dexp := dexp - ex else dexp := dexp + ex
   end;
   if not ok then begin
     e := errSyntax;
     ParseNumberNode := nil
   end
   else begin
+    { No significant digit at all is the one value the conversion cannot be
+      asked for: `0`, `0.000` and `0E9` are all zero, and `E-3` is not a
+      real-literal. }
+    if not any then mant := 0.0
+    else begin
+      { Written as a real-literal and read back as one, which is the whole of
+        the conversion: 6.9.5's two required procedures are how a program
+        hands a value to the language's own number reading and takes the
+        answer back. The exponent writes its own sign. }
+      writestr(text, sig, 'E', dexp:1);
+      readstr(text, mant)
+    end;
     if neg then mant := -mant;
     p := FreshNode(jsNumber);
     p^.num := mant;

@@ -23,12 +23,14 @@ var doc: JsonPtr; at: integer; r: JsonResult;
   own reader, and the one the writer's search consults -- returns the value
   that went in. It is TRUE for every value here, and that is the property.
 
-  `parses` is `JsonParse` reading its own writer's output, and it is FALSE
-  wherever the text carries an exponent, because the parser scales by
-  multiplying or dividing by ten once per decade and a decade at a time is not
-  a correctly rounded conversion. That is a defect in the *reader* which this
-  change made visible and does not fix (ADR-0309); the column is here so that
-  the day it is fixed, this golden says so. }
+  `parses` is `JsonParse` reading its own writer's output, and it is **TRUE
+  for every value here** since ADR-0314. It was not: the reader scaled by
+  multiplying or dividing by ten once per decade, so four of these sixteen
+  came back a different value, and ADR-0309 put the column in the golden so
+  that the day it was fixed this case would say so. It says so. The reader
+  normalises what it scans and hands the literal to the same `readstr` the
+  writer's search consults, so the two halves of the trip now agree by
+  construction rather than by arithmetic written twice. }
 procedure Trip(what: string; x: real);
 var v, back: JsonPtr; out: JsonChars; text: string(255); q: JsonResult;
     y, z: real; where: integer;
@@ -86,6 +88,23 @@ begin
   Trip('exponent beyond ', 1.0e-7);
   Trip('twenty zeros    ', 1.0e20);
   Trip('twenty-one      ', 1.0e21);
+
+  { ADR-0314's own additions: values whose conversion the old reader could
+    not have got right, and two that ask what the *scan* does rather than
+    what the arithmetic does.
+
+    `denormal` and `subnormal least` sit where a decade-at-a-time scaling
+    loses the value entirely; `pi times 1e-300` needs seventeen digits *and*
+    a large exponent, which are the two halves of the old defect met at once.
+    `two to the 53` and `just past 2^53` are the boundary above which a
+    decimal mantissa is no longer exactly a double, and where the old
+    accumulation went inexact before any scaling began. }
+  Trip('denormal        ', 5.0e-324);
+  Trip('subnormal least ', 4.9406564584124654e-324);
+  Trip('pi times 1e-300 ', 3.1415926535897932e-300);
+  Trip('two to the 53   ', 9007199254740992.0);
+  Trip('just past 2^53  ', 9007199254740994.0);
+  Trip('near a tie      ', 1.0000000000000002);
 
   Whole('integer 3       ', 3);
   Whole('integer 0       ', 0);
