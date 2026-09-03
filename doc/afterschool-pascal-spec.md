@@ -2175,8 +2175,9 @@ it matches, as follows.
      corresponding component of the type-argument-tuple of that type.
 
   c) Where the parameter-form is a slice-parameter-type (6.7.3.9.1), and the
-     actual-parameter is one 6.7.3.9.3 admits, the type-denoter after `of`
-     shall be read against the component type of that actual-parameter.
+     type possessed by the actual-parameter is an array-type or a slice-type,
+     the type-denoter after `of` shall be read against the component type of
+     that type.
 
   d) Otherwise the formal-parameter shall determine nothing.
 
@@ -2215,11 +2216,23 @@ possesses a type merely assignment-compatible with the first's is therefore
 well-formed, and one whose second actual-parameter is not is refused where any
 other mismatch is refused.
 
-NOTE 8 — A type parameter occurring only in the result type is determined by
+NOTE 8 — Clause c) is deliberately wider than 6.7.3.9.3, which admits an
+array only where its index-type is an integer type. An array indexed
+otherwise therefore determines the type parameter and is then refused as the
+actual-parameter it is, by the rule about slice actuals; were it excluded
+here, the type parameter would be determined by no actual-parameter and the
+error reported would be that one, so the reader would have to write a type
+argument before the error about the array appeared. What clause c) requires is
+only that there be a component type to read, and an array-type has one
+whatever its index-type. A variable-string is not an array-type and has no
+component type in this sense, so it determines nothing here, and 6.7.3.9.3
+does not admit one either.
+
+NOTE 9 — A type parameter occurring only in the result type is determined by
 no actual-parameter, 6.7.1 making a result type a type-identifier and not an
 actual-parameter. Such a type parameter is written by every activation.
 
-NOTE 9 — A generic declaration writing its undeterminable type parameters
+NOTE 10 — A generic declaration writing its undeterminable type parameters
 first is therefore one whose activations write those and no others. This is
 why 6.7.3.10.2's produced routine is reached by a prefix and not by a
 selection: the declaration chooses, once, which of its type parameters an

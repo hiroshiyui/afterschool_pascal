@@ -30,6 +30,7 @@ type
   IntFallible = Fallible(integer);
   Short = string(8);
   Row = array [1..4] of integer;
+  Vec(cap: integer) = array [1..cap] of integer;
 
 { The determining position is a schema production, so the binding is read out
   of the tuple `good`'s type was produced with -- the shape a name-only
@@ -58,6 +59,11 @@ end;
 var
   i, j: integer;
 
+{ The component of an array whose component is structured. Separate from
+  `Total`, which sums ordinals: a `Row` has no `ord`. }
+function Count(T: type; protected var xs: array of T): integer;
+begin Count := length(xs) end;
+
 { ADR-0125's slice is a parameter-form too, and its component determines. }
 function Total(T: type; protected var xs: array of T): integer;
 var k, n: integer;
@@ -81,6 +87,9 @@ var
   st: Fallible(Short);
   r: Row;
   c: char;
+  g: array [1..4] of Row;
+  v: Vec(3);
+  sub: array [0..2] of integer;
 
 begin
   good := 7;
@@ -88,6 +97,9 @@ begin
   ch := 'x';
   st := refused;
   r[1] := 10; r[2] := 20; r[3] := 30; r[4] := 40;
+  v[1] := 1; v[2] := 2; v[3] := 3;
+  sub[0] := 5; sub[1] := 6; sub[2] := 7;
+  g[1] := r; g[2] := r; g[3] := r; g[4] := r;
 
   { Inferred, through the production: `good` is a Fallible(integer), so T is
     integer and `0` is an ordinary actual of it. }
@@ -107,7 +119,21 @@ begin
 
   writeln(Third(1, 2, 'c'), ' ', Third(1, 2, char, 'd'));
 
-  writeln(Total(r[1..4]):1);
+  { AP 6.7.3.10.4 c) reads the component off the actual "6.7.3.9.3 admits",
+    and that clause admits a whole array as well as a slice of one -- so the
+    array itself determines T and no type has to be written. The slice form is
+    printed beside it because the two are one instantiation: what differs is
+    the extent, which is the feature. }
+  writeln(Total(r):1, ' ', Total(r[1..4]):1, ' ', Total(r[2..3]):1);
+
+  { Two shapes the arm reaches now that it reads an array's component, and
+    both were unreachable while it asked whether the actual was a slice. A
+    schema-produced array determines from the component of the *produced*
+    type, and an array whose component is itself structured determines T as
+    that type -- `Total(g)` is 4 rows of nothing, `length` of the outer array.
+    `sub` is indexed from 0, and the callee indexes from 1 whatever the
+    array's own bounds are (AP 6.7.3.9.4), so its three components are read. }
+  writeln(Total(v):1, ' ', Count(g):1, ' ', Total(sub):1);
 
   i := 3; j := 4;
   Swap(i, j);

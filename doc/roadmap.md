@@ -345,8 +345,19 @@ the first row here to close, the day after the chapter was written
   reason, which is that an owned pointer already has `dispose` and a handle has
   nothing else, and the message names it now.
 
-- **Inference cannot read a type parameter through a whole array**, only
-  through a slice-designator. `Determine`'s slice arm asks whether the
+- ~~**Inference cannot read a type parameter through a whole array**, only
+  through a slice-designator.~~ — **done** (ADR-0316), the day after it was
+  written down, and **the row had the direction wrong**: it said AP 6.7.3.10.4
+  c) was narrower than the parameter it describes, and the clause was right
+  all along. It defers to 6.7.3.9.3 for what is admitted, and 6.7.3.9.3
+  admits a whole array; it was `Determine` that asked `IsSlice(t)` and so
+  read only what was already a slice. The clause is widened in the one place
+  it needed to be — an array indexed by something other than an integer now
+  determines and is then refused for its index-type, so the reader gets that
+  message rather than being told to write a type argument first — and the
+  fix reached two shapes nobody had asked for either, a schema-produced array
+  and an array whose component is structured. The original row, for the
+  record: `Determine`'s slice arm asks whether the
   *actual's* type is a slice, and an ordinary array's is not — the conversion
   happens at the call — so `Total(r)` against `function Total(T: type;
   protected var xs: array of T)` is refused with *nothing in this call says

@@ -21695,7 +21695,25 @@ begin
         if t^.schema = sc then DetermineTuple(gen, d^.scArgs, t, bs)
     end
     else if d^.kind = nkArray then
-      if (d^.arDims = nil) and IsSlice(t) then
+      { AP 6.7.3.10.4 c) reads the denoter after `of` against the component of
+        an actual 6.7.3.9.3 admits, and that clause admits *a whole array* as
+        well as a slice of one -- so this asks the two questions
+        CheckActualParams asks of a slice formal's actual, and not whether the
+        actual is already a slice. It was `IsSlice(t)` alone, and an ordinary
+        array's type is not a slice: the conversion happens at the call, so
+        `Total(r)` determined nothing where `Total(r[1..4])` determined the
+        component, and a program had to write the type argument for a
+        parameter whose whole point is that it need not know the extent.
+        Nothing here had tried it -- `generic_infer`'s one slice activation
+        passed a slice-designator.
+
+        An array indexed by something other than an integer is *not* excluded
+        here, though 6.7.3.9.3 excludes it as an actual. It determines, and
+        the slice rule then refuses it in the words that say what is wrong
+        with it; excluding it here would leave the type parameter determined
+        by nothing, and the reader would be told to write a type argument
+        before the message they needed appeared. }
+      if (d^.arDims = nil) and (IsSlice(t) or IsArray(t)) then
         Determine(gen, d^.arElem, t^.elem, bs)
 end;
 

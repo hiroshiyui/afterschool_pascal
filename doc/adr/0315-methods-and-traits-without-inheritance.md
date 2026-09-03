@@ -447,10 +447,18 @@ refused with *nothing in this call says what 't' of 'total' is*, while
 admitted where `array of T` stands; it is only inference that cannot read
 through it. Nothing in this tree had ever written that call — `generic_infer`'s
 one slice activation passes a slice-designator — so no oracle here could have
-said so. It is not this record's to fix, and AP 6.7.3.10.4 c) is narrower than
-the parameter it describes; ADR-0266's own example
+said so. ADR-0266's own example
 `procedure Sort(Elem: ordered type; var a: array of Elem)` cannot be activated
 by inference from an ordinary array.
+
+  **Fixed the next day, in
+  [ADR-0316](0316-an-array-says-what-its-components-are.md), and this
+  paragraph first had the direction wrong**: it said AP 6.7.3.10.4 c) was
+  narrower than the parameter it describes. It was not — the clause defers to
+  6.7.3.9.3 for what is *admitted* and that clause admits a whole array, so
+  the specification was right and `Determine` was asking `IsSlice(t)`.
+  Nothing about the design above turns on it, but a wrong direction is worth
+  correcting where it was written and not only where it was fixed.
 
 **One thing to watch that no gate will see.** `x.M(a)` resolving in the type's
 scope means a reader can no longer find a routine's declaration by searching

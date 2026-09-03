@@ -60,10 +60,20 @@ begin
   if res.ok then WhenBadFirst := res.val else WhenBadFirst := whenBad
 end;
 
+{ AP 6.7.3.10.4 c) reads the component type off an array as well as off a
+  slice, so `Total(byChar)` determines T -- and 6.7.3.9.3, which is the clause
+  c) defers to, then refuses the actual for the reason it is refused. That is
+  the decision this case pins: the reader is told what is wrong with the array
+  once, rather than told that nothing said what T was and left to write the
+  type argument before the real message appears. }
+function Total(T: type; protected var xs: array of T): integer;
+begin Total := length(xs) end;
+
 var
   good: IntFallible;
   i: integer;
   c: char;
+  byChar: array ['a'..'c'] of integer;
 
 begin
   good := 7;
@@ -87,5 +97,8 @@ begin
 
   { A written prefix of one, and the type parameter left over is determined by
     nothing. The message names `u` and not the whole list. }
-  writeln(Pair(integer, 3):1)
+  writeln(Pair(integer, 3):1);
+
+  { Determined, then refused by the slice rule and not by inference. }
+  writeln(Total(byChar):1)
 end.

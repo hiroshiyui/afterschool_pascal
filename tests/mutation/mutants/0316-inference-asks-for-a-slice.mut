@@ -1,0 +1,8 @@
+adr: 0316
+file: selfhost/apfront.pas
+kills: generic_infer, generic_infer_errors
+why: The arm back to asking whether the actual's type is *already* a slice, which is what AP 6.7.3.10.4 c) does not say -- it defers to 6.7.3.9.3, and that clause admits a whole array. `Total(r)` then determines nothing and is refused as an activation short of a type argument, and `Total(byChar)` is refused for the same wrong reason instead of for its index-type. Two cases fail and they fail differently: one loses an activation that should compile, the other loses a diagnostic that should name the array.
+--- old
+      if (d^.arDims = nil) and (IsSlice(t) or IsArray(t)) then
+--- new
+      if (d^.arDims = nil) and IsSlice(t) then
