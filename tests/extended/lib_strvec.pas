@@ -20,10 +20,11 @@ var
   v, w: StrVecPtr;
   i, n: integer;
   joined: string(40);
+  buf: FileLine;   { ForEachLine's buffer, and so the bound on a line }
   ok: boolean;
 
 { nested, so it can reach `v` }
-procedure keep(line: FileLine);
+procedure keep(line: string);
 begin SVecPush(v, line) end;
 
 procedure dump(what: string(8); u: StrVecPtr);
@@ -90,7 +91,7 @@ begin
           WriteAllText(p, 'pear' + chr(10) + 'apple' + chr(10) + 'fig'
                        + chr(10)));
   SVecClear(v);
-  ok := ForEachLine(p, keep);
+  ok := ForEachLine(p, buf, keep);
   dump('read', v);
   SVecSort(v);
   n := SVecJoin(v, ' < ', joined);

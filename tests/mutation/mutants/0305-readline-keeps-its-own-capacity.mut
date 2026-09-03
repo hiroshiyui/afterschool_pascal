@@ -1,0 +1,8 @@
+adr: 0305
+file: lib/pasfile.pas
+kills: lib_file
+why: ReadLine's formal back to FileLine, so the capacity is the module's 255 again and not the caller's. The case reads one line into a string(8) and into a string(300); with this the narrow read comes back whole and the golden's `narrow: TRUE [a line l] 8` becomes the full line.
+--- old
+function ReadLine(path: FilePath; n: integer; var line: string): boolean;
+--- new
+function ReadLine(path: FilePath; n: integer; var line: FileLine): boolean;

@@ -10,3 +10,4 @@
 <source>:53:8: error: an owned pointer can only be compared with = and <>, not with '<'
 <source>:59:11: error: argument 1 of 'byvalue' is nodeptr, but the value is nodeptr
 <source>:63:12: error: var parameter 'n' is owned ^node, but the argument is nodeptr
+<source>:68:3: error: 'dispose' is what releases an owned pointer: assigning nil would leave what it identifies with no owner

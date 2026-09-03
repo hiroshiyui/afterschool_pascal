@@ -1725,6 +1725,14 @@ type
       would grow a slot nothing reads. Set nowhere else and read nowhere
       else. }
     nChecked: boolean;
+    { This node's `ntype` is the placeholder an error path left behind, not a
+      type the program wrote. The contract RunCodeGen rests on is that Sema
+      leaves every node's `ntype` non-null, and `intType` is what an error
+      path gives it -- so a later rule that finds the types incompatible
+      reports a second message naming `integer`, which nothing in the source
+      holds. Set where such a placeholder is assigned; read only where a
+      message would otherwise spell it (ADR-0306). }
+    nErrType: boolean;
     { Where the construct this node is ends: the line of its last token and one
       past that token's last character (ADR-0258). Zero on a node nothing
       stamped, which is every node that is not a statement -- the parser knows

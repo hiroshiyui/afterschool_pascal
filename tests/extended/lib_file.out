@@ -38,3 +38,11 @@ write line refused: FALSE
 append line refused: FALSE
 append text refused: FALSE
 copy refused: FALSE source intact=6
+narrow: TRUE [a line l] 8
+wide: TRUE [a line longer than eight] 24
+  1: [short]
+  2: [a line l]
+  1: [short]
+  2: [a line longer than eight]
+whole=TRUE [short]
+whole=FALSE [a line l]

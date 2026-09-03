@@ -274,21 +274,14 @@ the first row here to close, the day after the chapter was written
 
 ### Writing a daily program
 
-- **What a program reads can be cut without a word.** ADR-0292 closed with
-  a warning rather than a gap, and this row is where it lives now. `readln`
-  truncates **silently** at the variable's capacity, §6.9.1 skipping the rest
-  of the line, so the capacity a reader declares is a decision and not a formality —
-  which is why `DumpLineMax` is derived from `MaxPath` and not counted. And
-  `PasFile.ReadLine` and `ForEachLine` still hand a caller a `FileLine` of 255
-  and cut the rest away without a word. No client here has been bitten by that
-  one, so it is written down and not fixed: ADR-0116's bar, applied to the
-  module next door.
-
-  From the user's side it is one thing: **a line longer than a number the
-  program did not choose is lost, and nothing says so.** The library half is
-  a schematic formal, which is what ADR-0291 did for `PasJson`; the language
-  half is a decision about whether a truncating read may be *reported*, and
-  it has not been probed.
+- ~~**What a program reads can be cut without a word.**~~ — **done**
+  (ADR-0305), and moved to
+  [`doc/history.md`](history.md#the-capacity-is-the-callers). `ReadLine` and
+  `ForEachLine` take the caller's own string, and the language half needed
+  nothing built: `read(f, s)` stops at the capacity *or* at the line's end, so
+  `eoln(f)` immediately afterwards is false exactly when something was left
+  over. The row said that half had not been probed; probing it took four
+  lines.
 
 - **Concurrency is one increment short**, and the rows are in [What each
   landed feature left open](#what-each-landed-feature-left-open): a task
@@ -317,22 +310,21 @@ the first row here to close, the day after the chapter was written
   writes none. `examples/word_freq.pas` is the measurement the row above
   asked for, and it reads as a program about `MapGet`'s signature.
 
-- **Four of twelve example programs collided with a library name on their
-  first draft** (ADR-0295, finding 3). Pascal folds case, so `info: InfoResult`
-  is a second declaration of `PasFS.Info` and `parts: Parts(16)` of
-  `PasText.Parts`. The names are the nouns a caller reaches for first —
-  `Info`, `Dir`, `List`, `Parts`, `Stream` — and `tests/dialect/lib_dir.pas`
-  already carried a comment warning about one of them. Three of the four
-  diagnostics were exact; `info := Info(child)` reports *cannot assign
-  integer to a variable of type inforesult*, naming a type nothing in the
-  source holds, and that one is the compiler's.
+- ~~**Four of twelve example programs collided with a library name on their
+  first draft**~~ — **done** (ADR-0306), and moved to
+  [`doc/history.md`](history.md#the-capacity-is-the-callers). The compiler
+  defect was a placeholder type an error path left behind and a later rule
+  spelled out; the naming half is a paragraph in `README.md` and not a rename,
+  because every rename moves the collision rather than removing it.
 
-- **Three smaller reports from the same pass** (ADR-0295, findings 4 to 6):
-  an owned pointer refuses `p := nil` where a handle takes it as its early
-  release, and the refusal does not name `dispose`; `PasJson` renders `0.75`
-  as `7.500000000000E-01`, which `examples/json_pretty.out` now holds so the
-  day it changes is visible; and a `MapKey` is 63 characters, so a map keyed
-  by text from outside needs a guard the example has to explain.
+- **Two smaller reports from the same pass** (ADR-0295, findings 5 and 6):
+  `PasJson` renders `0.75` as `7.500000000000E-01`, which
+  `examples/json_pretty.out` now holds so the day it changes is visible; and a
+  `MapKey` is 63 characters, so a map keyed by text from outside needs a guard
+  the example has to explain. ~~The third — an owned pointer refusing
+  `p := nil`~~ — is **answered** (ADR-0307): the asymmetry with a handle has a
+  reason, which is that an owned pointer already has `dispose` and a handle has
+  nothing else, and the message names it now.
 
 ### Tooling
 

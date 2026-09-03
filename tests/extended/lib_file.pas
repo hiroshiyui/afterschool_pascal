@@ -10,6 +10,7 @@ import PasFile;
 
 var
   fresh: bindable text;
+  g: text; gb: BindingType;
   base, p, q, absent, bad: FilePath;
   n, size, seen: integer;
   l: FileLine;
@@ -17,7 +18,7 @@ var
   big, again: string(300);
   ok: boolean;
 
-procedure show(line: FileLine);
+procedure show(line: string);
 begin
   seen := seen + 1;
   writeln('  ', seen:1, ': [', line, ']')
@@ -36,7 +37,7 @@ begin
   l := 'untouched';
   writeln('absent line: ', ReadLine(absent, 1, l), ' ', l);
   seen := 0;
-  writeln('absent each: ', ForEachLine(absent, show), ' ', seen:1);
+  writeln('absent each: ', ForEachLine(absent, l, show), ' ', seen:1);
   size := -1;
   small := 'untouch';
   writeln('absent all: ', ReadAllText(absent, small, size), ' ', small, ' ',
@@ -60,7 +61,7 @@ begin
   ok := ReadLine(p, 0, l);
   writeln('line 0: ', ok);
   seen := 0;
-  ok := ForEachLine(p, show);
+  ok := ForEachLine(p, l, show);
   writeln('each: ', ok);
 
   { the whole text, into a string that holds it and one that does not }
@@ -122,5 +123,39 @@ begin
   writeln('append line refused: ', AppendLine(bad, 'x'));
   writeln('append text refused: ', AppendText(bad, 'x'));
   ok := LineCount(p, n);
-  writeln('copy refused: ', CopyFile(p, bad), ' source intact=', n:1)
+  writeln('copy refused: ', CopyFile(p, bad), ' source intact=', n:1);
+
+  { --- the capacity is the caller's, and nothing here chooses it (ADR-0305).
+        The same two lines read into a string of eight characters and into one
+        of three hundred: the narrow one delivers a prefix and the wide one
+        the line. `small` is also the buffer ForEachLine reads through, so the
+        bound on a line there is a variable this program declared. --- }
+  ok := WriteAllText(q, 'short' + chr(10) + 'a line longer than eight' + chr(10));
+  ok := ReadLine(q, 2, small);
+  writeln('narrow: ', ok, ' [', small, '] ', length(small):1);
+  ok := ReadLine(q, 2, big);
+  writeln('wide: ', ok, ' [', big, '] ', length(big):1);
+  seen := 0;
+  ok := ForEachLine(q, small, show);
+  seen := 0;
+  ok := ForEachLine(q, big, show);
+
+  { And what the language answers where the library does not: `read` stops at
+    the capacity or at the line's end (ISO/IEC 10206:1991 §6.10.1 f)), so
+    `eoln` is false exactly when something was left over. }
+  gb := binding(g); gb.name := q; bind(g, gb);
+  reset(g);
+  while not eof(g) do begin
+    read(g, small);
+    writeln('whole=', eoln(g), ' [', small, ']');
+    readln(g)
+  end;
+  unbind(g);
+
+  { `q` is left as this case found it -- empty. Every name here is derived from
+    a path the harness gave us, but the *same* path on a second run of the same
+    build, and `AppendLine(q, ...)` above appends: a `q` left holding these two
+    lines makes the earlier `q: TRUE [created by append]` read `[short]` the
+    next time round. That is what irtest.sh's second compiler found. }
+  ok := WriteAllText(q, '')
 end.

@@ -1382,7 +1382,7 @@ standard to satisfy. Eight modules so far:
 | `lib/pasvector.pas` | `IntVec`, a growable sequence: `IVecNew`, `IVecPush`, `IVecPop`, `IVecGet`, `IVecSet`, `IVecReserve`, `IVecFill`, `IVecSum`, `IVecFree` — the `I` is what keeps it apart from `PasContainer`'s generic `Vec`, as `PasStrVec`'s `S` does (ADR-0298) |
 | `lib/pasmap.pas` | `StrMap`, a `string(32)`-keyed dictionary: `SMapPut`, `SMapGet`, `SMapHas`, `SMapDelete`, and `SMapSlots`/`SMapLiveAt` to walk it |
 | `lib/pastext.pas` | `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`, `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr` |
-| `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal, and since ADR-0240 every *writer* answers false for a path it cannot create, which is what `binding(f).writable` made possible |
+| `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal, and since ADR-0240 every *writer* answers false for a path it cannot create, which is what `binding(f).writable` made possible. **The bound on a line is the caller's**: `ReadLine` delivers into a string of any capacity and `ForEachLine` reads through a buffer the caller declares, so no number in this module decides how much of a line survives (ADR-0305) |
 | `lib/passtrvec.pas` | `StrVec`, a growable sequence of `string(255)`: `PasVector`'s interface under `SVec` names where that one's are `IVec`, plus `SVecIndexOf`, `SVecSort`, `SVecJoin` and `SVecSplit`. `PasFile.ForEachLine` with a nested procedure is how a file's lines become one |
 
 **`lib/dialect/` is a second layer** (ADR-0120): its modules use `external`,
@@ -1436,6 +1436,22 @@ which is where the interface is written.
 tools/pascalcc -c lib/passtrings.pas -o passtrings.o
 tools/pascalcc prog.pas --import lib/passtrings.pas passtrings.o -o prog
 ```
+
+**An imported name is one of your own declarations.** §6.11.2 puts every name a
+module exports into the importing block's scope, and §6.1 folds case — so
+`import PasFS;` declares `Info` in your block, and `var info: InfoResult` is
+then that name declared twice. Four of the twelve programs in `examples/` met
+this on their first draft (ADR-0295), because a library's best name for a
+routine is also a caller's best name for a variable. The ones to expect are
+`Info` (`PasFS`), `Dir` and `List` (`PasDir`), `Parts` (`PasText`) and `Stream`
+(`PasStream`). It is a compile-time error and never a silent one —
+*'info' is already declared in this block* — and there are three answers: rename
+the variable, `import PasFS only (Exists, Remove);` so the name never arrives,
+or `import PasFS qualified;` so it arrives as `PasFS.Info` and the short
+spelling stays yours. ADR-0298 made every export unique *across* the library,
+which is a different collision and does not reach this one: this is your
+declaration against the library's, and only the importer can decide which of the
+two moves (ADR-0306).
 
 Strings are passed by value, so an argument may be a literal, another
 function's result, a concatenation, or a string of any capacity:
