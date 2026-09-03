@@ -1045,12 +1045,35 @@ inside a task included — `release(c)`, `c := nil` and `c := take(d)` all do �
 so a pipeline of stages each closing the one downstream of it terminates; the
 release performed by the *end* of a task's block only drops that task's
 reference, which is what lets a pool of workers share one job channel.
-`channel`, `task`, `spawn`, `send` and `receive` are nobody's words — a
-program that declares any of them keeps it.
+`channel`, `task`, `spawn`, `send`, `receive` and `wait` are nobody's words —
+a program that declares any of them keeps it.
 
-What is not here: there is no way to wait for one task, no select over several
-channels, no timeout, and no channel of handles — a task may be *given* a
-socket at the moment it starts and cannot be sent one afterwards.
+**A task can be named, and waited for** (ADR-0312):
+
+```pascal
+var w: task; ws: array [1..4] of task; k: integer;
+
+  spawn w := Worker(jobs, results);
+  wait(w);                      { returns when that one activation is done }
+  for k := 1 to 4 do spawn ws[k] := Worker(jobs, results);
+  for k := 1 to 4 do wait(ws[k])
+```
+
+`task` is a type as well as a heading, and its value is one activation. It is
+a **handle**, so every rule a handle has is already its rule: released when
+its block ends, released early with `release`, moved with `take`, and storable
+in an array, in a record field or in a heap variable. What stands before `:=`
+is any variable-access, which is what makes a pool of workers writable.
+`wait(t)` returns at once when that activation is already complete and a
+second `wait` does nothing; waiting on an **empty** task-variable stops the
+program, because answering quietly would let a variable nothing was spawned
+into read as work that was done. It takes nothing out of the block's join: a
+block still joins everything it commenced before releasing anything of its
+own, and `wait` only completes one of them earlier.
+
+What is not here: there is no select over several channels, no timeout on a
+`send`, a `receive` or a `wait`, and no channel of handles — a task may be
+*given* a socket at the moment it starts and cannot be sent one afterwards.
 
 **`exit` leaves the block early** (ADR-0177), which no standard Pascal has and
 every widely used one does:
