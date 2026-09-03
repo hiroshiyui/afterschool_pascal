@@ -9,17 +9,32 @@ in this tree whose status is not *Accepted*, and the reason is that it was
 asked for as a design: the shape is to be argued before any code exists. Read
 it as a proposal with its costs measured, not as a decision taken.
 
+**The four choices it was written to put are settled** (2026-09-03, by the
+maintainer), and each is now stated as the decision below with the rejected
+form beside it:
+
+| Choice | Settled as |
+| --- | --- |
+| how far the design reaches | all three — methods, static traits, and `dyn` |
+| how a method is declared | the `impl` block |
+| how the receiver is written | explicitly, with its type |
+| what happens to the 139 prefixed library names | one module rewritten as proof, then judged |
+
+What is **not** settled is whether to build it, and one technical question named
+at the end of *Consequences* should be answered before increment B.
+
 Where it is agreed, it lands as three increments with a record apiece (see
 *Staging*), and this record's status becomes *Superseded* by the first of them.
 
 **No clause number is spelled here on purpose.** The clauses these constructs
 would take do not exist, and `clause-citations` (ADR-0164) cannot tell a
 proposal from a claim — it refused this record until the two numbers came out.
-Where they would go is said by naming the clause they follow: the impl-declaration
-after AP 6.7.8, the trait-type after AP 6.4.17. Writing the numbers down would
-have meant an entry in `tests/checks/nonexistent_clauses.txt` that somebody has
-to remember to remove on the day the clause is written, and the placement is
-the only information the number carried.
+Where they would go is said by naming the clause they follow: the
+impl-declaration after AP 6.7.8, the trait-type after AP 6.4.17. Writing the
+numbers down would have meant an entry in
+`tests/checks/nonexistent_clauses.txt` that somebody has to remember to remove
+on the day the clause is written, and the placement is the only information the
+number carried.
 
 ## Context
 
@@ -175,6 +190,23 @@ type-identifier, as a schema's discriminant is a constant identifier in its
 (§6.4.7), and not a new kind of thing. `for` is a word-symbol used in a
 position `impl` has already made the dialect's.
 
+**A trait impl repeats only the name, and that is not a new shape.** §6.7 lets
+a definition whose heading was already given elsewhere repeat the identifier
+alone — this compiler's own source does it **248 times** after a `forward`
+declaration, `function IsChannel;` being one. A trait heading plays the part
+that `forward` plays: it gave the signature, so the impl says only which
+routine it is defining.
+
+    impl Ord for Point;
+      function Compare;
+      begin Compare := self.x - other.x end;
+    end;
+
+That is the strongest single argument for the block form over a qualified
+name, and it was found after the choice was made rather than before it: the
+construct needed no syntax invented for its body, only a position for its
+heading.
+
 **Where an impl may be written is not a choice.** It must stand in the
 program-component that declared the type, or the one that declared the trait.
 Rust calls that the orphan rule and argues for it; here it falls out of
@@ -214,9 +246,18 @@ the value. Permitted:
 - a `var` or `protected var` parameter of a `dyn` type — a borrow for the
   duration of the call, which is the one second name ADR-0201 admits.
 
-Refused, for now: a `dyn` variable, field or array element. Each would be a
-reference outliving a call, and the language has no way to say how long. That
-is the same boundary ADR-0201 drew and this record does not move it.
+Refused, for now: a `dyn` value stored **inline** — a variable, a field or an
+array element of `dyn` type. Each would be a reference outliving a call and
+the language has no way to say how long. That is the same boundary ADR-0201
+drew and this record does not move it.
+
+**That restriction is narrower than it sounds, and the difference matters to
+whether increment C is worth doing.** An array may already hold owned
+pointers — `array [1..3] of owned ^Node` compiles, runs and disposes — so
+`Vec(owned ^dyn Drawable)` is the heterogeneous collection, and it is
+writable. What is refused is only the `dyn` value *inline*, which is the one
+case with no owner to name. The canonical use of dynamic dispatch is
+therefore inside the proposal rather than outside it.
 
 ## Staging
 
@@ -271,10 +312,31 @@ each of those is load-bearing with a gate over it.
 **Declaring a method by qualifying its name** — `procedure Point.Shift(...)`,
 which is what Delphi and Free Pascal write and which needs no new spelling at
 all, a procedure-heading taking an identifier and then `(` or `;` so a dot
-there is free. Rejected because it cannot express `impl Trait for Type`: there
-is nowhere in a qualified heading to say *which trait this satisfies*. Two
-spellings for one thing is worse than one that covers both, and the block also
-groups an impl's routines where a reader looks for them.
+there is free. **Chosen against**, and the choice turned on the reach: it
+cannot express `impl Trait for Type`, there being nowhere in a qualified
+heading to say which trait a routine satisfies, so it is only the better form
+for a design that stops at methods. The reach settled as all three, which
+settles this. The argument that decided it after the fact is the one above —
+the block needs no syntax for a trait impl's body either, §6.7's own
+parameterless definition serving.
+
+**Omitting the receiver's type inside an impl** (`function Length(protected var
+self): real`) and **an implicit `self`** with the borrow form moved onto the
+heading. Both were put and both were chosen against, in favour of writing the
+receiver out. The first needs a parameter with no type-denoter, against the
+rule that a declaration group shares one; the second makes `self` a name with
+meaning rather than an ordinary parameter, and needs a directive slot for the
+borrow form. Writing it out invents nothing and keeps all three borrow forms
+visible in the heading, at the cost of repeating a type the block already
+named — which is the one place this proposal is knowingly more verbose than
+Rust.
+
+**Retiring all 139 prefixes in one sweep**, and **letting them coexist for
+ever**. Chosen against in favour of one module as proof. The sweep is the
+largest single change this tree would have seen and would commit to the shape
+before anybody had read it in use; permanent coexistence leaves the library
+with two ways to do everything and no date on which that stops being
+temporary.
 
 **A procedural type, so that a record could hold its methods** — the
 hand-rolled vtable, which is how C does this. Rejected because it is the thing
@@ -310,12 +372,31 @@ ADR-0085's constraint is that a feature must be expressible in what `seed/*.ll`
 accepts or the seed is refreshed first — A and B emit nothing new, C emits a
 new global form.
 
-**The library rewrite is the evidence, and it is also the risk.** Retiring 139
-prefixes means renaming 139 exported names, which is every call site in
-`examples/`, `tests/dialect/` and `lsp/`. ADR-0306 renamed four and found that
-the *rename* was the easy half. It should be staged per module, and the old
-names cannot be kept as aliases, `export-unique` refusing two spellings of one
-thing.
+**The library rewrite is the evidence and it is not a forced migration**, which
+is a correction to this record's own first draft. `export-unique` reads the
+**export-part** and nothing else; a method is not in one, the *type* being what
+a module exports and its methods travelling with it. So the gate never sees
+`Member` and never compares it with anything, `JsonMember` and `doc.Member`
+may coexist indefinitely, and no existing name has to move. The first draft
+said the rename was the risk and that was the strongest argument against
+increment A; it was wrong.
+
+What is settled instead is **one module rewritten as proof**: `PasJson` carries
+43 of the 139 prefixes, the largest share of any module, and rewriting it
+against methods while keeping the prefixed routines beside them is increment
+A's evidence. Whether the other thirty modules follow is a judgement to make
+after reading that one, not before.
+
+**The one technical question still open, and it gates increment B.** This
+record asserts that `T: Ord` leaves ADR-0304's inference untouched, because the
+bound sits in the slot `T: type` already occupies. That deserves proving rather
+than asserting: ADR-0304's prefix rule was designed to infer a type argument
+from an actual's type, and a bound makes inference a choice among *admissible*
+candidates rather than among all of them. Two readings are possible — the bound
+is checked after inference has chosen, or it narrows what inference may choose —
+and they differ for a call where two impls would both fit. It should be settled
+with a probe against the existing generic machinery before B is written, not
+during it.
 
 **One thing to watch that no gate will see.** `x.M(a)` resolving in the type's
 scope means a reader can no longer find a routine's declaration by searching

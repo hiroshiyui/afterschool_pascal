@@ -181,6 +181,28 @@ question with an answer nobody has needed yet.
   holding a task-variable whose activation is still running, and no clause
   here says what that is.
 
+**And one proposal awaiting a decision** (ADR-0315): **methods and traits,
+without inheritance.** It is the first record in this tree that is *Proposed*
+rather than *Accepted*, and it stands here rather than in a chapter of its own
+because it is a decision and not a queue. The evidence for it is this
+project's own library: **139 of 486 exported names repeat their module's
+noun** — `JsonMember`, `StreamOpenWrite`, `NetListen` — because §6.11.2 puts
+every imported name into one scope and `export-unique` (ADR-0298) refuses a
+collision, so the prefix is a receiver spelled by hand; and where a property
+belongs to a *type*, the caller carries it instead, `MapPut(m, 'k', 1,
+StrHash, StrEq)` being the shape, with **14 routine-valued parameters** across
+two modules and **30 call sites** threading one pair through.
+
+The record proposes Rust's model and argues against Object Pascal's on four
+grounds that are each about a decision already taken here, stages it in three,
+and names what each stage costs — `dyn` being the only one that adds a
+representation. **Its four open choices are settled**: all three stages, the
+`impl` block, a receiver written out with its type, and one library module
+rewritten as proof rather than a sweep. What is *not* settled is whether to
+build it, and one technical question is named in the record as gating the
+second stage — whether a trait bound narrows what ADR-0304's inference may
+choose, or is checked after inference has chosen. Nothing is implemented.
+
 **And one shape with no client at all**, which is what is left of the FFI rows:
 a struct **member** that is itself a pointer. A record crosses as a `var`
 parameter (ADR-0184) and comes back as an optional copied at the call
