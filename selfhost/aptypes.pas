@@ -47,7 +47,7 @@ export ApTypes = (
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
-  taskSetSize,
+  taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
   lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
   textLit, tokenKind, token, ctxKind, labelWhat, binaryOp, unaryOp,
@@ -82,7 +82,7 @@ export ApTypes = (
   ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl, ctxVarDeclEnd,
   ctxParamList, ctxParamListEnd, ctxProcHeading, ctxProcBody,
   ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
-  ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
+  ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxSelectArm, ctxSelectEnd, ctxWith, ctxAssign,
   ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxSubstring,
   ctxReadStrArgs, ctxWriteStrArgs, ctxValueOpen, ctxValueSelector,
   ctxValueClose, ctxVariantValueOf, ctxParenExpr, ctxCallArgs,
@@ -98,7 +98,7 @@ export ApTypes = (
   nkSetMember, nkVar, nkIndex, nkField, nkDeref, nkBinary, nkUnary,
   nkCall, nkSubstr, nkStructValue, nkValueElem, nkEmpty, nkAssign,
   nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
-  nkWith, nkCase, nkGoto, nkLabeled, nkDefer, nkSpawn, nkWriteArg, nkCaseArm,
+  nkWith, nkCase, nkGoto, nkLabeled, nkDefer, nkSpawn, nkSelect, nkSelectArm, nkWriteArg, nkCaseArm,
   nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray,
   nkRecord, nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible,
   nkConfArray, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
@@ -355,6 +355,13 @@ const
     spawning once. It must equal PAS_TASKSET_SIZE in runtime/pasrt.h; irtest.sh
     checks the two. }
   taskSetSize = 32;
+  { AP 6.9.3.15's select descriptor, one per channel arm (ADR-0313): two
+    integers and two pointers, which is 24 bytes on a 64-bit target and 16 on
+    a 32-bit one. The array is indexed with the larger, as PAS_TASKSET_SIZE
+    clears both. It must equal PAS_SELECT_ARM_SIZE in runtime/pasrt.h;
+    irtest.sh checks the two, the files not being able to include one
+    another. }
+  selectArmSize = 24;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -500,7 +507,7 @@ type
     ctxConstDef, ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl,
     ctxVarDeclEnd, ctxParamList, ctxParamListEnd, ctxProcHeading, ctxProcBody,
     ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
-    ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
+    ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxSelectArm, ctxSelectEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxSubstring,
     { ISO/IEC 10206:1991 6.7.5.5's two string transfer procedures. Their lists
       are parsed as write- and read-parameter-lists (ADR-0087), so only the
@@ -577,6 +584,13 @@ type
       `(`, `:=`, `[`, `.`, `^` or a terminator -- which is `defer`'s, and here
       the token after is the task's own identifier. }
     nkSpawn,
+    { AP 6.9.3.15's select-statement (ADR-0313), and one arm of it: wait until
+      one of several channels can proceed and run that arm's statement, or
+      give up after a stated time. Spelled with no reserved word, ADR-0140's
+      test being `defer`'s and `spawn`'s -- a select's first arm always begins
+      with an identifier, which is a token no conforming program can have
+      written after a statement-initial name. }
+    nkSelect, nkSelectArm,
     { the pieces the C++ side keeps in vectors of plain structs }
     nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName,
     { type denoters }
@@ -1189,6 +1203,14 @@ type
       growing in the runtime -- and recorded by Sema rather than found by
       CodeGen walking the tree, which is ADR-0111's rule and ADR-0230's. }
     spawns: boolean;
+    { AP 6.9.3.15 (ADR-0313): the widest select-statement in this block,
+      counted in channel arms, and zero where the block has none. It sizes the
+      **one** descriptor slot the block gets -- one per block and not one per
+      statement, which is the defer record's shape and the task set's, and is
+      sound for the same reason both are: the descriptor is read only while
+      `pas_select` is running, and a select written inside another select's
+      arm runs after that call has returned. }
+    selectArms: integer;
     { AP 6.7.8: this routine was declared `task` and not `procedure`, so
       only a spawn-statement may start an activation of it. }
     isTask: boolean;
@@ -2003,6 +2025,35 @@ type
         an array of handles, which this language already had. }
       nkSpawn:      (spAt, spLen: integer; spArgs, spTarget: nodePtr;
                      spSym: symPtr);
+      { AP 6.9.3.15's select-statement (ADR-0313): wait until one of several
+        channels can proceed, and run that arm. slArms is the list of arms in
+        source order -- CodeGen numbers them in that order and the runtime
+        answers with a number -- and slOtherwise is the statement-sequence of
+        a completer, which is `case`'s field and `case`'s word.
+
+        slSlot is the hidden variable holding the descriptor array the runtime
+        reads: a **frame slot** and not an alloca, because a select inside a
+        loop would claim one per iteration (ADR-0102). slCount is how many
+        channel arms it has, which is the array's length and is also what
+        tells CodeGen how wide its switch is. }
+      nkSelect:     (slArms, slOtherwise: nodePtr; slSlot: symPtr;
+                     slCount: integer; slHasOtherwise: boolean);
+      { One arm. saKind says which of the three forms it is -- 0 a receive,
+        1 a send, 2 the timeout -- and is decided by *Sema* and not by the
+        parser, because `send` and `receive` are required identifiers a
+        program may declare its own of (6.1.3), so which operation an arm
+        performs is a question about a symbol and not about a spelling
+        (ADR-0087's rule, met again).
+
+        saTarget is the variable-access of `ok := receive(c, v)`, nil where
+        the arm did not ask; saDelay is the timeout arm's expression;
+        saSlot is the hidden variable a send arm's value is evaluated into,
+        once, before the wait -- a frame slot for slSlot's reason. saIndex is
+        the arm's position among the channel arms, which is the number the
+        runtime answers with. }
+      nkSelectArm:  (saAt, saLen, saKind, saIndex: integer;
+                     saArgs, saTarget, saDelay, saBody: nodePtr;
+                     saSlot: symPtr);
       { csHasOtherwise, not `csOtherwise <> nil`: `otherwise` followed by
         nothing is an empty statement -- a legal way to say "and otherwise do
         nothing", which is exactly the case that must not trap. }

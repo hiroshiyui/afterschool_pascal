@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 846
-instrumented 10852
-decisions 5426
+uncovered 850
+instrumented 11004
+decisions 5502
 
 accept 0/4
 accumulate 1/32
@@ -91,7 +91,7 @@ checkcomponentvalue 0/10
 checkconstdecl 0/18
 checkdeclarations 4/62
 checkdefer 1/2
-checkdeferbody 1/12
+checkdeferbody 1/16
 checkedforsetbase 0/8
 checkedforsubrange 2/24
 checkedresulttype 0/16
@@ -121,6 +121,8 @@ checkresultassign 1/44
 checkschemaarms 0/4
 checkschemabodynames 0/20
 checkschemadomain 3/28
+checkselect 1/20
+checkselectarm 4/46
 checksetexpr 0/8
 checksetmember 2/12
 checksetvalue 1/12
@@ -205,7 +207,7 @@ dumpoptional 0/2
 dumpproc 0/12
 dumpprogram 2/20
 dumprecordlayout 0/2
-dumpstmt 0/80
+dumpstmt 0/100
 dumpstmtlist 0/2
 dumpsymbols 5/12
 dumpsymdecl 2/22
@@ -249,7 +251,7 @@ emitforeignargument 0/8
 emitforin 1/10
 emitframealiases 0/6
 emitframeglobal 0/2
-emitframetype 0/10
+emitframetype 0/12
 emitglobals 0/2
 emitgoto 1/4
 emithandletest 1/4
@@ -273,6 +275,8 @@ emitreadargs 0/18
 emitrealtext 1/12
 emitrecordvalue 1/22
 emitrepeat 0/8
+emitselect 0/22
+emitselectarmsetup 0/2
 emitset 0/4
 emitsetbinary 0/4
 emitshortcircuit 0/10
@@ -348,7 +352,7 @@ fmtpop 0/2
 fmtpretrivia 0/32
 fmtpush 0/2
 fmtput 0/2
-fmttoken 0/182
+fmttoken 0/188
 fmttrivia 0/26
 fmtwantatleast 0/2
 fmtwidthof 0/4
@@ -537,7 +541,7 @@ parsefieldgroups 0/14
 parsefor 1/8
 parseformaldiscriminants 1/12
 parseformalparameters 0/38
-parseidentstatement 1/92
+parseidentstatement 1/96
 parseif 0/2
 parseimportpart 0/28
 parselabel 1/6
@@ -558,6 +562,8 @@ parserange 5/14
 parseread 0/4
 parserecordtype 0/4
 parserepeat 2/10
+parseselect 0/14
+parseselectarm 0/10
 parseselectors 0/20
 parsesimpleexpr 2/22
 parsestatement 0/32
@@ -654,6 +660,7 @@ schematicformal 0/2
 schematicstandsfor 0/10
 sel 4/18
 selectedsize 0/10
+selectslot 0/2
 seq 0/10
 setindex 0/6
 setvaluetypeof 0/14
@@ -682,7 +689,7 @@ tag 2/10
 tagfieldat 0/2
 tagtypeat 0/2
 targetindex 1/6
-tasksetbase 2/4
+tasksetbase 1/4
 textofcapacity 2/10
 threatened 3/34
 threatsym 1/6

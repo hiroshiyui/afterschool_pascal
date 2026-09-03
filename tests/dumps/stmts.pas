@@ -7,6 +7,7 @@
 program stmts(output);
 label 9;
 var i: integer; r: record a: integer end;
+    c: channel [2] of integer;
 procedure p(x: integer);
 begin
   x := x
@@ -31,6 +32,11 @@ begin
     0: writeln('zero');
     1: ;
     otherwise writeln('other')
+  end;
+  select
+    receive(c, i): ;
+  otherwise
+    ;
   end;
   defer i := 9;
   read(i);

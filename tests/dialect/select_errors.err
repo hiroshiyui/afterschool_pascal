@@ -1,0 +1,23 @@
+<source>:27:5: error: 'receive' is declared by this program, so a select arm cannot be it: an arm is 'send', 'receive' or 'after'
+<source>:39:16: error: 'pn' is a protected parameter, so it cannot be written by a select arm
+<source>:53:5: error: 'pb' is a protected parameter, so a select arm cannot write it
+<source>:60:5: error: a select arm is 'send', 'receive' or 'after', and this is 'listen'
+<source>:67:10: error: a select arm takes a channel and this is integer
+<source>:72:5: error: 'send' takes a channel and a value
+<source>:73:5: error: 'send' takes a channel and a value
+<source>:78:13: error: 'made' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:78:13: error: a select arm takes a channel variable, so its first argument must be one
+<source>:83:16: error: a select arm's 'receive' writes the value it received, so its second argument must be a variable
+<source>:88:5: error: what a select arm's 'receive' answers is written to a variable, so what stands before ':=' must be one
+<source>:94:13: error: a select arm cannot send packed array [1..4] of char on a channel of real
+<source>:95:13: error: a select arm cannot send real on a channel of integer
+<source>:98:16: error: a select arm's 'receive' writes integer and this is real
+<source>:104:5: error: what a select arm's 'receive' answers is boolean, and this is integer
+<source>:107:5: error: only a 'receive' arm answers a value, so only one may be written with ':='
+<source>:110:5: error: what a select arm's 'receive' answers is boolean, and this is real
+<source>:116:11: error: a select statement waits a whole number of milliseconds, and this is real
+<source>:123:5: error: a select statement has at most one 'after' arm: two deadlines are one deadline, the earlier
+<source>:125:3: error: a select statement has an 'after' arm or an 'otherwise' and not both: 'otherwise' is a deadline of zero
+<source>:132:3: error: a select statement needs at least one 'send' or 'receive' arm: there is nothing else for it to wait for
+<source>:139:13: error: a select arm takes a channel and this is task
+<source>:147:22: error: a deferred statement may not spawn a task

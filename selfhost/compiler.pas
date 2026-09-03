@@ -1756,6 +1756,20 @@ begin
   writeln(ircode, ', i32 0, i32 ', TaskSetBase(p):1)
 end;
 
+{ AP 6.9.3.15's descriptor array, which follows the task set for the reason
+  the task set follows the defer record: a slot nothing in the source can name
+  goes at the end. }
+procedure SelectSlot(p: symPtr; protected var frame: str; var v: str);
+var k: integer;
+begin
+  k := TaskSetBase(p);
+  if p^.spawns then k := k + 1;
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
+  PutOp(frame);
+  writeln(ircode, ', i32 0, i32 ', k:1)
+end;
+
 { The wrapper emitted for a task, and the reason there is one. `pthread_create`
   takes a pointer to a C function of one argument, and a Pascal routine is a
   code-and-link pair (ADR-0030), so no procedure of the program can be handed
@@ -9578,6 +9592,193 @@ begin
   StartBlock(endB)
 end;
 
+{ AP 6.9.3.15's select-statement (ADR-0313).
+
+  The whole of the waiting is the runtime's, and what the emitter writes is a
+  descriptor array and a switch. That split is deliberate: which arm goes
+  first rotates, so that a channel always ready cannot starve the arm below
+  it, and a rotation is a fact about the *execution* rather than about the
+  program -- putting it here would have made the emitted code carry a counter
+  and the arms be tried in emitted order, which is the thing being avoided.
+
+  Everything is evaluated before the call and nothing after it. A channel is
+  lent once, a receive's destination has its address taken once, and a send's
+  value is stored once into the frame slot Sema gave that arm -- so a select
+  that goes round its arms a hundred times evaluates each actual exactly one
+  time, and how many times it went round is unobservable. }
+procedure EmitSelectArmSetup(a: nodePtr; protected var base: str);
+var armp, fld, chan, val, addr: str;
+begin
+  Def(armp);
+  write(ircode, 'getelementptr inbounds i8, ptr ');
+  PutOp(base);
+  writeln(ircode, ', i64 ', a^.saIndex * selectArmSize:1);
+
+  write(ircode, '  store i32 ', a^.saKind:1, ', ptr ');
+  PutOp(armp);
+  writeln(ircode);
+
+  { `got` -- what a receive that fired answers. Cleared here rather than
+    trusted, because the frame slot is the block's and holds whatever the
+    previous select in this block left in it. }
+  Def(fld);
+  write(ircode, 'getelementptr inbounds i8, ptr ');
+  PutOp(armp);
+  writeln(ircode, ', i64 4');
+  write(ircode, '  store i32 0, ptr ');
+  PutOp(fld);
+  writeln(ircode);
+
+  EmitAddress(a^.saArgs, addr);
+  EmitAt(a^.saArgs^.line, a^.saArgs^.col);
+  Def(chan);
+  write(ircode, 'call ptr @pas_handle_lend(ptr ');
+  PutOp(addr);
+  writeln(ircode, ')');
+  EmitAtDone;
+  Def(fld);
+  write(ircode, 'getelementptr inbounds i8, ptr ');
+  PutOp(armp);
+  writeln(ircode, ', i64 8');
+  write(ircode, '  store ptr ');
+  PutOp(chan);
+  write(ircode, ', ptr ');
+  PutOp(fld);
+  writeln(ircode);
+
+  { Where the value comes from or goes to. A receive writes into the program's
+    own variable, so the runtime is given its address; a send reads out of the
+    hidden variable this arm's value was just stored into. }
+  if a^.saKind = 0 then EmitAddress(a^.saArgs^.next, val)
+  else begin
+    AddressOfSym(a^.saSlot, val);
+    EmitStore(val, a^.saSlot^.stype, a^.saArgs^.next)
+  end;
+  Def(fld);
+  write(ircode, 'getelementptr inbounds i8, ptr ');
+  PutOp(armp);
+  writeln(ircode, ', i64 16');
+  write(ircode, '  store ptr ');
+  PutOp(val);
+  write(ircode, ', ptr ');
+  PutOp(fld);
+  writeln(ircode)
+end;
+
+procedure EmitSelect(s: nodePtr);
+var a, sub: nodePtr;
+    frame, base, ms, chosen, armp, fld, raw, bit, tgt: str;
+    first, k, armB, timeoutB, endB, bounded: integer;
+begin
+  FrameAt(irProc^.level, frame);
+  SelectSlot(irProc, frame, base);
+
+  a := s^.slArms;
+  while a <> nil do begin
+    if a^.saKind <> 2 then EmitSelectArmSetup(a, base);
+    a := a^.next
+  end;
+
+  { The deadline. An `after` arm gives one, an `otherwise` is a deadline of
+    zero -- the runtime polls once and answers that nothing was ready -- and a
+    select with neither waits for as long as it takes. Sema has refused both
+    at once, so the two cannot disagree here. }
+  bounded := 0;
+  StrClear(ms);
+  StrAppend(ms, '0');
+  a := s^.slArms;
+  while a <> nil do begin
+    if a^.saKind = 2 then begin
+      EmitExpr(a^.saDelay, raw);
+      Def(ms);
+      write(ircode, 'sext i32 ');
+      PutOp(raw);
+      writeln(ircode, ' to i64');
+      bounded := 1
+    end;
+    a := a^.next
+  end;
+  if s^.slHasOtherwise then bounded := 1;
+
+  EmitAt(s^.line, s^.col);
+  Def(chosen);
+  write(ircode, 'call i32 @pas_select(ptr ');
+  PutOp(base);
+  write(ircode, ', i32 ', s^.slCount:1, ', i32 ', bounded:1, ', i64 ');
+  PutOp(ms);
+  writeln(ircode, ')');
+  EmitAtDone;
+
+  first := nextBlock + 1;
+  for k := 1 to s^.slCount do
+    armB := NewBlock;
+  timeoutB := NewBlock;
+  endB := NewBlock;
+
+  { The runtime answers the index of the arm that proceeded, or the arm count
+    where it gave up. The count is the default label as well, so a value the
+    runtime cannot produce lands somewhere with a statement rather than in
+    `unreachable`. }
+  write(ircode, '  switch i32 ');
+  PutOp(chosen);
+  write(ircode, ', label %L', timeoutB:1, ' [');
+  for k := 0 to s^.slCount - 1 do
+    write(ircode, ' i32 ', k:1, ', label %L', first + k:1);
+  writeln(ircode, ' ]');
+
+  a := s^.slArms;
+  while a <> nil do begin
+    if a^.saKind <> 2 then begin
+      StartBlock(first + a^.saIndex);
+      { `ok := receive(c, v)`: what the runtime wrote into the descriptor,
+        which is 1 for a value and 0 for the close of a drained channel. }
+      if a^.saTarget <> nil then begin
+        Def(armp);
+        write(ircode, 'getelementptr inbounds i8, ptr ');
+        PutOp(base);
+        writeln(ircode, ', i64 ', a^.saIndex * selectArmSize:1);
+        Def(fld);
+        write(ircode, 'getelementptr inbounds i8, ptr ');
+        PutOp(armp);
+        writeln(ircode, ', i64 4');
+        Def(raw);
+        write(ircode, 'load i32, ptr ');
+        PutOp(fld);
+        writeln(ircode);
+        Def(bit);
+        write(ircode, 'trunc i32 ');
+        PutOp(raw);
+        writeln(ircode, ' to i1');
+        EmitAddress(a^.saTarget, tgt);
+        write(ircode, '  store i1 ');
+        PutOp(bit);
+        write(ircode, ', ptr ');
+        PutOp(tgt);
+        writeln(ircode)
+      end;
+      EmitStmt(a^.saBody);
+      writeln(ircode, '  br label %L', endB:1)
+    end;
+    a := a^.next
+  end;
+
+  StartBlock(timeoutB);
+  a := s^.slArms;
+  while a <> nil do begin
+    if a^.saKind = 2 then EmitStmt(a^.saBody);
+    a := a^.next
+  end;
+  sub := s^.slOtherwise;
+  while sub <> nil do begin
+    EmitStmt(sub);
+    sub := sub^.next
+  end;
+  EndSequence(s^.slOtherwise);
+  writeln(ircode, '  br label %L', endB:1);
+
+  StartBlock(endB)
+end;
+
 procedure EmitStmt;
 var sub: nodePtr; v, flag: str; mark: integer;
 begin
@@ -9645,6 +9846,7 @@ begin
       nkCase: EmitCase(s);
       nkGoto: EmitGoto(s);
       nkSpawn: EmitSpawn(s);
+      nkSelect: EmitSelect(s);
       nkLabeled: EmitLabeled(s);
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
@@ -9653,7 +9855,7 @@ begin
       nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
-      nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
+      nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkSelectArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkFallible,
       nkConfArray,
@@ -9809,6 +10011,13 @@ begin
     applied a third time. }
   if p^.spawns then
     write(ircode, ', [', taskSetSize div 8:1, ' x i64]');
+  { AP 6.9.3.15: the descriptor array a select-statement hands the runtime,
+    one entry per channel arm and sized to the widest select in this block --
+    one slot per *block* and not one per statement, for the reason the two
+    records above are one apiece. It is last, so no frame index a name
+    resolves to moves, and it is absent from a block that selects nothing. }
+  if p^.selectArms > 0 then
+    write(ircode, ', [', (p^.selectArms * selectArmSize) div 8:1, ' x i64]');
   writeln(ircode, ' }');
   if p^.isTask then EmitTaskArgType(p)
 end;
@@ -11173,6 +11382,7 @@ begin
   writeln(ircode, 'declare void @pas_tasks_spawn(ptr, ptr, ptr)');
   writeln(ircode, 'declare ptr @pas_tasks_spawn_named(ptr, ptr, ptr)');
   writeln(ircode, 'declare void @pas_task_wait(ptr)');
+  writeln(ircode, 'declare i32 @pas_select(ptr, i32, i32, i64)');
   writeln(ircode, 'declare i32 @pas_task_drop(ptr)');
   writeln(ircode, 'declare void @pas_tasks_join(ptr)');
   writeln(ircode, 'declare void @pas_handle_done(ptr)');

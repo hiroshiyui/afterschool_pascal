@@ -1519,6 +1519,8 @@ begin
     ctxCaseSelector:   write('after the selector of a case statement');
     ctxCaseLabels:     write('after the labels of a case arm');
     ctxCaseEnd:        write('at the end of a case statement');
+    ctxSelectArm:      write('in the head of a select arm');
+    ctxSelectEnd:      write('at the end of a select statement');
     ctxWith:           write('in a with statement');
     ctxAssign:         write('in an assignment');
     ctxProcCallArgs:   write('after the arguments of a procedure call');
@@ -1635,6 +1637,11 @@ begin
     nkWith: n^.wtBinding := nil;
     nkDefer: n^.dfIndex := 0;
     nkSpawn: begin n^.spSym := nil; n^.spTarget := nil end;
+    nkSelect: begin n^.slArms := nil; n^.slOtherwise := nil; n^.slSlot := nil;
+                    n^.slCount := 0; n^.slHasOtherwise := false end;
+    nkSelectArm: begin n^.saArgs := nil; n^.saTarget := nil; n^.saDelay := nil;
+                       n^.saBody := nil; n^.saSlot := nil; n^.saKind := 0;
+                       n^.saIndex := 0; n^.saAt := 0; n^.saLen := 0 end;
     nkVariantArm: begin
       n^.vaTagType := nil;
       n^.vaVariants := nil;
@@ -3436,6 +3443,115 @@ end;
 
   ISO 7185 6.8.3.5 has no `else` or `otherwise` arm, and none is invented
   here: a selector matching no label is an error the program stops on. }
+{ AP 6.9.3.15's select-statement (ADR-0313).
+
+    select-statement = 'select' select-arm (';' select-arm)*
+                       (';'? 'otherwise' statement-sequence)? 'end'
+    select-arm       = channel-arm | timeout-arm
+    channel-arm      = (variable-access ':=')? identifier
+                       actual-parameter-list ':' statement
+    timeout-arm      = 'after' expression ':' statement
+
+  The shape is `case`'s and the punctuation is `case`'s: arms separated by
+  `;`, an optional `otherwise` last, `end` to close. What differs is that an
+  arm's head is an operation rather than a label list, and that the operation
+  is *not* decided here -- `send` and `receive` are required identifiers a
+  program may declare its own of (6.1.3), so which one an arm performs is a
+  question Sema asks of the symbol (ADR-0087).
+
+  `after` **is** decided here, and it is the one spelling this construct
+  reserves -- inside a select and nowhere else. No conforming program can be
+  inside a select at all, so what it costs is nothing outside these brackets
+  (ADR-0140); the alternative was a required identifier, which would have made
+  `after(x): S` a channel arm in a program that had declared one and a timeout
+  in every other, which is a construct whose meaning depends on a declaration
+  a reader cannot see. }
+function ParseSelectArm: nodePtr;
+var a, ref, head, tail: nodePtr;
+begin
+  a := NewNode(nkSelectArm, CurLine, CurCol);
+  a^.saArgs := nil;
+  a^.saTarget := nil;
+  a^.saDelay := nil;
+  a^.saBody := nil;
+  a^.saSlot := nil;
+  a^.saAt := 0;
+  a^.saLen := 0;
+  a^.saIndex := 0;
+  if Check(tkIdent) and PoolIs(tok[pos].at, tok[pos].len, 'after    ') then
+  begin
+    a^.saKind := 2;
+    pos := pos + 1;
+    a^.saDelay := ParseExpr
+  end
+  else begin
+    { `ok := receive(c, v)` -- the target is what tells a value apart from a
+      close, and it is looked for exactly as a spawn-statement's is: past a
+      variable-access for `:=`, consuming nothing (ADR-0312). }
+    a^.saKind := 0;
+    if SpawnNamesTarget then begin
+      ref := NewNode(nkVar, tok[pos].line, tok[pos].col);
+      ref^.vrAt := tok[pos].at;
+      ref^.vrLen := tok[pos].len;
+      pos := pos + 1;
+      a^.saTarget := ParseSelectors(ref);
+      Expect(tkAssign, ctxAssign)
+    end;
+    if Check(tkIdent) then begin
+      a^.saAt := tok[pos].at;
+      a^.saLen := tok[pos].len;
+      pos := pos + 1
+    end
+    else Expect(tkIdent, ctxSelectArm);
+    if Accept(tkLParen) then begin
+      head := nil;
+      tail := nil;
+      ParseActualParameters(head, tail, ctxCallArgs);
+      a^.saArgs := head
+    end
+  end;
+  Expect(tkColon, ctxSelectArm);
+  a^.saBody := ParseStatement;
+  ParseSelectArm := a
+end;
+
+function ParseSelect: nodePtr;
+var s, head, tail, oh, ot: nodePtr; more, moreStmts: boolean;
+begin
+  s := NewNode(nkSelect, CurLine, CurCol);
+  s^.slArms := nil;
+  s^.slOtherwise := nil;
+  s^.slSlot := nil;
+  s^.slCount := 0;
+  s^.slHasOtherwise := false;
+  pos := pos + 1;   { the `select`, which the caller has already seen }
+  head := nil;
+  tail := nil;
+  more := true;
+  while more and not aborted and not Check(tkEnd) do begin
+    if Check(tkOtherwise) then begin
+      pos := pos + 1;
+      s^.slHasOtherwise := true;
+      oh := nil;
+      ot := nil;
+      moreStmts := true;
+      while moreStmts and not aborted do begin
+        Append(oh, ot, ParseStatement);
+        moreStmts := Accept(tkSemi)
+      end;
+      s^.slOtherwise := oh;
+      more := false
+    end
+    else begin
+      Append(head, tail, ParseSelectArm);
+      more := Accept(tkSemi) or Check(tkOtherwise)
+    end
+  end;
+  s^.slArms := head;
+  Expect(tkEnd, ctxSelectEnd);
+  ParseSelect := s
+end;
+
 function ParseCase: nodePtr;
 var s, head, tail, arm, lh, lt, oh, ot: nodePtr;
     more, moreLabels, moreStmts: boolean;
@@ -3714,7 +3830,16 @@ begin
     designator, as a call, or not at all, so an identifier after the name is a
     token no conforming program can have written there. `spawn;`, `spawn(x)`
     and `spawn := 3` all stay what a program that declared `spawn` meant. }
-  if PoolIs(at, len, 'spawn    ') and (k = tkIdent) then begin
+  { AP 6.9.3.15's select-statement (ADR-0313), and the question is `defer`'s
+    and `spawn`'s exactly: a statement beginning with an identifier can
+    continue only as a designator, as a call, or not at all, so an identifier
+    after the name is a token no conforming program can have written there.
+    A select's first arm always begins with one -- `receive`, `send`, `after`,
+    or the variable of `ok := receive(...)`. `select;`, `select(x)` and
+    `select := 3` all stay what a program that declared `select` meant. }
+  if PoolIs(at, len, 'select   ') and (k = tkIdent) then
+    s := ParseSelect
+  else if PoolIs(at, len, 'spawn    ') and (k = tkIdent) then begin
     s := NewNode(nkSpawn, l, c);
     s^.spArgs := nil;
     s^.spTarget := nil;
@@ -3866,6 +3991,7 @@ begin
     nkLabeled:   write('labelled');
     nkDefer:     write('defer');
     nkSpawn:     write('spawn');
+    nkSelect:    write('select');
     nkEmpty:     write('empty');
     otherwise    write('statement')
   end
@@ -5196,6 +5322,7 @@ begin
   s^.frameCount := 0;
   s^.defers := nil;
   s^.deferCount := 0;
+  s^.selectArms := 0;
   s^.spawns := false;
   s^.isTask := false;
   s^.exitBlock := 0;
@@ -10335,7 +10462,8 @@ begin
       nkStructValue, nkValueElem,
       nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-      nkProcCall, nkWith, nkDefer, nkSpawn, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
+      nkProcCall, nkWith, nkDefer, nkSpawn, nkSelect, nkSelectArm,
+      nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
       nkPointer, nkHandle, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
@@ -12188,7 +12316,8 @@ begin
       nkSetMember, nkField, nkDeref, nkWriteArg, nkEmpty,
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
-      nkWith, nkDefer, nkSpawn, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
+      nkWith, nkDefer, nkSpawn, nkSelect, nkSelectArm, nkCase, nkGoto, nkLabeled, nkCaseArm,
+      nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkFallible,
       nkConfArray,
@@ -17650,6 +17779,21 @@ begin
           sub := sub^.next
         end
       end;
+      { AP 6.9.3.15: an arm's statement is a statement of the deferred one, so
+        a spawn or an exit written in one is refused where it would be refused
+        anywhere else in a deferred statement. }
+      nkSelect: begin
+        sub := s^.slArms;
+        while sub <> nil do begin
+          CheckDeferBody(sub^.saBody, outer);
+          sub := sub^.next
+        end;
+        sub := s^.slOtherwise;
+        while sub <> nil do begin
+          CheckDeferBody(sub, outer);
+          sub := sub^.next
+        end
+      end;
       { AP 6.7.5.9's exit, for the goto-statement's reason and not a new one:
         the runner is a function of its own, and the block whose activation
         an exit would terminate is not the one running. Asked of pcStd, which
@@ -17664,7 +17808,7 @@ begin
       { Everything else is a statement with no statement inside it, or is not
         a statement at all. The list is exhaustive rather than a catch-all so
         that a statement kind added later is named here (ADR-0145). }
-      nkEmpty, nkAssign, nkWrite, nkRead,
+      nkEmpty, nkAssign, nkWrite, nkRead, nkSelectArm,
       nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
       nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
       nkStructValue, nkValueElem, nkWriteArg, nkCaseArm, nkVariantArm,
@@ -17699,6 +17843,207 @@ end;
   A task may be started by this statement and by nothing else, and a procedure
   may not be started by it. The two refusals are one rule read from both ends,
   as AP 6.4.12.2's handle-birth is. }
+{ AP 6.9.3.15's select-statement (ADR-0313).
+
+  **Which operation an arm performs is asked of the symbol.** `send` and
+  `receive` are required identifiers, so a program may declare its own
+  (6.1.3), and a select arm naming one it declared is naming a routine that
+  cannot be waited on -- so the arm is refused rather than quietly meaning the
+  required one. That is ADR-0087's rule met again: the parser cannot tell a
+  channel arm from a call, and Sema can, because it can look the name up.
+
+  **Everything the wait needs is evaluated once, before it.** A channel
+  designator, a receive's destination and a send's value are read where the
+  statement stands and not each time the runtime polls: a select may go round
+  its arms many times, and an actual that was re-evaluated would make the
+  number of times observable. A send's value therefore lands in a hidden
+  frame variable of the element's type -- a frame slot and not an `alloca`,
+  because a select inside a loop would claim one per iteration (ADR-0102).
+
+  **A timeout arm and an `otherwise` are the same question asked twice**, and
+  having both is a contradiction rather than a refinement: `otherwise` is a
+  deadline of zero. They are refused together for that reason and not because
+  the runtime could not carry it. }
+procedure CheckSelectArm(a: nodePtr);
+var sym: symPtr; chan, val: nodePtr; n: integer;
+begin
+  if a^.saKind = 2 then begin
+    CheckExpr(a^.saDelay);
+    if (a^.saDelay^.ntype <> nil) and not IsInteger(a^.saDelay^.ntype) then
+    begin
+      ErrorAt(a^.saDelay^.line, a^.saDelay^.col);
+      write('a select statement waits a whole number of milliseconds, and ');
+      write('this is ');
+      WriteTypeName(a^.saDelay^.ntype);
+      writeln
+    end;
+    exit
+  end;
+
+  { A name that resolves is the program's own, and the program's own is not a
+    channel operation however it is spelled. }
+  sym := LookupUser(a^.saAt, a^.saLen);
+  if sym <> nil then begin
+    ErrorAt(a^.line, a^.col);
+    write('''');
+    WritePool(a^.saAt, a^.saLen);
+    writeln(''' is declared by this program, so a select arm cannot be it: ',
+            'an arm is ''send'', ''receive'' or ''after''');
+    exit
+  end;
+  if PoolIs(a^.saAt, a^.saLen, 'receive  ') then a^.saKind := 0
+  else if PoolIs(a^.saAt, a^.saLen, 'send     ') then a^.saKind := 1
+  else begin
+    ErrorAt(a^.line, a^.col);
+    write('a select arm is ''send'', ''receive'' or ''after'', and this is ''');
+    WritePool(a^.saAt, a^.saLen);
+    writeln('''');
+    exit
+  end;
+
+  n := 0;
+  chan := a^.saArgs;
+  while chan <> nil do begin
+    CheckExpr(chan);
+    n := n + 1;
+    chan := chan^.next
+  end;
+  if n <> 2 then begin
+    ErrorAt(a^.line, a^.col);
+    write('''');
+    WritePool(a^.saAt, a^.saLen);
+    writeln(''' takes a channel and a value');
+    exit
+  end;
+  chan := a^.saArgs;
+  val := chan^.next;
+  if not IsChannel(chan^.ntype) then begin
+    ErrorAt(chan^.line, chan^.col);
+    write('a select arm takes a channel and this is ');
+    WriteTypeName(chan^.ntype);
+    writeln;
+    exit
+  end;
+  if not IsDesignator(chan) then begin
+    ErrorAt(chan^.line, chan^.col);
+    writeln('a select arm takes a channel variable, so its first argument ',
+            'must be one');
+    exit
+  end;
+  if a^.saKind = 0 then begin
+    { The destination is the channel's own element type and not merely
+      assignable to it, which is CheckReceive's rule and for its reason: what
+      the runtime copies is the element's storage. }
+    if not IsDesignator(val) then begin
+      ErrorAt(val^.line, val^.col);
+      writeln('a select arm''s ''receive'' writes the value it received, ',
+              'so its second argument must be a variable')
+    end
+    else if val^.ntype <> chan^.ntype^.elem then begin
+      ErrorAt(val^.line, val^.col);
+      write('a select arm''s ''receive'' writes ');
+      WriteTypeName(chan^.ntype^.elem);
+      write(' and this is ');
+      WriteTypeName(val^.ntype);
+      writeln
+    end
+    else if Threatened(val) then
+      writeln('it cannot be written by a select arm')
+  end
+  else begin
+    if not Assignable(chan^.ntype^.elem, val^.ntype) then begin
+      ErrorAt(val^.line, val^.col);
+      write('a select arm cannot send ');
+      WriteTypeName(val^.ntype);
+      write(' on a channel of ');
+      WriteTypeName(chan^.ntype^.elem);
+      writeln
+    end
+    else if currentProc <> nil then
+      a^.saSlot := AddHiddenVar(a^.saAt, a^.saLen, skVar, chan^.ntype^.elem,
+                                currentProc)
+  end;
+
+  { `ok := receive(c, v)` -- the boolean the function form answers, which is
+    how a select tells a value from the close of a drained channel. Written
+    through, so 6.9.4's threats apply to it as they do to the value. }
+  if a^.saTarget <> nil then begin
+    if a^.saKind <> 0 then begin
+      ErrorAt(a^.saTarget^.line, a^.saTarget^.col);
+      writeln('only a ''receive'' arm answers a value, so only one may be ',
+              'written with '':=''')
+    end
+    else begin
+      CheckExpr(a^.saTarget);
+      if (a^.saTarget^.ntype <> nil) and not IsDesignator(a^.saTarget) then
+      begin
+        ErrorAt(a^.saTarget^.line, a^.saTarget^.col);
+        writeln('what a select arm''s ''receive'' answers is written to a ',
+                'variable, so what stands before '':='' must be one')
+      end
+      else if (a^.saTarget^.ntype <> nil) and
+              not IsBoolean(a^.saTarget^.ntype) then begin
+        ErrorAt(a^.saTarget^.line, a^.saTarget^.col);
+        write('what a select arm''s ''receive'' answers is boolean, and this ',
+              'is ');
+        WriteTypeName(a^.saTarget^.ntype);
+        writeln
+      end
+      else if Threatened(a^.saTarget) then
+        writeln('a select arm cannot write it')
+    end
+  end
+end;
+
+procedure CheckSelect(s: nodePtr);
+var a, sub: nodePtr; timeouts, arms: integer;
+begin
+  timeouts := 0;
+  arms := 0;
+  a := s^.slArms;
+  while a <> nil do begin
+    CheckSelectArm(a);
+    if a^.saKind = 2 then begin
+      timeouts := timeouts + 1;
+      if timeouts = 2 then begin
+        ErrorAt(a^.line, a^.col);
+        writeln('a select statement has at most one ''after'' arm: two ',
+                'deadlines are one deadline, the earlier')
+      end
+    end
+    else begin
+      a^.saIndex := arms;
+      arms := arms + 1
+    end;
+    a := a^.next
+  end;
+  s^.slCount := arms;
+  if arms = 0 then begin
+    ErrorAt(s^.line, s^.col);
+    writeln('a select statement needs at least one ''send'' or ''receive'' ',
+            'arm: there is nothing else for it to wait for')
+  end;
+  if (timeouts > 0) and s^.slHasOtherwise then begin
+    ErrorAt(s^.line, s^.col);
+    writeln('a select statement has an ''after'' arm or an ''otherwise'' ',
+            'and not both: ''otherwise'' is a deadline of zero')
+  end;
+  { One descriptor slot per block, sized to the widest select in it. }
+  if (currentProc <> nil) and (arms > currentProc^.selectArms) then
+    currentProc^.selectArms := arms;
+
+  a := s^.slArms;
+  while a <> nil do begin
+    CheckStmt(a^.saBody);
+    a := a^.next
+  end;
+  sub := s^.slOtherwise;
+  while sub <> nil do begin
+    CheckStmt(sub);
+    sub := sub^.next
+  end
+end;
+
 procedure CheckSpawn(s: nodePtr);
 var sym: symPtr;
 begin
@@ -18287,6 +18632,7 @@ begin
       nkWith:  CheckWith(s);
       nkDefer: CheckDefer(s);
       nkSpawn: CheckSpawn(s);
+      nkSelect: CheckSelect(s);
       nkCase:  CheckCase(s);
       nkWrite: CheckWrite(s);
       nkRead:  CheckRead(s);
@@ -23859,7 +24205,7 @@ begin
 end;
 
 procedure DumpStmt;
-var p: nodePtr; rng: rangePtr;
+var p: nodePtr; rng: rangePtr; sub: nodePtr;
 begin
   { Look through the husk *before* anything is printed. Sema decided the name
     denotes a procedure the program declared, so what the statement is is the
@@ -23919,6 +24265,54 @@ begin
       level := level + 1;
       DumpExprList(n^.spArgs);
       level := level - 2
+    end;
+    { AP 6.9.3.15 (ADR-0313). The arm's operation is printed as Sema decided
+      it and not as it was spelled, which is the whole of what the annotation
+      adds here: a program's own `receive` would have been refused, so a
+      printed `receive` is the required one. }
+    nkSelect: begin
+      write('select');
+      WritePos(n^.line, n^.col);
+      if annotate then write(' #', n^.slCount:1);
+      writeln;
+      level := level + 1;
+      sub := n^.slArms;
+      while sub <> nil do begin
+        Pad;
+        { Before Sema there is no decision to print. `--dump-ast` shows what
+          the *parser* decided and the parser deliberately did not decide
+          this -- which operation an arm performs is a question about a symbol
+          (ADR-0087) -- so the unannotated pass prints the spelling and the
+          annotated one prints the answer. Printing the answer in both would
+          have shown every channel arm as `receive`, that being the field's
+          value until Sema sets it, and a send arm dumped as a receive is the
+          dump agreeing with a guess. }
+        if sub^.saKind = 2 then write('after')
+        else if not annotate then WritePool(sub^.saAt, sub^.saLen)
+        else if sub^.saKind = 1 then write('send')
+        else write('receive');
+        if sub^.saTarget <> nil then write(' ->');
+        At(sub^.line, sub^.col);
+        level := level + 1;
+        if sub^.saTarget <> nil then DumpExpr(sub^.saTarget);
+        if sub^.saDelay <> nil then DumpExpr(sub^.saDelay);
+        DumpExprList(sub^.saArgs);
+        DumpStmt(sub^.saBody);
+        level := level - 1;
+        sub := sub^.next
+      end;
+      if n^.slHasOtherwise then begin
+        Pad;
+        writeln('otherwise');
+        level := level + 1;
+        sub := n^.slOtherwise;
+        while sub <> nil do begin
+          DumpStmt(sub);
+          sub := sub^.next
+        end;
+        level := level - 1
+      end;
+      level := level - 1
     end;
     nkDefer: begin
       write('defer');
@@ -25355,6 +25749,29 @@ begin
     end
     else if k = tkOtherwise then begin
       FmtPush(opOtherwise, 1);
+      FmtWantAtLeast(2)
+    end
+    { AP 6.9.3.15's select-statement (ADR-0313). It opens a block closed by
+      `end` and is spelled with no word-symbol, so the printer has to
+      recognise it by the same positional rule the parser does: an identifier
+      `select` with an identifier after it.
+
+      **Without this the depth went negative.** `end` gives a level back and
+      nothing had taken one, so every line after the first select in a source
+      was indented one level too far left, and the one after that another --
+      and `format-check` could not see it, all three of its claims being about
+      what the output *contains*: the token stream is unchanged, the comments
+      are unchanged, and formatting the misindented output again reproduces it
+      exactly. ADR-0285's sentence -- there is no oracle for whether the
+      output is well laid out -- turns out to cover a defect and not only a
+      matter of taste.
+
+      It pushes `opCase` rather than a kind of its own because the two shapes
+      are the same one: arms separated by `;`, an optional `otherwise` last,
+      `end` to close, and one level of indent for the lot. }
+    else if (k = tkIdent) and (n = tkIdent)
+            and PoolIs(tok[i].at, tok[i].len, 'select   ') then begin
+      FmtPush(opCase, 1);
       FmtWantAtLeast(2)
     end
     else if (k = tkThen) or (k = tkDo) then begin

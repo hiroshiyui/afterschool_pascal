@@ -57,6 +57,17 @@
  * number; selfhost/irtest.sh checks the two. */
 #define PAS_TASKSET_SIZE 32
 
+/* AP 6.9.3.15's select-statement (ADR-0313): one entry per channel arm --
+ * which operation it is, whether the receive that fired delivered a value,
+ * the channel, and the address the value is read from or written to. The
+ * compiler builds the array in a frame slot, because a select inside a loop
+ * would claim an `alloca` per iteration (ADR-0102), and it hands the array to
+ * `pas_select` as opaque bytes. Two ints and two pointers is 24 bytes on a
+ * 64-bit target and 16 on a 32-bit one; 24 is the larger and the array is
+ * indexed with it. `selectArmSize` in selfhost/aptypes.pas is the same
+ * number; selfhost/irtest.sh checks the two. */
+#define PAS_SELECT_ARM_SIZE 24
+
 /* The storage a block needs to be the target of a non-local `goto`: somewhere
  * to jump back to, and the mark that says which files the jump abandons. It is
  * opaque for the same reason a file variable is, and sized here for the same

@@ -7049,6 +7049,49 @@ it as a second column beside the claim, which makes the sixth finding from
 somebody writing a program a finding from somebody testing one -- the same
 sentence one step further along.
 
+## What would make this easier to work on
+
+The chapter of [`doc/roadmap.md`](roadmap.md) that carried what someone
+working *on* this compiler needed, archived on 2026-09-03 when the last of its
+eleven items stopped being work. Five stood in it originally and all five
+closed; three more were added afterwards and closed too, two built and one
+declined; and the last three were never tasks at all.
+
+What is left of it is in three places, and nothing was lost in the move.
+
+**A `style:` gate for the Pascal** — of the kind `git clang-format` gives the
+C — was tried, measured and declined (ADR-0285). The mechanism is already
+there, `format-check` formatting every source on every run and discarding the
+result; what stops it is that the diff is a disagreement about style and not a
+list of bugs. A full reformat of the implementation alone — `selfhost/`,
+`lib/`, `lsp/`, 36 files — rewrites **25 070 lines** and grows the source
+**6.8%**: 818 one-line `var` declarations split in two, 558 one-line
+`begin … end` bodies expanded, 210 blank lines inserted between headings
+written as a group. Fixing the five real layout defects the attempt found
+moved that number **up**, 24 490 to 25 070, which is what settles it. It is a
+decision for whoever maintains this source rather than a task, and the gap it
+leaves is a row of [`doc/sop.md`](sop.md) §7.
+
+**An aarch64 `benchmark` baseline** was blocked on hardware and not on a
+decision, and is a row of `doc/sop.md` §7 for the same reason: the gate
+abstains on aarch64 and on CI (ADR-0282), so no push is guarded by it, and a
+baseline needs an *idle* aarch64 machine — the shared runner that exposed the
+gap is the one place a baseline must not be taken.
+
+**The three lessons stayed in the roadmap**, in the preamble that says how to
+read it, because they are rules for the next row somebody adds rather than
+history: a number needs a date *and* a command; a row saying a feature is
+blocked is a row nobody has tried; and a reason written beside a declined item
+is an estimate like any other, wherever it is written.
+
+The chapter's own last finding is worth keeping beside them. Its lesson about
+blocked rows was learned three times in succession and then a fourth time in a
+document that was supposed to be immune — `doc/sop.md` §7, a register of what
+is *not* checked, whose rows are meant to be uncomfortable. A row there said
+nothing held ADR-0283's zero and gave a reason for declining a gate; the
+reason was an estimate, and it was wrong by the same margin as the three
+before it. **The rule does not exempt the document that states it.**
+
 ## The concurrency residue
 
 All three rows ADR-0268 wrote about itself are closed, all on 2026-09-03, and
@@ -7131,9 +7174,83 @@ row had predicted. What the case rests on is the task being deliberately slow
 and not a construction that cannot race, and that is the honest description of
 its margin.
 
-What stands is the rest of the row that said *wait for one task*: no select
-over several channels, and no timeout on a `send`, a `receive` or a `wait`.
-And behind all three closed rows is one shape none of them reached — a
-**channel of handles**, so that a fixed pool of workers could take connections
-off a queue. A task may be given a socket at the moment it starts and not
-afterwards.
+**Waiting for whichever came first was a statement, and the runtime was the
+whole of the work** — ADR-0313, AP 6.9.3.15, which closed the last of the four
+rows. The language side is small: `select` opens a block whose arms are
+`receive`, `send` and `after`, punctuated exactly as a case-statement is, with
+`otherwise` for a program that will not wait at all and `ok := receive(c, v)`
+for one that needs to tell a value from the close of a drained channel. Which
+operation an arm performs is asked of the *symbol* and not of the spelling,
+`send` and `receive` being required identifiers a program may declare its own
+of — ADR-0087's rule met for the sixth time.
+
+**There is no way to wait on several condition variables, and that decided the
+design.** A selector waits on a single process-wide condition variable that
+every channel operation broadcasts after it has changed something, then polls
+its own channels again; the cost is a spurious wakeup for every unrelated
+channel, and the alternative — a list of waiting selectors on every channel —
+is more state in the one object two threads already share and buys nothing
+until a program has many of each. What the design turns on is stated as an
+**invariant** rather than an ordering: *no thread ever holds a channel's mutex
+and the activity mutex at the same time.* A sender changes its channel,
+releases it, and only then takes the activity mutex to broadcast; a selector
+holds the activity mutex and takes channel mutexes one at a time beneath it.
+The cycle that would deadlock has no first half, and that the selector holds
+the activity mutex *across* its poll is what makes a wakeup impossible to
+lose.
+
+**The fairness test did not discriminate on its first writing, and that is the
+finding.** Arms are tried from a rotating start, so a channel that is always
+ready cannot starve the arm below it — a worker servicing a busy job queue
+would otherwise never see its shutdown channel, which is the program the whole
+construct exists for. The case written to pin it gave each of two channels
+exactly as many values as the loop would take, and *trying the arms in written
+order produces the same count*: the first arm supplies its two, empties, and
+the second supplies the rest. The mutation survived a green case. It was
+caught only by giving each channel more values than the loop takes, at which
+point written order gives four and none where rotation gives two and two. A
+fairness property needs a test where the unfair schedule cannot reach the same
+answer, and "each arm won as often as the other" is not that test by itself.
+
+**A timeout is killed by hanging, not by differing.** Making the runtime answer
+the wrong index when a deadline expires does not change what the case prints —
+it stops the case finishing. That is the honest signature for a construct
+whose job is not to wait forever, and it is why the two deadlines in
+`tests/dialect/select_contended.pas` are 2000 ms: they are not what is being
+measured, they are there so that a defect losing a wakeup ends the program with
+a wrong total instead of hanging until the harness kills it.
+
+**Two gates refused to pass, and both were right.** `runtime-isoc` rejected
+`clock_gettime` — the deadline is C11's `timespec_get(&ts, TIME_UTC)` now, so
+the unit's bargain that one header beyond ISO C buys the whole construct is
+intact. And `predicate-callers` refused until the select's send arm was added
+to its table of positions: a send arm copies its value into the channel's
+storage exactly as a send-statement does, so `Assignable` decides it, and
+ADR-0058's sentence is that a permission granted in a shared predicate leaks
+to every caller — **a new caller is a new leak until it is asked**.
+
+**And the formatter had been indenting by an accident that no oracle could
+see.** `pascalc --format` is token-driven: it takes a level on `begin`,
+`record`, `repeat`, a case's `of` and `otherwise`, and gives one back on `end`
+and `until`. `select` is spelled with no word-symbol (ADR-0140), so the
+printer did not recognise it — but a select's `end` still gave a level back.
+The depth therefore went **negative**, and every line after the first select
+in a source was indented one level too far left. `format-check` was blind to
+all of it, and structurally so: its three claims are about what the output
+*contains*, and each held — the token stream unchanged but for positions, the
+comments unchanged and before the same tokens, and re-formatting the
+misindented output reproducing it byte for byte. ADR-0285's sentence that
+there is no oracle for whether the output is *well* laid out turns out to cover
+a correctness defect and not only a matter of taste. It was found by reading a
+reformat by eye.
+
+What stands is no longer a row. Three *shapes* outlive the four closed ones
+and each is a question with an answer nobody has needed yet: a **channel of
+handles**, so that a fixed pool of workers could take connections off a queue,
+a task being givable a socket at the moment it starts and not afterwards; the
+fact that an activation cannot **close a channel and then drain it**, all
+three spellings of AP 6.4.16.4 emptying the handle variable as well as closing
+the channel, so the close a select arm reports is always another activation's;
+and **no timeout on `wait`**, which is a decision and not an omission, a wait
+that gave up leaving a program holding a task-variable whose activation is
+still running with no clause saying what that is.

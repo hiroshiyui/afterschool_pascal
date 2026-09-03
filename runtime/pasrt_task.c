@@ -28,14 +28,21 @@
  * reintroduces the escaping alias this language has never had.
  */
 
+#include <errno.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "pasrt.h"
 
 void pas_runtime_error(const char *msg);
+
+/* Defined with the select machinery below, and called by every operation
+ * above it that changes a channel: a selector waits on one process-wide
+ * condition variable and has to be told that *something* moved. */
+static void pas_activity_signal(void);
 
 /* --- a channel -----------------------------------------------------------
  *
@@ -144,6 +151,7 @@ int pas_chan_close(void *p) {
   pthread_cond_broadcast(&c->notempty);
   pthread_cond_broadcast(&c->notfull);
   pthread_mutex_unlock(&c->m);
+  pas_activity_signal();
   pas_chan_drop(c);
   return 0;
 }
@@ -174,6 +182,7 @@ void pas_chan_shut(void *p) {
   pthread_cond_broadcast(&c->notempty);
   pthread_cond_broadcast(&c->notfull);
   pthread_mutex_unlock(&c->m);
+  pas_activity_signal();
 }
 
 /* AP 6.9.3.13's send. Blocks while the channel is full.
@@ -201,6 +210,7 @@ void pas_chan_send(void *p, const void *v) {
   c->n++;
   pthread_cond_signal(&c->notempty);
   pthread_mutex_unlock(&c->m);
+  pas_activity_signal();
 }
 
 /* AP 6.9.3.13's receive, which is a *function*: 1 with a value in `v`, 0 when
@@ -227,7 +237,171 @@ int pas_chan_receive(void *p, void *v) {
   c->n--;
   pthread_cond_signal(&c->notfull);
   pthread_mutex_unlock(&c->m);
+  pas_activity_signal();
   return 1;
+}
+
+/* --- selecting over several channels ------------------------------------
+ *
+ * AP 6.9.3.15 (ADR-0313). A select waits until one of several channels can
+ * proceed, and there is no way to wait on several condition variables at
+ * once -- so what a selector waits on is a **single process-wide condition
+ * variable** that every channel operation signals after it has changed
+ * something. A selector polls its own channels, and where none can proceed it
+ * waits to be told that *some* channel changed and polls again.
+ *
+ * The cost is a spurious wakeup for every unrelated channel, which is the
+ * honest trade: the alternative is a list of waiting selectors on every
+ * channel, which is more state in the one object two threads already share
+ * and buys nothing until a program has many channels and many selectors.
+ *
+ * **The lock order is the whole of the correctness argument**, and it is
+ * stated as an invariant rather than as an ordering: *no thread ever holds a
+ * channel's mutex and the activity mutex at the same time.* A sender changes
+ * its channel, releases it, and only then takes the activity mutex to
+ * broadcast; a selector holds the activity mutex and takes channel mutexes
+ * one at a time beneath it. So the cycle that would deadlock -- one thread
+ * holding a channel and wanting activity while another holds activity and
+ * wants that channel -- has no first half.
+ *
+ * That the selector holds the activity mutex *across* its poll is what makes
+ * the wakeup impossible to lose: a sender that changes a channel after the
+ * selector has looked at it cannot broadcast until the selector is inside
+ * `pthread_cond_wait` and has released the mutex.
+ */
+static pthread_mutex_t pas_activity = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pas_activity_c = PTHREAD_COND_INITIALIZER;
+
+/* Every operation that could make some select's arm ready calls this, and it
+ * is called with no channel mutex held. */
+static void pas_activity_signal(void) {
+  pthread_mutex_lock(&pas_activity);
+  pthread_cond_broadcast(&pas_activity_c);
+  pthread_mutex_unlock(&pas_activity);
+}
+
+struct pas_select_arm {
+  int kind; /* 0 = receive, 1 = send */
+  int got;  /* a receive that fired: 1 delivered a value, 0 reported the close */
+  void *chan;
+  void *val;
+};
+
+_Static_assert(sizeof(struct pas_select_arm) <= PAS_SELECT_ARM_SIZE,
+               "PAS_SELECT_ARM_SIZE is smaller than struct pas_select_arm");
+
+/* One arm, tried without waiting. 1 where it proceeded, 0 where it could not.
+ *
+ * A receive proceeds when a value is available *and* when the channel has been
+ * closed and drained -- the second reporting the close through `got`, which is
+ * what `receive`'s own boolean reports and is why a select over channels that
+ * have all closed terminates rather than waiting for something that cannot
+ * arrive. A send on a closed channel is AP 6.9.3.13.1's error wherever it is
+ * written, so it is raised here rather than reported as unready.
+ */
+static int pas_select_try(struct pas_select_arm *a) {
+  struct pas_chan *c = a->chan;
+  int done = 0;
+  if (!c)
+    pas_runtime_error("a select arm names an empty channel variable");
+  pthread_mutex_lock(&c->m);
+  if (a->kind == 0) {
+    if (c->n > 0) {
+      memcpy(a->val, c->buf + c->head * c->esize, (size_t)c->esize);
+      c->head = (c->head + 1) % c->cap;
+      c->n--;
+      pthread_cond_signal(&c->notfull);
+      a->got = 1;
+      done = 1;
+    } else if (c->closed) {
+      a->got = 0;
+      done = 1;
+    }
+  } else {
+    if (c->closed) {
+      pthread_mutex_unlock(&c->m);
+      pas_runtime_error("send on a channel that has been closed");
+    }
+    if (c->n < c->cap) {
+      memcpy(c->buf + c->tail * c->esize, a->val, (size_t)c->esize);
+      c->tail = (c->tail + 1) % c->cap;
+      c->n++;
+      pthread_cond_signal(&c->notempty);
+      done = 1;
+    }
+  }
+  pthread_mutex_unlock(&c->m);
+  return done;
+}
+
+/* Where a select starts looking, and it is not always the first arm.
+ *
+ * Trying the arms in the order they are written would let a channel that is
+ * always ready starve every arm below it -- a worker servicing a busy job
+ * queue would never see its shutdown channel, which is exactly the program
+ * this construct exists for. The start rotates, so over n executions every arm
+ * is looked at first once. It is a *thread-local* counter, so two tasks
+ * selecting do not perturb one another's order and a program's output stays
+ * reproducible.
+ */
+_Thread_local static unsigned pas_select_turn;
+
+/* AP 6.9.3.15. Returns the index of the arm that proceeded, or `n` where the
+ * select gave up -- which is a timeout that expired, and is also the answer
+ * for `otherwise` when nothing was ready, that being a deadline of zero.
+ *
+ * `wait_ms` is read only when `bounded` is non-zero; an unbounded select waits
+ * for as long as it takes, which is the ordinary blocking receive's contract
+ * one construct up.
+ */
+int pas_select(void *arms, int n, int bounded, long long wait_ms) {
+  struct pas_select_arm *a = arms;
+  struct timespec deadline;
+  int i, k;
+  if (n <= 0)
+    pas_runtime_error("a select statement needs at least one channel arm");
+  if (bounded && wait_ms < 0)
+    pas_runtime_error("a select statement cannot wait for a negative time");
+  if (bounded) {
+    /* C11 7.27.2.5's `timespec_get` and not POSIX's `clock_gettime`: this
+       unit's bargain is that one header beyond ISO C buys the whole
+       construct (ADR-0186), and TIME_UTC is the same epoch
+       `pthread_cond_timedwait` measures its absolute deadline against. */
+    timespec_get(&deadline, TIME_UTC);
+    deadline.tv_sec += (time_t)(wait_ms / 1000);
+    deadline.tv_nsec += (long)(wait_ms % 1000) * 1000000L;
+    if (deadline.tv_nsec >= 1000000000L) {
+      deadline.tv_sec += 1;
+      deadline.tv_nsec -= 1000000000L;
+    }
+  }
+  pthread_mutex_lock(&pas_activity);
+  for (;;) {
+    unsigned turn = pas_select_turn++;
+    for (k = 0; k < n; k++) {
+      i = (int)((turn + (unsigned)k) % (unsigned)n);
+      if (pas_select_try(&a[i])) {
+        /* This select has itself changed a channel -- taken a value out or
+           put one in -- so another selector may now proceed. The mutex is
+           already held here, which is why this is a broadcast and not a call
+           to `pas_activity_signal`, that one taking the mutex it is under. */
+        pthread_cond_broadcast(&pas_activity_c);
+        pthread_mutex_unlock(&pas_activity);
+        return i;
+      }
+    }
+    if (bounded) {
+      /* A deadline already past is how `otherwise` and `after 0` are spelled:
+         the poll above has happened once, which is the whole of what they
+         ask for. */
+      if (pthread_cond_timedwait(&pas_activity_c, &pas_activity, &deadline) ==
+          ETIMEDOUT) {
+        pthread_mutex_unlock(&pas_activity);
+        return n;
+      }
+    } else
+      pthread_cond_wait(&pas_activity_c, &pas_activity);
+  }
 }
 
 /* --- a task -------------------------------------------------------------

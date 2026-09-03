@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 19691
+instrumented 20053
 
 accept 0/4
 accumulate 0/84
@@ -99,7 +99,7 @@ checkcomponentvalue 0/12
 checkconstdecl 0/32
 checkdeclarations 1/67
 checkdefer 0/14
-checkdeferbody 0/34
+checkdeferbody 0/42
 checkedforsetbase 0/29
 checkedforstore 0/2
 checkedforsubrange 0/52
@@ -131,12 +131,14 @@ checkresultassign 4/37
 checkschemaarms 0/8
 checkschemabodynames 0/37
 checkschemadomain 0/51
+checkselect 0/30
+checkselectarm 0/84
 checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
 checkstdproc 19/379
-checkstmt 2/251
+checkstmt 2/252
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
@@ -224,7 +226,7 @@ dumpoptional 0/7
 dumpproc 0/36
 dumpprogram 0/43
 dumprecordlayout 0/9
-dumpstmt 0/214
+dumpstmt 0/245
 dumpstmtlist 0/4
 dumpstrchild 0/5
 dumpsymbols 1/16
@@ -264,7 +266,7 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/154
+emitdeclares 0/155
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
@@ -278,7 +280,7 @@ emitforin 0/110
 emitforintext 0/73
 emitframealiases 0/14
 emitframeglobal 0/6
-emitframetype 0/17
+emitframetype 0/19
 emitglobals 0/7
 emitgoto 0/12
 emithandletest 0/11
@@ -302,13 +304,15 @@ emitreadargs 0/77
 emitrealtext 0/16
 emitrecordvalue 0/41
 emitrepeat 0/34
+emitselect 0/81
+emitselectarmsetup 0/42
 emitset 0/63
 emitsetbinary 0/61
 emitshortcircuit 0/28
 emitslicevalue 0/89
 emitspawn 0/120
 emitstdproc 2/254
-emitstmt 0/38
+emitstmt 0/39
 emitstore 0/34
 emitstring 0/211
 emitstringcompare 11/33
@@ -390,7 +394,7 @@ fmtpop 0/4
 fmtpretrivia 0/5
 fmtpush 0/6
 fmtput 0/3
-fmttoken 0/115
+fmttoken 0/118
 fmttopkind 0/1
 fmttrivia 0/25
 fmtwantatleast 0/1
@@ -564,9 +568,9 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/88
+newnode 0/93
 newresultslot 0/7
-newsymbol 0/99
+newsymbol 0/100
 newtype 0/41
 nextformal 0/4
 nonvarying 3/42
@@ -614,7 +618,7 @@ parsefieldgroups 0/19
 parsefor 0/29
 parseformaldiscriminants 0/35
 parseformalparameters 0/48
-parseidentstatement 0/89
+parseidentstatement 0/91
 parseif 0/11
 parseimportpart 0/58
 parselabel 0/16
@@ -636,6 +640,8 @@ parserange 1/13
 parseread 0/14
 parserecordtype 0/15
 parserepeat 1/18
+parseselect 0/27
+parseselectarm 0/34
 parseselectors 0/56
 parsesimpleexpr 1/29
 parsestatement 0/32
@@ -690,7 +696,7 @@ putparamtypes 0/26
 putpos 0/1
 putprocsignature 0/9
 putslottype 0/4
-putstmtword 2/18
+putstmtword 2/19
 putstoragetypeat 1/4
 putstructat 0/21
 putsymkindword 0/13
@@ -755,6 +761,7 @@ schematicformal 0/3
 schematicstandsfor 0/3
 sel 0/51
 selectedsize 0/14
+selectslot 0/6
 seq 0/25
 setformatrange 0/2
 setindex 0/47
@@ -830,7 +837,7 @@ writebinop 0/21
 writeboundname 0/2
 writecatadmits 0/5
 writecatname 0/6
-writecontext 5/79
+writecontext 5/81
 writedistincttypenote 0/41
 writekeyword 0/2
 writekwlit 0/3

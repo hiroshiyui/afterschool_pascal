@@ -22,7 +22,6 @@ nobody has decided yet.
 | [The goal](#the-goal-adr-0109) | what this is all for — and all four areas ADR-0109 names now have an answer, which is not the same as the goal being met |
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
-| [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
 | [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it, and the server completes a name (ADR-0301) — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
@@ -32,6 +31,53 @@ nobody has decided yet.
 
 Nothing here is a work queue with owners and dates. Where a decision has been
 made it has an ADR; where it has not, that is the point of the entry.
+
+**Three lessons govern how this page is written**, and they are here rather
+than in the history because they are rules for the next row somebody adds.
+They were learned by the chapter that used to stand between *What a daily
+program cannot reach for* and *What would make this practical to pick up* --
+**What would make this easier to work on**, archived to
+[`doc/history.md`](history.md#what-would-make-this-easier-to-work-on) on
+2026-09-03 when the last of its eleven items closed.
+
+**A number needs a date *and* a command.** The suite item said 262 seconds,
+and every word of it was true of a configuration nothing used: it was measured
+serially while CI had run `-j"$(nproc)"` on every push since the workflow was
+written. The figure had a date, had been re-measured twice after an earlier
+round of six wrong figures, and was still wrong — so the rule this chapter
+gave itself was not enough. What closed it was a flag worth 3.4× (ADR-0281).
+
+**A row saying a feature is blocked is a row nobody has tried.** Three rows in
+succession were settled by attempting them, and each had carried a stated
+reason it could not be done. The `protected var` warning said §6.6.3.6's
+congruity made the fix illegal — it does, and the answer is to defer the
+diagnostic to the end of the component, which is one page of code (ADR-0283);
+the estimate under it said 81 sites where the truth is a **fixed point**, one
+pass reporting 130 and seven reporting zero. `textDocument/rangeFormatting`
+said the printer had to be *told* where its indent begins, which only a parse
+can answer; the printer accumulates that depth itself as it walks the token
+stream, and the whole feature is a gate on two routines (ADR-0284).
+
+**And the lesson is not about this page.** ADR-0286 is the third instance and
+it was found in `doc/sop.md` §7, which is a register of what is *not* checked
+and so is the one document here whose rows are supposed to be uncomfortable.
+A row there said nothing holds ADR-0283's zero, and gave a reason for
+declining a gate: the count is a fixed point rather than a number, so a gate
+would have to iterate to convergence. Iterating is what **reaching** zero
+needed; holding it needs one sweep. The gate is 1.2 seconds, and removing one
+`protected` from the compiler's own source leaves 798 of 798 cases green — so
+the row was right about the gap and wrong about the cost, which is the same
+shape twice over. **A reason written beside a declined item is an estimate
+like any other**, wherever it is written, and this page's own rule applies to
+it: it is a report or it is a guess.
+
+**An item can be re-scoped by measuring it rather than by arguing about it.**
+`--dump-uses --at line:col` was asked for and the measurement closed it the
+other way: the flag saves no compiler time, and narrowing the query would have
+cost the per-document cache that took five hovers from 795 ms to 159
+(ADR-0276).
+
+---
 
 ---
 
@@ -101,14 +147,39 @@ more than any of the rows was.
 
 **What two threads of control left open** (ADR-0268, AP 6.7.8). The record
 names these itself rather than letting the feature imply them, which is the
-shape to expect from here on:
+shape to expect from here on — **and every row of it is now closed**, the last
+four on 2026-09-03. What the table is kept for is the same thing the two
+chapters above it are kept for: a feature that names its own residue is a
+report, and four rows that closed in a day say the residue was named honestly.
+Three shapes outlive the rows and are named under it:
 
 | A daily program wants | Why it waits |
 | --- | --- |
 | ~~**to give a task a handle**~~ | **Done** (ADR-0303), and the whole of what was missing was a *position*: `take` stood on the right of an assignment and nowhere else. A task formal may be a handle-type and the actual is `take(v)` — moved, where a channel is lent. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
 | ~~**to wait for one task**~~ | **Done** (ADR-0312), and it cost a type and one statement because a handle already had every rule a name for an activation needs: `task` is a handle-type, `spawn t := P(x)` makes a variable name the activation, and `wait(t)` returns when it is complete. AP 6.9.3.12.1 is untouched — a block still joins everything it commenced, and `wait` only completes one of them earlier. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
-| **to wait for whichever comes first** | What the row above named and did not close. There is no select over several channels, so a task that must service a job queue and a shutdown signal still folds both into one channel; and there is no timeout on a `send`, a `receive` or a `wait`, so there is no way to give up. The second is not the small half: a `wait` that gave up would leave a program holding a task-variable whose activation is still running, and no clause here says what that is |
+| ~~**to wait for whichever comes first**~~ | **Done** (ADR-0313), and the shape it took was a *statement* rather than an argument: `select` waits until one of several channels can proceed, `after N` gives up, `otherwise` does not wait at all, and `ok := receive(c, v)` carries the close of a drained channel into an arm. One thing it named is deliberately still open — there is no timeout on `wait`, ADR-0312's reason being that a wait which gave up leaves a task-variable naming a running activation and no clause says what that is. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
 | ~~**to send a string**~~ | **Done** (ADR-0302), and writing the case is what showed the reading was wrong twice over: `send` chose its path with `IsStructured`, which a variable-string is not, so the module did not assemble; and a string *value* is shorter than the element it goes into, so copying `esize` bytes read past it. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
+
+**Three shapes stand behind the closed rows**, and none of them is a row
+because none is a thing a program is waiting to be able to write — each is a
+question with an answer nobody has needed yet.
+
+- **A channel cannot carry a handle** (AP 6.7.8.1 NOTE 6, ADR-0302). A task
+  may be *given* a socket at the moment it starts and cannot be sent one
+  afterwards, so a fixed pool of workers taking connections off a queue is
+  still unwritable. What would make it expressible is a rule about which
+  activation owns a value sitting in a bounded queue.
+- **An activation cannot close a channel and then drain it.** All three
+  spellings of AP 6.4.16.4 — `release(c)`, `c := nil`, `c := take(d)` — empty
+  the handle variable as well as closing the channel, so the close a `receive`
+  or a select arm reports is always another activation's: the ordinary
+  pipeline, a producer task closing what a consumer drains. It was met twice
+  while ADR-0313 was written. Closing without releasing would be a new
+  operation on a channel, and it is not built.
+- **There is no timeout on `wait`**, and that one is a decision rather than an
+  omission (ADR-0312, ADR-0313): a wait that gave up would leave a program
+  holding a task-variable whose activation is still running, and no clause
+  here says what that is.
 
 **And one shape with no client at all**, which is what is left of the FFI rows:
 a struct **member** that is itself a pointer. A record crosses as a `var`
@@ -148,74 +219,6 @@ found in an afternoon. A row here should be a report, not an estimate.
 
 **Thirty-one modules exist** — eight conforming and twenty-three dialect,
 listed by name in `README.md`'s module table.
-
-## What would make this easier to work on
-
-**Nothing here is a task.** Five items stood in this chapter and all five
-closed; three more were added afterwards and closed too — two built and one
-declined. All of it is in
-[`doc/history.md`](history.md#what-would-make-this-easier-to-work-on).
-
-Two things are left, and only one of them is a decision.
-
-- **A `style:` gate for the Pascal**, of the kind `git clang-format` gives the
-  C. **Tried, measured and declined** (ADR-0285), and revivable the day a
-  house style is agreed — the mechanism is already there, `format-check`
-  formatting every source on every run and discarding the result. What stops
-  it is that the diff is a disagreement about style and not a list of bugs.
-  A full reformat of the implementation alone — `selfhost/`, `lib/`, `lsp/`,
-  36 files — rewrites **25 070 lines** and grows the source **6.8%**: 818
-  one-line `var` declarations split in two, 558 one-line `begin … end` bodies
-  expanded, 210 blank lines inserted between headings written as a group.
-  Fixing the five real layout defects the attempt found moved that number
-  **up**, 24 490 to 25 070, which is what settles it. Deciding it belongs to
-  whoever maintains this source.
-- **An aarch64 `benchmark` baseline**, blocked on hardware rather than on a
-  decision. The gate abstains on aarch64 and on CI (ADR-0282), so no push is
-  guarded by it; a baseline needs an *idle* aarch64 machine, and the shared
-  runner that exposed the gap is the one place a baseline must not be taken.
-
-**Three lessons belong here rather than in the history**, because they are
-about how this page is written.
-
-**A number needs a date *and* a command.** The suite item said 262 seconds,
-and every word of it was true of a configuration nothing used: it was measured
-serially while CI had run `-j"$(nproc)"` on every push since the workflow was
-written. The figure had a date, had been re-measured twice after an earlier
-round of six wrong figures, and was still wrong — so the rule this chapter
-gave itself was not enough. What closed it was a flag worth 3.4× (ADR-0281).
-
-**A row saying a feature is blocked is a row nobody has tried.** Three rows in
-succession were settled by attempting them, and each had carried a stated
-reason it could not be done. The `protected var` warning said §6.6.3.6's
-congruity made the fix illegal — it does, and the answer is to defer the
-diagnostic to the end of the component, which is one page of code (ADR-0283);
-the estimate under it said 81 sites where the truth is a **fixed point**, one
-pass reporting 130 and seven reporting zero. `textDocument/rangeFormatting`
-said the printer had to be *told* where its indent begins, which only a parse
-can answer; the printer accumulates that depth itself as it walks the token
-stream, and the whole feature is a gate on two routines (ADR-0284).
-
-**And the lesson is not about this page.** ADR-0286 is the third instance and
-it was found in `doc/sop.md` §7, which is a register of what is *not* checked
-and so is the one document here whose rows are supposed to be uncomfortable.
-A row there said nothing holds ADR-0283's zero, and gave a reason for
-declining a gate: the count is a fixed point rather than a number, so a gate
-would have to iterate to convergence. Iterating is what **reaching** zero
-needed; holding it needs one sweep. The gate is 1.2 seconds, and removing one
-`protected` from the compiler's own source leaves 798 of 798 cases green — so
-the row was right about the gap and wrong about the cost, which is the same
-shape twice over. **A reason written beside a declined item is an estimate
-like any other**, wherever it is written, and this page's own rule applies to
-it: it is a report or it is a guess.
-
-**An item can be re-scoped by measuring it rather than by arguing about it.**
-`--dump-uses --at line:col` was asked for and the measurement closed it the
-other way: the flag saves no compiler time, and narrowing the query would have
-cost the per-document cache that took five hovers from 795 ms to 159
-(ADR-0276).
-
----
 
 ## What would make this practical to pick up
 
@@ -275,17 +278,18 @@ the first row here to close, the day after the chapter was written
   over. The row said that half had not been probed; probing it took four
   lines.
 
-- **Concurrency is one row short**, and it is in [What each landed feature
-  left open](#what-each-landed-feature-left-open): there is no select over
-  several channels and no timeout on anything. A task *can* now be waited on
-  singly (ADR-0312), *can* be handed a socket (ADR-0303), and a stage *can*
-  close the channel downstream of it (ADR-0302) — the observation that a
-  single task's completion is the next thing the first real server written
-  with tasks will want was right, and closing it took a type and a statement.
-  What is left besides select and timeouts is that a **channel of handles** is
-  the shape behind all three of the closed rows: a task may be given a socket
-  at the moment it starts and not afterwards, so a fixed pool of workers
-  taking connections off a queue is still unwritable.
+- ~~**Concurrency is one row short**~~ — **done**, and the row it named is
+  the last of four that closed on 2026-09-03. A task can be waited on singly
+  (ADR-0312), a program can wait for whichever of several channels comes first
+  and can give up waiting (ADR-0313), a task can be handed a socket
+  (ADR-0303), and a stage can close the channel downstream of it (ADR-0302).
+  What is left is in [What each landed feature left
+  open](#what-each-landed-feature-left-open) as three *shapes* rather than
+  rows — a **channel of handles**, closing a channel without releasing it, and
+  a timeout on `wait` — and the reason none of them is a row is that no
+  program here has wanted one. The prediction under this bullet was right
+  about the order: a single task's completion was the next thing wanted, and
+  waiting for whichever came first was the one after it.
 
 - ~~**Four of twelve example programs collided with a library name on their
   first draft**~~ — **done** (ADR-0306), and moved to

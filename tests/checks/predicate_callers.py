@@ -250,6 +250,15 @@ POSITIONS = [
     # position exists to require.
     ("send-value", "CheckStdProc", 3, "stmt",
      "send(uc, u)"),
+    # AP 6.9.3.15's select-statement (ADR-0313). A send arm copies its value
+    # into the channel's storage exactly as a send-statement does, so the same
+    # predicate decides it -- and it is a *separate* caller, which is the
+    # whole reason it takes a row of its own rather than being thought of as
+    # covered by `send-value` above. ADR-0058's sentence is that a permission
+    # granted in a shared predicate leaks to every caller, and a new caller is
+    # a new leak until it is asked.
+    ("select-send-value", "CheckSelectArm", 1, "stmt",
+     "select send(uc, u): i := 1 end"),
     ("case-selector", "CheckCase", 1, "stmt",
      "case u of 1: i := 1 end"),
     ("assignment", "CheckStmt", 4, "stmt",

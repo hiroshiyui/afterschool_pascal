@@ -321,3 +321,4 @@ the alternatives that were rejected and why.
 | [0310](0310-the-key-capacity-is-the-programs.md) | The key capacity is the program's | Accepted |
 | [0311](0311-the-places-a-document-looks.md) | The places a document looks | Accepted |
 | [0312](0312-waiting-for-one-task.md) | Waiting for one task | Accepted |
+| [0313](0313-waiting-for-whichever-comes-first.md) | Waiting for whichever comes first | Accepted |

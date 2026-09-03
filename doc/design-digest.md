@@ -4597,6 +4597,69 @@ after the procedure returns is reading something only the join can have
 ordered. Its margin is a one-second sleep and not a construction that cannot
 race.
 
+### Waiting for whichever comes first (ADR-0313)
+
+AP 6.9.3.15's select-statement waits until one of several channels can
+proceed, runs that arm, or gives up. Its punctuation is the case-statement's
+(§6.9.3.5) — arms separated by `;`, an optional `otherwise` last, `end` to
+close — and its three arm forms are `receive`, `send` and `after E`, with
+`ok := receive(c, v)` carrying into an arm the boolean `receive` answers, so a
+drain loop can end on the close of a drained channel. **Which operation an arm
+performs is asked of the symbol**, `send` and `receive` being required
+identifiers a program may declare its own of (§6.1.3): an arm naming a
+declared one is refused rather than quietly meaning the required operation.
+`after` is the one spelling reserved *inside* the construct, no conforming
+program being able to stand inside a select at all.
+
+**The wait is entirely the runtime's, and the reason is that a rotation is a
+fact about the execution rather than about the program.** Arms are tried from a
+rotating start so that a channel which is always ready cannot starve the arm
+below it; the counter is thread-local, so two tasks selecting do not perturb
+one another and a program's output stays reproducible. Putting the rotation in
+the emitted code would have meant the arms were tried in emitted order and the
+program carried a counter.
+
+There is no way to wait on several condition variables, so a selector waits on
+a **single process-wide condition variable** that every channel operation
+broadcasts after changing something, then polls its own channels again. The
+cost is a spurious wakeup for every unrelated channel; the alternative, a list
+of waiting selectors on every channel, is more state in the one object two
+threads already share. What the design turns on is an **invariant** rather
+than an ordering: *no thread ever holds a channel's mutex and the activity
+mutex at the same time.* A sender changes its channel, releases it, and only
+then takes the activity mutex to broadcast; a selector holds the activity
+mutex and takes channel mutexes one at a time beneath it — so the cycle that
+would deadlock has no first half. That the selector holds the activity mutex
+*across* its poll is what makes a wakeup impossible to lose.
+
+The compiler builds a descriptor array — per arm: the operation, whether the
+receive delivered a value, the channel, the value's address — in a **frame slot
+sized to the widest select in the block**. One slot per block and not one per
+statement, which is the defer record's shape and the task set's, and sound for
+the same reason: the descriptor is read only while `pas_select` is running,
+and a select written inside another select's arm runs after that call has
+returned. Everything is evaluated once, before the wait — a channel lent once,
+a receive destination's address taken once, a send's value stored once into a
+hidden frame variable of the element's type (a frame slot, not an `alloca`,
+ADR-0102) — because a select may poll many times and an actual that was
+re-evaluated would make the number of polls observable. The emitter then
+writes a `switch` on the index the runtime answers with, the arm count being
+both the timeout label and the default.
+
+The deadline is C11's `timespec_get(&ts, TIME_UTC)` rather than POSIX's
+`clock_gettime`, which `runtime-isoc` refused: this unit's bargain is that one
+header beyond ISO C — `<pthread.h>` — buys the whole construct.
+
+**The formatter had to be taught it.** `pascalc --format` is token-driven and
+takes a level on `begin`, `record`, `repeat`, a case's `of` and `otherwise`,
+giving one back on `end` and `until`. A select is spelled with no word-symbol,
+so the printer did not see the opener while a select's `end` still gave a
+level back — the depth went negative and every line after the first select was
+indented one level too far left. It recognises `select` by the parser's own
+positional rule now and pushes the case-statement's opener, the two shapes
+being the same one. `format-check` could not see any of it: all three of its
+claims are about what the output contains, and all three held.
+
 ### The key capacity is the program's (ADR-0310)
 
 `PasContainer`'s map is generic over its key type (ADR-0254) and its ready-made

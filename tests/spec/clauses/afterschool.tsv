@@ -177,6 +177,11 @@
 6.9.3.13.1	send
 6.9.3.13.2	receive
 6.9.3.14	wait
+6.9.3.15	The select-statement
+6.9.3.15.1	The arms
+6.9.3.15.2	What is evaluated, and when
+6.9.3.15.3	Which arm proceeds
+6.9.3.15.4	Giving up
 6.10	Input and output
 6.11	Modules
 6.13	Programs

@@ -3179,6 +3179,12 @@ NOTE 3 — Both are required identifiers, so a program that declares its own
 `send` or `receive` keeps it (§6.1.3), which is `int64`'s and `exit`'s route
 (ADR-0128, ADR-0177).
 
+NOTE 4 — These two are the operations a select-arm performs (6.9.3.15), and
+that clause restates neither. What it adds is the *waiting*: which of several
+channels an activation waits on, and what happens when none of them is ready.
+A send and a receive written in a select-arm mean what this clause says they
+mean, including the error a closed channel is.
+
 #### 6.9.3.14 wait [added]
 
 The required procedure-identifier `wait` shall take one actual-parameter,
@@ -3229,6 +3235,152 @@ saying what that means.
 NOTE 6 — `wait` is a required identifier, so a program that declares its own
 `wait` keeps it (§6.1.3), which is `send`'s and `exit`'s route (ADR-0128,
 ADR-0177).
+
+#### 6.9.3.15 The select-statement [added]
+
+    select-statement = 'select' select-arm { ';' select-arm }
+                       [ [ ';' ] 'otherwise' statement-sequence ] 'end' .
+    select-arm       = channel-arm | timeout-arm .
+    channel-arm      = [ variable-access ':=' ] identifier
+                       actual-parameter-list ':' statement .
+    timeout-arm      = 'after' expression ':' statement .
+
+A select-statement shall wait until one of its channel-arms can proceed, shall
+perform that arm's operation, and shall then execute that arm's statement. It
+shall perform the operation of one arm and execute the statement of that arm
+and of no other.
+
+A select-statement shall have at least one channel-arm and at most one
+timeout-arm, and shall not have both a timeout-arm and an otherwise part.
+
+`select` is not a word-symbol, and the position is `defer`'s (6.9.3.11) and
+`spawn`'s (6.9.3.12): a statement beginning with an identifier can continue
+only as a designator, as a call, or not at all, and a select-statement's first
+arm always begins with an identifier — `receive`, `send`, `after`, or the
+variable of `ok := receive(c, v)`. So `select;`, `select(x)` and `select := 3`
+all remain what a program that declared `select` meant by them.
+
+NOTE 1 — The shape and the punctuation are the case-statement's (§6.9.3.5):
+arms separated by `;`, an optional `otherwise` last whose separator is itself
+optional, and `end` to close. What differs is that an arm's head is an
+operation rather than a list of case-constants, and that the arm which is
+executed is chosen by what has happened elsewhere rather than by a value the
+statement computed.
+
+NOTE 2 — This is the statement a program that must service a job queue *and*
+notice a shutdown signal is written with. Without it the two have to be folded
+into one channel, which is a program writing a discriminated union because the
+language would not let it wait for two things (ADR-0312, ADR-0313).
+
+**6.9.3.15.1 The arms.** The identifier of a channel-arm shall denote the
+required procedure-identifier `send` (6.9.3.13.1) or the required
+function-identifier `receive` (6.9.3.13.2), and the actual-parameter-list
+shall be the one that clause gives to the operation. Where the identifier has
+a defining-point in the program (§6.1.3), the arm shall be refused.
+
+A channel-arm whose identifier denotes `receive` may be written with a
+variable-access and `:=` before it. That variable-access shall possess the
+type `boolean` and shall be **threatened** in the sense of ISO/IEC 10206:1991
+§6.9.4 a), as the variable receiving the value is. Where the arm proceeds, the
+variable shall be assigned the value 6.9.3.13.2 gives the function: *true*
+where a value was delivered, and *false* where the channel had been closed
+(6.4.16.4) and drained.
+
+A channel-arm can proceed
+
+a) where its identifier denotes `receive`, when a value is available, and when
+   the channel has been closed and drained; and
+
+b) where its identifier denotes `send`, when the channel is not full.
+
+Sending on a channel that has been closed shall be 6.9.3.13.1's error wherever
+it is written, and shall not be an arm that cannot proceed.
+
+It shall be an error (Annex A.8) for the channel-variable of an arm to be
+empty.
+
+NOTE 1 — Which operation an arm performs is decided by the **symbol** and not
+by the spelling, which is ADR-0087's recurring rule. `send` and `receive` are
+required identifiers, so a program may declare its own (§6.1.3); an arm naming
+one the program declared is naming a routine that cannot be waited on, and is
+refused rather than quietly meaning the required operation.
+
+NOTE 2 — That a drained closed channel lets a `receive` arm proceed is what
+terminates a select over channels that have all closed. It is 6.9.3.13.2's own
+second outcome and not a rule of this clause, and the boolean written before
+`:=` is how a program tells the two apart — which is what makes `while ok do
+select … ok := receive(jobs, j): …` a drain loop rather than a program waiting
+for something that cannot arrive.
+
+NOTE 3 — An activation cannot close a channel and then drain it: all three
+spellings of a release the program wrote (6.4.16.4) empty the variable holding
+the channel as well as closing it. So the close a select reports is always one
+performed by *another* activation — the ordinary pipeline shape, a producer
+task closing what a consumer drains. Closing without releasing would be an
+operation of its own and this document defines none (ADR-0313).
+
+NOTE 4 — An empty channel-variable is an error and not an arm that waits for
+ever, which is `send`'s and `receive`'s treatment of one and is chosen for
+their reason: a variable a program forgot to give a channel to would otherwise
+read as a channel on which nothing has happened yet.
+
+**6.9.3.15.2 What is evaluated, and when.** Each channel-arm's
+channel-variable, the variable a `receive` arm writes, and the expression a
+`send` arm sends shall each be evaluated once, where the select-statement
+stands, before the statement waits. The value of a `send` arm's expression
+shall be retained until that arm proceeds or the statement gives up
+(6.9.3.15.4).
+
+NOTE — A select-statement may look at its arms many times before one of them
+proceeds, and how many times is a fact about the execution of other
+activations. An actual that was evaluated on each look would make that number
+observable, so it is evaluated once; and the value a `send` arm holds is
+therefore the value the expression had where the statement was written and not
+where the send happened.
+
+**6.9.3.15.3 Which arm proceeds.** Where more than one channel-arm can
+proceed, which one does so is not determined by the order in which the arms
+are written, and a program shall not depend upon it.
+
+NOTE — Trying the arms in written order is what this clause exists to forbid.
+A channel that is always ready would then starve every arm below it, and the
+arm below is the shutdown signal of the very program NOTE 2 of 6.9.3.15
+describes: a worker servicing a busy job queue would never look at it. The
+processor rotates the arm it looks at first, so that over *n* executions each
+arm is looked at first once (ADR-0313).
+
+**6.9.3.15.4 Giving up.** The expression of a timeout-arm shall be of an
+integer-type and shall denote a number of milliseconds. It shall be evaluated
+once, where the select-statement stands. Where no channel-arm has proceeded
+before that many milliseconds have elapsed, the select-statement shall proceed
+no further with its channel-arms and shall execute the statement of the
+timeout-arm. It shall be an error (Annex A.9) for the value of the expression
+to be negative.
+
+Where a select-statement has an otherwise part it shall not wait: the
+channel-arms shall be looked at once and, where none of them can proceed, the
+statement-sequence of the otherwise part shall be executed.
+
+NOTE 1 — `otherwise` is a deadline of zero, which is why a select-statement
+may have a timeout-arm or an otherwise part and not both. Two ways of saying
+*give up after this long* in one statement is a contradiction and not a
+refinement, and refusing it says so where a rule choosing the earlier of the
+two would have hidden it.
+
+NOTE 2 — `after` is the one spelling this construct reserves, and it reserves
+it **inside a select-statement and nowhere else**. No conforming program can
+be inside one at all, so the word costs nothing outside these brackets
+(ADR-0140). Making it a required identifier instead was rejected: `after(x):
+S` would then be a channel-arm in a program that had declared its own `after`
+and a timeout-arm in every other, which is a construct whose meaning depends
+on a declaration the reader of the arm cannot see (ADR-0313).
+
+NOTE 3 — The deadline is a wall-clock delay in milliseconds and nothing finer,
+and it bounds the *select-statement* and not any other construct. There is
+still no timeout on a `send` (6.9.3.13.1), on a `receive` (6.9.3.13.2) or on a
+`wait` (6.9.3.14); the last is refused for 6.9.3.14 NOTE 5's reason, a task
+not being a channel and a `wait` that gave up leaving a program holding a
+task-variable whose activation is still running.
 
 ### 6.10 Input and output [extended]
 
@@ -3361,6 +3513,8 @@ standard error stream.
 | A.5 | a foreign string result exceeds the capacity | 6.7.7.8 | `a string of length n does not fit a capacity of c` |
 | A.6 | `argument(k)` with `k` outside 1..`argcount` | 6.7.6.10 | `argument k is not in 1..n` |
 | A.7 | an empty handle is lent to a foreign routine | 6.4.12.4, 6.9.3.14 | `the handle is empty, and a foreign routine may not be lent it` |
+| A.8 | a select-arm names an empty channel-variable | 6.9.3.15.1 | `a select arm names an empty channel variable` |
+| A.9 | a select-statement is given a negative delay | 6.9.3.15.4 | `a select statement cannot wait for a negative time` |
 
 Indexing a slice out of range (6.7.3.9.5 b) is reported by the array-index error
 ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
@@ -3368,6 +3522,13 @@ ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
 Waiting (6.9.3.14) on an empty task-variable is A.7's error and carries A.7's
 message: the variable is lent as 6.4.12.4 lends a handle, and a second message
 would be a second name for one condition.
+
+A.8 is **not** A.7's error, though both are an empty handle. A.7 is about a
+handle *lent to a foreign routine* (6.4.12.4), and nothing foreign is reached
+here; what a reader of A.8 needs told is which arm of the select-statement was
+written against a variable holding no channel. A `send` (6.9.3.13.1) or a
+`receive` (6.9.3.13.2) written outside a select-statement reports the same
+condition in its own words for the same reason.
 
 ## Annex B (historical) — Refusal under the conformance modes
 
@@ -3771,3 +3932,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |
 | 6.5.1 | ADR-0299 |
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |
+| 6.9.3.15, 6.9.3.13 NOTE 4, Annex A.8, Annex A.9 | ADR-0313 |

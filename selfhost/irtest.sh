@@ -84,6 +84,7 @@ check_size PAS_JUMP_SIZE jumpSize
 check_size PAS_HANDLE_SIZE handleSize
 check_size PAS_DEFER_SIZE deferSize
 check_size PAS_TASKSET_SIZE taskSetSize
+check_size PAS_SELECT_ARM_SIZE selectArmSize
 
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>

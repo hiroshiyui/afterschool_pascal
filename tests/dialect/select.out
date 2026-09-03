@@ -1,0 +1,14 @@
+nothing ready : TRUE
+timed out     : TRUE
+sent          : 1
+sent          : 2
+full at       : 3
+left won twice: TRUE
+quit          : 99
+every job seen: TRUE
+drained       : 11
+drained       : 22
+drained       : 33
+closed        : TRUE
+generic       : 41
+deferred      : nothing left

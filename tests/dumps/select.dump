@@ -1,0 +1,273 @@
+=== tokens
+16 1 kw program
+16 9 ident dumpselect
+16 19 op (
+16 20 ident output
+16 26 op )
+16 27 op ;
+18 1 kw type
+18 6 ident ints
+18 11 op =
+18 13 ident channel
+18 21 op [
+18 22 int 4
+18 23 op ]
+18 25 kw of
+18 28 ident integer
+18 35 op ;
+20 1 kw var
+20 5 ident a
+20 6 op ,
+20 8 ident b
+20 9 op :
+20 11 ident ints
+20 15 op ;
+21 5 ident v
+21 6 op ,
+21 8 ident w
+21 9 op :
+21 11 ident integer
+21 18 op ;
+22 5 ident ok
+22 7 op :
+22 9 ident boolean
+22 16 op ;
+24 1 kw begin
+25 3 ident select
+26 5 ident ok
+26 8 op :=
+26 11 ident receive
+26 18 op (
+26 19 ident a
+26 20 op ,
+26 22 ident v
+26 23 op )
+26 24 op :
+26 26 ident writeln
+26 33 op (
+26 34 ident v
+26 35 op :
+26 36 int 1
+26 37 op )
+26 38 op ;
+27 5 ident send
+27 9 op (
+27 10 ident b
+27 11 op ,
+27 13 int 1
+27 14 op )
+27 15 op :
+27 17 ident writeln
+27 24 op (
+27 25 str [sent]
+27 31 op )
+27 32 op ;
+28 5 ident receive
+28 12 op (
+28 13 ident b
+28 14 op ,
+28 16 ident w
+28 17 op )
+28 18 op :
+28 20 ident writeln
+28 27 op (
+28 28 ident w
+28 29 op :
+28 30 int 1
+28 31 op )
+28 32 op ;
+29 5 ident after
+29 11 int 10
+29 13 op :
+29 15 ident writeln
+29 22 op (
+29 23 str [idle]
+29 29 op )
+30 3 kw end
+30 6 op ;
+31 3 ident select
+32 5 ident receive
+32 12 op (
+32 13 ident a
+32 14 op ,
+32 16 ident v
+32 17 op )
+32 18 op :
+32 20 ident writeln
+32 27 op (
+32 28 ident v
+32 29 op :
+32 30 int 1
+32 31 op )
+33 3 kw otherwise
+34 5 ident writeln
+34 12 op (
+34 13 str [none]
+34 19 op )
+35 3 kw end
+36 1 kw end
+36 4 op .
+37 1 eof
+=== ast
+program dumpselect
+  params
+    name output @16:20
+  block
+    imports
+    labels
+    consts
+    types
+      type ints @18:6
+        handle '' @18:13
+    vars
+      var
+        names
+          name a @20:5
+          name b @20:8
+        type
+          named ints @20:11
+      var
+        names
+          name v @21:5
+          name w @21:8
+        type
+          named integer @21:11
+      var
+        names
+          name ok @22:5
+        type
+          named boolean @22:9
+    procs
+    body
+      compound @24:1
+        select @25:3
+          receive -> @26:5
+            var ok @26:5
+            var a @26:19
+            var v @26:22
+            writeln @26:26
+              arg w -
+                var v @26:34
+                int 1 @26:36
+          send @27:5
+            var b @27:10
+            int 1 @27:13
+            writeln @27:17
+              arg - -
+                str [sent] @27:25
+          receive @28:5
+            var b @28:13
+            var w @28:16
+            writeln @28:20
+              arg w -
+                var w @28:28
+                int 1 @28:30
+          after @29:5
+            int 10 @29:11
+            writeln @29:15
+              arg - -
+                str [idle] @29:23
+        select @31:3
+          receive @32:5
+            var a @32:13
+            var v @32:16
+            writeln @32:20
+              arg w -
+                var v @32:28
+                int 1 @32:30
+          otherwise
+            writeln @34:5
+              arg - -
+                str [none] @34:13
+=== sema
+program dumpselect
+  params
+    name output @16:20
+  frames
+    frame dumpselect level 0
+      var output #0 : text (stdout 0)
+      var a #1 : ints
+      var b #2 : ints
+      var v #3 : integer
+      var w #4 : integer
+      var ok #5 : boolean
+      var send #6 : integer
+  block
+    imports
+    labels
+    consts
+    types
+      type ints @18:6
+        handle '' @18:13 = ints
+    vars
+      var
+        names
+          name a @20:5
+          name b @20:8
+        type
+          named ints @20:11 = ints
+      var
+        names
+          name v @21:5
+          name w @21:8
+        type
+          named integer @21:11 = integer
+      var
+        names
+          name ok @22:5
+        type
+          named boolean @22:9 = boolean
+    procs
+    body
+      compound @24:1
+        select @25:3 #3
+          receive -> @26:5
+            var ok @26:5 -> dumpselect/5 : boolean
+            var a @26:19 -> dumpselect/1 : ints
+            var v @26:22 -> dumpselect/3 : integer
+            writeln @26:26
+              file
+                var output @26:26 -> dumpselect/0 : text
+              arg w -
+                var v @26:34 -> dumpselect/3 : integer
+                int 1 @26:36 : integer
+          send @27:5
+            var b @27:10 -> dumpselect/2 : ints
+            int 1 @27:13 : integer
+            writeln @27:17
+              file
+                var output @27:17 -> dumpselect/0 : text
+              arg - -
+                str [sent] @27:25 : packed array [1..4] of char
+          receive @28:5
+            var b @28:13 -> dumpselect/2 : ints
+            var w @28:16 -> dumpselect/4 : integer
+            writeln @28:20
+              file
+                var output @28:20 -> dumpselect/0 : text
+              arg w -
+                var w @28:28 -> dumpselect/4 : integer
+                int 1 @28:30 : integer
+          after @29:5
+            int 10 @29:11 : integer
+            writeln @29:15
+              file
+                var output @29:15 -> dumpselect/0 : text
+              arg - -
+                str [idle] @29:23 : packed array [1..4] of char
+        select @31:3 #1
+          receive @32:5
+            var a @32:13 -> dumpselect/1 : ints
+            var v @32:16 -> dumpselect/3 : integer
+            writeln @32:20
+              file
+                var output @32:20 -> dumpselect/0 : text
+              arg w -
+                var v @32:28 -> dumpselect/3 : integer
+                int 1 @32:30 : integer
+          otherwise
+            writeln @34:5
+              file
+                var output @34:5 -> dumpselect/0 : text
+              arg - -
+                str [none] @34:13 : packed array [1..4] of char
