@@ -255,22 +255,13 @@ the first row here to close, the day after the chapter was written
   as it stood and what writing it found are in
   [`doc/history.md`](history.md#the-tour-and-what-writing-it-found).
 
-- **A source named with no directory finds no sibling module.** ADR-0244's
-  first search rule is *the directory the source being translated is in*, and
-  `SourceDir` computes that from the path it was handed: a bare `prog.pas` has
-  no `/` in it, so the answer is the empty string and `AddPath` drops it — an
-  empty entry being deliberately skipped, since one in
-  `AFTERSCHOOL_PASCAL_PATH` would name the working directory. So a program and
-  its modules in one directory find each other under `pascalc ./prog.pas` and
-  do not under `pascalc prog.pas`, which is the shape a person types.
-  `README.md` says such a checkout compiles with no configuration and it is
-  half true. The command that shows it: put `greeting.pas` and `sayhello.pas`
-  beside each other and run both spellings — the second answers *no interface
-  named 'greeting' has been exported*. Found by writing `doc/tour.md`'s module
-  section; no oracle here could see it, every case being compiled by a harness
-  that passes a path. The fix looks like one line — answer `'./'` where there
-  is no separator — and wants a case of its own, since `install-layout` drives
-  an absolute prefix and `import_by_name` an `--import-path`.
+- ~~**A source named with no directory finds no sibling module.**~~ — **done**
+  (ADR-0308), the day the tour that found it landed. `SourceDir` answered the
+  empty string where the answer is `./`, and `AddPath` drops an empty
+  directory on purpose, so ADR-0244's first rule held for every spelling but
+  `pascalc prog.pas`. Two right answers to two different questions, wrong
+  together; `bare-source-name` is the gate, and it has to be one because no
+  test case can choose how it is named.
 
 ### Writing a daily program
 

@@ -1,0 +1,8 @@
+adr: 0308
+file: selfhost/compiler.pas
+kills: bare-source-name
+why: The empty string restored, so a source named with no directory contributes no search directory at all -- AddPath drops it on purpose -- and a sibling module is not found. The program still compiles when it is named with a directory, so the gate's second claim stands and only the first falls, which is what says the fix is about the bare name and not about the search order.
+--- old
+  if k = 0 then SourceDir := './'
+--- new
+  if k = 0 then SourceDir := ''

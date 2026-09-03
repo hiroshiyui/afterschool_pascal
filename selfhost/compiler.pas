@@ -11647,13 +11647,20 @@ end;
   empty prefix is exactly that. Written out rather than taken from a library:
   this component imports ApTypes and ApFront and nothing else, and PasFS is
   not available to a compiler that has to build from the seed. }
+{ The directory the source was named in, which is './' when it was named
+  without one (ADR-0308). Answering the empty string there looked right and
+  was not: AddPath drops an empty directory on purpose, so `pascalc prog.pas`
+  searched nowhere for a sibling module while `pascalc ./prog.pas` found it,
+  and ADR-0244's first search rule -- a program and its components written in
+  one directory find each other -- was true of every spelling but the one a
+  person types. }
 function SourceDir: pathStr;
 var k: integer;
 begin
   k := length(srcName);
   while (k > 0) and (srcName[k] <> '/') do
     k := k - 1;
-  if k = 0 then SourceDir := ''
+  if k = 0 then SourceDir := './'
   else SourceDir := substr(srcName, 1, k)
 end;
 

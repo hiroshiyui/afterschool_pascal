@@ -168,7 +168,7 @@ This is the part worth knowing before you plan a project layout. Put the
 program and its modules in one directory and compile the program:
 
 ```sh
-pascalcc ./sayhello.pas -o sayhello
+pascalcc sayhello.pas -o sayhello
 ```
 
 That is the whole build. The compiler resolves `import Greeting` by looking
@@ -187,12 +187,6 @@ your own modules elsewhere, name the directory once:
 ```sh
 pascalcc --import-path ~/pascal/lib app.pas -o app
 ```
-
-> **One wart, as of this writing.** The first rule — *the source's own
-> directory* — is computed from the path you typed, and a bare `prog.pas` has
-> no directory in it, so a sibling module is not found. Write `./prog.pas`, or
-> pass `--import-path .`, until that is fixed; `doc/roadmap.md` carries the
-> row.
 
 `examples/` shows the receiving end: seven of the twelve programs import
 library modules and carry nothing but a `.importpath` sidecar naming the two

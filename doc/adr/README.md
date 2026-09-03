@@ -316,3 +316,4 @@ the alternatives that were rejected and why.
 | [0305](0305-the-capacity-is-the-callers.md) | The capacity is the caller's, and the language already reports the cut | Accepted |
 | [0306](0306-a-message-does-not-name-a-placeholder.md) | A message does not name a placeholder type | Accepted |
 | [0307](0307-dispose-is-what-releases-an-owned-pointer.md) | `dispose` is what releases an owned pointer | Accepted |
+| [0308](0308-the-directory-a-bare-name-is-in.md) | The directory a bare name is in | Accepted |

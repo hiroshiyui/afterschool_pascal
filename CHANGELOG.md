@@ -56,6 +56,13 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **A source named with no directory finds its neighbours** (ADR-0308).
+  ADR-0244's first search rule is the source's own directory, and `SourceDir`
+  answered the empty string for a name with no `/` in it, which `AddPath`
+  drops on purpose — so a program and its modules in one directory compiled
+  under `pascalc ./prog.pas` and not under `pascalc prog.pas`. The answer is
+  `./`, and `bare-source-name` is the new gate; it has to be a harness because
+  no test case can choose how it is named.
 - **A channel may carry a `string(n)` or a text** (ADR-0302). `send` chose its
   path with `IsStructured`, which a variable-string is not, so a program
   sending one did not assemble at all; and copying the element's size out of a

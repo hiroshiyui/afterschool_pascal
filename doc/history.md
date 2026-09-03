@@ -6881,8 +6881,12 @@ claim is true of every spelling but the one a person types, and **no oracle
 here could have seen it**: every case is compiled by a harness that passes a
 path — `install-layout` an absolute prefix, `import_by_name` an
 `--import-path` — which is `long-path`'s argument and `stale-component`'s met
-a third time. It is a roadmap row rather than a fix, because the tour's job
-was to be written and the compiler change wants a case of its own.
+a third time. It was a roadmap row rather than a fix, because the tour's job
+was to be written and the compiler change wanted a case of its own — and it
+got one the same day (ADR-0308): `SourceDir` answers `./`, `bare-source-name`
+is the gate, and the shape the finding leaves behind is that **two right
+answers to two different questions can be wrong together**. Both comments
+name their own reason correctly and neither can see the pair.
 
 **The library is wordier than the language now requires, and its own header
 says why in the past tense.** `lib/dialect/pascontainer.pas` opens with a

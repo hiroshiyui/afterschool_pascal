@@ -347,6 +347,19 @@ if(Python3_FOUND)
   set_tests_properties(long-path PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+  # ADR-0308: does a source named without a directory find its neighbours?
+  # `SourceDir` answered the empty string for a name with no `/`, and AddPath
+  # drops an empty directory on purpose, so ADR-0244's first search rule was
+  # true of `./prog.pas` and false of `prog.pas` -- the spelling a person
+  # types. Its own harness for long-path's reason, met a third time: no test
+  # case can choose how it is named, every case here being compiled where it
+  # sits by a harness that passes a path.
+  add_test(NAME bare-source-name
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/bare_source_name.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(bare-source-name PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+
   # ADR-0244: can this compiler be put somewhere and found there? Every other
   # harness drives it out of the build tree with PASCALC and
   # AFTERSCHOOL_PASCAL_RUNTIME saying where that tree is, which is exactly the
