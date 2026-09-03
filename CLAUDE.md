@@ -215,7 +215,12 @@ There are **four** warnings, and each found something on its first run.
   need the whole component: a routine passed as a procedural actual cannot take
   the word, and an exported one cannot be judged here at all. **It is a fixed
   point and not a list** — §6.5.1 exempts a protected formal from being
-  threatened, so protecting one parameter exposes the next layer.
+  threatened, so protecting one parameter exposes the next layer. **The unit is
+  the formal-parameter-section and not the parameter** (ADR-0300): §6.7.3.1 puts
+  the word before the whole section, so `var b, c` takes it for both names or
+  neither, and advising it for `c` while `b` is written through was advice that
+  does not compile — ADR-0283's own claim, true of a parameter and false of a
+  section.
 
 ### The representation, in brief
 
@@ -757,7 +762,7 @@ the only oracle here that nobody in this project wrote.
 
 **The dumps are opt-in** — `--dump-tokens`, `--dump-trivia`, `--dump-ast`,
 `--dump-sema`, `--dump-all`, `--dump-symbols`, `--dump-stmts`, `--dump-imports`,
-`--dump-uses` — and each stops at the stage it names, reporting what its own
+`--dump-uses`, `--dump-words` — and each stops at the stage it names, reporting what its own
 stage found and showing its result only when nothing was found. **`=== tokens`
 belongs to `--dump-all`**, which has three sections and so needs them separated;
 a single-stage flag writes its one section bare — a test comment asserted the
@@ -776,7 +781,12 @@ each is in `doc/design-digest.md`.
   outside the compiler, the shape that broke `foreign-reserved` and that
   ADR-0229 and ADR-0230 moved `kind-exhaustive` off. `--dump-symbols` answers in
   **Pascal's** words and not any protocol's numbers and stops after the *parse*,
-  an outline being what an editor draws while a file is wrong; `--dump-uses`
+  an outline being what an editor draws while a file is wrong, and reports a
+  formal `parameter` since ADR-0301, a completion list inside a body being
+  nothing else; **`--dump-words` is the one dump not about the source at all**
+  (ADR-0301), the word-symbols and required identifiers walked out of the
+  lexer's table and the outermost scope, so a caller offering names to a person
+  typing one holds no copy of either list; `--dump-uses`
   carries a defining-point and a type in one row, needs the `--import`s, and is
   **the one dump not guarded by `errorSeen`**, an editor asking where a name is
   declared exactly while the file does not compile.

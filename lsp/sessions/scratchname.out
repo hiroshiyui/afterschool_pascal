@@ -1,6 +1,6 @@
-Content-Length: 407
+Content-Length: 508
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 122
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"completionProvider":{"resolveProvider":false},"codeActionProvider":{"codeActionKinds":["quickfix"]},"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 122
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/quiet.pas","diagnostics":[]}}Content-Length: 38
 

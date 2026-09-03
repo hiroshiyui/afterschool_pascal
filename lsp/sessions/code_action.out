@@ -1,0 +1,15 @@
+Content-Length: 507
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"completionProvider":{"resolveProvider":false},"codeActionProvider":{"codeActionKinds":["quickfix"]},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: 450
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/warn.pas","diagnostics":[{"range":{"start":{"line":6,"character":2},"end":{"line":6,"character":2}},"severity":2,"source":"pascalc","message":"this statement cannot be reached"},{"range":{"start":{"line":2,"character":15},"end":{"line":2,"character":15}},"severity":2,"source":"pascalc","message":"'n' is never written through, so it could be protected"}]}}Content-Length: 463
+
+{"jsonrpc":"2.0","id":2,"result":[{"title":"Delete the unreachable statement","kind":"quickfix","diagnostics":[{"range":{"start":{"line":6,"character":2},"end":{"line":6,"character":2}},"severity":2,"source":"pascalc","message":"this statement cannot be reached"}],"edit":{"documentChanges":[{"textDocument":{"uri":"file:///scratch/warn.pas","version":null},"edits":[{"range":{"start":{"line":6,"character":2},"end":{"line":6,"character":18}},"newText":""}]}]}}]}Content-Length: 506
+
+{"jsonrpc":"2.0","id":3,"result":[{"title":"Add `protected` to the parameter section","kind":"quickfix","diagnostics":[{"range":{"start":{"line":2,"character":15},"end":{"line":2,"character":15}},"severity":2,"source":"pascalc","message":"'n' is never written through, so it could be protected"}],"edit":{"documentChanges":[{"textDocument":{"uri":"file:///scratch/warn.pas","version":null},"edits":[{"range":{"start":{"line":2,"character":15},"end":{"line":2,"character":15}},"newText":"protected "}]}]}}]}Content-Length: 36
+
+{"jsonrpc":"2.0","id":4,"result":[]}Content-Length: 36
+
+{"jsonrpc":"2.0","id":5,"result":[]}Content-Length: 38
+
+{"jsonrpc":"2.0","id":6,"result":null}

@@ -1,0 +1,32 @@
+# ADR-0301: the names that may be written at a position, and the compiler's
+# own vocabulary.
+#
+# Two things make the list and only one of them is about the document. The
+# word-symbols and required identifiers come from `--dump-words` and are a
+# property of the compiler, asked once; the names in scope come from the same
+# `--dump-symbols` the outline is drawn from, filtered by two rules that are
+# the whole of the design -- the block that declares a name has to contain the
+# position, and 6.2.2.9 makes the defining-point have to precede it.
+#
+# The document below is written so that both rules refuse something. `later`
+# is declared after `Inner` and is not in scope inside it; `count`, `sink` and
+# `scratch` belong to `Inner`'s block and are not in scope in the program's.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/scope.pas","languageId":"pascal","version":1,"text":"program p(output);\nconst Limit = 10;\ntype Colour = (Red, Green);\nvar total: integer;\nprocedure Inner(count: integer; var sink: integer);\nvar scratch: integer;\nbegin\n  scratch := count;\n  sink := scratch\nend;\nvar later: integer;\nbegin\n  total := 0;\n  Inner(total, later)\nend.\n"}}}
+
+# Inside Inner's body, at the start of line 9. Everything the program declared
+# before `Inner` is in scope, and so are `Inner`'s own parameters and its
+# local -- which is the whole reason --dump-symbols had to learn to report a
+# parameter at all. `later` is declared on line 11 and must not be offered.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///scratch/scope.pas"},"position":{"line":8,"character":2}}}
+
+# And in the program's own statement part, where `later` *is* in scope and
+# Inner's three names are not: they are declared in a block this position is
+# not inside.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///scratch/scope.pas"},"position":{"line":13,"character":2}}}
+
+{"jsonrpc":"2.0","id":4,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

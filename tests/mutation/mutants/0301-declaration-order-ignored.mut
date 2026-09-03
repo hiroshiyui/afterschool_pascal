@@ -1,0 +1,9 @@
+adr: 0301
+file: lsp/pasls.pas
+kills: lsp-server
+why: 6.2.2.9 makes a defining-point precede its applied occurrences, and this compiler enforces it -- `later`, declared after `Inner`, is not in scope inside it. Dropping the order test offers a name that does not compile at the position it was offered for, which is the one thing a completion list must not do. lsp/sessions/completion.out is the session; `later` appears in the answer for a position inside `Inner`.
+--- old
+            visible := inside and (sym.kind <> 'field')
+                       and Before(sym.line, sym.col, line, col);
+--- new
+            visible := inside and (sym.kind <> 'field');

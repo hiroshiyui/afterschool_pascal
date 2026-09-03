@@ -52,6 +52,7 @@ export ApFront = (
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
   At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent, DumpTrivia,
+  WantWords,
   FormatSource, SetFormatRange,
   RoundUp, LlSize, LlAlign, RecordLayout, VariantStorageAt,
   SelectedSize, ArmSlotAt);
@@ -229,6 +230,23 @@ procedure DumpProgram;
   editor's outline has to survive (ADR-0239). }
 procedure DumpSymbols;
 
+{ Ask for the *vocabulary* rather than for anything about a source: every
+  word-symbol 6.1.2 reserves and every required identifier 6.2.2.10 puts in a
+  region enclosing the program, one to a line (ADR-0301). It is a property of
+  the compiler and not of the file it was handed, which is why a caller asks
+  it once and why it is spelled as a request rather than as a flag beside the
+  others -- and why RunSema answers it and stops, the required identifiers
+  being installed there and the source being of no interest after that.
+
+    word <spelling>
+    required <kind> <spelling>
+
+  A caller offering names to a person typing one needs these; a caller
+  holding a table of its own would hold one that is right today and silently
+  wrong the day a forty-sixth word-symbol is reserved, which is the shape
+  ADR-0294 refused for `rename` and the same refusal here. }
+procedure WantWords;
+
 end;
 
 var
@@ -236,6 +254,11 @@ var
   { --- the lexer's lookahead window; win[0] is the character it looks at --- }
   win: array [0..2] of char;
   winEof: array [0..2] of boolean;
+
+  { Whether this run was asked for the vocabulary rather than for anything
+    about a source (ADR-0301). `RunSema` reads it, once, at the moment the
+    outermost scope holds the required identifiers and nothing else. }
+  wordsAsked: boolean;
 
   kwText: array [1..kwCount] of kwLit;
   kwKind: array [1..kwCount] of tokenKind;
@@ -5161,6 +5184,8 @@ begin
   s^.heapDisc := false;
   s^.discBinding := false;
   s^.paramSection := 0;
+  s^.secLine := 0;
+  s^.secCol := 0;
   s^.isProtected := false;
   s^.initValue := nil;
   s^.constValue := nil;
@@ -6888,8 +6913,22 @@ end;
   Hence the candidate is recorded where it is found and judged when the whole
   component has been seen. `RunSema` calls the second half after
   `CheckMutualSupply`, which is the last thing it does. }
+{ Could this one parameter take the word? 6.5.1 forbids a statement to
+  threaten a variable-access closest-containing a protected
+  variable-identifier and 6.9.4 lists the six ways, so `not wasThreatened` is
+  the exact condition; 6.4.1 refuses a file and a pointer, which is
+  `Protectable`. Written out here because two callers ask it -- the recorder
+  below asks it of every name in a section, since 6.7.3.1's word is the
+  section's and not the parameter's. }
+function ProtectableCandidate(s: symPtr): boolean;
+begin
+  ProtectableCandidate := (s^.kind = skVarParam) and not s^.isProtected
+                          and not s^.wasThreatened and (s^.declLine > 0)
+                          and Protectable(s^.stype)
+end;
+
 procedure NoteUnwrittenVarParams(sym: symPtr);
-var q: symListPtr; s: symPtr; c: symListPtr;
+var q, r: symListPtr; c: symListPtr; sec: integer; whole: boolean;
 begin
   { `sym` is tested and `q^.sym` is not, and the difference was measured
     rather than assumed: `line-coverage` takes both directions of the first --
@@ -6898,18 +6937,35 @@ begin
   if warnOn and not errorSeen and (sym <> nil) and (curFile = mainFile) then begin
     q := sym^.params;
     while q <> nil do begin
-      s := q^.sym;
-      if (s^.kind = skVarParam) and not s^.isProtected
-         and not s^.wasThreatened and (s^.declLine > 0) then
-        if Protectable(s^.stype) then begin
-          new(c);
-          c^.sym := s;
-          c^.next := nil;
-          if unwrittenTail = nil then unwritten := c
-                                 else unwrittenTail^.next := c;
-          unwrittenTail := c
-        end;
-      q := q^.next
+      { One formal-parameter-section, which is the run of parameters sharing a
+        `paramSection` -- 6.6.3.6 numbers them and `AppendSym` keeps them in
+        declaration order, so a run is contiguous.
+
+        The section and not the parameter is the unit, and that is ADR-0300's
+        correction to this warning rather than a convenience for the tool that
+        reads it. 6.7.3.1 puts `protected` before the whole
+        formal-parameter-section, so `var b, c: integer` takes the word for
+        both names or for neither; advising it for `c` while `b` is written
+        through is advice that does not compile, which is exactly what
+        ADR-0283 claimed this warning could never give. A section qualifies
+        only when every name in it does. }
+      sec := q^.sym^.paramSection;
+      whole := true;
+      r := q;
+      while (r <> nil) and (r^.sym^.paramSection = sec) do begin
+        if not ProtectableCandidate(r^.sym) then whole := false;
+        r := r^.next
+      end;
+      if whole then begin
+        new(c);
+        { the section's first parameter, which is what carries its position }
+        c^.sym := q^.sym;
+        c^.next := nil;
+        if unwrittenTail = nil then unwritten := c
+                               else unwrittenTail^.next := c;
+        unwrittenTail := c
+      end;
+      q := r
     end
   end
 end;
@@ -6938,25 +6994,28 @@ end;
   themselves so the order is the source's, but a whole-component answer cannot
   be interleaved with answers given a block at a time.
 
-  A selection sort over a list that holds one entry per unwritten parameter of
-  the file being compiled -- 130 for the largest source in this tree -- which
-  is small enough that the shape of the loop matters less than its being
-  obviously right. }
+  A selection sort over a list that holds one entry per unwritten
+  formal-parameter-section of the file being compiled -- 130 parameters in the
+  largest source in this tree, and fewer sections -- which is small enough
+  that the shape of the loop matters less than its being obviously right. }
 procedure WarnUnwrittenVarParams;
 var c, best, prev, bestPrev, rest: symListPtr; s, owner: symPtr;
+    q: symListPtr; many: boolean;
 begin
   if warnOn and not errorSeen then begin
     rest := unwritten;
     while rest <> nil do begin
-      { the earliest remaining candidate, by declaration position }
+      { the earliest remaining candidate, by the position of the section it
+        opens -- which orders the sections as their first names do, a section
+        beginning at or before the name it declares first }
       best := rest;
       bestPrev := nil;
       prev := rest;
       c := rest^.next;
       while c <> nil do begin
-        if (c^.sym^.declLine < best^.sym^.declLine)
-           or ((c^.sym^.declLine = best^.sym^.declLine)
-               and (c^.sym^.declCol < best^.sym^.declCol)) then begin
+        if (c^.sym^.secLine < best^.sym^.secLine)
+           or ((c^.sym^.secLine = best^.sym^.secLine)
+               and (c^.sym^.secCol < best^.sym^.secCol)) then begin
           best := c;
           bestPrev := prev
         end;
@@ -6978,10 +7037,31 @@ begin
         `line-coverage` said about the one `Transfers` used to have. }
       owner := s^.owner;
       if not owner^.passedAsProc and not ExportedRoutine(owner) then begin
-        WarnAt(s^.declLine, s^.declCol);
-        write('''');
-        WritePool(s^.at, s^.len);
-        writeln(''' is never written through, so it could be protected')
+        { At the section and not at the name: the word goes before `var`, and
+          a diagnostic that points anywhere else is one a reader -- or a code
+          action (ADR-0300) -- has to search backwards from. }
+        WarnAt(s^.secLine, s^.secCol);
+        many := false;
+        q := owner^.params;
+        while q <> nil do begin
+          if q^.sym^.paramSection = s^.paramSection then begin
+            if q^.sym <> s then begin
+              write(', ');
+              many := true
+            end;
+            write('''');
+            WritePool(q^.sym^.at, q^.sym^.len);
+            write('''')
+          end;
+          q := q^.next
+        end;
+        { One message for the section, naming every name in it. Two messages
+          at one position would be two offers of the same single edit, and
+          applying both would write the word twice. }
+        if many then
+          writeln(' are never written through, so they could be protected')
+        else
+          writeln(' is never written through, so it could be protected')
       end
     end
   end
@@ -12486,16 +12566,40 @@ procedure CheckResultAssign(s: nodePtr; named: symPtr;
   that LookupUser turns back into nil (6.2.2.10). So a program that tries to
   pass one gets "undeclared identifier" unless it is recognised here, which
   would be a baffling way to report 6.6.3.7. }
-function IsRequiredName(at, len: integer): boolean;
+{ The twelve of them, one at a time, so that the two readers below share one
+  list. `--dump-words` writes them for a completion list (ADR-0301) and this
+  function asks the pool about each; a second spelling of the twelve in either
+  place would be a copy free to drift, which is the mistake this tree has made
+  with a table of word-symbols more than once. }
+procedure RequiredProcName(i: integer; var w: kwLit);
 begin
-  IsRequiredName :=
-    PoolIs(at, len, 'new      ') or PoolIs(at, len, 'dispose  ') or
-    PoolIs(at, len, 'reset    ') or PoolIs(at, len, 'rewrite  ') or
-    PoolIs(at, len, 'get      ') or PoolIs(at, len, 'put      ') or
-    PoolIs(at, len, 'read     ') or PoolIs(at, len, 'readln   ') or
-    PoolIs(at, len, 'write    ') or PoolIs(at, len, 'writeln  ') or
-    PoolIs(at, len, 'pack     ') or PoolIs(at, len, 'unpack   ') or
-    (LookupBuiltin(at, len) <> biNone)
+  case i of
+    1:  w := 'new      ';
+    2:  w := 'dispose  ';
+    3:  w := 'reset    ';
+    4:  w := 'rewrite  ';
+    5:  w := 'get      ';
+    6:  w := 'put      ';
+    7:  w := 'read     ';
+    8:  w := 'readln   ';
+    9:  w := 'write    ';
+    10: w := 'writeln  ';
+    11: w := 'pack     ';
+    12: w := 'unpack   '
+  end
+end;
+
+function IsRequiredName(at, len: integer): boolean;
+var i: integer; found: boolean; w: kwLit;
+begin
+  found := false;
+  i := 1;
+  while (i <= reqProcCount) and not found do begin
+    RequiredProcName(i, w);
+    found := PoolIs(at, len, w);
+    i := i + 1
+  end;
+  IsRequiredName := found or (LookupBuiltin(at, len) <> biNone)
 end;
 
 { The symbol a procedural or functional actual names, whichever of the two
@@ -18489,6 +18593,8 @@ begin
         and 6.6.3.6 compares sections -- so it has to be numbered even though
         it can never hold a second name. }
       ps^.paramSection := section;
+      ps^.secLine := g^.line;
+      ps^.secCol := g^.col;
       { Its own parameters name no frame and are never looked up: the actual
         procedure supplies the names its body uses, and these exist only to be
         compared against that procedure's. Two of them sharing a spelling
@@ -18535,6 +18641,8 @@ begin
             ps^.stype := intType
           end;
           ps^.paramSection := section;
+          ps^.secLine := g^.line;
+          ps^.secCol := g^.col;
           ps^.isProtected := g^.grIsProtected;
           if first = nil then
             ps^.stype := ConformantFormal(ps, g^.grType, nil)
@@ -18579,6 +18687,8 @@ begin
             ps^.stype := intType
           end;
           ps^.paramSection := section;
+          ps^.secLine := g^.line;
+          ps^.secCol := g^.col;
           ps^.isProtected := g^.grIsProtected;
           ps^.stype := SchematicFormal(schema, ps, g^.grType);
           { 6.7.3.1 asks the question of "every type possessed by" the name,
@@ -18747,6 +18857,8 @@ begin
           ps^.stype := t
         end;
         ps^.paramSection := section;
+        ps^.secLine := g^.line;
+        ps^.secCol := g^.col;
         ps^.isProtected := g^.grIsProtected;
         { 6.7.3.3: a var parameter's form is a type-name, and 6.4.1 makes a
           type-name denote the bindability of its definition -- so a parameter
@@ -22719,6 +22831,66 @@ begin
   end
 end;
 
+{ ------------------------------------------------------------- --dump-words }
+
+{ ADR-0301. What a caller may write here that this source did not declare:
+  the word-symbols and the required identifiers.
+
+  It walks the compiler's own tables and declares none of its own, which is
+  the whole point of asking the compiler at all. `kwText` is the lexer's
+  table, so a forty-sixth word-symbol appears here on the day it is reserved;
+  the outermost scope is what `InstallPredefined` just filled, so a required
+  type or function added to 6.2.2.10's region appears the same way; and the
+  twelve required procedures are the one part with no table to walk -- 6.6.5
+  makes them names and not symbols (ADR-0097) -- so they come through
+  `RequiredProcName`, which `IsRequiredName` reads too.
+
+  `restricted` is written by hand for the reason `StrIsWide` exists: it is ten
+  characters and `kwLit` is nine, so the lexer cannot hold it in the table
+  either. }
+procedure WriteKwLit(w: kwLit);
+var n, k: integer;
+begin
+  n := kwWidth;
+  while (n > 0) and (w[n] = ' ') do n := n - 1;
+  for k := 1 to n do write(w[k])
+end;
+
+procedure DumpWords;
+var i: integer; e: entryPtr; w: kwLit;
+begin
+  for i := 1 to kwCount do begin
+    write('word ');
+    WriteKwWord(i);
+    writeln
+  end;
+  writeln('word restricted');
+  for i := 1 to reqProcCount do begin
+    RequiredProcName(i, w);
+    write('required procedure ');
+    WriteKwLit(w);
+    writeln
+  end;
+  { The scope is a stack, so this is the reverse of the order they were
+    installed in. Nothing here is ordered by anything a caller can use --
+    a completion list is sorted by whatever asked for it -- so reversing it
+    to look tidier would be a claim about an order this dump does not have. }
+  e := scopeTop;
+  while e <> nil do begin
+    write('required ');
+    PutSymKindWord(e^.sym^.kind);
+    write(' ');
+    WritePool(e^.at, e^.len);
+    writeln;
+    e := e^.prev
+  end
+end;
+
+procedure WantWords;
+begin
+  wordsAsked := true
+end;
+
 procedure RunSema;
 var p, m: nodePtr; k: integer;
 begin
@@ -22783,6 +22955,16 @@ begin
   curModule := nil;
   { the predefined identifiers live in their own outermost scope }
   InstallPredefined;
+  { ADR-0301. Asked here and nowhere else, because *here* is the one moment
+    the scope holds the required identifiers and nothing else: 6.2.2.10 puts
+    their defining-points in a region enclosing the program, and the program's
+    own scope has not been pushed yet. So the walk needs no test for which
+    depth an entry is at, and the answer cannot come to include a name the
+    source declared. }
+  if wordsAsked then begin
+    DumpWords;
+    exit
+  end;
   InstallRequiredInterfaces;
 
   programSym := NewSymbol;
@@ -25584,6 +25766,36 @@ end;
 
 procedure DumpSymBlock(b: nodePtr; depth: integer); forward;
 
+{ 6.6.3.1's formal-parameter-list: every name in it, at the depth of the
+  block the routine's own row opens.
+
+  It reported none of them until ADR-0301, and the flag's own sentence is
+  *every name a source declares* -- 6.2.2.10 gives a formal parameter a
+  defining-point in the block, so a parameter is as much a declaration as a
+  local. Nothing had noticed because an outline is not where a reader looks
+  for one; a completion list inside a routine's body is, and a list without
+  them is missing the names most likely to be typed next.
+
+  One word for all four forms, `parameter`. Which of them a name is -- value,
+  variable, procedural, functional -- is a question about the *signature* and
+  an answer this row has nowhere to put; a reader wanting it has the
+  position and the source. }
+procedure DumpSymParams(p: nodePtr; depth: integer);
+var g, n: nodePtr;
+begin
+  g := p;
+  while g <> nil do begin
+    n := g^.grNames;
+    while n <> nil do begin
+      SymHead(depth);
+      write('parameter');
+      SymTail(n^.line, n^.col, n^.dnAt, n^.dnLen);
+      n := n^.next
+    end;
+    g := g^.next
+  end
+end;
+
 { One declaration, and whatever it declares below itself. `nm` is the name
   within a variable-declaration's group and nil for every other kind, a group
   being the one declaration here that carries more than one defining-point. }
@@ -25622,6 +25834,7 @@ begin
   else if d^.kind = nkProcDecl then begin
     SymHead(depth);
     if d^.pdIsFunction then write('function') else write('procedure');
+    { the parameters are written below, after the row this opens }
     if d^.pdBody <> nil then
       SymTailTo(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen,
                 d^.pdBody^.blEndLine, d^.pdBody^.blEndCol)
@@ -25629,6 +25842,10 @@ begin
       { A heading with no block in this translation -- 6.11.1's, or a
         `forward` -- occupies its name and no more here. }
       SymTail(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen);
+    { Before the block's own declarations, which is where they were written:
+      6.2.2.9 makes written order the only correct one and a parameter
+      precedes every local. }
+    DumpSymParams(d^.pdParams, depth + 1);
     if d^.pdBody <> nil then DumpSymBlock(d^.pdBody, depth + 1)
   end
 end;
@@ -26068,6 +26285,7 @@ end;
 
 to begin do
   begin
+    wordsAsked := false;
     fmtRangeLo := 0;
     fmtRangeHi := 0;
     { The sink is open unless a range closes it. `DumpTrivia` copies comment

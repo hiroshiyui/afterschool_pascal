@@ -1,1 +1,1 @@
-<source>:35:24: warning: 'g' is never written through, so it could be protected
+<source>:35:20: warning: 'g' is never written through, so it could be protected

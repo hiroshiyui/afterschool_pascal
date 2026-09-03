@@ -1,0 +1,8 @@
+adr: 0301
+file: selfhost/apfront.pas
+kills: dump-words
+why: `restricted` is ten characters and kwLit is nine, so the lexer cannot hold it in the table with the other forty-five word-symbols and --dump-words writes it out on its own. Dropping that one line loses a word-symbol from every completion list and nothing else here reads the vocabulary, so tests/dumps/words.dump is the only oracle that can say so.
+--- old
+  writeln('word restricted');
+--- new
+  { mutated: the one word-symbol the table cannot hold }

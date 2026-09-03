@@ -1,6 +1,4 @@
-<source>:26:22: warning: 'n' is never written through, so it could be protected
-<source>:34:19: warning: 'a' is never written through, so it could be protected
-<source>:34:22: warning: 'b' is never written through, so it could be protected
-<source>:34:25: warning: 'c' is never written through, so it could be protected
-<source>:86:20: warning: 'ov' is never written through, so it could be protected
-<source>:87:22: warning: 'iv' is never written through, so it could be protected
+<source>:26:18: warning: 'n' is never written through, so it could be protected
+<source>:34:15: warning: 'a', 'b', 'c' are never written through, so they could be protected
+<source>:86:16: warning: 'ov' is never written through, so it could be protected
+<source>:87:18: warning: 'iv' is never written through, so it could be protected

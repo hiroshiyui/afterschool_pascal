@@ -1,6 +1,6 @@
 Content-Length: -
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"completionProvider":{"resolveProvider":false},"codeActionProvider":{"codeActionKinds":["quickfix"]},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/a_directory_named_at_length_so_that_the_path_of_a_file_inside_it_passes_255_characters_from_any_checkout_root_255_being_where_PasStrVec_ItemMax_cut_the_dump_row_that_names_it_and_the_answer_pointed_somewhere_else_ADR_0292/farclient.pas","diagnostics":[]}}Content-Length: -
 

@@ -1,6 +1,6 @@
 Content-Length: -
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"completionProvider":{"resolveProvider":false},"codeActionProvider":{"codeActionKinds":["quickfix"]},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E3%81%AE%E5%90%8D%E5%89%8D%E3%81%8C%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%A7%E3%82%82URI%E3%81%AF%E6%AD%A3%E3%81%97%E3%81%8F%E5%BE%80%E5%BE%A9%E3%81%99%E3%82%8B_ADR_0291/deepclient.pas","diagnostics":[]}}Content-Length: -
 

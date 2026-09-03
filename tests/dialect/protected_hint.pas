@@ -97,6 +97,20 @@ begin
   Outer := Inner(scratch)
 end;
 
+{ One name of a group is written through and the other is not, which is the
+  shape that must be advised about *neither* (ADR-0300). 6.7.3.1 puts
+  `protected` before the whole formal-parameter-section, so the word `mixed`
+  would take is the word `written` takes too -- and `written := 1` below then
+  refuses to compile. A warning here would be advice that cannot be followed,
+  which is exactly what ADR-0283 claimed this warning could never give.
+
+  The compiler judges the section and not the parameter, so nothing is said. }
+function Mixed(var written, read_: integer): integer;
+begin
+  written := 1;
+  Mixed := read_
+end;
+
 { --- the whole-component guard ----------------------------------------- }
 
 { Never written through, and still not advised: it is passed as a procedural
@@ -124,6 +138,7 @@ begin
   ViaNested(total);
   total := total + Outer(total);
   total := total + Apply(Passed, total);
+  total := total + Mixed(total, total);
   total := total + Shown(total);
   writeln('total ', total:1)
 end.

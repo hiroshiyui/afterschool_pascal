@@ -1,3 +1,3 @@
-<source>:14:20: warning: 'v' is never written through, so it could be protected
-<source>:24:37: warning: 'src' is never written through, so it could be protected
-<source>:52:35: warning: 'b' is never written through, so it could be protected
+<source>:14:16: warning: 'v' is never written through, so it could be protected
+<source>:24:33: warning: 'src' is never written through, so it could be protected
+<source>:52:31: warning: 'b' is never written through, so it could be protected

@@ -548,7 +548,7 @@ lsp/build.sh tools/pascalcc ~/bin/pasls
 ```
 
 It publishes diagnostics as you type — you do not have to save — and answers
-nine requests:
+eleven requests:
 
 | Request | What you get |
 | --- | --- |
@@ -561,9 +561,13 @@ nine requests:
 | `rangeFormatting` | the same, for the lines you selected |
 | `references` | every occurrence of a name, into the components the compilation read |
 | `rename` | those occurrences edited, or a refusal that says why |
+| `completion` | the names in scope where the cursor is, and every word-symbol |
+| `codeAction` | the edit a warning asks for, where the compiler proved it safe |
 
-The outline, folding and selection work on a document that does **not compile
-yet**, which is when they are most wanted: they stop after the parse.
+The outline, folding, selection and completion work on a document that does
+**not compile yet**, which is when they are most wanted: they stop after the
+parse — and completion offers nothing after a `.` for the same reason, what may
+follow one being a question only the checker can answer.
 Formatting will not — a document the lexer cannot read is answered with no
 edits, and your buffer is left alone.
 

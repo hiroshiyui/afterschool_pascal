@@ -17,11 +17,12 @@
 
 # A request this server does not implement, which must be answered rather than
 # ignored: a client waiting on an id it never gets back is a client that hangs.
-# It was `textDocument/hover` until ADR-0246 answered that one, which is the
-# reason to say what this probe is for rather than which method it names: the
-# method here is whichever one is still unimplemented, and what is asserted is
-# the -32601 and not anything about completion.
-{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
+# It was `textDocument/hover` until ADR-0246 answered that one and
+# `textDocument/completion` until ADR-0301 answered that, which is the reason
+# to say what this probe is for rather than which method it names: the method
+# here is whichever one is still unimplemented, and what is asserted is the
+# -32601 and not anything about signature help.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/signatureHelp","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
 
 # Interleaved between the two edits on purpose (ADR-0257). Two didChange
 # messages for one file arriving back to back are coalesced -- only the last

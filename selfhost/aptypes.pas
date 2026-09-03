@@ -43,7 +43,7 @@ module ApTypes;
 export ApTypes = (
   strMax, pathMax, realDigits, vgNone, vgRead, vgWrite, kwWidth, bindNameCap,
   dateLen, timeLen, apVersion, maxImports, argMax, wordWidth, msgWidth,
-  textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, nul,
+  textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, reqProcCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
@@ -240,6 +240,10 @@ const
   nounVarType = 1;
   nounPointerDomain = 2;
   kwCount  = 45;     { 35 word-symbols of ISO 7185, then ISO 10206's ten }
+  { 6.6.5's required procedures, which are not symbols in any scope
+    (ADR-0097) and so are the one part of the vocabulary --dump-words has to
+    be told about rather than walk (ADR-0301). }
+  reqProcCount = 12;
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
   newline  = 10;
@@ -1305,6 +1309,13 @@ type
       the list. }
     discExpr: nodePtr;
     discIndex, paramSection: integer;
+    { ...and where that section *begins*: the position of its `protected` or
+      `var` word-symbol, or of its first name where it has neither. 6.7.3.1
+      puts `protected` before the whole formal-parameter-section, so the one
+      edit ADR-0283's advice asks for goes here and not at the parameter the
+      warning names -- which is why the warning is reported here too
+      (ADR-0300). Zero for every symbol that is not a formal parameter. }
+    secLine, secCol: integer;
 
     { The two halves 6.2.3.8 b) needs at a *type-definition* (ADR-0127). The
       clause evaluates a subrange-bound or an actual-discriminant-part closest-
