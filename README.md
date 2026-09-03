@@ -1144,23 +1144,25 @@ Swap(i, j)                { and not Swap(integer, i, j) }
 writeln(ValueOr(r, 0))    { r is a Fallible(integer), so T is integer }
 ```
 
-An activation writes an argument for every parameter, or one for every
-parameter that is not a type — those two counts can never be the same, so
-there is nothing ambiguous about the shorter one. A type parameter is fixed by
-the **first** argument that says what it is; every later argument is then an
-ordinary argument of an ordinary parameter, judged the way every other one is.
-So there is no such thing as two arguments disagreeing: the second is simply
-right or wrong about the type the first chose.
+A type parameter is fixed by the **first** argument that says what it is;
+every later argument is then an ordinary argument of an ordinary parameter,
+judged the way every other one is. So there is no such thing as two arguments
+disagreeing: the second is simply right or wrong about the type the first
+chose.
 
-A type parameter that appears only in the **result** is fixed by nothing, and
-has to be written:
+A type parameter that appears only in the **result** is fixed by nothing —
+a result type is a type name and not an argument — and has to be written. It
+does not drag the others in with it: **a call may write the first few types
+and infer the rest** (ADR-0304), so a routine puts the type nothing can
+determine first and the caller names that one alone.
 
 ```pascal
-x := VecGet(IVec, integer, v, 3)     { the element type is the answer }
+x := VecGet(integer, v, 3)     { the element type is the answer; v says the rest }
 ```
 
-The compiler says so rather than guessing — *nothing in this call says what
-'elem' of 'vecget' is*.
+Where a type parameter is left with nothing to fix it, the compiler says so
+rather than guessing — *nothing in this call says what 'elem' of 'vecget'
+is: write the type arguments, or pass an argument whose type determines it*.
 
 The other way a call avoids repeating itself is **`type of` over a
 component** (ADR-0215), where the container already knows the type:
@@ -1175,9 +1177,9 @@ handed instead of being told the same thing twice. The access is never
 evaluated — the type of `a[i]` does not depend on `i` — so a call in one is
 written and not made.
 
-`lib/dialect/pascontainer.pas` is what it was built for: five of its headings
-lost a type parameter. The two that return the element type kept theirs,
-§6.7.1's result-type being a type-name and nothing else.
+`lib/dialect/pascontainer.pas` is what it was built for, and no call into it
+names a type now except the two that return one — `VecGet` and `MapKeyAt`,
+which name that one and nothing else.
 
 **A type parameter may say what it needs** (ADR-0266), and the call that gets
 it wrong is then refused where it stands:
