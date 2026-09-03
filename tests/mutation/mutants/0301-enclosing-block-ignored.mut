@@ -1,0 +1,10 @@
+adr: 0301
+file: lsp/pasls.pas
+kills: lsp-server
+why: A name is in scope only where the block that declares it contains the position, and the rows of --dump-symbols nest by depth with a block's extent on the declaration that opens it (ADR-0253). Calling every row visible offers `Inner`'s parameters and its local in the program's own statement part, which is the second half of lsp/sessions/completion.out.
+--- old
+            inside := depth = 0;
+            found := depth = 0;
+--- new
+            inside := true;
+            found := true;

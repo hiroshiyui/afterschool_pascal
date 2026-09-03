@@ -1,0 +1,10 @@
+adr: 0300
+file: lsp/pasls.pas
+kills: lsp-server
+why: The quick fix for an unreachable statement deletes it, and what it deletes is the extent --dump-stmts reports (ADR-0258); the warning gives only where the statement begins. Ending the edit where it starts makes the action an offer to change nothing, which every client shows and no client can tell from a fix. lsp/sessions/code_action.out holds the range.
+--- old
+          endLine := q.endLine;
+          endCol := q.endCol;
+--- new
+          endLine := q.line;
+          endCol := q.col;

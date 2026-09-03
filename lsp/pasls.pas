@@ -153,6 +153,22 @@ const
   SkEnumMember = 22;
   SkStruct = 23;
 
+  { LSP's CompletionItemKind, from the specification's table, for the words
+    `--dump-symbols` and `--dump-words` answer in (ADR-0301). A second table
+    beside `SymbolKind` above and not a reuse of it: the protocol numbers the
+    two enumerations differently -- a variable is 13 in one and 6 in the other
+    -- and one table serving both is a mistake that shows as a wrong icon and
+    nothing else. }
+  CkFunction = 3;
+  CkVariable = 6;
+  CkClass = 7;
+  CkModule = 9;
+  CkEnum = 13;
+  CkKeyword = 14;
+  CkEnumMember = 20;
+  CkConstant = 21;
+  CkStruct = 22;
+
   { How deeply an outline is followed. Declarations nest through nested
     procedures and this is far past anything a person writes -- the compiler's
     own deepest is three -- but it is a bound and so it is *reported* when it
@@ -268,6 +284,12 @@ var
   scratchFile: bindable text;
   scratchPath: EnvText;
   compilerCmd: EnvText;
+  { The compiler's own vocabulary -- every word-symbol and required identifier
+    it knows -- as `--dump-words` wrote it, or nil before anything asked
+    (ADR-0301). It is a property of the compiler and not of any document, so
+    it is taken once per session and never invalidated: the compiler cannot
+    change under a running server without the server being restarted. }
+  vocab: StrVecPtr;
 
 { --- talking to a person -------------------------------------------------- }
 
@@ -975,6 +997,20 @@ begin
   info := JsonNewObject;
   JsonPut(info, 'prepareProvider', JsonNewBoolean(true));
   JsonPut(caps, 'renameProvider', info);
+  { ADR-0301: the names in scope at a position, filtered from --dump-symbols,
+    and the compiler's own vocabulary. No `triggerCharacters`: this server
+    offers no member completion, because what follows a `.` is a question
+    about the *type* at the position and this answer deliberately stops
+    before Sema. }
+  info := JsonNewObject;
+  JsonPut(info, 'resolveProvider', JsonNewBoolean(false));
+  JsonPut(caps, 'completionProvider', info);
+  { ADR-0300: the two of the compiler's four warnings that know an edit which
+    cannot change what the program does. }
+  info := JsonNewObject;
+  JsonPut(info, 'codeActionKinds', JsonNewArray);
+  JsonAppend(JsonMember(info, 'codeActionKinds'), JsonNewText('quickfix'));
+  JsonPut(caps, 'codeActionProvider', info);
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -1288,7 +1324,13 @@ begin
           { A line that is not a symbol is skipped and is not an error: a
             source with a syntax error in it says so on this same stream, and
             an outline of what parsed is still the best answer available. }
-          if SymParse(text, sym) then begin
+          { A formal parameter is a name the source declares and the compiler
+            reports it (ADR-0301), and an *outline* is not where a reader
+            looks for one: a client draws this in a gutter to navigate by, and
+            `selfhost/apfront.pas` would gain some hundreds of rows nobody
+            jumps to. Dropped here rather than in the compiler, which answers
+            about Pascal and not about what a particular client wants drawn. }
+          if SymParse(text, sym) and (sym.kind <> 'parameter') then begin
             depth := sym.depth;
             kind := sym.kind;
             symLine := sym.line;
@@ -2493,7 +2535,10 @@ begin
   v := JsonNewText('');
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);
-    if SymParse(text, sym) then begin
+    { A parameter is dropped here for the reason the LSP outline drops one
+      (ADR-0301): both are outlines and neither is where a reader looks for a
+      signature. }
+    if SymParse(text, sym) and (sym.kind <> 'parameter') then begin
       depth := sym.depth;
       kind := sym.kind;
       symLine := sym.line;
@@ -3070,6 +3115,430 @@ begin
   Formatting(id, params, lo, hi)
 end;
 
+{ --- what may be written here ---------------------------------------------- }
+
+{ `textDocument/completion`, and the design is the scope rule rather than the
+  protocol (ADR-0301).
+
+  Two things make a list, and only one of them is about the document. The
+  **vocabulary** -- 6.1.2's word-symbols and 6.2.2.10's required identifiers --
+  is a property of the compiler, asked once with `--dump-words` and held for
+  the session. The **names in scope** come from the same `--dump-symbols` the
+  outline is drawn from, which stops after the parse and so answers while the
+  file is wrong -- the state a file is in whenever somebody is typing a name
+  into it.
+
+  What the dump does not do is filter, and filtering is the whole of the work
+  here. A name is offered when two things hold and neither is guessable from a
+  row read alone:
+
+  **The block that declares it contains the position.** The rows nest by
+  depth and a declaration with a block carries its extent (ADR-0253), so the
+  nearest enclosing *container* -- a program, a module, a procedure or a
+  function -- is the row above at the first depth that has one, and the
+  position has to be inside it. Checking the nearest is enough because the
+  containers nest: a position inside a nested procedure is inside every block
+  around it.
+
+  **And its defining-point precedes the position** (6.2.2.9). Not a nicety:
+  `procedure A; begin writeln(later) end; var later: integer;` is *refused* by
+  this compiler, so offering `later` inside `A` would be offering a name that
+  does not compile. The one thing this over-refuses is 6.2.2.8's pointer
+  domain, where a type-name may be written before its definition; that is a
+  shorter list and not a wrong one, which is the trade this whole procedure
+  is written to make.
+
+  A **field** is dropped. 6.4.3.3 makes a record a region and a field is
+  reachable through a selection or a with-statement, both of which need the
+  *type* at the position -- which is Sema's, and Sema is what this answer
+  deliberately does not wait for. So this list has no member completion in it
+  at all, and saying that plainly is better than offering every field of every
+  record in the file. }
+
+{ Pascal's word for a declaration, as the protocol's completion number. }
+function CompletionKindOf(word: ParseLine): integer;
+begin
+  if (word = 'program') or (word = 'module') then CompletionKindOf := CkModule
+  else if word = 'const' then CompletionKindOf := CkConstant
+  else if word = 'type' then CompletionKindOf := CkClass
+  else if (word = 'record') or (word = 'schema') then
+    CompletionKindOf := CkStruct
+  else if word = 'enum' then CompletionKindOf := CkEnum
+  else if word = 'value' then CompletionKindOf := CkEnumMember
+  else if (word = 'var') or (word = 'parameter') then
+    CompletionKindOf := CkVariable
+  else if (word = 'procedure') or (word = 'function')
+          or (word = 'required') then CompletionKindOf := CkFunction
+  else CompletionKindOf := CkVariable
+end;
+
+{ Does a declaration at this position stand before that one? 6.2.2.9's order,
+  which is the only order a scope is read in. }
+function Before(aLine, aCol, bLine, bCol: integer): boolean;
+begin
+  Before := (aLine < bLine) or ((aLine = bLine) and (aCol <= bCol))
+end;
+
+{ Is this row one that opens a block a position can be inside? }
+function Container(word: ParseLine): boolean;
+begin
+  Container := (word = 'program') or (word = 'module')
+               or (word = 'procedure') or (word = 'function')
+end;
+
+{ The compiler's vocabulary, taken once (ADR-0301).
+
+  A two-line program is written to the scratch path and compiled, because the
+  answer is written where the required identifiers are installed and a
+  compiler is asked about a source. The document's own scratch copy is
+  clobbered by it and that is safe: every request that needs one writes it
+  first. }
+function Vocabulary: boolean;
+var probe: JsonChars; cmd: CommandLine; r: RunResult; lines: StrVecPtr;
+begin
+  if vocab <> nil then exit(true);
+  Vocabulary := false;
+  JsonCharsNew(probe);
+  JsonCharsAddLine(probe, 'program w;');
+  JsonCharsAddLine(probe, 'begin end.');
+  if WriteScratch(probe) then
+    if CompilerCommand(' --dump-words', '', scratchPath, '', cmd) then begin
+      SVecNew(lines, 128);
+      r := CaptureLines(cmd, lines);
+      if r.ok then begin
+        vocab := lines;
+        Vocabulary := true
+      end
+      else begin
+        Note('could not run the compiler: ' + ErrorText(r.cause));
+        SVecFree(lines)
+      end
+    end;
+  JsonCharsFree(probe)
+end;
+
+{ One item, appended. }
+procedure OfferItem(items: JsonPtr; label_: DiagLine; kind: integer;
+                    detail: ParseLine);
+var obj: JsonPtr;
+begin
+  obj := JsonNewObject;
+  JsonPut(obj, 'label', JsonNewText(label_));
+  JsonPut(obj, 'kind', JsonNewInteger(kind));
+  JsonPut(obj, 'detail', JsonNewText(detail));
+  JsonAppend(items, obj)
+end;
+
+{ The vocabulary's rows, which are `word <spelling>` and
+  `required <kind> <spelling>`. }
+procedure OfferVocabulary(items: JsonPtr);
+var i: integer; text: StrItem; head, kind, spelling: ParseLine;
+begin
+  for i := 1 to SVecLen(vocab) do begin
+    text := SVecGet(vocab, i);
+    head := SymField(text, 1);
+    if head = 'word' then begin
+      spelling := SymField(text, 2);
+      OfferItem(items, spelling, CkKeyword, 'word-symbol')
+    end
+    else if head = 'required' then begin
+      kind := SymField(text, 2);
+      spelling := SymField(text, 3);
+      OfferItem(items, spelling, CompletionKindOf(kind), 'required ' + kind)
+    end
+  end
+end;
+
+procedure Completion(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    d: Document;
+    lines: StrVecPtr;
+    cmd: CommandLine;
+    r: RunResult;
+    reply, result, items: JsonPtr;
+    text: StrItem;
+    source: DiagLine;
+    name: DiagLine;
+    sym: SymRow;
+    line, col, i, k, depth, lastDepth: integer;
+    contLine, contCol, contEndLine, contEndCol: array [0..SymDepthMax] of integer;
+    opens: array [0..SymDepthMax] of boolean;
+    inside, visible, found: boolean;
+begin
+  reply := NewResponse(id);
+  result := JsonNewObject;
+  items := JsonNewArray;
+  { `isIncomplete: false`: this is the whole list for the position, and a
+    client that filters it as the reader types is filtering a complete set. }
+  JsonPut(result, 'isIncomplete', JsonNewBoolean(false));
+  JsonPut(result, 'items', items);
+  uri := UriOf(params);
+  AskedAt(params, uri, line, col);
+  if DocOf(uri, d) and (line >= 1) then begin
+    if Vocabulary then OfferVocabulary(items);
+    if WriteScratch(d.text)
+       and CompilerCommand(' --dump-symbols', '', scratchPath, '', cmd) then
+    begin
+      SVecNew(lines, 64);
+      r := CaptureLines(cmd, lines);
+      if not r.ok then
+        Note('could not run the compiler: ' + ErrorText(r.cause))
+      else begin
+        for i := 0 to SymDepthMax do begin
+          opens[i] := false;
+          contLine[i] := 0;
+          contCol[i] := 0;
+          contEndLine[i] := 0;
+          contEndCol[i] := 0
+        end;
+        lastDepth := -1;
+        for i := 1 to SVecLen(lines) do begin
+          text := SVecGet(lines, i);
+          if SymParse(text, sym) then begin
+            depth := sym.depth;
+            if depth > SymDepthMax then depth := SymDepthMax;
+            if depth > lastDepth + 1 then depth := lastDepth + 1;
+            { The nearest container above this row, and whether the position
+              is inside it. A row at depth 0 is the program or the module and
+              is in scope everywhere in its own text. }
+            inside := depth = 0;
+            found := depth = 0;
+            k := depth - 1;
+            while (k >= 0) and not found do
+              if opens[k] then begin
+                found := true;
+                inside := Before(contLine[k], contCol[k], line, col)
+                          and Before(line, col, contEndLine[k], contEndCol[k])
+              end
+              else k := k - 1;
+            visible := inside and (sym.kind <> 'field')
+                       and Before(sym.line, sym.col, line, col);
+            if visible then begin
+              LineOf(d.text, sym.line, source);
+              name := sym.name;
+              if (sym.col >= 1) and (sym.len > 0)
+                 and (sym.col + sym.len - 1 <= length(source)) then
+                name := source[sym.col..sym.col + sym.len - 1];
+              OfferItem(items, name, CompletionKindOf(sym.kind), sym.kind)
+            end;
+            opens[depth] := Container(sym.kind);
+            contLine[depth] := sym.line;
+            contCol[depth] := sym.col;
+            contEndLine[depth] := sym.endLine;
+            contEndCol[depth] := sym.endCol;
+            if depth < SymDepthMax then opens[depth + 1] := false;
+            lastDepth := depth
+          end
+        end
+      end;
+      SVecFree(lines)
+    end
+  end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ --- the edit a warning asks for ------------------------------------------- }
+
+{ `textDocument/codeAction`, and it answers for two of the compiler's four
+  warnings and refuses the other two (ADR-0300).
+
+  A quick fix is offered only where the edit is **decidable from what the
+  compiler reported** and cannot change what the program does. That admits
+  exactly two:
+
+  *A statement that cannot be reached* (ADR-0277) is deleted. The compiler has
+  proved control never arrives there, so removing the text cannot change any
+  behaviour, and `--dump-stmts` gives the extent to remove (ADR-0258) -- the
+  statement and not its separator, since 6.9.2.1 makes what is left an empty
+  statement and legal.
+
+  *A `var` parameter nothing writes through* (ADR-0283) takes `protected`
+  before its formal-parameter-section. The word belongs to the section and not
+  to the parameter, which is why the compiler now reports the warning at the
+  section (ADR-0300): the edit is an insertion at the position the diagnostic
+  already carries, and there is nothing to search for.
+
+  The other two are declined and the reason is not that they were harder.
+  *An unused local* would be deleted, and a variable-declaration's
+  type-denoter may hold defining-points of its own -- `var c: (red, green)`
+  declares two constants the rest of the block may name (6.4.2.3) -- so
+  deleting the declaration can delete names that are still used, which is a
+  program that no longer compiles. *A function that does not write its result
+  on every path* (ADR-0278) has no mechanical edit at all: where the
+  assignment belongs and what value it takes is the decision the warning
+  exists to prompt.
+
+  The diagnostics come back from the client in `context.diagnostics`, which
+  are the ones this server published, and they are matched by their **text**.
+  That is the one place here that reads the compiler's prose, and it is
+  unavoidable: a diagnostic is `file:line:col: warning: message` and carries
+  no code. What holds it still is a `.warn` sidecar on every case that warns,
+  in both directions (ADR-0272), plus the sessions below. }
+
+{ Does this message end with that phrase? }
+function EndsWithText(s: JsonLine; tail: JsonLine): boolean;
+begin
+  if length(tail) > length(s) then EndsWithText := false
+  else EndsWithText :=
+    substr(s, length(s) - length(tail) + 1, length(tail)) = tail
+end;
+
+{ One `CodeAction` with one edit in one file. `documentChanges` and not
+  `changes`, for ADR-0294's reason: a URI is as long as a path and
+  `JsonName` is 255. }
+{ The diagnostic this action is *for*, rebuilt rather than borrowed: the one
+  the client sent belongs to the request's tree and this reply is freed on its
+  own. Four members, which is every one this server publishes. }
+function DiagCopy(diag: JsonPtr): JsonPtr;
+var out, r, a, b, src: JsonPtr;
+    message: JsonLine;
+    where: JsonLine;
+
+  { one end of the range, as the client sent it }
+  function Corner(which: JsonName): JsonPtr;
+  var c, e: JsonPtr;
+  begin
+    e := JsonMember(JsonMember(diag, 'range'), which);
+    c := JsonNewObject;
+    JsonPut(c, 'line', JsonNewInteger(JsonIntegerOr(JsonMember(e, 'line'), 0)));
+    JsonPut(c, 'character',
+            JsonNewInteger(JsonIntegerOr(JsonMember(e, 'character'), 0)));
+    Corner := c
+  end;
+
+begin
+  a := Corner('start');
+  b := Corner('end');
+  r := JsonNewObject;
+  JsonPut(r, 'start', a);
+  JsonPut(r, 'end', b);
+  out := JsonNewObject;
+  JsonPut(out, 'range', r);
+  JsonPut(out, 'severity',
+          JsonNewInteger(JsonIntegerOr(JsonMember(diag, 'severity'), 1)));
+  where := '';
+  if JsonTextInto(JsonMember(diag, 'source'), where) <> errNone then
+    where := '';
+  src := JsonNewText(where);
+  JsonPut(out, 'source', src);
+  message := '';
+  if JsonTextInto(JsonMember(diag, 'message'), message) <> errNone then
+    message := '';
+  JsonPut(out, 'message', JsonNewText(message));
+  DiagCopy := out
+end;
+
+function QuickFix(title: JsonLine; uri: DocUri; diag: JsonPtr;
+                  range: JsonPtr; newText: JsonLine): JsonPtr;
+var act, edits, edit, tdoc, change, changes, wedit, diags: JsonPtr;
+begin
+  edit := JsonNewObject;
+  JsonPut(edit, 'range', range);
+  JsonPut(edit, 'newText', JsonNewText(newText));
+  edits := JsonNewArray;
+  JsonAppend(edits, edit);
+  tdoc := JsonNewObject;
+  JsonPut(tdoc, 'uri', JsonNewText(uri));
+  JsonPut(tdoc, 'version', JsonNewNull);
+  change := JsonNewObject;
+  JsonPut(change, 'textDocument', tdoc);
+  JsonPut(change, 'edits', edits);
+  changes := JsonNewArray;
+  JsonAppend(changes, change);
+  wedit := JsonNewObject;
+  JsonPut(wedit, 'documentChanges', changes);
+  act := JsonNewObject;
+  JsonPut(act, 'title', JsonNewText(title));
+  JsonPut(act, 'kind', JsonNewText('quickfix'));
+  diags := JsonNewArray;
+  JsonAppend(diags, DiagCopy(diag));
+  JsonPut(act, 'diagnostics', diags);
+  JsonPut(act, 'edit', wedit);
+  QuickFix := act
+end;
+
+{ The extent of the statement beginning exactly here, or false. The warning
+  stands at a statement's own first token, so the row is found by its start
+  and nothing is searched for. }
+function StatementAt(uri: DocUri; line, col: integer;
+                     var endLine, endCol: integer): boolean;
+var lines: StrVecPtr; i: integer; q: StmtRow; found: boolean;
+begin
+  found := false;
+  if StatementsOf(uri, lines) then begin
+    for i := 1 to SVecLen(lines) do
+      if StmtParse(SVecGet(lines, i), q) then
+        if (not found) and (q.line = line) and (q.col = col) then begin
+          endLine := q.endLine;
+          endCol := q.endCol;
+          found := true
+        end;
+    SVecFree(lines)
+  end;
+  StatementAt := found
+end;
+
+procedure CodeAction(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    d: Document;
+    reply, result, diags, diag, range: JsonPtr;
+    message: JsonLine;
+    source, endSource: DiagLine;
+    i, line, col, endLine, endCol: integer;
+begin
+  reply := NewResponse(id);
+  result := JsonNewArray;
+  uri := UriOf(params);
+  diags := JsonMember(JsonMember(params, 'context'), 'diagnostics');
+  if DocOf(uri, d) then
+    for i := 1 to JsonCount(diags) do begin
+      diag := JsonAt(diags, i);
+      message := '';
+      if JsonTextInto(JsonMember(diag, 'message'), message) = errNone then
+      begin
+        { The diagnostic's own start, back in the compiler's units: this
+          server published it and converts it back the way it converted it
+          out. }
+        range := JsonMember(diag, 'range');
+        line := JsonIntegerOr(
+                  JsonMember(JsonMember(range, 'start'), 'line'), -1) + 1;
+        col := 0;
+        if line >= 1 then begin
+          LineOf(d.text, line, source);
+          col := ByteColumn(source,
+                   JsonIntegerOr(
+                     JsonMember(JsonMember(range, 'start'), 'character'), 0))
+        end;
+        if line >= 1 then
+          if message = 'this statement cannot be reached' then begin
+            if StatementAt(uri, line, col, endLine, endCol) then begin
+              LineOf(d.text, endLine, endSource);
+              JsonAppend(result,
+                QuickFix('Delete the unreachable statement', uri, diag,
+                         SpanRange(source, line, col,
+                                   endSource, endLine, endCol), ''))
+            end
+          end
+          else if EndsWithText(message, 'could be protected')
+                  and (EndsWithText(message,
+                         'is never written through, so it could be protected')
+                       or EndsWithText(message,
+                         'are never written through, so they could be '
+                         + 'protected')) then
+            { An insertion, which is an empty range at the position the
+              warning stands at -- the section's own first token. }
+            JsonAppend(result,
+              QuickFix('Add `protected` to the parameter section', uri, diag,
+                       NameRange(source, line, col, 0), 'protected '))
+      end
+    end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
 procedure Dispatch(msg: JsonPtr);
 var method: JsonLine;
     id, params: JsonPtr;
@@ -3097,6 +3566,8 @@ begin
   else if method = 'textDocument/references' then References(id, params)
   else if method = 'textDocument/prepareRename' then PrepareRename(id, params)
   else if method = 'textDocument/rename' then RenameSymbol(id, params)
+  else if method = 'textDocument/completion' then Completion(id, params)
+  else if method = 'textDocument/codeAction' then CodeAction(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 
@@ -3156,6 +3627,7 @@ var body: JsonChars;
 
 begin
   held := nil;
+  vocab := nil;
   ReadTransport;
   ReadEnvironment;
   encoding := peUtf16;
@@ -3276,5 +3748,9 @@ begin
         if d.uses_ <> nil then SVecFree(d.uses_);
         if d.files <> nil then VecFree(PathVec, d.files)
       end;
-  MapFree(DocMap, docs)
+  MapFree(DocMap, docs);
+  { And the compiler's vocabulary, which belongs to the session rather than to
+    any document (ADR-0301). `heap-balance` is what would otherwise say so: it
+    counts one vector never given back, exactly as it did for the cache above. }
+  if vocab <> nil then SVecFree(vocab)
 end.

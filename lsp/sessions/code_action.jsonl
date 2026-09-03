@@ -1,0 +1,41 @@
+# ADR-0300: the edit a warning asks for, where the compiler has already proved
+# it safe.
+#
+# Two of the four warnings carry a quick fix and two do not, and the split is
+# not about which was harder. A statement that cannot be reached is deleted --
+# the compiler has proved control never arrives there, so no behaviour can
+# change, and `--dump-stmts` gives the extent. A `var` parameter nothing writes
+# through takes `protected` before its formal-parameter-section, which is where
+# 6.7.3.1 puts the word and, since ADR-0300, where the warning stands.
+#
+# An unused local is not offered one: a variable-declaration's type-denoter may
+# declare names of its own -- `var c: (red, green)` declares two constants
+# (6.4.2.3) -- so deleting the declaration can delete names still in use. And a
+# function that does not write its result on every path has no mechanical edit
+# at all.
+#
+# The diagnostics below are the ones the server published on the didOpen above
+# them, sent back as `context.diagnostics` the way a client sends them.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/warn.pas","languageId":"pascal","version":1,"text":"program p(output);\nvar total: integer;\nprocedure Show(var n: integer);\nbegin\n  writeln(n);\n  halt;\n  writeln('never')\nend;\nbegin\n  total := 1;\n  Show(total)\nend.\n"}}}
+
+# The unreachable statement, whose whole extent is removed. What is left is the
+# `;` before it, which 6.9.2.1 makes an empty statement and legal.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///scratch/warn.pas"},"range":{"start":{"line":6,"character":2},"end":{"line":6,"character":2}},"context":{"diagnostics":[{"range":{"start":{"line":6,"character":2},"end":{"line":6,"character":2}},"severity":2,"source":"pascalc","message":"this statement cannot be reached"}]}}}
+
+# The parameter section, where `protected ` is inserted before `var`.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///scratch/warn.pas"},"range":{"start":{"line":2,"character":15},"end":{"line":2,"character":15}},"context":{"diagnostics":[{"range":{"start":{"line":2,"character":15},"end":{"line":2,"character":15}},"severity":2,"source":"pascalc","message":"'n' is never written through, so it could be protected"}]}}}
+
+# A diagnostic that is neither: an ordinary error. There is no edit for it and
+# the answer is an empty array rather than an action nobody asked for.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///scratch/warn.pas"},"range":{"start":{"line":4,"character":10},"end":{"line":4,"character":10}},"context":{"diagnostics":[{"range":{"start":{"line":4,"character":10},"end":{"line":4,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'nowhere'"}]}}}
+
+# And a request with no diagnostics at all, which is what a client sends on
+# every cursor move: no compilation is started for it.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///scratch/warn.pas"},"range":{"start":{"line":9,"character":2},"end":{"line":9,"character":2}},"context":{"diagnostics":[]}}}
+
+{"jsonrpc":"2.0","id":6,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}
