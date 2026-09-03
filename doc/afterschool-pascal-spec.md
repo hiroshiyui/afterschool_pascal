@@ -1194,6 +1194,15 @@ assignment is 6.4.12.2's. A move between two handles would release the source
 without releasing its value, which is a distinct operation from the one here;
 it waits for a client (ADR-0182).
 
+NOTE 6 — `nil` is not admitted, and the asymmetry with 6.4.12.2 — where a
+handle-type variable *is* assigned `nil`, and that assignment is its release —
+is deliberate rather than an omission. An owned pointer already has a statement
+that releases it, `dispose` (§6.7.5.3), and a handle has none; admitting `nil`
+here would give one operation two spellings, and admitting it as a plain store
+would leave the identified variable held by no variable, which 6.4.14.3
+forbids. A processor is therefore expected to name `dispose` where it reports
+this (ADR-0307).
+
 NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
 binds to the variable and not to the value, and a component of a record or an
 array, which then owns it. Those two are the whole of how a program reaches what

@@ -16,12 +16,20 @@
   appends whether or not the file existed, and a failure of either is the
   same stop.
 
-  **Lines are what text files hold, and they are capped.** A line longer
-  than `FileLineMax` is delivered truncated to it, and the remainder of that line
-  is skipped -- `readln` does that -- so a routine over lines never stops on
-  a long one and never reports it either. `ReadAllText` is the one routine
-  that can say it ran out of room: `size` is the whole file's length, so the
-  caller compares it with `dest.capacity`.
+  **Lines are what text files hold, and the capacity is the caller's.**
+  `ReadLine` delivers into the caller's own string and `ForEachLine` reads
+  through a buffer the caller declares, so the number that decides how much of
+  a line survives is one the program chose (ADR-0305). It is still a
+  truncation: a line longer than that capacity arrives cut and the remainder
+  is skipped -- `readln` does that, ISO/IEC 10206:1991 §6.10.1 -- and neither
+  routine reports it. **The language does**, and in three tokens: `read(f, s)`
+  stops at the capacity *or* at the line's end, whichever comes first (§6.10.1
+  f) of the same standard), so `eoln(f)` immediately afterwards is false
+  exactly when something was left, and `readln(f)` then skips it. A program that must not lose a line reads it
+  that way; `ReadAllText` is the routine here that says so instead, `size`
+  being the whole file's length for the caller to compare with
+  `dest.capacity`. `FileLine` stays exported as a ready-made capacity for a
+  caller that wants one.
 
   **This is the portable layer** (ADR-0114, ADR-0120) in what it answers --
   unable to name an error code because `PasError` is on the other side of
@@ -62,15 +70,22 @@ function FileExists(path: FilePath): boolean;
 function LineCount(path: FilePath; var count: integer): boolean;
 
 { Line number `n`, counting from 1, into `line`. False when nothing is there
-  or the file has fewer than `n` lines, and `line` is then left alone. }
-function ReadLine(path: FilePath; n: integer; var line: FileLine): boolean;
+  or the file has fewer than `n` lines, and `line` is then left alone. `line`
+  may be a string of any capacity, and a longer line arrives cut to it. }
+function ReadLine(path: FilePath; n: integer; var line: string): boolean;
 
 { Hand every line to `visit` in order. False, and no call, when nothing is
   there. §6.7.3.4's procedural parameter is what makes this possible without
   a container for the lines: the caller's procedure sees each one as it is
-  read and keeps what it wants. }
-function ForEachLine(path: FilePath;
-                     procedure visit(line: FileLine)): boolean;
+  read and keeps what it wants.
+
+  `buf` is where each line is read before `visit` sees it, and its capacity is
+  therefore the bound on a line -- a variable the caller declares rather than a
+  number counted here (ADR-0292's rule, ADR-0305). Its value on return is the
+  last line read. `visit`'s own formal is schematic and §6.7.3.6's congruity
+  requires it to be written that way. }
+function ForEachLine(path: FilePath; var buf: string;
+                     procedure visit(line: string)): boolean;
 
 { The whole file into `dest`, every line terminator as chr(10), and `size`
   the length the whole file has -- so `size > dest.capacity` is how the caller
@@ -209,13 +224,13 @@ begin
 end;
 
 function ForEachLine;
-var f: text; l: FileLine;
+var f: text;
 begin
   if Found(f, path) then begin
     reset(f);
     while not eof(f) do begin
-      readln(f, l);
-      visit(l)
+      readln(f, buf);
+      visit(buf)
     end;
     ForEachLine := true
   end
@@ -231,8 +246,8 @@ begin
     reset(f);
     dest := '';
     n := 0;
-    { Character by character rather than line by line, so that a line longer
-      than FileLineMax is not the one thing this routine silently loses. }
+    { Character by character rather than line by line, so that a long line is
+      not the one thing this routine silently loses. }
     while not eof(f) do begin
       if eoln(f) then begin
         c := chr(10);
@@ -332,8 +347,8 @@ begin
       exit(false)
     end;
     reset(i);
-    { Character by character, for ReadAllText's reason: nothing is lost to
-      FileLineMax. }
+    { Character by character, for ReadAllText's reason: no line's length is
+      a bound here. }
     while not eof(i) do begin
       if eoln(i) then begin
         writeln(o);

@@ -1547,6 +1547,7 @@ begin
   n^.nsBindable := false;
   n^.nParen := false;
   n^.nChecked := false;
+  n^.nErrType := false;
   { ADR-0258: stamped by the parser for a statement and left alone for
     everything else, so zero means "not recorded" rather than "column zero". }
   n^.endLine := 0;
@@ -14217,6 +14218,9 @@ begin
     sym := LookupName(c^.clQualAt, c^.clQualLen, c^.clAt, c^.clLen,
                       c^.line, c^.col);
     c^.ntype := intType;
+    { Whatever this branch leaves is a placeholder until a result type is
+      found, and a message must not name it (ADR-0306). }
+    c^.nErrType := true;
     if sym <> nil then
       if (not IsInvocable(sym)) or (ResultTypeOf(sym) = nil) then begin
         ErrorAt(c^.line, c^.col);
@@ -14229,6 +14233,7 @@ begin
       else begin
         c^.clSym := sym;
         c^.ntype := ResultTypeOf(sym);
+        c^.nErrType := false;
         GiveResultSlot(c);
         CheckArguments(sym, c^.clArgs, c^.line, c^.col)
       end
@@ -14262,7 +14267,8 @@ begin
     write('''');
     WritePool(c^.clAt, c^.clLen);
     writeln(''' is a procedure and returns no value');
-    c^.ntype := intType
+    c^.ntype := intType;
+    c^.nErrType := true
   end
   { 6.2.2.11: "Whatever an identifier or label denotes at its defining-point
     shall be denoted at all applied occurrences of that identifier or label."
@@ -14277,7 +14283,8 @@ begin
     write('''');
     WritePool(c^.clAt, c^.clLen);
     writeln(''' is not a function');
-    c^.ntype := intType
+    c^.ntype := intType;
+    c^.nErrType := true
   end
   else begin
     c^.clBuiltin := LookupBuiltin(c^.clAt, c^.clLen);
@@ -14289,7 +14296,8 @@ begin
       write('unknown function ''');
       WritePool(c^.clAt, c^.clLen);
       writeln('''');
-      c^.ntype := intType
+      c^.ntype := intType;
+      c^.nErrType := true
     end
     else begin
       a := c^.clArgs;
@@ -17693,7 +17701,12 @@ begin
     write('a handle result may be assigned only nil or the result of a ');
     writeln('function of its own type: it is owned, and there is no copy')
   end
-  else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then begin
+  { nErrType means the value's type is the placeholder an error path left
+    rather than one the program wrote, and naming it would be a second fault
+    reported as a first -- badFunc's rule below (ADR-0054) read one node over
+    (ADR-0306). }
+  else if (not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype)) and
+          not s^.asValue^.nErrType then begin
     ErrorAt(s^.line, s^.col);
     write('cannot assign ');
     WriteTypeName(s^.asValue^.ntype);
@@ -17944,13 +17957,30 @@ begin
                   (s^.asValue^.clBuiltin = biTake) and
                   (s^.asValue^.ntype = s^.asTarget^.ntype) then
             { admitted: the variable takes what the other stopped holding }
+          { AP 6.4.14.6 again, for the one value a reader tries next. A
+            handle takes `h := nil` as its release (AP 6.4.12.2, ADR-0202)
+            because nothing else releases a handle; an owned pointer has
+            `dispose`, so admitting nil here would be a second spelling of an
+            operation that already has one -- and admitting it as a plain
+            store would abandon what the variable identifies. The refusal is
+            the general one above; only the words differ, and they name the
+            statement to write instead (ADR-0307). }
+          else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  IsNil(s^.asValue^.ntype) then begin
+            ErrorAt(s^.line, s^.col);
+            write('''dispose'' is what releases an owned pointer: assigning ');
+            writeln('nil would leave what it identifies with no owner')
+          end
           else if IsOwnedPointer(s^.asTarget^.ntype) then begin
             ErrorAt(s^.line, s^.col);
             write('an owned pointer may be assigned only ''take'' of a ');
             writeln('variable of its own type: it owns what it identifies, ',
                     'and there is no copy')
           end
-          else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then
+          { See CheckResultAssign: a placeholder type is not named in a
+            message (ADR-0306). }
+          else if (not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype)) and
+                  not s^.asValue^.nErrType then
           begin
             ErrorAt(s^.line, s^.col);
             { The refusal is Assignable's (ADR-0143); this only chooses the

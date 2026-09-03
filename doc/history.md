@@ -6755,3 +6755,67 @@ twelve programs anyone wrote here to be read rather than to pin a clause.
   would be the corpus that finds the next `JsonLine`, and it is the one row
   here that pays twice: every example is also a case, and a case that fails
   is a finding.
+
+## The capacity is the caller's
+
+Two rows of `doc/roadmap.md`'s *Writing a daily program*, closed on
+2026-09-03. They arrived from different places -- one from ADR-0292's closing
+warning, one from ADR-0295's third finding -- and each turned out to be two
+halves with only one of them costing anything.
+
+### What a program reads can be cut without a word -- closed (ADR-0305)
+
+The row said a line longer than a number the program did not choose is lost
+and nothing says so, and named a library half and a language half. The
+library half was ADR-0291's mechanism applied one module over: `ReadLine`
+takes `var line: string` and `ForEachLine` takes the buffer it reads through,
+so the capacity is a variable the caller declared. Two callers moved and both
+had been writing `FileLine` because the interface asked them to.
+
+The language half said it *had not been probed*, and probing it took four
+lines. `read(f, s)` stops at the capacity **or** at the line's end, whichever
+comes first (ISO/IEC 10206:1991 §6.10.1 f)), so `eoln(f)` immediately
+afterwards is false exactly when something was left over and `readln(f)` then
+skips it. Nothing needed building, nothing is spelled, and no clause moved --
+the finding is that the facility was documentable rather than missing, and it
+is now documented at the routines that truncate. Two documents had walked past
+it: ADR-0292 cites §6.10.1 for the truncation and does not read the sentence
+beside it.
+
+The alternative shape for `ForEachLine` was an integer capacity and a local
+`string(cap)`, which §6.2.3.8 b) admits and which was probed and works. It was
+rejected for ADR-0292's own reason -- a number at a call site is a counted
+capacity and a variable's declaration is a derived one -- and because every
+other reader in this library already takes the caller's string.
+
+### Four of twelve examples collided with a library name -- closed (ADR-0306)
+
+The compiler half was a real defect and a small one: `CheckCall` leaves
+`intType` on a node whose call it could not resolve, which is the contract
+CodeGen rests on, and the assignment rule then spelled that placeholder out as
+though the program had written it. What hid it is that the placeholder is a
+*real* type -- every existing golden reaching one of those four arms assigns
+to an integer target, so `Assignable` said yes and the second message never
+appeared. `nErrType` is the fix and `badFunc` (ADR-0054) is its precedent on
+the other side of the same statement.
+
+The naming half was decided the other way and is worth the paragraph. The
+nouns are `Info`, `Dir`, `List`, `Parts` and `Stream`, every one the best word
+for what it denotes; the collision is with a name the *caller* chose, so any
+rename moves it rather than removing it. It is a compile-time error read in
+the same second and answered in one word, and §6.11.2 already has `only` and
+`qualified` for a caller who wants the short spelling kept. What was missing
+was that nobody had written it down, so `README.md`'s library section names
+the five and the three answers. ADR-0298 -- no two library modules export one
+spelling -- is a different collision and does not reach this one.
+
+### And one of the three smaller reports -- answered (ADR-0307)
+
+An owned pointer refuses `p := nil` where a handle takes it as its release,
+and ADR-0295 said the asymmetry had *no reason a reader can see*. It has one:
+an owned pointer already has `dispose` and a handle has nothing else, so
+admitting `nil` would give one operation two spellings, and admitting it as a
+plain store would abandon what the variable identifies. So the language does
+not change and the message does -- it names `dispose` -- and AP 6.4.14.6 gains
+a NOTE saying why the two clauses differ. An asymmetry between two clauses is
+either a reason or a defect, and it has to be written down as one of the two.

@@ -1,0 +1,14 @@
+adr: 0307
+file: selfhost/apfront.pas
+kills: owned_errors
+why: The arm deleted, so `p := nil` on an owned pointer falls to the general refusal again -- still refused, still exit 1, still a true sentence, and silent about `dispose`, which is what a reader wanted. Only the golden can tell the two apart.
+--- old
+          else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  IsNil(s^.asValue^.ntype) then begin
+            ErrorAt(s^.line, s^.col);
+            write('''dispose'' is what releases an owned pointer: assigning ');
+            writeln('nil would leave what it identifies with no owner')
+          end
+          else if IsOwnedPointer(s^.asTarget^.ntype) then begin
+--- new
+          else if IsOwnedPointer(s^.asTarget^.ntype) then begin

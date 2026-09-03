@@ -1,0 +1,9 @@
+adr: 0306
+file: selfhost/apfront.pas
+kills: calls
+why: The guard removed, so an assignment whose value is a call the compiler could not resolve reports a second diagnostic naming `integer` -- the placeholder an error path left on the node, not a type the program wrote. Invisible for as long as every such assignment in the corpus had an integer target, which is what the three statements added to selfhost/badsema/calls.pas are for.
+--- old
+          else if (not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype)) and
+                  not s^.asValue^.nErrType then
+--- new
+          else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then

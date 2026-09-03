@@ -61,5 +61,10 @@ begin
     lends one declares a name for it -- Lend takes NodePtr and is legal }
   Lend(p);
   LendAnon(p);
+  { AP 6.4.14.6, and the value a reader tries next: a handle takes `h := nil`
+    as its release (AP 6.4.12.2) and an owned pointer does not, because it has
+    `dispose` and a handle has nothing else. The message names it (ADR-0307).
+    Written after `new(p)` so the variable really does identify storage. }
+  p := nil;
   v.k := 2
 end.
