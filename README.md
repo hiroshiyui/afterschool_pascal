@@ -1235,6 +1235,18 @@ judged the way every other one is. So there is no such thing as two arguments
 disagreeing: the second is simply right or wrong about the type the first
 chose.
 
+Three kinds of argument say what a type is: one whose parameter is the type
+parameter itself, one whose type was produced from a schema the parameter
+appears in the arguments of, and — since ADR-0316 — one handed to an
+`array of T` parameter, whether it is a whole array or a slice of one:
+
+```pascal
+Total(r)          { r is an array of integer, so T is integer }
+Total(r[2..3])    { and so is a slice of it }
+```
+
+The first of those two was refused until ADR-0316, and nothing had tried it.
+
 A type parameter that appears only in the **result** is fixed by nothing —
 a result type is a type name and not an argument — and has to be written. It
 does not drag the others in with it: **a call may write the first few types

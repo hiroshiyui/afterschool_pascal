@@ -105,6 +105,43 @@ on 2026-08-30:
 | concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
 | memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
 
+**A fifth area is proposed, and ADR-0109 does not name it.** That record's four
+came from asking what a program needs of the world outside it — a socket, a
+text, a second thread, a lifetime — and each row is a facility a program
+*reaches for* and cannot otherwise have. An **object model** is not that shape.
+Nothing is unreachable without one: every program in `examples/` was written
+without it, and the containers, the JSON reader and the language server are all
+built out of records and routines over them.
+
+What argues for it is the other half of ADR-0109's test. The question was never
+*does the language have it* but **does a program someone would actually write
+today need it, and can it get it** — and the second clause is what this tree's
+own library answers badly. **139 of 486 exported names repeat their own
+module's noun** — `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut` — and
+that is forced rather than chosen: §6.11.2 puts every imported name into one
+scope, so two modules may not export one spelling, and ADR-0298's
+`export-unique` gate refuses a collision outright. The prefix is a receiver,
+spelled by hand, at every declaration and every call site. It was found by
+writing programs in the language, which is the only way anything gets onto
+this page — ADR-0306 renamed four examples' worth of those names before anyone
+counted them.
+
+| Area | Where it is answered |
+| --- | --- |
+| an object model | **Proposed only** — [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md), which is the first record in this tree with that status. No clause, no code, and no commitment to build it |
+
+The proposal is Rust's decomposition and not Object Pascal's: methods with an
+explicit receiver written out as the first parameter, traits with no
+inheritance, and `dyn T` behind an owned pointer for the one case that needs a
+vtable — in three increments, of which **only the first has to be built for the
+other two to be judged**. Its four open factors were settled on 2026-09-03 and
+its one technical question on 2026-09-04, which is what turned up ADR-0316: a
+whole array could not determine a generic's type parameter, and nothing here
+had ever tried it. **Whether the object model is built is not settled**, and
+this row says so rather than implying a plan — the two goals before this one
+were finished before they were left, and a fifth area announced and abandoned
+would be the first thing on this page that was neither.
+
 **That is not the goal met**, and the distinction is the one this page exists
 to keep making. A facility that exists is not a facility that is pleasant to
 use, and ADR-0109's test was never *does the language have it* — no standard
