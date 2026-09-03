@@ -24,7 +24,6 @@ nobody has decided yet.
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
 | [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
-| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question; [all twenty-seven of its findings are closed](#the-findings-all-closed) since 2026-09-03, and the chapter now carries the method rather than a list |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -67,7 +66,7 @@ governs this language, so that question has no asker — but **does a program
 someone would actually write today need it, and can it get it**. What answers
 that is somebody writing a program and finding it hard, which is what
 [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for)
-is waiting for and what [the language server](#the-program-that-would-judge-the-language)
+is waiting for and what [the language server](history.md#the-language-server-and-the-bound-it-found-before-it-ran)
 was written to produce. Two of the four areas have been used in anger by
 something in this tree and two have not.
 
@@ -362,111 +361,6 @@ day — the binary (ADR-0296), `references` (ADR-0294) and the examples
 (ADR-0295), which paid twice as the sentence said: twelve cases, and seven
 findings in *Writing a daily program* above. The line in every trap is what
 is left, and `codeAction` is the tooling row now.
-
----
-
-## The program that would judge the language
-
-**A Language Server Protocol implementation, written in Afterschool Pascal and
-for it**, and it is written: `lsp/pasls.pas` answers `publishDiagnostics`,
-`documentSymbol`, `definition`, `hover`, `foldingRange`, `selectionRange` and
-formatting for a document and for a range, and the same binary speaks MCP over
-stdio when given `--mcp`. `lsp/README.md` says what it is and how to run it;
-`.mcp.json` declares it as this project's own development tooling, which is
-the loop closed from the other end — the program written to judge the language
-is a program the people working on the language use every day.
-
-It was proposed as **the caller** and not as a feature. Every gate here says
-whether the compiler is correct; not one of them can say whether a program
-large enough to get tired inside is *pleasant* to write in this dialect —
-where the boilerplate collects, which of the three affine kinds gets in the
-way, whether `T ! E` and `try` still read well at depth, whether a module's
-export list is a help or a chore at the fortieth import. **The argument, why a
-server rather than the text-mode IDE this chapter first proposed — now
-withdrawn — and what
-each of its increments found are in
-[`doc/history.md`](history.md#the-language-server-and-the-bound-it-found-before-it-ran)**
-— including the one result no golden here could have produced, an
-independent client computing UTF-16 columns the server then agreed with, which
-is the external authority open question §1 says the dialect structurally
-lacks.
-
-Nothing about the program is open, and since 2026-09-03 nothing that writing
-it demanded of the language is open either. The chapter is kept because the
-method is the product, and the method is written out below.
-
-### The findings, all closed
-
-Twenty-seven entries, and **all twenty-seven are in
-[`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)**
-— twenty-five acted on, and two that needed no action because each is a
-thing a writer has to know rather than a defect. The last three closed
-together on 2026-09-03 and each was a decision this chapter had been
-carrying as a question: the library now uses the inference it asked for
-(ADR-0297), no two library modules export one spelling and a gate holds it
-(ADR-0298), and every file variable is bindable (ADR-0299). Two of the three
-were wrong as recorded — the collision entry had counted three of
-thirty-seven, and the bindable entry's *nobody has asked twice* was answered
-by counting — which is the shape the whole register has: a finding recorded
-and left is a finding wasted, and the rule that made the first one
-actionable was this section's own — one site is an anecdote, two are a demand
-(ADR-0116).
-
-The shape of the register is the argument for the chapter: five of the
-twenty-seven were **bounds** — 8 imports, 24 arguments, a 63-character key, a
-255-character line, a 16 384-byte capture — and every one of them was chosen
-by counting what the largest thing in the tree needed at the time. The
-largest thing in the tree was a test case.
-
-### The usability findings, which took a deliberate pass to get
-
-**Twenty-three findings and not one of them was about *usability*, which is
-what this chapter said it was for.** Every one was a capability finding — a
-bound too small, a routine absent, `getpid` missing, a compiler that did not
-record a position. Those are *X was not there*; this chapter asked *Y was
-unpleasant*, and named four questions: where the boilerplate collects, which
-of the three affine kinds gets in the way, whether `T ! E` and `try` still
-read well at depth, and whether a module's export list is a help or a chore at
-the fortieth import.
-
-The reason is structural rather than flattering. Each increment was
-feature-driven and recorded what **blocked** it, because a block stops you and
-an annoyance does not — so the method this chapter proposed is biased toward
-capability gaps by construction. Getting the other kind took reading the
-finished program as a *reader* rather than as its author, which is a different
-activity and had never been done. Three came out of one pass and all three
-are closed: one in both its halves within four days (ADR-0290, ADR-0291,
-ADR-0292), which taught that the pass that finds an annoyance can also file
-a defect as a taste; the accessor finding by ADR-0297, whose probe found two
-compiler defects a green suite had not, and whose retaken measurement answers
-the depth question — `try` reads well four levels deep across two modules,
-and a server has no place for it because a server answers every request; and
-the `only` finding by ADR-0298, where the fortieth-import program did not
-need writing because reading the export-parts did. Of the four questions,
-two are answered by those records, and two — where the boilerplate collects,
-and which affine kind gets in the way — are still questions with no
-finding against them, which after 3 280 lines of server is itself the
-answer for now.
-
-**What the examples then found** (ADR-0295) is the next register, and it is
-in [*Writing a daily program*](#writing-a-daily-program) rather than here:
-twelve one-page programs written to be read produced seven findings in an
-afternoon, which is the sentence this chapter kept making — the next finding
-comes from somebody writing a program.
-
-**The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
-and by decision rather than by discovery: the language server is the better
-tool for what the IDE was wanted for, it exists, and it is in daily use here.
-The reasoning that chose a server over it is in
-[`doc/history.md`](history.md#the-chapter-as-it-stood-and-the-argument-it-was-made-on),
-and so is the withdrawal. Nothing was lost in capability — `PasTerm` built the
-terminal binding the IDE would have needed (ADR-0262), and it stands as a
-library module like any other.
-
-Everything after that is unknown on purpose. **The list of what this demands is
-the product of writing it**, and enumerating it here would be designing
-features without a caller — which is the practice this entry exists to serve
-rather than to break.
 
 ---
 
@@ -824,5 +718,5 @@ the record.
 | What is a character, once a byte is not one? | A grapheme cluster; text is UTF-8 in normal form C, in a value with a byte capacity, and `char` is left alone because it cannot widen | ADR-0189 |
 | Should the dialect read a type off a component? | Yes: `type of` takes a whole variable-access, so a generic reads an element type off the container it was handed. The substring is the one access it must refuse, and a *result* type is where the widening stops | ADR-0215 |
 | What did version 3 take, and what did it leave? | Four proposals: three became records and the fourth dissolved under the first. The one it left open was `src/` — whether the second front end earned its cost — and §0 answered that by removing the surface it was frozen at. The chapter is in [`doc/history.md`](history.md#version-3--what-it-took-and-what-it-left) | ADR-0229 – ADR-0233 |
-| What did the language server demand? | Findings enough that the count is kept in one place and not four — [above](#the-findings-all-closed), which had said twenty-one where that section said twenty-six. Five were **bounds**, each chosen by counting what the largest thing in the tree needed at the time, and the largest thing in the tree was a test case. All twenty-seven are closed and in [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded); [above](#the-findings-all-closed) keeps the count | ADR-0236 – ADR-0249 |
+| What did the language server demand? | Findings enough that the count is kept in one place and not four — [the chapter as it closed](history.md#the-chapter-as-it-closed), which had said twenty-one where that section said twenty-six. Five were **bounds**, each chosen by counting what the largest thing in the tree needed at the time, and the largest thing in the tree was a test case. All twenty-seven are closed and in [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded); the chapter as it closed, in the same place, keeps the count | ADR-0236 – ADR-0249 |
 | Is this a conforming processor or a dialect? | A dialect. `--std` and the two conformance modes are removed, the clause 5.1 a) compliance statement withdrawn, and 25 of 172 ISO 7185 cases became inexpressible — a conforming ISO 7185 program with a field called `value` no longer compiles. Five oracles retired with the surface they asked about. It is what version 3 is named for | ADR-0232 |

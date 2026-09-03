@@ -4870,6 +4870,116 @@ and it is the one whose measurement changed the task it named.
   shared — is deleted rather than catalogued, no program being able to
   reach it. Five cases die when the standard's refusal is put back.
 
+### The chapter as it closed
+
+**Removed from `doc/roadmap.md` on 2026-09-03**, the day its last three
+findings closed, because a chapter with nothing to do is length the roadmap
+does not need. What follows is the chapter as it stood that day, with its
+in-chapter links repointed here; the register above is where its findings
+are, and the argument for the chapter is the section after this one.
+
+
+**A Language Server Protocol implementation, written in Afterschool Pascal and
+for it**, and it is written: `lsp/pasls.pas` answers `publishDiagnostics`,
+`documentSymbol`, `definition`, `hover`, `foldingRange`, `selectionRange` and
+formatting for a document and for a range, and the same binary speaks MCP over
+stdio when given `--mcp`. `lsp/README.md` says what it is and how to run it;
+`.mcp.json` declares it as this project's own development tooling, which is
+the loop closed from the other end — the program written to judge the language
+is a program the people working on the language use every day.
+
+It was proposed as **the caller** and not as a feature. Every gate here says
+whether the compiler is correct; not one of them can say whether a program
+large enough to get tired inside is *pleasant* to write in this dialect —
+where the boilerplate collects, which of the three affine kinds gets in the
+way, whether `T ! E` and `try` still read well at depth, whether a module's
+export list is a help or a chore at the fortieth import. **The argument, why a
+server rather than the text-mode IDE this chapter first proposed — now
+withdrawn — and what
+each of its increments found are in
+[the chapter above](#the-language-server-and-the-bound-it-found-before-it-ran)**
+— including the one result no golden here could have produced, an
+independent client computing UTF-16 columns the server then agreed with, which
+is the external authority open question §1 says the dialect structurally
+lacks.
+
+Nothing about the program is open, and since 2026-09-03 nothing that writing
+it demanded of the language is open either. The chapter was kept one day for
+the method, which is the product, and then moved here whole.
+
+#### The findings, all closed
+
+Twenty-seven entries, and **all twenty-seven are in
+[the register above](#the-language-servers-findings-as-they-were-recorded)**
+— twenty-five acted on, and two that needed no action because each is a
+thing a writer has to know rather than a defect. The last three closed
+together on 2026-09-03 and each was a decision this chapter had been
+carrying as a question: the library now uses the inference it asked for
+(ADR-0297), no two library modules export one spelling and a gate holds it
+(ADR-0298), and every file variable is bindable (ADR-0299). Two of the three
+were wrong as recorded — the collision entry had counted three of
+thirty-seven, and the bindable entry's *nobody has asked twice* was answered
+by counting — which is the shape the whole register has: a finding recorded
+and left is a finding wasted, and the rule that made the first one
+actionable was this section's own — one site is an anecdote, two are a demand
+(ADR-0116).
+
+The shape of the register is the argument for the chapter: five of the
+twenty-seven were **bounds** — 8 imports, 24 arguments, a 63-character key, a
+255-character line, a 16 384-byte capture — and every one of them was chosen
+by counting what the largest thing in the tree needed at the time. The
+largest thing in the tree was a test case.
+
+#### The usability findings, which took a deliberate pass to get
+
+**Twenty-three findings and not one of them was about *usability*, which is
+what this chapter said it was for.** Every one was a capability finding — a
+bound too small, a routine absent, `getpid` missing, a compiler that did not
+record a position. Those are *X was not there*; this chapter asked *Y was
+unpleasant*, and named four questions: where the boilerplate collects, which
+of the three affine kinds gets in the way, whether `T ! E` and `try` still
+read well at depth, and whether a module's export list is a help or a chore at
+the fortieth import.
+
+The reason is structural rather than flattering. Each increment was
+feature-driven and recorded what **blocked** it, because a block stops you and
+an annoyance does not — so the method this chapter proposed is biased toward
+capability gaps by construction. Getting the other kind took reading the
+finished program as a *reader* rather than as its author, which is a different
+activity and had never been done. Three came out of one pass and all three
+are closed: one in both its halves within four days (ADR-0290, ADR-0291,
+ADR-0292), which taught that the pass that finds an annoyance can also file
+a defect as a taste; the accessor finding by ADR-0297, whose probe found two
+compiler defects a green suite had not, and whose retaken measurement answers
+the depth question — `try` reads well four levels deep across two modules,
+and a server has no place for it because a server answers every request; and
+the `only` finding by ADR-0298, where the fortieth-import program did not
+need writing because reading the export-parts did. Of the four questions,
+two are answered by those records, and two — where the boilerplate collects,
+and which affine kind gets in the way — are still questions with no
+finding against them, which after 3 280 lines of server is itself the
+answer for now.
+
+**What the examples then found** (ADR-0295) is the next register, and it is
+in [*Writing a daily program*](roadmap.md#writing-a-daily-program) rather than here:
+twelve one-page programs written to be read produced seven findings in an
+afternoon, which is the sentence this chapter kept making — the next finding
+comes from somebody writing a program.
+
+**The text-mode IDE this chapter once proposed is withdrawn**, on 2026-09-01
+and by decision rather than by discovery: the language server is the better
+tool for what the IDE was wanted for, it exists, and it is in daily use here.
+The reasoning that chose a server over it is in
+[the section below](#the-chapter-as-it-stood-and-the-argument-it-was-made-on),
+and so is the withdrawal. Nothing was lost in capability — `PasTerm` built the
+terminal binding the IDE would have needed (ADR-0262), and it stands as a
+library module like any other.
+
+Everything after that is unknown on purpose. **The list of what this demands is
+the product of writing it**, and enumerating it here would be designing
+features without a caller — which is the practice this entry exists to serve
+rather than to break.
+
 ### The chapter as it stood, and the argument it was made on
 
 **The IDE was withdrawn on 2026-09-01**, which closes the argument below
@@ -6450,7 +6560,7 @@ the open decision it would settle.
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-each-landed-feature-left-open) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](roadmap.md#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. **And it has now been measured, which this row asserted without doing** (ADR-0252). Against `selfhost/apfront.pas` at 22 900 lines, driven by an independent client: one hover 159 ms, five sequential hovers 795 ms, five *pipelined* hovers 800 ms — so pipelining buys nothing and the server is serial, as this row said — and a `didChange` arriving behind work in flight waited **933 ms**. But the larger number was not concurrency at all: five hovers on unchanged text cost five compilations, and caching the answer against the document took that 795 ms to **106**. The cost a reader actually pays fell 7.5× with no construct. What is left is the 933 ms, and the *second* cheaper answer in front of it has now been costed rather than waved at. The sketch was: this server already has `PasNet.Wait` over `poll` (ADR-0205), so a `Capture` polling the child's pipe **and** standard input could abandon work a newer message has made stale, single-threaded, which is what most language servers do. **What stops it is ADR-0174's own decision.** `PasProcess.Pipe` is `handle external 'pclose'` — an *opaque* handle, which is what made binding `popen` safe and what means no program can get a descriptor out of one to poll. `Collect` reads with `fgetc` on that handle, so there is nothing pollable anywhere on the Pascal side. Three routes and only one is small: a `pasx_` routine that polls on the far side, where the runtime holds the `FILE *` and can `fileno` it — no new headers, `<stdio.h>` being ISO C — keeping the handle opaque, which is right; exposing the descriptor, which breaks the opacity that made the binding safe; or `fork`/`exec`/`pipe`/`waitpid`, which is a large new POSIX surface for one caller. Even the small route needs `Collect` restructured to read incrementally and a server that can decide what "stale" means and abandon a child, so it is *cheaper than a construct* and not cheap. It stays unbuilt under ADR-0116: what a reader actually pays fell 7.5× without it. This row has now been answered by a cheaper thing twice — `select` for the sockets, a cache for the hovers — and the rule it is teaching is worth more than the construct: **measure the cost before naming the mechanism**, because twice the expensive-looking sentence was not where the time went **A fourth cheaper answer has now landed and this row is closed for the foreseeable** (ADR-0257). The server drains the messages that have *arrived* -- never waits for more, which would be a policy about a client's typing speed rather than a fact about the queue -- and keeps only the last `didChange` per document, a keystroke carrying the whole file. Measured: four queued edits of `selfhost/apfront.pas`, **780 ms to 340**, five `publishDiagnostics` to two, and the change a reader is waiting for compiled first rather than fourth. No construct, no compiler change; `pasx_fd_ready`, `PasIO.FdReady` and `PasLsp.LspPending` are the whole of it, and `<poll.h>` was already catalogued. **And the remaining work now has a number against it rather than a sketch.** What the drain cannot abandon is a compile already in flight -- one compilation, about 170 ms, once at the end of a burst. The cheapest route named above needs the pipe unbuffered, because a `FILE *`'s buffer is libc's and neither ISO C nor POSIX will say how much it holds -- ADR-0205's decision 4 a third time, with no counter available. Measured on the dump a hover actually reads, 1 555 350 bytes: **5 ms buffered, 621 ms unbuffered**. The cheap-looking route would cost 124 times what it could save, on the operation a reader performs most; the correct route is the other one, moving the buffer into C as `struct pasx_socket` does, and it stays unbuilt under ADR-0116. So the rule this row teaches has a fourth confirmation and a new face: three times the expensive-looking sentence was not where the time went, and this time **the cheap-looking route was the expensive one** |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-chapter-as-it-closed), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. **And it has now been measured, which this row asserted without doing** (ADR-0252). Against `selfhost/apfront.pas` at 22 900 lines, driven by an independent client: one hover 159 ms, five sequential hovers 795 ms, five *pipelined* hovers 800 ms — so pipelining buys nothing and the server is serial, as this row said — and a `didChange` arriving behind work in flight waited **933 ms**. But the larger number was not concurrency at all: five hovers on unchanged text cost five compilations, and caching the answer against the document took that 795 ms to **106**. The cost a reader actually pays fell 7.5× with no construct. What is left is the 933 ms, and the *second* cheaper answer in front of it has now been costed rather than waved at. The sketch was: this server already has `PasNet.Wait` over `poll` (ADR-0205), so a `Capture` polling the child's pipe **and** standard input could abandon work a newer message has made stale, single-threaded, which is what most language servers do. **What stops it is ADR-0174's own decision.** `PasProcess.Pipe` is `handle external 'pclose'` — an *opaque* handle, which is what made binding `popen` safe and what means no program can get a descriptor out of one to poll. `Collect` reads with `fgetc` on that handle, so there is nothing pollable anywhere on the Pascal side. Three routes and only one is small: a `pasx_` routine that polls on the far side, where the runtime holds the `FILE *` and can `fileno` it — no new headers, `<stdio.h>` being ISO C — keeping the handle opaque, which is right; exposing the descriptor, which breaks the opacity that made the binding safe; or `fork`/`exec`/`pipe`/`waitpid`, which is a large new POSIX surface for one caller. Even the small route needs `Collect` restructured to read incrementally and a server that can decide what "stale" means and abandon a child, so it is *cheaper than a construct* and not cheap. It stays unbuilt under ADR-0116: what a reader actually pays fell 7.5× without it. This row has now been answered by a cheaper thing twice — `select` for the sockets, a cache for the hovers — and the rule it is teaching is worth more than the construct: **measure the cost before naming the mechanism**, because twice the expensive-looking sentence was not where the time went **A fourth cheaper answer has now landed and this row is closed for the foreseeable** (ADR-0257). The server drains the messages that have *arrived* -- never waits for more, which would be a policy about a client's typing speed rather than a fact about the queue -- and keeps only the last `didChange` per document, a keystroke carrying the whole file. Measured: four queued edits of `selfhost/apfront.pas`, **780 ms to 340**, five `publishDiagnostics` to two, and the change a reader is waiting for compiled first rather than fourth. No construct, no compiler change; `pasx_fd_ready`, `PasIO.FdReady` and `PasLsp.LspPending` are the whole of it, and `<poll.h>` was already catalogued. **And the remaining work now has a number against it rather than a sketch.** What the drain cannot abandon is a compile already in flight -- one compilation, about 170 ms, once at the end of a burst. The cheapest route named above needs the pipe unbuffered, because a `FILE *`'s buffer is libc's and neither ISO C nor POSIX will say how much it holds -- ADR-0205's decision 4 a third time, with no counter available. Measured on the dump a hover actually reads, 1 555 350 bytes: **5 ms buffered, 621 ms unbuffered**. The cheap-looking route would cost 124 times what it could save, on the operation a reader performs most; the correct route is the other one, moving the buffer into C as `struct pasx_socket` does, and it stays unbuilt under ADR-0116. So the rule this row teaches has a fourth confirmation and a new face: three times the expensive-looking sentence was not where the time went, and this time **the cheap-looking route was the expensive one** |
 
 Two conclusions worth stating:
 
