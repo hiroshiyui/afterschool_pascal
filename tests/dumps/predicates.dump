@@ -21,6 +21,7 @@ IsPointer 1 of 21: tyPointer
 IsFile 1 of 21: tyFile
 IsHandle 1 of 21: tyHandle
 IsChannel 0 of 21:
+IsTask 0 of 21:
 IsOwned 2 of 21: tyFile tyHandle
 IsOwnedPointer 0 of 21:
 IsAffine 2 of 21: tyFile tyHandle

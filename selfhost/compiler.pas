@@ -8359,6 +8359,23 @@ begin
       writeln(ircode, ')')
     end
   end
+  { AP 6.9.3.14's wait (ADR-0312). `pas_handle_lend` is what makes an empty
+    task-variable an error, and it is the same call `send` makes on a channel
+    for the same reason: there is no activation to wait for, and answering
+    quietly would make `wait` on a variable a program forgot to spawn into
+    read as a task that finished. }
+  else if s^.pcStd = spWait then begin
+    EmitAddress(s^.pcArgs, chSlot);
+    EmitAt(s^.line, s^.col);
+    Def(chan);
+    write(ircode, 'call ptr @pas_handle_lend(ptr ');
+    PutOp(chSlot);
+    writeln(ircode, ')');
+    write(ircode, '  call void @pas_task_wait(ptr ');
+    PutOp(chan);
+    writeln(ircode, ')');
+    EmitAtDone
+  end
   else if s^.pcStd = spHalt then begin
     { The operand is computed first: the emitter is sequential, so anything
       EmitExpr writes has to come out before the call line is begun. }
@@ -10704,7 +10721,7 @@ end;
   thread owns and frees, so the callee's prologue copies from storage that
   outlives the activation that spawned it. }
 procedure EmitTaskWrapper(p: symPtr);
-var l: symListPtr; a, fld, val, target: str; k: integer;
+var l: symListPtr; a, fld, val, chars, slen, target: str; k: integer;
     ops, opTail, o: opndPtr;
 begin
   if not p^.isTask then exit;
@@ -10740,7 +10757,34 @@ begin
     { A structured value parameter travels as an address everywhere in this
       emitter, so the field itself is what crosses -- and the block outlives
       this activation, which a frame slot of the spawning one would not. }
-    if IsStructured(l^.sym^.stype) and not IsHandle(l^.sym^.stype) then
+    { A variable-string or a text travels as a pointer and a length, which is
+      the fourth of the things that are two words and may not depend on how a
+      struct is passed (ADR-0051, ADR-0115). Loading the whole record and
+      handing it over as one operand produced a call whose arguments did not
+      match the callee's, and the block field is addressable, so the two
+      operands come straight out of it -- the characters and the count that
+      says how many of them the value has. }
+    if IsStringType(l^.sym^.stype) or IsText(l^.sym^.stype) then begin
+      Def(val);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(l^.sym^.stype);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode, ', i32 0, i32 0');
+      Def(slen);
+      write(ircode, 'load i32, ptr ');
+      PutOp(val);
+      writeln(ircode);
+      Def(chars);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(l^.sym^.stype);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode, ', i32 0, i32 1');
+      AppendOpnd(ops, opTail, chars, true, nil);
+      AppendOpnd(ops, opTail, slen, false, intType)
+    end
+    else if IsStructured(l^.sym^.stype) and not IsHandle(l^.sym^.stype) then
       AppendOpnd(ops, opTail, fld, true, nil)
     { A channel's word, or a handle's -- the field holds one pointer either
       way and the prologue decides what the slot does with it (ADR-0302). }
@@ -10802,7 +10846,7 @@ end;
   thread frees it. }
 procedure EmitSpawn;
 var task: symPtr; l: symListPtr; arg: nodePtr;
-    frame, set_, size, one, blk, fld, val, link: str;
+    frame, set_, size, one, blk, fld, val, link, hdr: str;
     k: integer;
 begin
   task := s^.spSym;
@@ -10881,6 +10925,25 @@ begin
       PutOp(fld);
       writeln(ircode)
     end
+    { A variable-string or a text, which is ADR-0302's finding met one
+      construct over: it is `IsMemory` and not `IsStructured`, so it used to
+      fall to the branch below that stores a *register* value and produced IR
+      naming a global where a pointer belongs. And a copy of the element's
+      size would be wrong even once the branch was right, a string value being
+      as long as it is rather than as long as the formal -- so what happens
+      here is an ordinary assignment into the block's field, which is where
+      6.4.6 c)'s padding, the capacity check and AP 6.4.15.5's normalisation
+      already live. `send` reaches the same answer through a temporary because
+      the channel's element is not addressable until the runtime copies it;
+      here the destination *is* the field. }
+    else if IsStringType(l^.sym^.stype) or IsText(l^.sym^.stype) then begin
+      Def(fld);
+      write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
+      PutOp(blk);
+      writeln(ircode, ', i32 0, i32 ', k:1);
+      StrClear(hdr);
+      EmitStringStore(fld, l^.sym^.stype, arg, hdr)
+    end
     else if IsStructured(l^.sym^.stype) then begin
       EmitAddress(arg, val);
       Def(fld);
@@ -10916,14 +10979,45 @@ begin
   FrameAt(irProc^.level, frame);
   TaskSetSlot(irProc, frame, set_);
   EmitAt(s^.line, s^.col);
-  write(ircode, '  call void @pas_tasks_spawn(ptr ');
-  PutOp(set_);
-  write(ircode, ', ptr ');
-  PutTaskName(task);
-  write(ircode, ', ptr ');
-  PutOp(blk);
-  writeln(ircode, ')');
-  EmitAtDone
+  { AP 6.9.3.12 (ADR-0312): the two forms differ in one call. The named one
+    answers the task record with a reference for the variable, and the
+    unnamed one leaves the set holding the only one -- so a task that is not
+    named costs exactly what it cost before, and neither form changes when
+    the block is joined.
+
+    The address of the target is taken **after** the thread is started, and
+    that is deliberate: `pas_handle_set` releases what the variable held, and
+    what it held is a reference and never a join, so nothing here can block
+    while the argument block is half built. A spawn in a loop therefore drops
+    the previous iteration's reference at the point the new activation
+    replaces it, and the block's set goes on naming both. }
+  if s^.spTarget = nil then begin
+    write(ircode, '  call void @pas_tasks_spawn(ptr ');
+    PutOp(set_);
+    write(ircode, ', ptr ');
+    PutTaskName(task);
+    write(ircode, ', ptr ');
+    PutOp(blk);
+    writeln(ircode, ')');
+    EmitAtDone
+  end
+  else begin
+    Def(val);
+    write(ircode, 'call ptr @pas_tasks_spawn_named(ptr ');
+    PutOp(set_);
+    write(ircode, ', ptr ');
+    PutTaskName(task);
+    write(ircode, ', ptr ');
+    PutOp(blk);
+    writeln(ircode, ')');
+    EmitAtDone;
+    EmitAddress(s^.spTarget, fld);
+    write(ircode, '  call void @pas_handle_set(ptr ');
+    PutOp(fld);
+    write(ircode, ', ptr ');
+    PutOp(val);
+    writeln(ircode, ')')
+  end
 end;
 
 procedure EmitDeferRunner(p: symPtr);
@@ -11077,6 +11171,9 @@ begin
   writeln(ircode, 'declare void @pas_tasks_init(ptr)');
   writeln(ircode, 'declare ptr @pas_tasks_alloc(i64)');
   writeln(ircode, 'declare void @pas_tasks_spawn(ptr, ptr, ptr)');
+  writeln(ircode, 'declare ptr @pas_tasks_spawn_named(ptr, ptr, ptr)');
+  writeln(ircode, 'declare void @pas_task_wait(ptr)');
+  writeln(ircode, 'declare i32 @pas_task_drop(ptr)');
   writeln(ircode, 'declare void @pas_tasks_join(ptr)');
   writeln(ircode, 'declare void @pas_handle_done(ptr)');
   writeln(ircode, 'declare void @pas_handle_set(ptr, ptr)');
@@ -12156,6 +12253,7 @@ begin
   Row('IsFile          ', IsFile);
   Row('IsHandle        ', IsHandle);
   Row('IsChannel       ', IsChannel);
+  Row('IsTask          ', IsTask);
   Row('IsOwned         ', IsOwned);
   Row('IsOwnedPointer  ', IsOwnedPointer);
   Row('IsAffine        ', IsAffine);

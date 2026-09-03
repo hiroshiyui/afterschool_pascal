@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 19390
+instrumented 19691
 
 accept 0/4
 accumulate 0/84
@@ -78,7 +78,7 @@ boundschema 0/65
 boundschemafor 0/9
 boundslot 0/3
 boundvalue 1/35
-buildformals 7/143
+buildformals 7/151
 buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
@@ -89,11 +89,11 @@ chainhas 0/10
 chainnames 0/4
 chainrecof 0/3
 check 0/1
-checkarguments 6/235
+checkarguments 6/246
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
-checkcall 12/270
+checkcall 12/275
 checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -134,14 +134,14 @@ checkschemadomain 0/51
 checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
-checkspawn 0/11
-checkstdproc 19/366
-checkstmt 2/247
+checkspawn 0/24
+checkstdproc 19/379
+checkstmt 2/251
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
-checktake 0/20
-checktaskformals 0/25
+checktake 0/21
+checktaskformals 0/26
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
@@ -151,7 +151,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/24
 collecttagtests 0/31
-compile 0/54
+compile 0/55
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -224,12 +224,13 @@ dumpoptional 0/7
 dumpproc 0/36
 dumpprogram 0/43
 dumprecordlayout 0/9
-dumpstmt 0/207
+dumpstmt 0/214
 dumpstmtlist 0/4
 dumpstrchild 0/5
 dumpsymbols 1/16
-dumpsymdecl 0/25
+dumpsymdecl 0/26
 dumpsymfields 0/8
+dumpsymparams 0/9
 dumpsymrecord 0/6
 dumpsymtype 0/10
 dumpsymvariants 0/9
@@ -238,6 +239,7 @@ dumptrivia 0/8
 dumptypeexpr 2/128
 dumpusefiles 0/3
 dumpvariantpart 0/29
+dumpwords 0/18
 dynamicextent 0/9
 dynamictail 0/13
 dynbounddisc 0/16
@@ -246,12 +248,13 @@ dynsize 0/47
 earlier 0/1
 emitaddress 3/193
 emitarrayvalue 0/24
-emitassign 0/90
+emitassign 0/92
 emitat 0/1
 emitatdone 0/1
 emitbinary 4/212
-emitcall 8/549
+emitcall 8/550
 emitcase 0/85
+emitchanshut 0/7
 emitcheckedarith 0/45
 emitcomplexbinary 0/63
 emitcomplexpow 0/23
@@ -261,7 +264,7 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/149
+emitdeclares 0/154
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
@@ -303,8 +306,8 @@ emitset 0/63
 emitsetbinary 0/61
 emitshortcircuit 0/28
 emitslicevalue 0/89
-emitspawn 0/82
-emitstdproc 2/224
+emitspawn 0/120
+emitstdproc 2/254
 emitstmt 0/38
 emitstore 0/34
 emitstring 0/211
@@ -315,7 +318,7 @@ emitstringstorevalue 0/49
 emitstringvalue 2/2
 emitstructvalue 0/3
 emittaskargtype 0/7
-emittaskwrapper 0/58
+emittaskwrapper 0/77
 emittextcompare 1/30
 emittransfer 0/110
 emittrapdisc 0/14
@@ -334,7 +337,7 @@ emitwriteargs 14/106
 emptyargumentlist 0/6
 endsequence 0/6
 ensurestdfile 0/16
-enterframe 0/214
+enterframe 0/220
 enterlevel 0/5
 enumconstof 0/9
 enumcount 0/6
@@ -413,7 +416,7 @@ frameof 0/2
 frameslot 0/10
 framevarat 0/6
 genericfromschema 2/98
-genericshape 0/10
+genericshape 0/7
 giveresultslot 0/1
 groupfieldname 0/8
 guardlnarg 0/5
@@ -443,7 +446,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/176
+instantiategeneric 0/191
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -499,7 +502,7 @@ ispointer 0/1
 isproctype 0/1
 isreal 0/1
 isrecord 0/1
-isrequiredname 0/1
+isrequiredname 0/7
 isrequiredproc 0/1
 isrestricted 0/1
 isset 0/1
@@ -511,6 +514,7 @@ isstringorchar 0/1
 isstringrep 0/1
 isstringtype 0/1
 isstructured 0/3
+istask 0/1
 istext 0/1
 istextfile 0/1
 istimebuiltin 0/1
@@ -528,7 +532,7 @@ lexoperator 0/47
 lexstring 0/28
 linkstdfile 0/2
 llalign 1/17
-llsize 2/56
+llsize 2/57
 lookslikestructuredvalue 0/20
 lookslikesubrange 0/23
 lookup 0/5
@@ -560,10 +564,10 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/87
+newnode 0/88
 newresultslot 0/7
-newsymbol 0/97
-newtype 0/40
+newsymbol 0/99
+newtype 0/41
 nextformal 0/4
 nonvarying 3/42
 noteblockdeclarations 0/1
@@ -571,7 +575,7 @@ notedeclarationsto 0/6
 notedefining 0/7
 noteexportedinterface 0/6
 notehandlecloser 0/6
-noteunwrittenvarparams 0/13
+noteunwrittenvarparams 0/17
 noteuse 0/8
 noteusefield 0/5
 notinghere 0/4
@@ -591,7 +595,7 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/138
+parseargs 10/140
 parsearraytype 0/17
 parseblock 0/50
 parseboundident 0/12
@@ -610,7 +614,7 @@ parsefieldgroups 0/19
 parsefor 0/29
 parseformaldiscriminants 0/35
 parseformalparameters 0/48
-parseidentstatement 0/81
+parseidentstatement 0/89
 parseif 0/11
 parseimportpart 0/58
 parselabel 0/16
@@ -662,6 +666,7 @@ posconst 0/9
 procactualsym 0/2
 producefromschema 0/192
 protectable 1/14
+protectablecandidate 0/1
 pushseq 0/3
 pushstmt 0/6
 put 0/1
@@ -711,7 +716,8 @@ repeateddisc 1/7
 reportcat 0/13
 requirearg 0/9
 requiredfunc 0/2
-requiredfuncwide 0/166
+requiredfuncwide 0/167
+requiredprocname 0/13
 requiredtype 0/6
 reservedforeignname 4/16
 resolvearray 0/25
@@ -736,10 +742,10 @@ resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
 roundup 0/2
-row 0/57
+row 0/58
 runcodegen 0/95
 rundefersreversed 0/4
-runsema 2/86
+runsema 2/92
 samelink 0/1
 sametuple 0/7
 satisfiescat 0/6
@@ -758,6 +764,7 @@ skiptriviaandcomments 1/31
 sliceof 0/4
 sourcedir 0/5
 span 0/5
+spawnnamestarget 0/14
 srcbefore 0/3
 srccopy 0/6
 srcrewind 0/1
@@ -802,19 +809,21 @@ transferargs 0/10
 transfers 0/5
 typeargument 0/6
 typeend 0/4
+typeformalpos 0/10
 typelength 0/1
 underlying 0/1
-usage 0/59
+usage 0/61
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
 version 0/1
 walkfiles 0/131
+wantwords 0/1
 warnat 0/2
 warnpartialresult 0/11
 warnunreachable 0/13
 warnunusedlocals 0/13
-warnunwrittenvarparams 0/22
+warnunwrittenvarparams 0/33
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21
@@ -824,6 +833,7 @@ writecatname 0/6
 writecontext 5/79
 writedistincttypenote 0/41
 writekeyword 0/2
+writekwlit 0/3
 writekwword 0/3
 writelabelwhat 1/5
 writenocopyreason 0/5

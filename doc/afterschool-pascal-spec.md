@@ -1690,6 +1690,96 @@ why they are named together: `release(c)`, `c := nil` and `c := take(d)` each
 release what `c` held, and a rule that separated them would be a rule about
 syntax rather than about the channel.
 
+#### 6.4.17 The task-type [added]
+
+The task-type denotes one activation of a task-declaration (6.7.8). A variable
+of the task-type names the activation a spawn-statement (6.9.3.12) commenced,
+so that a program may wait for that one activation (6.9.3.14) rather than for
+every activation its block commenced (6.9.3.12.1).
+
+**6.4.17.1 The denoter.** `task` shall be a required type-identifier denoting
+the task-type.
+
+It is not a word-symbol. It is a name in the scope enclosing the
+program-block (§6.2.2.10), so a program that declares `task` for itself keeps
+that meaning (§6.1.3) — `int64`'s route and not `channel`'s (ADR-0128,
+ADR-0140).
+
+There shall be **one** task-type and not one per denoter. `task` is the whole
+of the denoter, so there is nothing for 6.4.12.1's new-type rule to
+distinguish: two variables written `t, u: task` are of one type, and so are
+two written in different blocks.
+
+NOTE 1 — The identifier occurs in two positions and they do not interact. In a
+declaration-part it introduces a task-declaration (6.7.8), which is a position
+where an identifier is a syntax error in both standards; in a type-denoter it
+denotes this type. A program that declares its own `task` shadows the *type*
+and does not thereby recover the declaration-part position, which 6.7.8
+already stated is not a program's to spell.
+
+NOTE 2 — The type needed no spelling beyond a name, so none was invented. A
+channel-type (6.4.16.1) had to be spelled by juxtaposition because its
+capacity and its component type are part of it; a task-type carries nothing,
+and 6.4.12.1's own denoter names a foreign closer this type does not have.
+
+**6.4.17.2 A task is a handle.** The task-type shall be a handle-type
+(6.4.12) whose releasing routine is this processor's. Everything 6.4.12 says
+of a handle shall hold of a task: a task-variable shall be empty when its
+block is activated, shall hold at most one activation, shall be released when
+the variable ceases to exist (6.4.12.3), may be released earlier by the
+release-function (6.4.12.5) or by an assignment of `nil`, may be **moved**
+(6.4.12.7), and may be compared with `nil` and with nothing else. It shall not
+be assigned from another task-variable, shall not be a value parameter of a
+routine that is not a task-declaration (6.7.8.1), and shall not be a function
+result.
+
+There shall be three forms of assignment to a task-variable: the second form
+of the spawn-statement (6.9.3.12), which is this type's producer; `nil`; and
+the move (6.4.12.7). 6.4.12.2's first form requires an external-declaration
+and reaches nothing here, an activation of a task being this program's.
+
+A task-variable may be a component of an array or of a record, as any handle
+may be, and may be a formal parameter of a task-declaration, a task-type being
+a handle-type and 6.7.8.1 admitting one.
+
+NOTE 1 — A kind of its own was refused for 6.4.16.2's reason, one type further
+on. Everything this type needs from the language — no copy, release at the end
+of the block, an early release, the move, affinity — is what a handle already
+is, and a second mechanism would be a parallel one where a flag does.
+
+NOTE 2 — An array of task-variables is what makes a pool of workers writable:
+`spawn ws[i] := Worker(jobs)` in one loop and `wait(ws[i])` in another.
+Nothing was added for it — an array of handles was already admissible, and it
+is why 6.9.3.12's second form takes a variable-access and not a name.
+
+NOTE 3 — A task-variable moved into a task is a task waiting for a task, and
+the move is what keeps it safe: at no moment do two activations name one
+activation, so the claim 6.9.3.14 rests on is the affine model unchanged.
+
+**6.4.17.3 Releasing a task.** Releasing (6.4.12.3) the value a task-variable
+holds shall not wait for the activation. The variable shall cease to name it;
+the activation shall remain one the block commenced, and 6.9.3.12.1 shall
+still require it to be complete before that block's activation ends.
+
+NOTE 1 — This is what releasing a *channel* is not (6.4.16.4), and the
+asymmetry is the design rather than an inconsistency. A channel no activation
+holds is of no use to anybody, so a release the program wrote closes it; an
+activation is not made pointless by nothing naming it, and stopping one is not
+something this language can do at all.
+
+NOTE 2 — A task-variable assigned twice therefore names the second activation
+and leaves the first to the block's join. That is a program that spawns more
+activations than it waits for, and it is not an error; a program that wants to
+wait for both writes an array (NOTE 2 of 6.4.17.2).
+
+NOTE 3 — The release **cannot** be where the join happens, and the reason is
+an ordering. 6.9.3.12.1 requires every activation to be complete before *any*
+variable of the block is released, and the release of one handle is not
+ordered against the release of another — so a task-variable that joined as it
+was released would join at a moment no clause fixes, after some of the block's
+files and handles had already been closed under a task still running
+(ADR-0312).
+
 ### 6.5 Declarations and denotations of variables
 
 #### 6.5.1 Variable-declarations [extended]
@@ -2767,6 +2857,12 @@ carry one. A task may be given a socket; it may not be *sent* one. What would
 make sending one expressible is a rule about which activation owns a value in
 a bounded queue, and no program here has wanted it (ADR-0302).
 
+NOTE 7 — The task-type (6.4.17) is a handle-type, so the second sentence of
+this clause already admits it and it is moved in as any other handle is: a
+task may be given a task, and waits for it (6.9.3.14) as the block that
+spawned both would have. Nothing was added for this, and saying so is the
+point — the rule is the one already written, asked of one more type.
+
 **6.7.8.2 What a task's body may name.** A variable-access occurring in the
 block of a task-declaration, or in the block of any procedure or function
 declared within it, shall denote a variable declared in that task-declaration
@@ -2979,7 +3075,8 @@ termination of an activation.
 
 #### 6.9.3.12 Spawn-statements [added]
 
-    spawn-statement = 'spawn' procedure-identifier actual-parameter-list? .
+    spawn-statement = 'spawn' [ variable-access ':=' ] procedure-identifier
+                      actual-parameter-list? .
 
 The procedure-identifier shall denote a task (6.7.8). Executing a
 spawn-statement shall commence an activation of that task which proceeds
@@ -2991,11 +3088,40 @@ of a handle-type that is not a channel-type shall be `take` (6.4.14.6) applied
 to a variable-access of that type, and what is copied shall be the value that
 variable held, the variable being made empty (6.7.8.1).
 
+**The second form names the activation [added].** Where a variable-access and
+`:=` stand between `spawn` and the procedure-identifier, the variable-access
+shall denote a variable of the task-type (6.4.17). The activation shall be
+commenced exactly as the first form commences it, and the variable shall then
+hold that activation. The value the variable held, if any, shall be released
+(6.4.17.3) first, and the variable shall be **threatened** in the sense of
+ISO/IEC 10206:1991 §6.9.4 a), as the variable-access of an
+assignment-statement is.
+
 `spawn` is not a word-symbol, and the position is `defer`'s (6.9.3.11): a
 statement beginning with an identifier can continue only as a designator, as a
 call, or not at all, so an identifier after the name is a token no conforming
 program can have written there. `spawn;`, `spawn(x)` and `spawn := 3` all
 remain what a program that declared `spawn` meant by them.
+
+NOTE 1 — The two forms are one statement and not two, which is why the join
+(6.9.3.12.1) says nothing about them. Naming an activation adds a way to
+reach it and takes it out of nothing: the block commenced it, so the block
+completes it.
+
+NOTE 2 — The forms are told apart with no symbol table and no backtracking
+over anything the parser has built. A procedure-identifier is followed by `(`
+or by a terminator and never by a selector, so a scan from the identifier
+after `spawn` — through a selector's brackets, dots and arrows — reaches `:=`
+in the second form and reaches something else in the first. `spawn P(x)`,
+`spawn P` and `spawn P;` are read exactly as they were, and `spawn := 3` and
+`spawn(x)` still belong to a program that declared its own `spawn`.
+
+NOTE 3 — It is a variable-access and not an identifier because
+`spawn ws[i] := Worker(jobs)` is the statement a pool of workers is written
+with (6.4.17.2 NOTE 2). Threatening it is what makes a `for` control-variable
+(§6.8.3.9) and a protected parameter (§6.7.3.1) refused there, which is the
+answer an assignment would have given and is the same rule rather than a
+second one.
 
 **6.9.3.12.1 The join.** Every activation a block commenced shall be complete
 before that block's activation ends, and before any variable of that block is
@@ -3052,6 +3178,57 @@ closing the channel downstream of it terminate.
 NOTE 3 — Both are required identifiers, so a program that declares its own
 `send` or `receive` keeps it (§6.1.3), which is `int64`'s and `exit`'s route
 (ADR-0128, ADR-0177).
+
+#### 6.9.3.14 wait [added]
+
+The required procedure-identifier `wait` shall take one actual-parameter,
+which shall be a variable-access of the task-type (6.4.17). The activation
+executing the statement shall not proceed past it until the activation the
+variable holds is complete.
+
+Where that activation is already complete, and where the variable has been
+waited for before, the statement shall have no effect.
+
+It shall be an error (Annex A.7) for the variable to be empty.
+
+NOTE 1 — Waiting for one task and joining all of them are the same statement
+asked twice, and that is the whole of what makes this clause safe. `wait` does
+not take the activation out of the set 6.9.3.12.1's join walks; it completes it
+earlier, so the join then finds it complete and returns at once. So naming an
+activation weakens nothing: every alias argument this language rests on —
+ADR-0201's *a borrow cannot outlive the call* above all — is an argument about
+the join, and the join is untouched.
+
+NOTE 2 — The empty variable is an error rather than a statement with no
+effect, which is `send`'s treatment of a closed channel (6.9.3.13.1) and is
+chosen for the same reason. A variable a program forgot to spawn into would
+otherwise read as an activation that has already finished, and a program would
+be told that work was done which was never started. It is Annex A.7's error
+and not one of its own: the task-variable is **lent** exactly as 6.4.12.4
+lends a handle, and the error is the one that already stands there.
+
+NOTE 3 — Waiting twice is *not* an error, and the asymmetry with NOTE 2 is
+deliberate. An emptied variable never held an activation, while a variable
+waited for twice held one and the answer is known — which is what lets a
+program `wait` in a loop it may leave and again on the way out, and what lets
+the block's own join arrive after a `wait` the program wrote.
+
+NOTE 4 — `wait` is a procedure and not a function, there being no result to
+answer: a task yields no value, and what it computed comes back through a
+channel (6.4.16). A program that wants an answer as well as a completion
+writes both, and the two are ordered by 6.4.16.4's close rather than by this
+statement.
+
+NOTE 5 — There is no timeout and no way to ask whether an activation is
+complete without waiting for it. Each is a construct of its own and neither is
+implied by this one; they are recorded as open (ADR-0312) rather than
+half-answered by a `wait` that could give up, which would leave a program
+holding a task-variable whose activation is still running and no clause
+saying what that means.
+
+NOTE 6 — `wait` is a required identifier, so a program that declares its own
+`wait` keeps it (§6.1.3), which is `send`'s and `exit`'s route (ADR-0128,
+ADR-0177).
 
 ### 6.10 Input and output [extended]
 
@@ -3183,10 +3360,14 @@ standard error stream.
 | A.4 | a string crossing to a foreign routine contains NUL | 6.7.7.5 | `a string crossing to a foreign routine contains a NUL character` |
 | A.5 | a foreign string result exceeds the capacity | 6.7.7.8 | `a string of length n does not fit a capacity of c` |
 | A.6 | `argument(k)` with `k` outside 1..`argcount` | 6.7.6.10 | `argument k is not in 1..n` |
-| A.7 | an empty handle is lent to a foreign routine | 6.4.12.4 | `the handle is empty, and a foreign routine may not be lent it` |
+| A.7 | an empty handle is lent to a foreign routine | 6.4.12.4, 6.9.3.14 | `the handle is empty, and a foreign routine may not be lent it` |
 
 Indexing a slice out of range (6.7.3.9.5 b) is reported by the array-index error
 ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
+
+Waiting (6.9.3.14) on an empty task-variable is A.7's error and carries A.7's
+message: the variable is lent as 6.4.12.4 lends a handle, and a second message
+would be a second name for one condition.
 
 ## Annex B (historical) — Refusal under the conformance modes
 
@@ -3589,3 +3770,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |
 | 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |
 | 6.5.1 | ADR-0299 |
+| 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |

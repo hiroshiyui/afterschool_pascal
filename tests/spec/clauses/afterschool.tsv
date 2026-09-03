@@ -106,6 +106,10 @@
 6.4.16.2	A channel is a handle
 6.4.16.3	What a channel may carry
 6.4.16.4	Releasing a channel
+6.4.17	The task-type
+6.4.17.1	The denoter
+6.4.17.2	A task is a handle
+6.4.17.3	Releasing a task
 6.5	Declarations and denotations of variables
 6.5.1	Variable-declarations
 6.5.3	Component-variables
@@ -172,6 +176,7 @@
 6.9.3.13	The channel operations
 6.9.3.13.1	send
 6.9.3.13.2	receive
+6.9.3.14	wait
 6.10	Input and output
 6.11	Modules
 6.13	Programs

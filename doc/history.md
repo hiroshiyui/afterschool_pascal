@@ -7051,8 +7051,9 @@ sentence one step further along.
 
 ## The concurrency residue
 
-Two of the three rows ADR-0268 wrote about itself are closed, on 2026-09-03,
-and the third stands. The chapter they came from is still in
+All three rows ADR-0268 wrote about itself are closed, all on 2026-09-03, and
+what stands is the part of the third the row itself had bundled into it. The
+chapter they came from is still in
 [`doc/roadmap.md`](roadmap.md#what-each-landed-feature-left-open); what is
 here is what closing them found.
 
@@ -7090,8 +7091,49 @@ construct's to widen; ADR-0268 built the construct and said the move existed
 and the argument block did not use it. The whole of what was missing was that
 position, and the change needed no new runtime routine at all.
 
-What stands is **to wait for one task**: no `Task` variable, no select over
-several channels, no timeout on a send or a receive. And behind both closed
-rows is one shape neither of them reached — a **channel of handles**, so that
-a fixed pool of workers could take connections off a queue. A task may be
-given a socket at the moment it starts and not afterwards.
+**A task could not be waited on singly, and closing it cost a type and a
+statement** — ADR-0312. The row read as three wants in one sentence and only
+the first of them was about waiting; what it took was small because a handle
+(AP 6.4.12) already had every rule a name for an activation needs — owned by
+one variable, released when that variable ceases to exist, released early,
+moved with `take`. So the task-type is a `tyHandle` with a flag, exactly as a
+channel-type is a `tyHandle` with an element type, and `IsTask` is `IsHandle`
+and that flag; nothing about release, about the move, about what may be
+assigned or compared had to be decided a second time. The work that was not
+free is in the runtime, and it is there because a *named* activation may be
+joined from two places — `wait` on the variable, or the block's own join —
+where `pthread_join` may be called once.
+
+**Writing the client found two defects in the construct that was already
+there**, neither of them reachable by anything in the corpus. A task with a
+string or text **value parameter** emitted invalid IR: the argument-block
+store chose its path with `IsStructured`, and a variable-string is `IsMemory`
+and not structured, so it stored a global where a pointer belonged — ADR-0191's
+split met a fourth time, and ADR-0302's own finding met one construct over.
+The task wrapper then passed such a parameter as one aggregate, where a string
+travels as a **pointer and a length** (ADR-0051, ADR-0115), so the call did not
+match the callee's signature. Both had stood since the construct landed; what
+had kept them invisible is that no program had spawned a task taking a string,
+`send` having been the half somebody wanted first.
+
+**And the block-end join now has a case that fails without it**, which is what
+`doc/sop.md` §7 had carried a row about since ADR-0268. The oracle for a join
+is weak for a reason worth stating: the obvious observation is a value the task
+sent, and a channel has already synchronised that, so a test written the
+obvious way stays green with the join deleted — which is exactly what
+`tests/dialect/concurrency.pas` does. The discriminating observation had to sit
+*outside* a channel. `tests/dialect/task_join.pas` spawns inside a procedure,
+so the join is at that procedure's `end`; the task sleeps a second and writes
+to a file it owns, which its block closes when the block ends; the program then
+reads that file by name. Mutation says it works: with the block-end join
+removed the new case fails and `concurrency.pas` stays green, exactly as the
+row had predicted. What the case rests on is the task being deliberately slow
+and not a construction that cannot race, and that is the honest description of
+its margin.
+
+What stands is the rest of the row that said *wait for one task*: no select
+over several channels, and no timeout on a `send`, a `receive` or a `wait`.
+And behind all three closed rows is one shape none of them reached — a
+**channel of handles**, so that a fixed pool of workers could take connections
+off a queue. A task may be given a socket at the moment it starts and not
+afterwards.

@@ -22,12 +22,16 @@ type
   BadChan = channel [4] of Ptr;
   Zero = channel [0] of integer;
 
+const
+  one = 1;
+
 var
   c: Ints;
   n: integer;
   t: text;
   q: Ptr;
   h: Stream;
+  w: task;
 
 { A var parameter is the escaping alias this language has never had, arriving
   with no model to govern it -- ADR-0201's rejected `cobegin` in one
@@ -81,6 +85,13 @@ begin send(c, k) end;
 procedure NotATask(k: integer);
 begin end;
 
+{ §6.7.3.1's protected var: the statement writes through its target, so a
+  variable §6.9.4 does not let it threaten is refused there. }
+procedure Cannot(protected var pw: task);
+begin
+  spawn pw := Good(c, 1)
+end;
+
 begin
   { Only a task may be spawned. }
   spawn NotATask(1);
@@ -115,6 +126,22 @@ begin
     which is after the join -- so a task spawned there would be joined by
     nothing. }
   defer spawn Good(c, 1);
+
+  { AP 6.9.3.14 (ADR-0312): `wait` takes one task variable and nothing else.
+    A channel is a handle and a task is a handle, so the refusal has to be
+    the task-type's own and not a handle's. }
+  wait(n);
+  wait(c);
+  wait(w, w);
+  wait(take(w));
+
+  { AP 6.9.3.12: what stands before `:=` in a spawn-statement is a variable of
+    the task-type. A variable of another type is refused there, and so is a
+    variable §6.9.4 does not let the statement threaten -- the statement
+    writes through it exactly as an assignment does. }
+  spawn n := Good(c, 1);
+  spawn one := Good(c, 1);
+  Cannot(w);
 
   writeln(n)
 end.

@@ -61,6 +61,9 @@ schema_string_heap 0
 sets_records 0
 sweepgaps 0
 take 0
+task_join 0
+task_pool 0
+task_wait 0
 typeinquiry_access 0
 variant_disc 0
 variant_otherwise 0

@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 854
-instrumented 10712
-decisions 5356
+uncovered 846
+instrumented 10852
+decisions 5426
 
 accept 0/4
 accumulate 1/32
@@ -81,7 +81,7 @@ chainfield 1/12
 chainhas 0/10
 chainnames 0/2
 chainrecof 0/4
-checkarguments 10/184
+checkarguments 10/206
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 2/10
@@ -117,21 +117,21 @@ checkread 3/56
 checkreceive 0/12
 checkrecordvalue 0/44
 checkrelease 0/8
-checkresultassign 1/42
+checkresultassign 1/44
 checkschemaarms 0/4
 checkschemabodynames 0/20
 checkschemadomain 3/28
 checksetexpr 0/8
 checksetmember 2/12
 checksetvalue 1/12
-checkspawn 3/8
-checkstdproc 30/310
-checkstmt 16/240
+checkspawn 4/18
+checkstdproc 30/320
+checkstmt 16/248
 checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
 checktake 0/12
-checktaskformals 0/10
+checktaskformals 0/12
 checktypedecl 1/34
 checkvardecl 2/38
 checkvariantpartvalue 4/44
@@ -141,7 +141,7 @@ checkwriteargs 4/34
 claimboundsslot 0/2
 closefiles 0/12
 collecttagtests 7/34
-compile 0/98
+compile 0/102
 computeactivemodules 0/4
 confarraytype 0/4
 confbound 0/2
@@ -205,11 +205,12 @@ dumpoptional 0/2
 dumpproc 0/12
 dumpprogram 2/20
 dumprecordlayout 0/2
-dumpstmt 0/76
+dumpstmt 0/80
 dumpstmtlist 0/2
 dumpsymbols 5/12
 dumpsymdecl 2/22
 dumpsymfields 0/4
+dumpsymparams 0/4
 dumpsymrecord 0/2
 dumpsymtype 1/8
 dumpsymvariants 0/4
@@ -217,6 +218,7 @@ dumptokens 0/2
 dumptrivia 1/2
 dumptypeexpr 4/30
 dumpvariantpart 0/8
+dumpwords 0/2
 dynamicextent 1/14
 dynamictail 1/16
 dynbounddisc 0/2
@@ -225,9 +227,9 @@ dynsize 0/12
 earlier 0/2
 emitaddress 2/36
 emitarrayvalue 0/16
-emitassign 0/38
+emitassign 0/42
 emitbinary 5/118
-emitcall 7/108
+emitcall 7/110
 emitcase 0/24
 emitcheckedarith 0/4
 emitcomplexbinary 0/2
@@ -275,8 +277,8 @@ emitset 0/4
 emitsetbinary 0/4
 emitshortcircuit 0/10
 emitslicevalue 2/16
-emitspawn 1/10
-emitstdproc 2/50
+emitspawn 1/20
+emitstdproc 2/56
 emitstmt 3/28
 emitstore 0/34
 emitstring 0/46
@@ -284,7 +286,7 @@ emitstringcompare 2/4
 emitstringstorevalue 0/6
 emitstructvalue 0/6
 emittaskargtype 0/2
-emittaskwrapper 0/16
+emittaskwrapper 0/20
 emittextcompare 1/6
 emittransfer 0/18
 emittuplecheck 0/2
@@ -297,7 +299,7 @@ emitwriteargs 2/24
 emptyargumentlist 0/2
 endsequence 0/6
 ensurestdfile 0/10
-enterframe 0/44
+enterframe 0/46
 enterlevel 0/4
 enumconstof 4/12
 enumcount 0/2
@@ -370,7 +372,7 @@ frameof 0/2
 frameslot 0/2
 framevarat 2/6
 genericfromschema 4/34
-genericshape 0/6
+genericshape 0/4
 groupfieldname 0/10
 hastypeparam 0/4
 headerof 1/4
@@ -390,7 +392,7 @@ initinitialstates 0/8
 inittasks 0/2
 inquiryofaccess 0/6
 inquiryrootname 1/6
-instantiategeneric 4/78
+instantiategeneric 4/88
 instantiateheading 0/28
 int64toolarge 3/14
 internbindingname 0/2
@@ -445,7 +447,7 @@ ispointer 1/2
 isproctype 1/2
 isreal 1/2
 isrecord 0/2
-isrequiredname 9/24
+isrequiredname 0/6
 isrequiredproc 0/16
 isrestricted 1/2
 isset 1/2
@@ -457,6 +459,7 @@ isstringorchar 0/2
 isstringrep 0/4
 isstringtype 0/2
 isstructured 1/10
+istask 0/2
 istext 1/2
 istextfile 0/2
 istimebuiltin 0/2
@@ -503,7 +506,7 @@ notedeclarationsto 0/8
 notedefining 2/8
 noteexportedinterface 1/8
 notehandlecloser 0/2
-noteunwrittenvarparams 0/22
+noteunwrittenvarparams 0/20
 noteuse 0/6
 noteusefield 0/4
 notinghere 0/4
@@ -517,7 +520,7 @@ packedcomponent 1/18
 padstofixedstring 2/18
 parameterof 1/6
 parseactualparameters 0/6
-parseargs 6/126
+parseargs 6/130
 parsearraytype 0/4
 parseblock 0/36
 parseboundident 0/4
@@ -534,9 +537,9 @@ parsefieldgroups 0/14
 parsefor 1/8
 parseformaldiscriminants 1/12
 parseformalparameters 0/38
-parseidentstatement 1/90
+parseidentstatement 1/92
 parseif 0/2
-parseimportpart 1/28
+parseimportpart 0/28
 parselabel 1/6
 parselabelpart 0/4
 parsemainprogram 1/12
@@ -583,6 +586,7 @@ posconst 0/2
 procactualsym 0/2
 producefromschema 6/100
 protectable 1/16
+protectablecandidate 0/8
 pushstmt 0/4
 put 0/2
 putcchar 0/8
@@ -641,7 +645,7 @@ roundup 0/2
 row 0/4
 runcodegen 1/40
 rundefersreversed 0/4
-runsema 3/26
+runsema 3/28
 samelink 0/8
 sametuple 2/12
 schemahastypedisc 0/6
@@ -655,6 +659,7 @@ setindex 0/6
 setvaluetypeof 0/14
 skiptriviaandcomments 1/30
 sourcedir 2/6
+spawnnamestarget 0/18
 srcbefore 0/4
 srccopy 0/10
 srcto 0/2
@@ -690,6 +695,7 @@ transferargs 0/2
 transfers 0/12
 typeargument 2/10
 typeend 0/2
+typeformalpos 0/8
 underlying 0/2
 variantfieldname 1/10
 variantselector 1/18
@@ -699,11 +705,12 @@ warnat 1/2
 warnpartialresult 0/22
 warnunreachable 0/18
 warnunusedlocals 1/24
-warnunwrittenvarparams 0/20
+warnunwrittenvarparams 0/28
 widenordinal 0/4
 writeboundname 0/2
 writedistincttypenote 2/18
 writekeyword 0/2
+writekwlit 1/4
 writekwword 1/4
 writenocopyreason 0/4
 writeordinalname 2/24

@@ -119,13 +119,13 @@ export ApTypes = (
   biRelease, spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut,
   spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend, spBind,
   spUnbind, spHalt, spSend, spGetTimeStamp, spPack, spUnpack, spPage, spExit,
-  spBreak, spContinue, readingImports, line, col, pool, poolLen, tokCount,
+  spBreak, spContinue, spWait, readingImports, line, col, pool, poolLen, tokCount,
   pos, depth, aborted, errorSeen, errorCount, progBlock, progModules,
   progModuleTail, progMainIndex, activeModules, msgOut, msgBuf, annotate,
   layoutHead, programSym, ircode, imports, importName, dumping, warnOn,
   dumpLayoutOpt, dumpDispatchOpt, dispatchHead, dispatchTail, enumHead,
   enumTail, chainHead, chainTail, tagHead, tagTail, curFile, curImportIdx,
-  mainTokBase, notingUses, notingStmts, mainFile, FileIndexOf, instDeclHead, intType, int64Type, canonTextType,
+  mainTokBase, notingUses, notingStmts, mainFile, FileIndexOf, instDeclHead, intType, int64Type, taskType, canonTextType,
   stringSchema, handleClosers, StrClear, StrAppend, Put, PutIrLit,
   ErrorAt, WarnAt, PoolAdd, WritePool, PoolIsWide, PoolIs, ReservedForeignName,
   PoolSame, PoolPut, InternWord, InternWide, InternWide2,
@@ -135,7 +135,7 @@ export ApTypes = (
   IsStringRep, IsOptional, IsFallible, IsHandleBirth,
   IsSlice, SliceOf, IsNumeric,
   IsArith, IsBoolean, IsChar, IsEnum, IsArray, IsRecord, IsPointer,
-  IsFile, IsHandle, IsChannel, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
+  IsFile, IsHandle, IsChannel, IsTask, IsOwned, IsOwnedPointer, IsAffine, IsTextFile, IsNil,
   IsSet, IsProcType, IsEmptySet, IsRestricted, Underlying, IsStructured,
   IsMemory, Protectable, IsOrdinal, IsCharArray, IsStringType,
   IsStringOrChar, IsOrdered, IsEquatable, SatisfiesCat, WriteCatName,
@@ -866,7 +866,19 @@ type
                    spExit's reason, and next to it for a second one: the three
                    of them are the only required procedures here that are a
                    transfer of control rather than an operation. }
-                 spBreak, spContinue);
+                 spBreak, spContinue,
+                 { AP 6.9.3.14's wait (ADR-0312): the join of one named
+                   activation, where AP 6.9.3.12.1's is the join of every
+                   activation a block commenced. A procedure and not a
+                   function because it has one outcome: a task either
+                   completes or the program does not go on.
+
+                   Appended for the reason the six above it were, and the
+                   reason is now one file rather than two: the AST dump prints
+                   a required procedure as its ordinal, so a constant put
+                   anywhere but the end renumbers every one after it and every
+                   golden under tests/dumps/ that names one. }
+                 spWait);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -1052,6 +1064,13 @@ type
       refusals arrive through ContainsFile without a call site being edited --
       the handle's own route (ADR-0174). }
     owns: boolean;
+    { AP 6.4.17 (ADR-0312): this handle-type is the required `task`, whose
+      closer is the runtime's join rather than a foreign name a program
+      wrote. A flag on tyHandle rather than a kind of its own, which is
+      IsChannel's shape and `owns`'s: what changes is what the value denotes,
+      and nothing about how a handle-variable is declared, released, moved or
+      lent. Everything AP 6.4.12 says about a handle is true of a task. }
+    isTaskType: boolean;
     { 6.4.7 and 6.4.8: the schema this type was produced from and the tuple it
       was produced with, nil and empty for every type written out in full.
       Sema interns by the pair, so "one tuple, one type" needs no rule in
@@ -1977,7 +1996,13 @@ type
         spArgs the actual-parameter-list, both what nkProcCall holds -- a
         separate kind rather than a flag on that one because what is emitted
         is not a call: it is an argument block, a copy of it, and a thread. }
-      nkSpawn:      (spAt, spLen: integer; spArgs: nodePtr; spSym: symPtr);
+      { spTarget is the task-variable of `spawn t := P(...)` (AP 6.9.3.12,
+        ADR-0312), and nil for the form that names no variable. It is a
+        variable-access and not a name, so `spawn ws[i] := Worker(c)` is what
+        a program pooling workers writes -- an array of task-variables being
+        an array of handles, which this language already had. }
+      nkSpawn:      (spAt, spLen: integer; spArgs, spTarget: nodePtr;
+                     spSym: symPtr);
       { csHasOtherwise, not `csOtherwise <> nil`: `otherwise` followed by
         nothing is an empty statement -- a legal way to say "and otherwise do
         nothing", which is exactly the case that must not trap. }
@@ -2416,6 +2441,10 @@ var
     a type object costs one record. It was conditional on nothing even while
     there were modes, so that no predicate naming it had to test one. }
   int64Type: typePtr;
+  { AP 6.4.17's required `task` type (ADR-0312) -- a shared singleton, as
+    every required type-identifier's is, so that name-equivalence makes two
+    task-variables the same type without a rule saying so. }
+  taskType: typePtr;
   { AP 6.4.15.7's result: a text-type with no capacity, as
     canonStringType is a variable-string with none. What `+` yields has
     to fit any target, so it carries no capacity to exceed and the
@@ -2714,6 +2743,12 @@ function IsHandle(t: typePtr): boolean;
   a second kind would be a parallel mechanism where a field does. `elem` is nil
   for every other handle, which is what makes the question answerable. }
 function IsChannel(t: typePtr): boolean;
+{ AP 6.4.17 (ADR-0312): the required `task` type, a handle whose value is one
+  activation. IsChannel and this are the two questions that tell the three
+  kinds of handle apart, and both are answered by a field rather than by a
+  kind, so a handle-variable's declaration, release and move need no arm for
+  either. }
+function IsTask(t: typePtr): boolean;
 
 { A file or a handle: the two owned things whose *value* lives in memory and
   therefore travels by address. IsMemory is what asks this, and it is why the
@@ -3502,6 +3537,7 @@ begin
   t^.handleAt := 0;
   t^.handleLen := 0;
   t^.owns := false;
+  t^.isTaskType := false;
   t^.schema := nil;
   t^.tuple := nil;
   t^.tupleTail := nil;
@@ -3669,6 +3705,9 @@ begin IsHandle := (t <> nil) and (t^.kind = tyHandle) end;
 
 function IsChannel;
 begin IsChannel := IsHandle(t) and (t^.elem <> nil) end;
+
+function IsTask;
+begin IsTask := IsHandle(t) and t^.isTaskType end;
 
 { A file or a handle: the two owned things whose *value* lives in memory and
   therefore travels by address. IsMemory is what asks this, and it is why the

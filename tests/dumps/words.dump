@@ -109,6 +109,7 @@ required required odd
 required required sqr
 required required abs
 required schema utf8
+required type task
 required type int64
 required type complex
 required type text

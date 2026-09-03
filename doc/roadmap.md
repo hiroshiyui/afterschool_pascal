@@ -106,7 +106,8 @@ shape to expect from here on:
 | A daily program wants | Why it waits |
 | --- | --- |
 | ~~**to give a task a handle**~~ | **Done** (ADR-0303), and the whole of what was missing was a *position*: `take` stood on the right of an assignment and nowhere else. A task formal may be a handle-type and the actual is `take(v)` — moved, where a channel is lent. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
-| **to wait for one task** | There is no `Task` variable, no select over several channels, and no timeout on a send or a receive. A block joins every task it spawned, and a program needing anything finer writes a second channel |
+| ~~**to wait for one task**~~ | **Done** (ADR-0312), and it cost a type and one statement because a handle already had every rule a name for an activation needs: `task` is a handle-type, `spawn t := P(x)` makes a variable name the activation, and `wait(t)` returns when it is complete. AP 6.9.3.12.1 is untouched — a block still joins everything it commenced, and `wait` only completes one of them earlier. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
+| **to wait for whichever comes first** | What the row above named and did not close. There is no select over several channels, so a task that must service a job queue and a shutdown signal still folds both into one channel; and there is no timeout on a `send`, a `receive` or a `wait`, so there is no way to give up. The second is not the small half: a `wait` that gave up would leave a program holding a task-variable whose activation is still running, and no clause here says what that is |
 | ~~**to send a string**~~ | **Done** (ADR-0302), and writing the case is what showed the reading was wrong twice over: `send` chose its path with `IsStructured`, which a variable-string is not, so the module did not assemble; and a string *value* is shorter than the element it goes into, so copying `esize` bytes read past it. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
 
 **And one shape with no client at all**, which is what is left of the FFI rows:
@@ -275,14 +276,16 @@ the first row here to close, the day after the chapter was written
   lines.
 
 - **Concurrency is one row short**, and it is in [What each landed feature
-  left open](#what-each-landed-feature-left-open): a task cannot be waited on
-  singly, and there is no select and no timeout. A task *can* now be handed a
-  socket (ADR-0303) and a stage *can* close the channel downstream of it
-  (ADR-0302). What is left is the observation that a single task's completion
-  is the next thing the first real server written with tasks will want, and
-  that a **channel of handles** is the shape behind both of the closed rows:
-  a task may be given a socket at the moment it starts and not afterwards, so
-  a fixed pool of workers taking connections off a queue is still unwritable.
+  left open](#what-each-landed-feature-left-open): there is no select over
+  several channels and no timeout on anything. A task *can* now be waited on
+  singly (ADR-0312), *can* be handed a socket (ADR-0303), and a stage *can*
+  close the channel downstream of it (ADR-0302) — the observation that a
+  single task's completion is the next thing the first real server written
+  with tasks will want was right, and closing it took a type and a statement.
+  What is left besides select and timeouts is that a **channel of handles** is
+  the shape behind all three of the closed rows: a task may be given a socket
+  at the moment it starts and not afterwards, so a fixed pool of workers
+  taking connections off a queue is still unwritable.
 
 - ~~**Four of twelve example programs collided with a library name on their
   first draft**~~ — **done** (ADR-0306), and moved to

@@ -4489,9 +4489,11 @@ Five things carry it.
   own sentence that a feature must be expressible in `seed/*.ll` or the seed is
   refreshed first.
 
-The mutation that is **not** caught is the join, and that is recorded rather
+The mutation that was **not** caught is the join, and it was recorded rather
 than papered over: every task in `tests/dialect/concurrency.pas` finishes
-before its block ends, so removing the join changes nothing observable.
+before its block ends, so removing the join changes nothing observable there.
+`tests/dialect/task_join.pas` closed that with ADR-0312 — see *Naming a task*
+below for why the observation had to be a file rather than a channel.
 
 ### What a release means to a channel (ADR-0302)
 
@@ -4537,6 +4539,63 @@ The lowering is AP 6.4.12.7's two calls with the argument block between them:
 the type's own closer, so the task's block releases what it was given. The join
 is *not* what makes this correct — a moved handle is the spawning activation's
 no longer — which is why one position carries two rules.
+
+### Naming a task, and waiting for it (ADR-0312)
+
+AP 6.4.17's task-type is a `tyHandle` carrying `isTaskType`, exactly as a
+channel-type is a `tyHandle` carrying an element type, so `IsTask` is
+`IsHandle` and a flag and every rule a name for an activation needs is a rule
+AP 6.4.12 already wrote: released by the block that declared it, released early
+by `release`, moved by `take`, affine, admissible as a task's formal, refused
+as an assignment source, as a comparison operand other than against `nil`, and
+as a function result. There is one task-type and not one per denoter, `task`
+being the whole of its denoter.
+
+**The two spawn forms are told apart by a scan that consumes nothing.** From
+the identifier after `spawn`, the parser reads through a selector — a `[`, a
+`.`, a `^` — looking for `:=`, and puts every token back. It is decidable with
+no symbol table because a procedure-identifier is followed by `(` or by a
+terminator and never by a selector, so `spawn P(x)`, `spawn P` and `spawn P;`
+read as they always did, and reading *through* a selector is what buys
+`spawn ws[i] := Worker(jobs)`, the statement a pool of workers is written with
+and the reason AP 6.9.3.12's grammar takes a variable-access rather than an
+identifier. The statement threatens that variable (§6.9.4 a) as an assignment
+does, so a `for` control-variable and a protected parameter are refused there
+by the rule that already refuses them.
+
+**The runtime is where the work was.** A block's task set holds a
+reference-counted `struct pas_task` rather than a bare `pthread_t`, because a
+named activation may be joined from two places — `wait` on the variable, or the
+block's own join under AP 6.9.3.12.1 — and `pthread_join` may be called once.
+The join is **claimed** under the record's mutex: the first arrival takes it,
+unlocks, joins and broadcasts on a condition variable, and a second arrival
+waits on that variable. That is what makes a second `wait(t)`, or a `wait` on
+an activation already complete, a statement with no effect rather than
+undefined behaviour. The **task-variable's closer drops a reference and does
+not join**: the block's set holds a reference of its own and joins, which is
+where the join already was, so a task-variable overwritten in a loop drops the
+previous reference while the set goes on naming both activations. Joining from
+the closer would have been the tidy place and is wrong on an ordering —
+AP 6.9.3.12.1 requires the join before *any* of the block's variables are
+released, and one handle's release is not ordered against another's.
+
+`wait` on an **empty** task-variable is Annex A.7's error with Annex A.7's
+message, as `send` on an empty channel-variable is: answering quietly would let
+a variable a program forgot to spawn into read as a task that finished.
+AP 6.9.3.12.1 is unchanged throughout, which is the point — `wait` takes no
+activation out of the block's set, it only completes one earlier, so waiting for
+one task and joining all of them are the same statement asked twice and
+ADR-0201's *a borrow cannot outlive the call* is untouched.
+
+`tests/dialect/task_join.pas` is the case that fails when the block-end join is
+removed, and it exists because the obvious observation cannot see one: a value
+the task **sent** has already been synchronised by the channel, so a test
+written that way passes with the join deleted. It observes the task's
+completion outside a channel instead — the task owns a file, writes to it, and
+its block closes the file when the block ends, so a program reading that file
+after the procedure returns is reading something only the join can have
+ordered. Its margin is a one-second sleep and not a construction that cannot
+race.
 
 ### The key capacity is the program's (ADR-0310)
 

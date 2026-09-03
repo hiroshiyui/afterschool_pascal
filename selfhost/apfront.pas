@@ -1634,7 +1634,7 @@ begin
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
     nkDefer: n^.dfIndex := 0;
-    nkSpawn: n^.spSym := nil;
+    nkSpawn: begin n^.spSym := nil; n^.spTarget := nil end;
     nkVariantArm: begin
       n^.vaTagType := nil;
       n^.vaVariants := nil;
@@ -1741,6 +1741,46 @@ begin
   if i > tokCount then
     i := tokCount;
   PeekKind := tok[i].kind
+end;
+
+{ AP 6.9.3.12 (ADR-0312): does this spawn-statement name a task-variable?
+  Asked with `pos` on the identifier after `spawn`, and it consumes nothing --
+  the parser has to know which of the two forms it is reading before it can
+  decide whether that identifier is the target or the task.
+
+  A variable-access is scanned by its selectors and the answer is whether `:=`
+  follows. That is decidable with no symbol table because the two forms differ
+  in a token: a procedure-identifier is followed by `(` or by a terminator,
+  and neither is a selector, so `spawn P(x)` stops at `(` and answers no.
+  Reading through the brackets is what buys `spawn ws[i] := Worker(c)`, and
+  they are counted rather than matched so that a subscript holding a set-value
+  or a second subscript does not end the scan early.
+
+  Every lookahead goes through PeekKind, which clamps at the last token, so
+  the scan cannot run off the end however unbalanced the source is. }
+function SpawnNamesTarget: boolean;
+var d, bracket: integer; scanning: boolean;
+begin
+  { The caller has already tested that the token here is an identifier -- it
+    is what told `spawn` apart from a program's own variable of that name --
+    so the scan starts past it rather than testing it again. A second test
+    would be a statement no corpus could reach. }
+  d := 1;
+  scanning := true;
+  while scanning do
+    if PeekKind(d) = tkCaret then d := d + 1
+    else if (PeekKind(d) = tkPeriod) and (PeekKind(d + 1) = tkIdent) then
+      d := d + 2
+    else if PeekKind(d) = tkLBracket then begin
+      bracket := 0;
+      repeat
+        if PeekKind(d) = tkLBracket then bracket := bracket + 1
+        else if PeekKind(d) = tkRBracket then bracket := bracket - 1;
+        d := d + 1
+      until (bracket = 0) or (PeekKind(d) = tkEof)
+    end
+    else scanning := false;
+  SpawnNamesTarget := PeekKind(d) = tkAssign
 end;
 
 function Accept(k: tokenKind): boolean;
@@ -3677,7 +3717,23 @@ begin
   if PoolIs(at, len, 'spawn    ') and (k = tkIdent) then begin
     s := NewNode(nkSpawn, l, c);
     s^.spArgs := nil;
+    s^.spTarget := nil;
     pos := pos + 1;
+    { AP 6.9.3.12 (ADR-0312): `spawn t := P(...)` names the activation, where
+      `spawn P(...)` leaves it to be joined with the rest of the block's. The
+      two are told apart by looking past a variable-access for `:=` --
+      SpawnNamesTarget does that and consumes nothing -- because the target is
+      a variable-access and not a name, and a procedure-identifier is followed
+      by `(` or by a terminator and never by a selector. So `spawn P(x)`,
+      `spawn P` and `spawn P;` are read exactly as they were. }
+    if SpawnNamesTarget then begin
+      ref := NewNode(nkVar, tok[pos].line, tok[pos].col);
+      ref^.vrAt := tok[pos].at;
+      ref^.vrLen := tok[pos].len;
+      pos := pos + 1;
+      s^.spTarget := ParseSelectors(ref);
+      Expect(tkAssign, ctxAssign)
+    end;
     s^.spAt := tok[pos].at;
     s^.spLen := tok[pos].len;
     pos := pos + 1;
@@ -16446,6 +16502,7 @@ begin
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'continue        ') then
     p^.pcStd := spContinue
   else if PoolIs(p^.pcAt, p^.pcLen, 'send     ') then p^.pcStd := spSend
+  else if PoolIs(p^.pcAt, p^.pcLen, 'wait     ') then p^.pcStd := spWait
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -16461,12 +16518,35 @@ begin
     a := a^.next
   end;
 
+  { AP 6.9.3.14's wait (ADR-0312): one task-variable, joined. It is a
+    variable and not an expression for `send`'s reason and `release`'s --
+    there is one activation and the statement acts on it -- and a task is the
+    only handle-type it takes, because joining is the only thing that can be
+    waited for. Waiting twice is not an error: the second is a statement with
+    no effect, which is what lets a program `wait` in a loop it may leave
+    early and let the block's own join cover the rest. }
+  if p^.pcStd = spWait then begin
+    if n <> 1 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''wait'' takes one task')
+    end
+    else if not IsTask(p^.pcArgs^.ntype) then begin
+      ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+      write('''wait'' takes a task and this is ');
+      WriteTypeName(p^.pcArgs^.ntype);
+      writeln
+    end
+    else if not IsDesignator(p^.pcArgs) then begin
+      ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+      writeln('''wait'' takes a task variable, so its argument must be one')
+    end
+  end
   { AP 6.9.3.13.1's send (ADR-0268): a channel variable and a value assignable
     to what it carries. The channel is a variable and not an expression for
     the reason `release`'s is -- there is one object and the statement acts on
     it -- and the value is copied, which is what makes the far side's read
     share nothing with this activation. }
-  if p^.pcStd = spSend then begin
+  else if p^.pcStd = spSend then begin
     if n <> 2 then begin
       ErrorAt(p^.line, p^.col);
       writeln('''send'' takes a channel and a value')
@@ -17633,6 +17713,39 @@ begin
   end;
   s^.spSym := sym;
   CheckArguments(sym, s^.spArgs, s^.line, s^.col);
+  { AP 6.9.3.12 (ADR-0312): the task-variable, where the statement names one.
+    It is checked *after* the actuals, so a spawn that is wrong in both places
+    reports both -- Sema accumulates, and the two are independent mistakes.
+
+    Threatened for `read`'s reason (6.9.4): the statement writes through it,
+    so a `for` control variable and a protected parameter are refused here by
+    the machinery that refuses them everywhere else. }
+  if s^.spTarget <> nil then begin
+    CheckExpr(s^.spTarget);
+    { Whether it is a variable is asked *before* what type it has, which is
+      the order an assignment-statement asks in and is not merely tidiness: a
+      constant or a function is refused here whatever its type, and the only
+      expression of the task-type that is not a designator is `take`, which
+      the parser cannot route to this position. Asking the type first would
+      make the refusal below a message no program could produce. }
+    if s^.spTarget^.ntype <> nil then
+      if not IsDesignator(s^.spTarget) then begin
+        ErrorAt(s^.spTarget^.line, s^.spTarget^.col);
+        writeln('a spawn-statement names a task variable, so what stands ',
+                'before '':='' must be one')
+      end
+      else if not IsTask(s^.spTarget^.ntype) then begin
+        ErrorAt(s^.spTarget^.line, s^.spTarget^.col);
+        write('a spawn-statement names a task variable, and this is ');
+        WriteTypeName(s^.spTarget^.ntype);
+        writeln
+      end
+      { 6.9.4 a): the statement writes through it, so it is threatened
+        exactly as an assignment's target is, and Threatened both records the
+        threat and reports where the variable may not take one. }
+      else if Threatened(s^.spTarget) then
+        writeln('a spawn-statement cannot name it')
+  end;
   { The block that spawns is the block that joins, so it needs a task-set slot
     and CodeGen needs to know which blocks have one. Recorded on the routine
     for the same reason a defer-statement is (ADR-0175): the emitter reads a
@@ -18222,6 +18335,9 @@ begin
             PoolIsWide(s^.pcAt, s^.pcLen, 'continue        ') or
             { AP 6.9.3.13's send, behind `sym = nil` like every other one. }
             PoolIs(s^.pcAt, s^.pcLen, 'send     ') or
+            { AP 6.9.3.14's wait (ADR-0312), and for the same reason: a
+              program that declares its own `wait` keeps it. }
+            PoolIs(s^.pcAt, s^.pcLen, 'wait     ') or
             IsRequiredProc(s^.pcAt, s^.pcLen)) then
           CheckStdProc(s)
         else if sym = nil then begin
@@ -22203,6 +22319,11 @@ begin
     Pascal program may define one of this name -- so it is a required
     identifier and not a word-symbol. }
   RequiredType('int64    ', int64Type);
+  { AP 6.4.17 (ADR-0312). A required type-identifier and not a word-symbol,
+    which is `int64`'s route exactly (ADR-0128) -- so a program that has
+    declared its own `task` keeps it, and `task P;` in a declaration-part is
+    still decided by position and not by this name. }
+  RequiredType('task     ', taskType);
 
   { AP 6.4.15.1: "`utf8` shall be a required identifier denoting a schema of
     one discriminant, whose identifier shall be `capacity`."
@@ -22896,6 +23017,14 @@ var p, m: nodePtr; k: integer;
 begin
   intType := NewType(tyInteger);
   int64Type := NewType(tyInt64);
+  { AP 6.4.17 (ADR-0312): the required `task` type. A handle whose closer is
+    the runtime's join-and-drop, written here as an ordinary foreign name so
+    that nothing in the emitter needs an arm for it -- `pas_` is already
+    reserved against a program's own `external`, so the spelling cannot
+    collide with one a program wrote (ADR-0144). }
+  taskType := NewType(tyHandle);
+  taskType^.isTaskType := true;
+  InternWide('pas_task_drop   ', taskType^.handleAt, taskType^.handleLen);
   realType := NewType(tyReal);
   complexType := NewType(tyComplex);
   { ISO/IEC 10206:1991 6.4.3.3.1's canonical-string-type: the type of every
@@ -23770,6 +23899,7 @@ begin
       symbol the name already names. }
     nkSpawn: begin
       write('spawn ');
+      if n^.spTarget <> nil then write('<- ');
       WritePool(n^.spAt, n^.spLen);
       if annotate then begin
         write(' -> ');
@@ -23777,6 +23907,13 @@ begin
       end;
       At(n^.line, n^.col);
       level := level + 1;
+      if n^.spTarget <> nil then begin
+        Pad;
+        writeln('task');
+        level := level + 1;
+        DumpExpr(n^.spTarget);
+        level := level - 1
+      end;
       Pad;
       writeln('args');
       level := level + 1;

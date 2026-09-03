@@ -151,14 +151,14 @@ EmitCall:builtinKind:4 names 18 of 46
 # exit is taken by an `if` before it too, and is still *named* by the arm that
 # says so, which is what keeps this count one short of the whole rather than
 # two (ADR-0177).
-EmitStdProc:stdProcKind:1 names 20 of 23
+EmitStdProc:stdProcKind:1 names 20 of 24
 
 # The two below it are nested inside that case's own arms -- one in the
 # `spReset, spRewrite, spGet, spPut, spUpdate, spExtend` arm and one in the
 # three-seek arm -- and each names the whole enumeration except the four that
 # no arm of the outer case can have narrowed to.
-EmitStdProc:stdProcKind:2 names 15 of 23
-EmitStdProc:stdProcKind:3 names 15 of 23
+EmitStdProc:stdProcKind:2 names 15 of 24
+EmitStdProc:stdProcKind:3 names 15 of 24
 
 # --- constants nothing dispatches on --------------------------------------
 #
@@ -442,6 +442,15 @@ CheckTaskFormals:symKind:1 chains 2 of 12
 # *element type* to choose between an address and a temporary, which is a
 # test on a type rather than on the tag. AP 6.9.3.13, ADR-0268.
 stdProcKind:spSend unused
+
+# --- and so is wait, in the same chain and for a related reason -----------
+#
+# AP 6.9.3.14 (ADR-0312). `wait` sits in the if-chain beside `send` because
+# its arm has to lend the handle before it can call anything, which is two
+# instructions before the dispatch and not one arm of it. Sema's own
+# dispatch on it is an if-chain for the same reason: the checks are on the
+# argument's *type*, and a task is one handle-type among three.
+stdProcKind:spWait unused
 Mentions:nodeKind:1 chains 3 of 64
 Determine:nodeKind:1 chains 3 of 64
 

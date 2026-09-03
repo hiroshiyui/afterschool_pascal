@@ -1,0 +1,5 @@
+../../lib/passtrvec.pas
+../../lib/dialect/paserror.pas
+../../lib/dialect/pasfs.pas
+../../lib/dialect/passtream.pas
+../../lib/dialect/pasprocess.pas

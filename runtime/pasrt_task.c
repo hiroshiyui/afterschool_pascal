@@ -230,6 +230,80 @@ int pas_chan_receive(void *p, void *v) {
   return 1;
 }
 
+/* --- a task -------------------------------------------------------------
+ *
+ * AP 6.4.17 (ADR-0312). One activation, and the record that says whether it
+ * has been joined. It exists because a *name* for one activation does, and it
+ * is reference counted for the channel's reason and not for a lifetime one:
+ * the block that spawned the task always holds a reference until it joins
+ * (AP 6.9.3.12.1), so nothing here can dangle. What the count buys is that a
+ * task-variable may be released, overwritten in a loop, or moved into another
+ * task, and the set the block joins goes on naming the same activation.
+ *
+ * **The join is claimed, not repeated.** `pthread_join` may be called once for
+ * a thread and this record may be reached from two places -- `wait` on the
+ * variable and the block's own join -- so the first to arrive takes `claimed`
+ * and the others wait on `done`. That is what makes the second `wait(t)` a
+ * statement with no effect rather than undefined behaviour, and it is the
+ * whole of the concurrency in this type.
+ */
+struct pas_task {
+  pthread_mutex_t m;
+  pthread_cond_t donec;
+  pthread_t tid;
+  int refs;
+  int claimed, done;
+};
+
+static void pas_task_drop_ref(struct pas_task *t) {
+  int last;
+  pthread_mutex_lock(&t->m);
+  t->refs--;
+  last = t->refs == 0;
+  pthread_mutex_unlock(&t->m);
+  if (last) {
+    pthread_mutex_destroy(&t->m);
+    pthread_cond_destroy(&t->donec);
+    free(t);
+  }
+}
+
+/* Wait for the activation to be complete. Claiming the join under the mutex
+ * and releasing it *before* `pthread_join` is what keeps a second waiter from
+ * holding the lock for the whole of the task's remaining run. */
+static void pas_task_join(struct pas_task *t) {
+  pthread_mutex_lock(&t->m);
+  if (!t->claimed) {
+    t->claimed = 1;
+    pthread_mutex_unlock(&t->m);
+    pthread_join(t->tid, NULL);
+    pthread_mutex_lock(&t->m);
+    t->done = 1;
+    pthread_cond_broadcast(&t->donec);
+  } else
+    while (!t->done)
+      pthread_cond_wait(&t->donec, &t->m);
+  pthread_mutex_unlock(&t->m);
+}
+
+/* AP 6.9.3.14's wait. The compiler has already lent the handle, so an empty
+ * task-variable trapped before this was reached. */
+void pas_task_wait(void *p) {
+  pas_task_join(p);
+}
+
+/* The task-type's closer (AP 6.4.12.1), so a task-variable is released by the
+ * block that declared it and by `release` before that. It drops the reference
+ * and does **not** join: the block's own set holds a reference too and joins
+ * every activation it commenced before it releases anything of its own
+ * (AP 6.9.3.12.1), so the join has a place already and this is not it.
+ * Answers 0 because a closer answers an int and there is nothing to report. */
+int pas_task_drop(void *p) {
+  if (p)
+    pas_task_drop_ref(p);
+  return 0;
+}
+
 /* --- a task set ----------------------------------------------------------
  *
  * One slot per *block* that spawns, not one per task, which is the defer
@@ -241,9 +315,13 @@ int pas_chan_receive(void *p, void *v) {
  * That ordering is the whole safety argument: a task's body is a nested
  * routine reached through a static link into this frame, and it is lent
  * whatever channels it was given, so it must not outlive either.
+ *
+ * It holds `struct pas_task *` rather than a `pthread_t` since ADR-0312: a
+ * named task is joined by whichever of the two arrives first, and a bare
+ * thread identifier has nowhere to record that.
  */
 struct pas_taskset {
-  pthread_t *tids;
+  struct pas_task **tasks;
   int n, cap;
 };
 
@@ -252,7 +330,7 @@ _Static_assert(sizeof(struct pas_taskset) <= PAS_TASKSET_SIZE,
 
 void pas_tasks_init(void *slot) {
   struct pas_taskset *s = slot;
-  s->tids = NULL;
+  s->tasks = NULL;
   s->n = 0;
   s->cap = 0;
 }
@@ -290,9 +368,18 @@ void *pas_tasks_alloc(long long size) {
   return p;
 }
 
-void pas_tasks_spawn(void *slot, void *fn, void *args) {
+/* The spawn, in the two forms AP 6.9.3.12 admits. The unnamed one leaves the
+ * set holding the only reference; the named one answers the record with a
+ * second reference, for the task-variable that is about to hold it.
+ *
+ * The record is created and linked into the set *before* the thread exists,
+ * so a task that finishes immediately cannot be joined by a set that has not
+ * yet heard of it. */
+static struct pas_task *pas_tasks_start(void *slot, void *fn, void *args,
+                                        int refs) {
   struct pas_taskset *s = slot;
-  struct pas_taskarg *t;
+  struct pas_taskarg *a;
+  struct pas_task *t;
   if (s->n == s->cap) {
     int want;
     /* Doubling is the growth, and the double is what overflows. Unreachable
@@ -301,29 +388,56 @@ void pas_tasks_spawn(void *slot, void *fn, void *args) {
     if (s->cap > INT_MAX / 2)
       pas_runtime_error("too many tasks spawned by one block");
     want = s->cap ? s->cap * 2 : 8;
-    pthread_t *grown = realloc(s->tids, (size_t)want * sizeof *grown);
+    struct pas_task **grown = realloc(s->tasks, (size_t)want * sizeof *grown);
     if (!grown)
       pas_runtime_error("out of memory spawning a task");
-    s->tids = grown;
+    s->tasks = grown;
     s->cap = want;
   }
   t = malloc(sizeof *t);
   if (!t)
     pas_runtime_error("out of memory spawning a task");
-  t->fn = (void (*)(void *))fn;
-  t->args = args;
-  if (pthread_create(&s->tids[s->n], NULL, pas_task_start, t) != 0)
+  pthread_mutex_init(&t->m, NULL);
+  pthread_cond_init(&t->donec, NULL);
+  t->refs = refs;
+  t->claimed = 0;
+  t->done = 0;
+  a = malloc(sizeof *a);
+  if (!a)
+    pas_runtime_error("out of memory spawning a task");
+  a->fn = (void (*)(void *))fn;
+  a->args = args;
+  s->tasks[s->n] = t;
+  if (pthread_create(&t->tid, NULL, pas_task_start, a) != 0)
     pas_runtime_error("a task could not be started");
   s->n++;
+  return t;
 }
 
+void pas_tasks_spawn(void *slot, void *fn, void *args) {
+  pas_tasks_start(slot, fn, args, 1);
+}
+
+/* AP 6.9.3.12's `spawn t := P(...)` (ADR-0312). Two references: the set's,
+ * which the join drops, and this one, which the task-variable's closer does. */
+void *pas_tasks_spawn_named(void *slot, void *fn, void *args) {
+  return pas_tasks_start(slot, fn, args, 2);
+}
+
+/* AP 6.9.3.12.1's join, and it is where a block's activation ends. A task
+ * `wait` has already joined is complete, so `pas_task_join` returns at once
+ * and the reference this set holds is dropped exactly as any other's is --
+ * which is what makes waiting for one task and joining all of them the same
+ * statement asked twice rather than two mechanisms. */
 void pas_tasks_join(void *slot) {
   struct pas_taskset *s = slot;
   int i;
-  for (i = 0; i < s->n; i++)
-    pthread_join(s->tids[i], NULL);
-  free(s->tids);
-  s->tids = NULL;
+  for (i = 0; i < s->n; i++) {
+    pas_task_join(s->tasks[i]);
+    pas_task_drop_ref(s->tasks[i]);
+  }
+  free(s->tasks);
+  s->tasks = NULL;
   s->n = 0;
   s->cap = 0;
 }
