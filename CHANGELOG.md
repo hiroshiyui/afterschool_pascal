@@ -56,6 +56,15 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **`PasJson` writes the shortest number that reads back as the same value**
+  (ADR-0309). `0.75` came out as `7.500000000000E-01` — valid JSON, and
+  §6.9.3.4.1's default real output arriving unchanged — and now comes out as
+  `0.75`. The writer renders at a precision and reads its own output back with
+  `readstr`, keeping the first spelling that returns the value it started
+  from; the point goes where ECMAScript's `Number::toString` puts it, so `10`
+  is `10` and `1e-7` is `1E-7`. A whole number is unaffected: `3` is still `3`
+  and never `3.0`. `examples/json_pretty.out` and `tests/dialect/lib_json.out`
+  move with it.
 - **A source named with no directory finds its neighbours** (ADR-0308).
   ADR-0244's first search rule is the source's own directory, and `SourceDir`
   answered the empty string for a name with no `/` in it, which `AddPath`

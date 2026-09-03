@@ -317,3 +317,4 @@ the alternatives that were rejected and why.
 | [0306](0306-a-message-does-not-name-a-placeholder.md) | A message does not name a placeholder type | Accepted |
 | [0307](0307-dispose-is-what-releases-an-owned-pointer.md) | `dispose` is what releases an owned pointer | Accepted |
 | [0308](0308-the-directory-a-bare-name-is-in.md) | The directory a bare name is in | Accepted |
+| [0309](0309-the-shortest-number-that-reads-back.md) | The shortest number that reads back | Accepted |

@@ -1,0 +1,8 @@
+adr: 0309
+file: lib/dialect/pasjson.pas
+kills: lib_json_number
+why: The round-trip test removed, so the first spelling the search produces is kept whatever it reads back as. Fifteen digits is right for almost every value, which is the point -- the golden's `0.1 + 0.2 -> {"n":0.30000000000000004} reads=TRUE` becomes `{"n":0.3} reads=FALSE`, a different double written with no complaint from anything else in the suite. It is the claim of ADR-0309 and not the spelling: the mutant still turns 0.75 into 0.75.
+--- old
+      if y = x then begin
+--- new
+      if true then begin

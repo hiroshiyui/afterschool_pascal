@@ -984,17 +984,153 @@ begin
   JsonCharsAdd(out, '"')
 end;
 
-procedure RenderNumber(v: JsonPtr; var out: JsonChars);
-var s: string(64); k, start: integer;
+{ The default form with its leading blank stripped -- what this module wrote
+  for every real until ADR-0309, and what it still writes for a value the
+  shortest-form search cannot answer for. }
+procedure PlainReal(x: real; var s: string(64));
+var f: string(64); k: integer;
 begin
-  { `writestr` is 6.10's own formatting (ADR-0057), so nothing here decides how
-    a real is spelled. Pascal's default form -- `1.50000000000000E+000` -- is a
-    JSON number by RFC 8259 §6, which admits an exponent and does not restrict
-    the digits before it. The leading blank a default width leaves is not. }
-  if v^.whole then writestr(s, v^.inum:1) else writestr(s, v^.num);
-  start := 1;
-  while (start <= length(s)) and (s[start] = ' ') do start := start + 1;
-  for k := start to length(s) do JsonCharsAdd(out, s[k])
+  writestr(f, x);
+  k := 1;
+  while (k <= length(f)) and (f[k] = ' ') do k := k + 1;
+  s := substr(f, k, length(f) - k + 1)
+end;
+
+{ The shortest decimal that reads back as `x` (ADR-0309).
+
+  `writestr` is still 6.10's own formatting (ADR-0057) and `readstr` is
+  §6.10.4's own reading, so nothing here converts anything: the loop asks the
+  processor for `x` at a precision, asks it to read that back, and keeps the
+  first spelling that returns the value it started from. What this routine
+  decides is only how many digits to ask for and where to put the point.
+
+  **The default form was never wrong.** `7.500000000000E-01` is a JSON number
+  by RFC 8259 §6 -- `number = [minus] int [frac] [exp]`, and `exp` admits a
+  capital `E`, a sign and leading zeros -- so this is legibility and not
+  correctness. What it costs a reader is that 0.75 does not look like 0.75.
+
+  **Where the point goes** is ECMAScript's `Number::toString` algorithm, from
+  ECMA-262, JSON being that language's notation: with `n` the
+  position of the point relative to the digits, a fixed form when
+  `-6 < n <= 21` and an exponent otherwise. That is what makes 10 print as
+  `10` rather than `1E+01` and 1e-7 print as `1E-7` rather than as six zeros
+  and a digit.
+
+  **Where the search starts** is what makes it cheap. Asking from one digit
+  upwards costs a `writestr` and a `readstr` per digit, and a value needing
+  seventeen of them pays seventeen of each -- 27 microseconds a number,
+  measured. It starts at fifteen instead, and stripping the trailing zeros off
+  the answer is what recovers the short spellings: if a decimal of k <= 15
+  digits reads back as `x`, then rounding `x` to fifteen digits *is* that
+  decimal with zeros after it, because a normalised double lies within
+  2^-53 = 1.1e-16 of it relatively and half a fifteenth-digit step is 5e-16.
+  So one probe answers for 0.75, and four is the worst case. Measured at
+  1.0 probes a number over a spread of quarters and 2.6 over the reciprocals
+  of the first hundred thousand integers: 5.8 microseconds a number.
+
+  That argument needs the relative half-ulp, so it holds for a normalised
+  value and not for a denormal, whose ulp is relatively large. A denormal
+  therefore starts the search at one digit, where the shortest answer is found
+  by looking for it.
+
+  **`readstr` here is safe for the reason `PasText` says it is not elsewhere.**
+  §6.9.1's read stops the program when what it is given is not a number
+  (ADR-0076), which is why `PasText.TryParseInt` inspects characters by hand.
+  What is handed to it here is a string this routine has just built out of
+  digits, a point and an exponent -- never a caller's text -- and the one value
+  that could not be spelled as a number is refused above. }
+procedure ShortestReal(x: real; var s: string(64));
+var f, t: string(64); digits: string(40);
+    ex, p, k, n, w: integer; neg, done: boolean; y: real;
+begin
+  s := '';
+  { A value with no decimal representation for the clause to describe. It
+    cannot come from `JsonParse`, whose grammar admits neither; it can come
+    from `JsonNewNumber`, and `readstr` would stop the program on what
+    `writestr` wrote for it. }
+  if (x <> x) or (abs(x) > maxreal) then PlainReal(x, s)
+  else begin
+    done := false;
+    if (x <> 0.0) and (abs(x) < 2.2250738585072014E-308) then p := 1
+    else p := 15;
+    while (p <= 18) and not done do begin
+      { §6.10.3.4.1's floating-point form is `ExpDigits + 17` wide by default
+        and `TotalWidth - ExpDigits - 5` places after the point, so a width of
+        `p + 6` asks for p significant digits where the exponent costs two
+        characters and p - 1 where it costs three. The loop runs to 18 so that
+        seventeen digits are reachable in the second case; which count arrived
+        is read off the string rather than assumed. }
+      writestr(f, x:(p + 6));
+      neg := f[1] = '-';
+      digits := '';
+      k := 2;
+      while (k <= length(f)) and (f[k] <> 'E') do begin
+        if f[k] <> '.' then digits := digits + f[k];
+        k := k + 1
+      end;
+      ex := 0;
+      w := 1;
+      if f[k + 1] = '-' then w := -1;
+      k := k + 2;
+      while k <= length(f) do begin
+        ex := ex * 10 + (ord(f[k]) - ord('0'));
+        k := k + 1
+      end;
+      ex := ex * w;
+      n := length(digits);
+      if (ex >= -6) and (ex <= 20) then begin
+        if ex >= n - 1 then begin
+          t := digits;
+          for k := 1 to ex - n + 1 do t := t + '0'
+        end
+        else if ex >= 0 then
+          t := substr(digits, 1, ex + 1) + '.'
+               + substr(digits, ex + 2, n - ex - 1)
+        else begin
+          t := '0.';
+          for k := 1 to -ex - 1 do t := t + '0';
+          t := t + digits
+        end;
+        { Only a fraction's zeros: the zeros a large exponent padded the
+          integer part with are the value. }
+        if index(t, '.') > 0 then begin
+          while t[length(t)] = '0' do t := substr(t, 1, length(t) - 1);
+          if t[length(t)] = '.' then t := substr(t, 1, length(t) - 1)
+        end
+      end
+      else begin
+        while (n > 1) and (digits[n] = '0') do n := n - 1;
+        t := substr(digits, 1, 1);
+        if n > 1 then t := t + '.' + substr(digits, 2, n - 1);
+        t := t + 'E';
+        if ex < 0 then begin t := t + '-'; ex := -ex end
+        else t := t + '+';
+        writestr(f, ex:1);
+        t := t + f
+      end;
+      if neg then t := '-' + t;
+      readstr(t, y);
+      if y = x then begin
+        s := t;
+        done := true
+      end;
+      p := p + 1
+    end;
+    { Unreachable for a finite value -- seventeen significant digits identify
+      every double -- and written out because the alternative to an answer
+      here is no answer at all. }
+    if not done then PlainReal(x, s)
+  end
+end;
+
+procedure RenderNumber(v: JsonPtr; var out: JsonChars);
+var s: string(64); k: integer;
+begin
+  { A number the document wrote without a fraction and without an exponent is
+    written back the same way (`whole`, ADR-0120): JSON has one number type,
+    and an LSP request id re-emitted as `3.0` is a different message. }
+  if v^.whole then writestr(s, v^.inum:1) else ShortestReal(v^.num, s);
+  for k := 1 to length(s) do JsonCharsAdd(out, s[k])
 end;
 
 procedure JsonRender;

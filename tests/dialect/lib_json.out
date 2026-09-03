@@ -5,7 +5,7 @@ pi= 3.50 pi as int=-1
 list=1 2 3 
 s bytes=9 code=0 [2]="
 absent kind=0 int=-1
-render={"id":7,"ok":true,"none":null,"pi":3.500000000000E+00,"list":[1,2,3],"s":"a\"b\\c\tdé"}
+render={"id":7,"ok":true,"none":null,"pi":3.5,"list":[1,2,3],"s":"a\"b\\c\tdé"}
 built={"jsonrpc":"2.0","id":2,"params":[10,false,null]}
 long ok=TRUE len=300
 trailing comma ok=FALSE cause=not of the expected form
