@@ -396,6 +396,20 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**Nothing enumerates this tree's sidecar conventions, and the tools that read
+them drift apart** (ADR-0311). `.components`, `.importpath`, `.importenv`,
+`.opt`, `.in`, `.err`, `.warn`, `.epoch`, `.status`, `.flags`, `.dump` and
+`.workspace` are read by `tests/run_test.sh`, `selfhost/irtest.sh`,
+`tests/dumps/run.sh`, `lsp/run.sh`, CMake, `lsp/pasls.pas` and several gates,
+and no list says which reader honours which. `.importpath` was added to the
+corpus by ADR-0244, grew seven users with ADR-0295 and was unread by the
+language server until somebody opened one of those seven programs in an
+editor — 21 diagnostics, all false, on a program that compiles. What would
+close this is a gate reading each convention's readers, and nobody has
+designed one; what makes it a blind spot rather than an oversight is that
+every oracle here agreed, each reader being correct about the sidecars it
+does read.
+
 **Nothing checks that a quick fix compiles** (ADR-0300). The language server
 offers two edits — delete an unreachable statement, add `protected` to a
 formal-parameter-section — and the argument that each is safe is a reading of

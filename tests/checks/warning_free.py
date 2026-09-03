@@ -111,6 +111,18 @@ def compile_one(pascalc: Path, root: Path, name: str, out: Path):
     args = [str(pascalc), name, "-o", str(out)]
     for p in IMPORT_PATHS:
         args += ["--import-path", str(root / p)]
+    # ...and the source's own `.importpath`, ADR-0244's sidecar, one directory
+    # a line relative to the source (ADR-0311). The fixed list above is where
+    # this tree's library lives and cannot know where a fixture's neighbour
+    # does. This gate is the third reader of that sidecar after
+    # `tests/run_test.sh` and `lsp/pasls.pas`, and it was the third to be
+    # told; `doc/sop.md` §7 carries what that costs.
+    sidecar = (root / name).with_suffix(".importpath")
+    if sidecar.exists():
+        for line in sidecar.read_text().splitlines():
+            line = line.strip()
+            if line:
+                args += ["--import-path", str((sidecar.parent / line).resolve())]
     r = subprocess.run(args, cwd=root, capture_output=True, text=True,
                        encoding="latin-1")
     return r.returncode, (r.stdout + r.stderr)

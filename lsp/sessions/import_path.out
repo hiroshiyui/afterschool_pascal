@@ -1,0 +1,7 @@
+Content-Length: -
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"referencesProvider":true,"renameProvider":{"prepareProvider":true},"completionProvider":{"resolveProvider":false},"codeActionProvider":{"codeActionKinds":["quickfix"]},"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/importclient/asks.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","id":2,"result":null}

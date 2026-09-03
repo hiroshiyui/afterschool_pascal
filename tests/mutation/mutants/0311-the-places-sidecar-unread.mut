@@ -1,0 +1,8 @@
+adr: 0311
+file: lsp/pasls.pas
+kills: lsp-server
+why: The call guarded away, so a document carrying a `.importpath` sidecar reaches the compiler without the directories it names and every imported name is undeclared. It is the state the server was in before this record: a wall of diagnostics about names that are there, on seven of the twelve programs in `examples/`. The `import_path` session is the only one that can see it -- every other session names its components.
+--- old
+  if ReadImportPaths(base + '.importpath', paths) then
+--- new
+  if false and ReadImportPaths(base + '.importpath', paths) then

@@ -319,3 +319,4 @@ the alternatives that were rejected and why.
 | [0308](0308-the-directory-a-bare-name-is-in.md) | The directory a bare name is in | Accepted |
 | [0309](0309-the-shortest-number-that-reads-back.md) | The shortest number that reads back | Accepted |
 | [0310](0310-the-key-capacity-is-the-programs.md) | The key capacity is the program's | Accepted |
+| [0311](0311-the-places-a-document-looks.md) | The places a document looks | Accepted |

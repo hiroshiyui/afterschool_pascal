@@ -44,9 +44,18 @@ named after it answers first; otherwise the workspace the client named at
 `initialize` is searched for one that names the file. Without this the compiler
 is handed a module alone and reports every name it imports as undeclared —
 21 171 diagnostics for `selfhost/apfront.pas` — so a project that does not use
-the convention gets no imports and that noise back. Resolving an interface name
-to a file, which would need no sidecar at all, is a compiler feature this
-project does not have.
+the convention gets no imports and that noise back.
+
+It also reads **`.importpath`**, ADR-0244's other sidecar (ADR-0311): one
+directory a line, relative to the sidecar's own directory, passed on as
+`--import-path` so the *compiler* resolves the interface name. The two are
+different claims and combine — `.components` names the files this document
+follows and `.importpath` names the places to look for the rest — and a
+document may carry both. Unlike `.components` it is read **only** from beside
+the document and named after it, with no workspace walk: a sidecar naming
+files can say whether it is about this file, and a list of directories names
+nobody, so a walk would hand one document another's search path.
+`.importenv` is not read, and ADR-0311 says why.
 
 The scratch file exists because a compiler reads a file and an editor holds a
 buffer that has never been saved — which is the whole reason a language server
@@ -300,7 +309,7 @@ checkout**, which is why the two tools are the ones a shell cannot do:
 | tool | what it answers |
 | --- | --- |
 | `outline` | every name a source declares, with kind, position and nesting, indented. Answers for a file that does not compile, because `--dump-symbols` stops after the parse |
-| `diagnostics` | what the compiler says about a source, one diagnostic to a line, with imports resolved from `.components` |
+| `diagnostics` | what the compiler says about a source, one diagnostic to a line, with imports resolved from `.components` and `.importpath` |
 
 Both take a `path` to a `.pas` file, absolute or relative to the directory the
 server was started in — MCP has no `rootUri` to be told, so that directory is

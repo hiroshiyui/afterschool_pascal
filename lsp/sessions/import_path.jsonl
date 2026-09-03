@@ -1,0 +1,18 @@
+# A document whose imports are resolved by a *place* and not by a list of
+# files (ADR-0244, ADR-0311). `asks.pas` names no component and could not: the
+# module it imports sits in a sibling directory, and what says where to look is
+# the `.importpath` sidecar beside it -- the other half of `.components`, and
+# the half the server did not read until this session existed.
+#
+# The evidence is an empty `diagnostics` array. Without the sidecar reaching
+# the compiler the server publishes a diagnostic for `Greeting` and one for
+# every name it exports, which is the wall of false errors that opening any of
+# the seven `examples/` programs produced.
+
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": "file://%ROOT%", "capabilities": {"general": {"positionEncodings": ["utf-8"]}}}}
+
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file://%ROOT%/lsp/sessions/workspace/importclient/asks.pas", "languageId": "pascal", "version": 1, "text": "{ The document a person opens. It names no component and never could: the\n  module it imports is resolved by ADR-0244's search, from the directory the\n  `.importpath` sidecar beside this file names. Without that sidecar reaching\n  the compiler, every line below is a diagnostic about a name that is there. }\nprogram asks(output);\nimport Greeting;\nbegin\n  writeln(Answer:1)\nend.\n"}}}
+
+{"jsonrpc": "2.0", "id": 2, "method": "shutdown"}
+
+{"jsonrpc": "2.0", "method": "exit"}

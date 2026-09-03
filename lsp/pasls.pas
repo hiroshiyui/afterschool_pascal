@@ -683,6 +683,50 @@ begin
   end
 end;
 
+{ The `--import-path` words from a `name.importpath` sidecar: one directory a
+  line, relative to the sidecar's own directory, which is how `run_test.sh`
+  reads the same file.
+
+  **It is the other half of `.components` and a different question** (ADR-0244).
+  That file names the *files* to translate and this one names the *places* to
+  look, so a document with one is asserting that the compiler finds what it was
+  never told about -- and the flag hands the question to the compiler rather
+  than to a second reader of Pascal living here, which is what the comment above
+  `ReadSidecar` asks for.
+
+  **Only the sidecar beside the document and named after it is read, and there
+  is no walk.** `.components` can be searched for because it names its target,
+  so a sidecar found anywhere can say whether it is about this file; a list of
+  directories names nobody, and a walk would hand one document another's search
+  path. }
+function ReadImportPaths(sidecar: PathName; var words: CommandLine): boolean;
+var f: text;
+    b: BindingType;
+    line, full: PathName;
+begin
+  ReadImportPaths := false;
+  words := '';
+  b := binding(f);
+  b.name := sidecar;
+  bind(f, b);
+  if not binding(f).bound then exit(false);
+  reset(f);
+  while not eof(f) do begin
+    readln(f, line);
+    if line <> '' then begin
+      full := Resolve(DirOf(sidecar), line);
+      { ADR-0235's bound again: a command line that would not fit is one the
+        compiler would refuse anyway, and the earlier directories are the half
+        a reader is more likely to want. }
+      if length(words) + length(full) + 18 <= CommandMax then begin
+        words := words + ' --import-path ''' + full + '''';
+        ReadImportPaths := true
+      end
+    end
+  end;
+  unbind(f)
+end;
+
 { Look for a sidecar naming `target`, below `dir`. Files before directories,
   so a sidecar in this directory answers before one further down, and both
   lists sorted so that a workspace with two candidates answers the same way
@@ -733,20 +777,34 @@ end;
 
 { The `--import` words for a document, or none. }
 function ImportsFor(target: PathName; var words: CommandLine): boolean;
-var own: PathName;
+var base: PathName;
+    paths: CommandLine;
     i: integer;
+    found: boolean;
 begin
   words := '';
   if target = '' then exit(false);
-  { A sidecar beside the file and named after it answers first: it is the one
-    whose author meant *this* file, and it is what run_test.sh would read. }
   i := length(target);
   while (i > 0) and (target[i] <> '.') and (target[i] <> '/') do i := i - 1;
-  if (i > 0) and (target[i] = '.') then own := target[1..i - 1] + '.components'
-  else own := target + '.components';
-  if Exists(own) then exit(ReadSidecar(own, target, true, words));
-  if rootPath = '' then exit(false);
-  ImportsFor := WalkFor(rootPath, 0, target, words)
+  if (i > 0) and (target[i] = '.') then base := target[1..i - 1]
+  else base := target;
+
+  { A sidecar beside the file and named after it answers first: it is the one
+    whose author meant *this* file, and it is what run_test.sh would read. }
+  if Exists(base + '.components') then
+    found := ReadSidecar(base + '.components', target, true, words)
+  else if rootPath = '' then found := false
+  else found := WalkFor(rootPath, 0, target, words);
+
+  { And the directories, which are a separate claim and combine with either
+    answer: a document may name the components it follows *and* a place to
+    look for the rest. }
+  if ReadImportPaths(base + '.importpath', paths) then
+    if length(words) + length(paths) <= CommandMax then begin
+      words := words + paths;
+      found := true
+    end;
+  ImportsFor := found
 end;
 
 { --- compiling ------------------------------------------------------------ }

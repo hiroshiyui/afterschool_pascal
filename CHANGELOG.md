@@ -65,6 +65,12 @@ appears below in the release where it still existed.
   is `10` and `1e-7` is `1E-7`. A whole number is unaffected: `3` is still `3`
   and never `3.0`. `examples/json_pretty.out` and `tests/dialect/lib_json.out`
   move with it.
+- **The language server reads `.importpath`** (ADR-0311). It honoured
+  `.components` and not ADR-0244's other sidecar, so opening any of the seven
+  `examples/` programs that name a *place* rather than a list of files put a
+  diagnostic on every imported name — 21 of them on `word_freq.pas`, all
+  false. The directories now reach the compiler as `--import-path`, and the
+  two sidecars combine.
 - **A source named with no directory finds its neighbours** (ADR-0308).
   ADR-0244's first search rule is the source's own directory, and `SourceDir`
   answered the empty string for a name with no `/` in it, which `AddPath`

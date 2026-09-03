@@ -4323,6 +4323,16 @@ nothing else. What it would lose, mechanism by mechanism:
   marker to exist at all: every other session is handed a `PASLS_SCRATCH`, so
   the default name was exercised by nothing.
 
+  **And it reads `.importpath`** (ADR-0311), ADR-0244's other sidecar: one
+  directory a line, passed on as `--import-path` so the compiler resolves the
+  interface name itself. The two are different claims and combine — one names
+  the files this document follows, the other the places to look for the rest.
+  It is read only from beside the document and **never walked for**: a sidecar
+  naming files can say whether it is about this file, and a list of
+  directories names nobody, so a walk would hand one document another's search
+  path. It was unread until somebody opened one of the seven `examples/`
+  programs that carry one, and got a diagnostic on every imported name.
+
   **`PasFS.TemporaryPath` is the other half and the server is not its caller**
   (ADR-0243). It answers a path that names nothing else **with the file
   created**, which is what carries the property past this process's exit; a
