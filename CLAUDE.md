@@ -627,12 +627,35 @@ feature, because each was arrived at more than once:
 
 **Two threads of control exist** (ADR-0268), and every alias rule above is
 written for one. `task`, `spawn`, `channel [n] of T`, `send` and `receive`
-reserve no word-symbol; a task takes only transferable values and channels
-(AP 6.7.8.1) and may name only its own variables (AP 6.7.8.2), which is the
-half a probe found after the first looked sufficient; and every task a block
-spawned is joined **before** that block releases anything, which is what makes
-ADR-0201's *a borrow cannot outlive the call* true again. The compiler is one
-thread and must stay so — the seed compiles it.
+reserve no word-symbol; a task takes transferable values, channels and — since
+ADR-0303 — **a handle, moved in** (AP 6.7.8.1), and may name only its own
+variables (AP 6.7.8.2), which is the half a probe found after the first looked
+sufficient; and every task a block spawned is joined **before** that block
+releases anything, which is what makes ADR-0201's *a borrow cannot outlive the
+call* true again. The compiler is one thread and must stay so — the seed
+compiles it.
+
+**A channel is lent and a handle is moved, and that is one position with two
+rules.** A channel is the only object in this language with a lock in it, so
+two activations may name it; a socket has none, so what crosses is ownership —
+the actual is `take(v)` (AP 6.4.14.6's second and only non-assignment
+position), the variable is empty from there on, and the task's block releases
+what it was given. The join is what makes the *channel* safe and is not what
+makes this safe, a moved handle being the spawning activation's no longer.
+
+**And a release the program *wrote* closes a channel** (AP 6.4.16.4,
+ADR-0302). Two closers decide what happens when a channel-variable ceases to
+exist — the owner's closes, a task's lent parameter's drops the reference and
+does not, because a worker that has finished must not close what its
+colleagues are draining — and that is the answer to *this activation is done*
+and the wrong answer to *close it*. Until ADR-0302 `release(c)` in a task did
+nothing at all and a pipeline of stages each closing the next hung in silence,
+which is the worst failure mode available. All three spellings close —
+`release(c)`, `c := nil`, `c := take(d)` — and a task's close cannot destroy
+the channel, the spawning block joining before it releases anything.
+**ThreadSanitizer is the oracle this construct rests on and it is still not a
+gate** (`doc/sop.md` §7): run it by hand over every concurrent program when a
+task changes.
 
 **`doc/implementation-defined.md` is still the register of what this processor
 decides** where a clause leaves it open, and the two extensions listed there are
@@ -716,7 +739,7 @@ Four things about the dialect are worth knowing before adding anything:
   `seed/*.ll` accepts, or the seed is refreshed first.
 - **It is specified, and the specification is enforced.** `tests/spec/` takes
   `@afterschool:<clause>` beside the two standards' tags, and
-  **117 of the spec's 121 testable clauses** are cited by a scenario, and the
+  **119 of the spec's 123 testable clauses** are cited by a scenario, and the
   four that are not are named in `tests/spec/clauses/pending.txt` rather than
   here, because the pair moves: AP 6.7.7.6.1 (scalar variable parameters),
   6.11 (modules), and 6.13.1 and 6.13.2, which are the two `stale-component`

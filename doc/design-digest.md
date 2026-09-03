@@ -4415,3 +4415,48 @@ Five things carry it.
 The mutation that is **not** caught is the join, and that is recorded rather
 than papered over: every task in `tests/dialect/concurrency.pas` finishes
 before its block ends, so removing the join changes nothing observable.
+
+### What a release means to a channel (ADR-0302)
+
+A channel is released twice over and the two releases are two questions. *This
+activation has finished with it* is what the end of a block says, and for a
+task's lent parameter the answer is to drop the reference and **not** close —
+a worker of a pool that has run out of work must not close the channel its
+colleagues are still draining. *Close it* is what a program writing
+`release(c)` says, and until AP 6.4.16.4 it did nothing at all: the count went
+down, the channel stayed open, and a pipeline of stages each closing the one
+downstream of it hung with no diagnostic from anywhere (ADR-0295 finding 1).
+
+So the closer answers the first question and the compiler answers the second,
+by emitting `pas_handle_peek` and `pas_chan_shut` in front of the release the
+program wrote. Three spellings share it — `release(c)`, `c := nil` and
+`c := take(d)` — because each releases what the variable held, and separating
+them would be a rule about syntax. A task closing a channel cannot destroy it:
+AP 6.9.3.12.1 makes the spawning block join before it releases anything, so a
+variable of that block holds the channel throughout.
+
+The same record fixed a second thing: `send` chose its path with
+`IsStructured`, and a `string(n)` is `IsMemory` and not structured — ADR-0191's
+split met again — so a channel of strings did not assemble. Asking `IsMemory`
+makes it assemble and is still wrong, a string *value* being shorter than the
+element type it is going into; the store is now the ordinary assignment into a
+temporary of the element type, which is where padding and AP 6.4.15.5's
+normalisation already live.
+
+### A handle moves into a task (ADR-0303)
+
+ADR-0201 named it, ADR-0267 built the move for it, ADR-0268 left it open, and
+the whole of what was missing was a **position**: `take` stood on the right of
+an assignment and nowhere else. AP 6.4.14.6 now admits a second, the actual of
+a spawn-statement corresponding to a handle-type formal.
+
+A channel is **lent** and a handle is **moved**, and the difference is what
+makes each safe — a channel is the only object here with a lock in it, and a
+socket has none, so what crosses is ownership rather than a second name. The
+spelling is required rather than inferred, because a reader of the
+spawn-statement has to see that the variable beside it is empty from there on.
+The lowering is AP 6.4.12.7's two calls with the argument block between them:
+`pas_handle_take` at the spawn, `pas_handle_set` in the task's prologue with
+the type's own closer, so the task's block releases what it was given. The join
+is *not* what makes this correct — a moved handle is the spawning activation's
+no longer — which is why one position carries two rules.

@@ -6755,3 +6755,50 @@ twelve programs anyone wrote here to be read rather than to pin a clause.
   would be the corpus that finds the next `JsonLine`, and it is the one row
   here that pays twice: every example is also a case, and a case that fails
   is a finding.
+
+## The concurrency residue
+
+Two of the three rows ADR-0268 wrote about itself are closed, on 2026-09-03,
+and the third stands. The chapter they came from is still in
+[`doc/roadmap.md`](roadmap.md#what-each-landed-feature-left-open); what is
+here is what closing them found.
+
+**A task could not close the channel downstream of it, and the program that
+tried deadlocked in silence** — ADR-0295's finding 1, closed by ADR-0302 and
+AP 6.4.16.4. The cause was a rule that is right about one question and was
+answering another: a channel is a handle, a task's lent parameter is released
+by a closer that drops the reference and does *not* close — a worker of a pool
+must not close what its colleagues are draining — and that is the answer to
+*this activation has finished with it* and the wrong answer to *close it*. So
+the release a **program** writes now closes, in all three of its spellings,
+and the release the end of a block performs is unchanged. The roadmap had
+offered a compile-time refusal or a sentence in the spec; the third answer was
+to make it work, on the argument that a stage closing its downstream channel
+is not a mistake but the shape a pipeline has, and a silent deadlock is the
+worst failure mode this language has.
+
+**A channel could not carry a string**, which ADR-0268 had called *unclaimed
+rather than done* — the distinction ADR-0080 exists to keep, and it earned its
+keep here. `Transferable` admitted a `string(n)` and the reading was that the
+implementation copied `esize` bytes, which is right. Writing the case showed
+two things wrong at once: `send` chose its path with `IsStructured` and a
+variable-string is `IsMemory` and not structured (ADR-0191's split, met a
+third time), so the module did not assemble at all; and a string *value* is a
+length and that many bytes, so it is shorter than the element it is going
+into and copying the element's size out of it read past the arena. The store
+is the ordinary assignment into a temporary of the element type now, which is
+where padding and normalisation already live.
+
+**A task could not be handed a handle** — ADR-0303, and the record worth
+reading for how long a one-line gap can stand between three records each
+naming it as somebody else's. ADR-0201 named it as the prerequisite for
+concurrency; ADR-0267 built the move and said the position was the
+construct's to widen; ADR-0268 built the construct and said the move existed
+and the argument block did not use it. The whole of what was missing was that
+position, and the change needed no new runtime routine at all.
+
+What stands is **to wait for one task**: no `Task` variable, no select over
+several channels, no timeout on a send or a receive. And behind both closed
+rows is one shape neither of them reached — a **channel of handles**, so that
+a fixed pool of workers could take connections off a queue. A task may be
+given a socket at the moment it starts and not afterwards.

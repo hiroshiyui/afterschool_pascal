@@ -27,6 +27,7 @@ var
   n: integer;
   t: text;
   q: Ptr;
+  h: Stream;
 
 { A var parameter is the escaping alias this language has never had, arriving
   with no model to govern it -- ADR-0201's rejected `cobegin` in one
@@ -51,10 +52,10 @@ begin end;
 task BadFile(f: text);
 begin end;
 
-{ A handle that is not a channel: a task cannot yet be *given* one. AP
-  6.4.12.7's move exists (ADR-0267) and the argument block does not use it,
-  which is stated in the record rather than left to be discovered. }
-task BadHandle(s: Stream);
+{ A handle that is not a channel is admitted and **moved** in (AP 6.7.8.1,
+  ADR-0302), so nothing is refused at this heading. What is refused is the
+  actual: it must be written `take`, because a copy would leave two owners. }
+task GoodHandle(s: Stream);
 begin end;
 
 { A procedural parameter would carry the activation it runs under, which is
@@ -103,6 +104,12 @@ begin
     they do to `read`'s. }
   for n := 1 to 2 do
     if receive(c, n) then n := n;
+
+  { AP 6.7.8.1 (ADR-0302): a handle crosses into a task by a move and the
+    spelling is required, so a plain variable is refused and so is a `take` of
+    something that is not the formal's type. }
+  spawn GoodHandle(h);
+  spawn GoodHandle(take(n));
 
   { A deferred statement runs when the sequence it stands in is completed,
     which is after the join -- so a task spawned there would be joined by

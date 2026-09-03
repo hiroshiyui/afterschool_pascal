@@ -243,3 +243,145 @@ Feature: tasks and channels
       """
       got 14
       """
+
+  # 6.4.16.4. The release a *program* writes closes the channel, whichever
+  # variable holds it -- which is what makes a pipeline of stages, each
+  # closing the one downstream of it, terminate. Before this clause the call
+  # dropped the task's reference and left the channel open, and every
+  # activation downstream waited for ever (ADR-0295 finding 1, ADR-0302).
+  @afterschool:6.4.16.4
+  Scenario: a task closes the channel it was handed
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of integer;
+      task t(c: ch);
+      var i, k: integer;
+      begin
+        for i := 1 to 3 do send(c, i);
+        k := release(c)
+      end;
+      var c: ch; v: integer;
+      begin
+        spawn t(c);
+        while receive(c, v) do writeln('got ', v:1);
+        writeln('closed')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      got 1
+      got 2
+      got 3
+      closed
+      """
+
+  # 6.4.16.4 NOTE 4. The two spellings of the program's own release are one
+  # operation, so `c := nil` closes exactly as `release(c)` does.
+  @afterschool:6.4.16.4
+  Scenario: assigning nil to a channel closes it too
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of integer;
+      task t(c: ch);
+      begin send(c, 9); c := nil end;
+      var c: ch; v: integer;
+      begin
+        spawn t(c);
+        while receive(c, v) do writeln('got ', v:1);
+        writeln('closed')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      got 9
+      closed
+      """
+
+  # 6.7.8.1 and 6.4.14.6's second position. A handle that is not a channel is
+  # moved into the task: the spawning variable is emptied before the
+  # activation commences, so at no moment do two activations hold one handle.
+  @afterschool:6.7.8.1
+  @afterschool:6.4.14.6
+  Scenario: a handle is moved into a task
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+           ch = channel [2] of integer;
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      function ExtFputs(text: string; s: f): integer; external 'fputs';
+      task t(s: f; c: ch);
+      begin send(c, ExtFputs('x', s)) end;
+      var s: f; c: ch; v: integer;
+      begin
+        s := ExtFopen('/dev/null', 'w');
+        spawn t(take(s), c);
+        writeln('source emptied: ', s = nil);
+        if receive(c, v) then writeln('the task wrote: ', v >= 0)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      source emptied: TRUE
+      the task wrote: TRUE
+      """
+
+  # 6.7.8.1 again: the spelling is required and not inferred, so a reader of
+  # the spawn-statement can see that the variable beside it is empty.
+  @afterschool:6.7.8.1
+  Scenario: a handle given to a task without take is refused
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function ExtFopen(path, mode: string): f; external 'fopen';
+      task t(s: f);
+      begin end;
+      var s: f;
+      begin
+        s := ExtFopen('/dev/null', 'w');
+        spawn t(s)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      must be written 'take' of a variable of that type
+      """
+
+  # 6.4.16.3 NOTE 2. A fixed-capacity string is a length beside a buffer, both
+  # in the value, so it is transferable and what the reader gets shares
+  # nothing with what the sender sent (ADR-0302).
+  @afterschool:6.4.16.3
+  Scenario: a channel carries a string
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of string(16);
+      task t(c: ch);
+      var s: string(16); k: integer;
+      begin
+        s := 'alpha';
+        send(c, s);
+        s := 'beta';
+        send(c, s);
+        k := release(c)
+      end;
+      var c: ch; s: string(16);
+      begin
+        spawn t(c);
+        while receive(c, s) do writeln(length(s):1, ' ', s)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      5 alpha
+      4 beta
+      """

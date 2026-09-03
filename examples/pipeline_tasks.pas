@@ -8,29 +8,29 @@
   output below the same on every run. Every task a block spawned is joined
   before the block ends.
 
-  The stages end on a sentinel. `release(c)` on a channel a task was
-  *handed* drops only that task's reference -- a worker must not close a
-  channel its colleagues still read -- so a stage cannot close the channel
-  downstream of it, and a value the data can never take does the job.
-  Nothing is imported. }
+  Each stage ends by closing the channel it writes to: `release(c)` closes
+  a channel wherever it is written, so the stage downstream sees the queue
+  drain and then end (ADR-0302). The first draft of this program used a
+  sentinel value instead, because a task's release used to drop its own
+  reference and leave the channel open -- which made a pipeline hang with
+  nothing reported anywhere. Nothing is imported. }
 program pipeline_tasks(output);
 
 type Ints = channel [8] of integer;
 
 task Producer(out: Ints; n: integer);
-var i: integer;
+var i, k: integer;
 begin
   for i := 1 to n do send(out, i * i);
-  send(out, 0)                     { the sentinel: no square of 1..n is 0 }
+  k := release(out)
 end;
 
 task OddOnly(src, dst: Ints);
-var v: integer;
+var v, k: integer;
 begin
-  v := -1;
-  while v <> 0 do
-    if receive(src, v) then
-      if odd(v) or (v = 0) then send(dst, v)
+  while receive(src, v) do
+    if odd(v) then send(dst, v);
+  k := release(dst)
 end;
 
 var squares, odds: Ints; v: integer;
@@ -38,9 +38,6 @@ var squares, odds: Ints; v: integer;
 begin
   spawn Producer(squares, 10);
   spawn OddOnly(squares, odds);
-  v := -1;
-  while v <> 0 do
-    if receive(odds, v) then
-      if v <> 0 then writeln(v:1);
+  while receive(odds, v) do writeln(v:1);
   writeln('done')
 end.

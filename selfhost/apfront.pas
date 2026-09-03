@@ -12704,8 +12704,20 @@ begin
       not idempotent, so it is not asked twice (ADR-0254). }
     if (p <> nil) and (p^.sym^.kind = skProcParam) then
       CheckProcArgument(p^.sym, a, callee, i)
-    else if not a^.nChecked then
+    else if not a^.nChecked then begin
+      { AP 6.7.8.1 (ADR-0302): the one argument position outside an
+        assignment where `take` may stand. The permission is set here, before
+        the value is checked, exactly as the assignment sets it and for the
+        same cause -- CheckTake reads the flag and nothing has resolved the
+        name yet (ADR-0182). It is narrow: the callee must be a task and the
+        formal a handle that is not a channel, a channel being lent rather
+        than moved. }
+      takeOk := (p <> nil) and callee^.isTask and (p^.sym^.kind = skParam) and
+                IsHandle(p^.sym^.stype) and not IsChannel(p^.sym^.stype) and
+                (a^.kind = nkCall);
       CheckExpr(a);
+      takeOk := false
+    end;
     if p <> nil then p := p^.next;
     i := i + 1;
     a := a^.next
@@ -13107,6 +13119,26 @@ begin
               (a^.ntype = p^.sym^.stype) and IsDesignator(a) then
         { admitted: the two activations name one object, which is what a
           channel is }
+      { AP 6.7.8.1 (ADR-0302): a handle moved into a task. The actual shall be
+        `take` of a variable of the formal's own type -- `Assignable` refuses
+        a handle from a handle and must go on doing so, so this is written
+        here, at the position that has the exception, as the channel arm above
+        is. Requiring the *spelling* is the whole of the safety: a copy would
+        leave two owners, and the move is the one thing that cannot. }
+      else if IsHandle(p^.sym^.stype) and not IsChannel(p^.sym^.stype) and
+              callee^.isTask then begin
+        if (a^.kind <> nkCall) or (a^.clBuiltin <> biTake) or
+           (a^.ntype <> p^.sym^.stype) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' gives a task the handle ');
+          WriteTypeName(p^.sym^.stype);
+          write(', so it must be written ''take'' of a variable of that ');
+          writeln('type: a handle has no copy, and the task owns what it ',
+                  'is given')
+        end
+      end
       else if not Assignable(p^.sym^.stype, a^.ntype) then begin
         ErrorAt(a^.line, a^.col);
         write('argument ', i:1, ' of ''');
@@ -13990,8 +14022,9 @@ begin
       if not takeOk then begin
         ErrorAt(c^.line, c^.col);
         write('''take'' may stand only as the whole right side of an ');
-        writeln('assignment to a variable of its own type: anywhere else ',
-                'what it emptied would be owned by no one')
+        write('assignment to a variable of its own type, or as the handle ');
+        writeln('a spawn gives a task: anywhere else what it emptied would ',
+                'be owned by no one')
       end
     end
   end;
@@ -18597,11 +18630,18 @@ begin
         which is exactly what a channel is for and the only thing in this
         language two tasks may share. It is not admitted for a procedure,
         only for a task, because what makes it safe is the join that ends the
-        spawning block. }
+        spawning block.
+
+        And a handle that is *not* a channel crosses the same position for
+        the opposite reason (ADR-0302): it is moved rather than shared, the
+        actual being AP 6.4.12.7's `take`, so the spawning variable is empty
+        before the thread exists and one handle still has one owner. The two
+        are one arm here because the position is one -- what separates them
+        is what the spawn requires of the actual. }
       if ContainsFile(t) and not g^.grByRef and (g^.grNames <> nil) and
          not (IsHandle(t) and (into <> nil) and
               (into^.linkKind = lnkForeign)) and
-         not (IsChannel(t) and (into <> nil) and into^.isTask) then begin
+         not (IsHandle(t) and (into <> nil) and into^.isTask) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         if IsFile(t) then
           writeln('a file parameter must be a var parameter')
@@ -19376,6 +19416,14 @@ begin
     end
     else if IsChannel(f^.stype) then
       { admitted: the one thing two tasks may touch, and it is lent }
+    { AP 6.7.8.1 (ADR-0302): a handle that is not a channel is **moved**, not
+      lent. AP 6.4.12.7's move is what makes that expressible -- the actual is
+      a `take`, so the spawning variable is emptied before the thread exists
+      and at no moment do two activations hold one handle. The formal owns it
+      from there and the task's block releases it, which is the ordinary rule
+      for a handle-variable and needs nothing said here. }
+    else if IsHandle(f^.stype) then
+      { admitted: moved in, and the actual is checked at the spawn }
     else if not Transferable(f^.stype) then begin
       ErrorAt(d^.line, d^.col);
       write('a task''s parameter ''');

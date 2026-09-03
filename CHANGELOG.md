@@ -15,6 +15,22 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A task may be handed a handle** (ADR-0303, AP 6.7.8.1): a formal parameter
+  of a task-declaration may be of a handle-type, and the actual is written
+  `take` of a variable of that type — the one position outside an assignment
+  where AP 6.4.14.6 admits a move. The variable is emptied before the
+  activation commences and the task's block releases what it was given, so a
+  socket, a stream or a directory can now be given to a task. A channel is
+  still *lent* and a handle is *moved*; a handle still cannot be sent through
+  a channel.
+- **A channel is closed by the release the program wrote** (ADR-0302,
+  AP 6.4.16.4): `release(c)`, `c := nil` and `c := take(d)` each close the
+  channel wherever they stand, including inside a task. Before this a task's
+  release dropped that task's reference and left the channel open, so a
+  pipeline of stages each closing the one downstream of it deadlocked with no
+  diagnostic. The release performed by the end of a task's block is unchanged
+  and still only drops the reference, which is what a pool of workers needs.
+
 - **A release archive on every tag** (ADR-0296). Pushing a `v*` tag now
   attaches `afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an
   `aarch64-linux` one, each with a `.sha256`, to the GitHub release: the
@@ -37,6 +53,16 @@ appears below in the release where it still existed.
 - `diagnostic-coverage` and `foreign-layout` read nothing when the checkout
   is itself a `.claude/worktrees` tree, their worktree filter having tested
   the absolute path; both now test the path below the root.
+
+### Fixed
+
+- **A channel may carry a `string(n)` or a text** (ADR-0302). `send` chose its
+  path with `IsStructured`, which a variable-string is not, so a program
+  sending one did not assemble at all; and copying the element's size out of a
+  string value read past what the expression produced, because a value is
+  shorter than the type it is going into. The value is now stored into a
+  temporary of the element type by the ordinary assignment, so it is padded
+  and — for a text — normalised where it crosses.
 
 ### Changed
 

@@ -5,5 +5,5 @@
 <source>:32:3: error: a handle may be assigned only nil, 'take' of a variable of its own type, or the result of a function of its own type: it is owned, and there is no copy
 <source>:35:13: error: 'take' empties a variable, so its argument must be one
 <source>:35:3: error: a handle may be assigned only nil, 'take' of a variable of its own type, or the result of a function of its own type: it is owned, and there is no copy
-<source>:40:12: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:40:12: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
 <source>:44:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy

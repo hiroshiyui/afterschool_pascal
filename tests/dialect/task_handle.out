@@ -1,0 +1,7 @@
+listening     : TRUE
+connected     : TRUE
+accepted      : TRUE
+source emptied: TRUE
+the task read: hello from the program
+the task wrote back
+client read   : answered by the task
