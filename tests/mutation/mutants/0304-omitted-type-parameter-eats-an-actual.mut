@@ -1,0 +1,21 @@
+adr: 0304
+file: selfhost/apfront.pas
+kills: generic_infer_partial
+why: The husk removal walks formals and actuals in lockstep again, as it could while every activation wrote all of its type arguments or none. An omitted type parameter consumed no actual, so stepping over one for it deletes the value actual that follows and the produced routine is called with the wrong list.
+--- old
+        if g^.grIsTypeDisc then begin
+          j := j + 1;
+          { An omitted type parameter consumed no actual, so the walk does not
+            step over one for it. }
+          if j <= nWritten then begin
+            nxt := a^.next;
+            if prev = nil then args := nxt else prev^.next := nxt;
+            a := nxt
+          end
+        end
+--- new
+        if g^.grIsTypeDisc then begin
+          nxt := a^.next;
+          if prev = nil then args := nxt else prev^.next := nxt;
+          a := nxt
+        end

@@ -61,11 +61,11 @@ begin
     that was written, and every thousandth element plus both ends says that as
     well as sixteen million reads would, at a cost the sanitizer run can
     afford. }
-  intact := VecGet(CV, char, v, 1) = Wanted(1);
-  if VecGet(CV, char, v, CapMax) <> Wanted(CapMax) then intact := false;
+  intact := VecGet(char, v, 1) = Wanted(1);
+  if VecGet(char, v, CapMax) <> Wanted(CapMax) then intact := false;
   i := 1000;
   while i < CapMax do begin
-    if VecGet(CV, char, v, i) <> Wanted(i) then intact := false;
+    if VecGet(char, v, i) <> Wanted(i) then intact := false;
     i := i + 1000
   end;
   if intact then writeln('prefix intact') else writeln('PREFIX DAMAGED');

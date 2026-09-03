@@ -300,3 +300,53 @@ Feature: A routine may be parameterised by a type
       """
       is not a type-parameter category
       """
+
+  @afterschool:6.7.3.10.4
+  Scenario: an activation may write a prefix of its type arguments
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Row = array [1..3] of integer;
+      function ItemAt(Elem: type; Cont: type; protected var v: Cont;
+                      i: integer): Elem;
+      begin ItemAt := v[i] end;
+      var r: Row;
+      begin r[2] := 7; writeln(ItemAt(integer, r, 2):1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      7
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: a written type argument is not redetermined by an actual
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Held(T: type; U: type; whenBad: T; n: U): T;
+      begin Held := whenBad end;
+      begin writeln(Held(real, 2, 65):6:2) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+        2.00
+      """
+
+  @afterschool:6.7.3.10.4
+  Scenario: writing a prefix does not make the rest determinable
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function Pair(T: type; U: type; n: integer): U;
+      var got: U;
+      begin Pair := got end;
+      begin writeln(Pair(integer, 3):1) end.
+      """
+    When it is compiled
+    Then it is rejected
+    And the diagnostic includes
+      """
+      nothing in this call says what 'u' of 'pair' is
+      """

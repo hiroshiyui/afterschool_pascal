@@ -57,11 +57,11 @@ begin
   for i := 1 to 8 do VecPush(IntVec, v, i * i);
   writeln('vec int  len=', VecLen(IntVec, v):1,
           ' cap=', VecCap(IntVec, v):1,
-          ' [3]=', VecGet(IntVec, integer, v, 3):1);
+          ' [3]=', VecGet(integer, v, 3):1);
   ok := VecPop(IntVec, v, got);
   writeln('vec pop  ', got:1, ' len=', VecLen(IntVec, v):1);
   VecSet(IntVec, v, 1, 99);
-  writeln('vec set  ', VecGet(IntVec, integer, v, 1):1);
+  writeln('vec set  ', VecGet(integer, v, 1):1);
   VecClear(IntVec, v);
   writeln('vec clr  len=', VecLen(IntVec, v):1);
   VecFree(IntVec, v);
@@ -71,7 +71,7 @@ begin
     p.x := i; p.y := i * 10;
     VecPush(PtVec, w, p)
   end;
-  p := VecGet(PtVec, Point, w, 4);
+  p := VecGet(Point, w, 4);
   writeln('vec rec  len=', VecLen(PtVec, w):1, ' [4]=', p.x:1, ',', p.y:1);
   VecFree(PtVec, w);
 

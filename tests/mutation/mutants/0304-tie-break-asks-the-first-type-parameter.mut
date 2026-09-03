@@ -1,0 +1,8 @@
+adr: 0304
+file: selfhost/apfront.pas
+kills: generic_infer_partial
+why: ADR-0254's tie-break, restored: the question of whether an actual denotes a type is asked at the position of the *first* type parameter rather than the first *omitted* one. Every partial activation then finds a type standing there, is read as a written activation short of an argument, and is refused -- so `VecGet(char, b, i)` and `MapKeyAt(MapKey, m, i)` become unwritable again.
+--- old
+      for j := 2 to TypeFormalPos(gen, k + 1) do
+--- new
+      for j := 2 to TypeFormalPos(gen, 1) do

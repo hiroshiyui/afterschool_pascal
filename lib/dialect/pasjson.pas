@@ -271,7 +271,7 @@ end;
 
 function JsonCharsAt;
 begin
-  JsonCharsAt := VecGet(JsonChars, char, b, i)
+  JsonCharsAt := VecGet(char, b, i)
 end;
 
 function JsonCharsInto;
@@ -294,7 +294,7 @@ begin
       which is the capacity the guard already asked about. }
     s := '';
     for i := 1 to n do
-      s := s + VecGet(JsonChars, char, b, i);
+      s := s + VecGet(char, b, i);
     JsonCharsInto := errNone
   end
 end;

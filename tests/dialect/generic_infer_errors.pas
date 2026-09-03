@@ -9,10 +9,13 @@
   disagree about.
 
   The one new message is for a call where *nothing* says what a type parameter
-  is. `VecGet` and `MapGet` in `lib/dialect/pascontainer.pas` are the standing
-  case: their element type appears only in the result, and 6.7.1 makes a
-  result-type a type-name rather than an actual, so there is nothing to read
-  it off. Those two keep their type arguments, and this says why. }
+  is. `MapKeyAt` in `lib/dialect/pascontainer.pas` is the standing case: its
+  key type appears only in the result, and 6.7.1 makes a result-type a
+  type-name rather than an actual, so there is nothing to read it off. That
+  one writes its key type and this says why. Since ADR-0304 it writes *only*
+  that one, the activation being free to write a prefix of its type arguments
+  -- so the message has a second reader, `Pair` below, where the prefix is
+  written and what is left over is still determined by nothing. }
 program generic_infer_errors(output);
 
 type
@@ -30,6 +33,16 @@ function Pick(T: type; n: integer): T;
 var got: T;
 begin
   if n > 0 then Pick := got else Pick := got
+end;
+
+{ Two type parameters, and the second stands in the result exactly as `Pick`'s
+  does. Writing the first is admitted (AP 6.7.3.10.4, ADR-0304) and does not
+  make the second determinable, so the refusal has to name *which* type
+  argument is missing rather than asking for the list again. }
+function Pair(T: type; U: type; n: integer): U;
+var got: U;
+begin
+  if n > 0 then Pair := got else Pair := got
 end;
 
 procedure Swap(T: type; var a, b: T);
@@ -70,5 +83,9 @@ begin
 
   { The default binds T to char; `good` is a Fallible(integer) and is refused
     as the mismatch it is, in the words a mismatch has always had. }
-  writeln(WhenBadFirst('?', good))
+  writeln(WhenBadFirst('?', good));
+
+  { A written prefix of one, and the type parameter left over is determined by
+    nothing. The message names `u` and not the whole list. }
+  writeln(Pair(integer, 3):1)
 end.

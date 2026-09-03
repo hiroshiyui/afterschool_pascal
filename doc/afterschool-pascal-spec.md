@@ -1994,21 +1994,31 @@ it chose which routine that is. What is passed at the activation is what
 6.7.3.1 admits, and a type is not among those things in any of the three
 languages this document is written against.
 
-**6.7.3.10.4 Inferred type arguments [added].** An activation of a generic
-routine shall write an actual-parameter for every formal-parameter of the
-generic declaration, or shall write one for every formal-parameter that is not
-a type parameter; it shall be an error to write any other number.
+**6.7.3.10.4 Inferred type arguments [added].** Let *n* be the number of type
+parameters of a generic declaration, *m* the number of its formal-parameters,
+and *a* the number of actual-parameters of an activation of it; and let *k* be
+*a* - (*m* - *n*).
 
-Where the actual-parameter-list contains an actual-parameter for every
-formal-parameter that is not a type parameter, and the actual-parameter
-occupying the position of the first type parameter, if there is one in that
-position, does not denote a type, the activation shall be an **inferred
-activation**; otherwise the type-argument-tuple shall be as 6.7.3.10.1 gives
-it.
+An activation of a generic routine shall write an actual-parameter for every
+formal-parameter that is not a type parameter, and shall write one, in that
+type parameter's own position, for each of the first *k* type parameters and
+for no other type parameter; it shall be an error to write any other
+actual-parameter-list. The type parameters for which an actual-parameter is so
+written shall be the **written type arguments** of the activation.
 
-For an inferred activation the type-argument-tuple shall be determined from the
-actual-parameters, taking each in the order it is written and reading it
-against the parameter-form of the formal-parameter it matches, as follows.
+Where *k* is less than zero or greater than *n*, or where *k* is less than *n*
+and the actual-parameter occupying the position of the (*k* + 1)th type
+parameter, if there is one in that position, denotes a type, the activation
+shall be one to which 6.7.3.10.1 applies and the type-argument-tuple shall be
+as that sub-clause gives it. Otherwise the activation shall be an **inferred
+activation**.
+
+For an inferred activation each written type argument shall determine the type
+parameter in whose position it is written, as the type it denotes; and the
+remaining type parameters shall be determined from the actual-parameters of
+the formal-parameters that are not type parameters, taking each in the order
+it is written and reading it against the parameter-form of the formal-parameter
+it matches, as follows.
 
   a) Where the parameter-form is a type-identifier having a defining-point as a
      type parameter of that generic declaration, that type parameter shall be
@@ -2028,24 +2038,31 @@ against the parameter-form of the formal-parameter it matches, as follows.
   d) Otherwise the formal-parameter shall determine nothing.
 
 A type parameter shall be determined by the first actual-parameter that
-determines it, and a later one shall not redetermine it. It shall be an error
-for a type parameter of an inferred activation to be determined by no
+determines it, and a later one shall not redetermine it; a written type
+argument determines before any other actual-parameter is read. It shall be an
+error for a type parameter of an inferred activation to be determined by no
 actual-parameter.
 
 The type-argument-tuple of an inferred activation shall be the types so
 determined, in the order the type parameters are written; and 6.7.3.10.2 shall
 then apply to it unchanged.
 
-NOTE 5 — So an inferred activation and a written one with the same types are
-one activation of one produced routine, not two: they name the same tuple, and
-6.7.3.10.2 makes the tuple the identity.
+NOTE 5 — So two activations writing the same types, by whatever mixture of
+written and determined type arguments, are one activation of one produced
+routine and not two: they name the same tuple, and 6.7.3.10.2 makes the tuple
+the identity.
 
-NOTE 6 — The two counts can never be the same number, there being at least one
-type parameter in a generic declaration, so a well-formed activation is never
-ambiguous by arity. The further condition on the first type parameter's
-position is what distinguishes an inferred activation from a written one that
-is short of an argument, and it is decidable because an actual-parameter that
-denotes a type cannot denote a value.
+NOTE 6 — Each length of actual-parameter-list admits exactly one value of *k*,
+so a well-formed activation is never ambiguous by arity, and the written type
+arguments being a prefix of the type parameters is what makes that so. The
+further condition on the (*k* + 1)th type parameter's position is what
+distinguishes an inferred activation from one that is short of an
+actual-parameter, and it is decidable because an actual-parameter that denotes
+a type cannot denote a value. An activation from which a type argument has
+been omitted in error is therefore not always refused: where the remaining
+type parameters are determined and every actual-parameter is compatible with
+the formal-parameter it then matches, it is a well-formed inferred activation
+of a routine other than the one intended.
 
 NOTE 7 — A later actual-parameter does not redetermine, and so cannot conflict.
 Once a type parameter is determined the formal-parameters that mention it have
@@ -2056,9 +2073,14 @@ well-formed, and one whose second actual-parameter is not is refused where any
 other mismatch is refused.
 
 NOTE 8 — A type parameter occurring only in the result type is determined by
-nothing, 6.7.1 making a result type a type-identifier and not an
-actual-parameter. Such a routine can be activated only by the form of
-6.7.3.10.1.
+no actual-parameter, 6.7.1 making a result type a type-identifier and not an
+actual-parameter. Such a type parameter is written by every activation.
+
+NOTE 9 — A generic declaration writing its undeterminable type parameters
+first is therefore one whose activations write those and no others. This is
+why 6.7.3.10.2's produced routine is reached by a prefix and not by a
+selection: the declaration chooses, once, which of its type parameters an
+activation has to name.
 
 **6.7.3.10.5 The category of a type parameter [added].** A
 type-parameter-specification may be preceded, within the

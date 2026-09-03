@@ -20872,23 +20872,40 @@ begin
   if g <> nil then n := g^.grNames
 end;
 
-{ How many formals, how many of them are type parameters, and where the first
-  of those stands. The counts AP 6.7.3.10.4's rule is written in terms of. }
-procedure GenericShape(gen: symPtr; var nTypes, nFormals, firstType: integer);
+{ How many formals and how many of them are type parameters. The two counts
+  AP 6.7.3.10.4's rule is written in terms of. }
+procedure GenericShape(gen: symPtr; var nTypes, nFormals: integer);
 var g, n: nodePtr;
 begin
   nTypes := 0;
   nFormals := 0;
-  firstType := 0;
   FirstFormal(gen, g, n);
   while g <> nil do begin
     nFormals := nFormals + 1;
-    if g^.grIsTypeDisc then begin
-      nTypes := nTypes + 1;
-      if firstType = 0 then firstType := nFormals
-    end;
+    if g^.grIsTypeDisc then nTypes := nTypes + 1;
     NextFormal(g, n)
   end
+end;
+
+{ Where the j'th type parameter stands among the formals, counting from one;
+  0 where there is no j'th. AP 6.7.3.10.4's tie-break asks for the position of
+  the *first omitted* type parameter, which is the second one where one type
+  argument is written and the first where none is (ADR-0304). }
+function TypeFormalPos(gen: symPtr; j: integer): integer;
+var g, n: nodePtr; at, seen: integer;
+begin
+  at := 0;
+  seen := 0;
+  FirstFormal(gen, g, n);
+  while g <> nil do begin
+    seen := seen + 1;
+    if g^.grIsTypeDisc then begin
+      j := j - 1;
+      if (j = 0) and (at = 0) then at := seen
+    end;
+    NextFormal(g, n)
+  end;
+  TypeFormalPos := at
 end;
 
 { Is this name one of the generic's type parameters? }
@@ -21101,8 +21118,8 @@ var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     saveCur: symPtr; saveFile: pathStr;
     ok: boolean; ts: symPtr;
     n: nodePtr; c: numPtr; bs: typeBindings;
-    nTypes, nFormals, firstType, nArgs, k, before: integer;
-    inferred, failedHere: boolean;
+    nTypes, nFormals, nArgs, k, j, argn, nWritten, before: integer;
+    failedHere: boolean;
 begin
   InstantiateGeneric := nil;
   tuple := nil;
@@ -21113,7 +21130,7 @@ begin
   bs.curLine := line;
   bs.curCol := col;
   bs.curArg := 0;
-  GenericShape(gen, nTypes, nFormals, firstType);
+  GenericShape(gen, nTypes, nFormals);
   nArgs := 0;
   a := args;
   while a <> nil do begin
@@ -21121,14 +21138,16 @@ begin
     a := a^.next
   end;
 
-  { AP 6.7.3.10.4: which of the two forms this activation is.
+  { AP 6.7.3.10.4: how many of the type arguments this activation writes.
 
-    A type parameter occupies a position in the generic's formal list and
-    none in the produced routine's, so an activation that writes its types has
-    `nFormals` actuals and one that leaves them to be inferred has
-    `nFormals - nTypes`. There is at least one type parameter or this is not a
-    generic, so the two counts can never be the same number and the reading is
-    never ambiguous by arity alone.
+    A type parameter occupies a position in the generic's formal list and none
+    in the produced routine's, so an activation writing all of its types has
+    `nFormals` actuals, one writing none has `nFormals - nTypes`, and one
+    writing the first `k` has `nFormals - nTypes + k`. The arity says which
+    `k` was meant, there being exactly one value of it per length: the written
+    type arguments are a *prefix* of the type parameters (ADR-0304), so the
+    list a program wrote never has to be read to find out where the types
+    stopped.
 
     The count is not quite enough, and the case that says so is already in the
     corpus. `P(integer)` against `procedure P(T: type; var a: T)` has exactly
@@ -21137,85 +21156,33 @@ begin
     holds the message it has always produced. So the tie-break is the one
     question that cannot be wrong: an actual that denotes a type cannot denote
     a value, and `TypeArgument` is that question asked without side effects. If
-    the actual standing where the first type parameter would stand names a
-    type, the activation is the explicit one, short an argument, and says so
-    in the words it always did. }
-  inferred := false;
-  if (nTypes > 0) and (nArgs = nFormals - nTypes) then begin
-    a := args;
-    for k := 2 to firstType do
-      if a <> nil then a := a^.next;
-    inferred := TypeArgument(a) = nil
+    the actual standing where the *first omitted* type parameter would stand
+    names a type, this activation is one that writes all of its types and is
+    short an argument, and it says so in the words it always did. }
+  nWritten := nTypes;
+  if nTypes > 0 then begin
+    k := nArgs - (nFormals - nTypes);
+    if (k >= 0) and (k < nTypes) then begin
+      a := args;
+      for j := 2 to TypeFormalPos(gen, k + 1) do
+        if a <> nil then a := a^.next;
+      if TypeArgument(a) = nil then nWritten := k
+    end
   end;
 
-  if inferred then begin
-    { Read the types off the actuals. Only a determining position is checked
-      here, and it is marked so CheckArguments does not check it again. }
-    FirstFormal(gen, g, n);
-    a := args;
-    k := 0;
-    while (g <> nil) and (a <> nil) do begin
-      if not g^.grIsTypeDisc then begin
-        { The actual's own number, counted over what the program wrote: a type
-          parameter occupies no position in an inferred activation's list, so
-          this is what a reader would count to (AP 6.7.3.10.5). }
-        k := k + 1;
-        { A procedural actual is an identifier and not an expression, and it
-          determines nothing: 6.7.3.1 gives it a heading rather than a
-          parameter-form. }
-        if (not g^.grIsProc) and Mentions(gen, g^.grType) then begin
-          if not a^.nChecked then begin
-            CheckExpr(a);
-            a^.nChecked := true
-          end;
-          bs.curLine := a^.line;
-          bs.curCol := a^.col;
-          bs.curArg := k;
-          Determine(gen, g^.grType, a^.ntype, bs)
-        end;
-        a := a^.next
-      end;
-      NextFormal(g, n)
-    end;
-
-    { The tuple, in the order the type parameters were written -- which is the
-      order 6.4.7 gives a tuple its identity in, so an inferred activation and
-      a written one produce the same instantiation and share a cache entry. }
-    FirstFormal(gen, g, n);
-    while (g <> nil) and ok do begin
-      if g^.grIsTypeDisc then begin
-        k := BoundSlot(bs, n^.dnAt, n^.dnLen);
-        given := nil;
-        if k > 0 then given := bs.b[k].ty;
-        if given = nil then begin
-          ErrorAt(line, col);
-          write('nothing in this call says what ''');
-          WritePool(n^.dnAt, n^.dnLen);
-          write(''' of ''');
-          WritePool(gen^.at, gen^.len);
-          write(''' is: write the type arguments, or pass an argument whose ');
-          writeln('type determines it');
-          ok := false
-        end
-        else if not SatisfiesCat(given, g^.grCat) then begin
-          ReportCat(gen, n, g, given, bs.b[k].line, bs.b[k].col,
-                    bs.b[k].argn);
-          ok := false
-        end
-        else AppendType(tuple, tupleTail, given)
-      end;
-      NextFormal(g, n)
-    end
-  end
-  else begin
-    { The type arguments as written, in the order the type parameters were.
-      An actual in that position must name a type and nothing else: it is not
-      an expression, and TypeArgument is what Stage A already asks of a
-      schema's type-valued discriminant (ADR-0209). }
-    FirstFormal(gen, g, n);
-    a := args;
-    while (g <> nil) and ok do begin
-      if g^.grIsTypeDisc then begin
+  { The type arguments as written, which are the first `nWritten` of them. An
+    actual in that position must name a type and nothing else: it is not an
+    expression, and TypeArgument is what Stage A already asks of a schema's
+    type-valued discriminant (ADR-0209). They are bound before anything is
+    inferred, so a written type argument is the first determining position and
+    no actual can redetermine it. }
+  FirstFormal(gen, g, n);
+  a := args;
+  j := 0;
+  while (g <> nil) and ok do begin
+    if g^.grIsTypeDisc then begin
+      j := j + 1;
+      if j <= nWritten then begin
         if a = nil then begin
           ErrorAt(line, col);
           write('''');
@@ -21233,18 +21200,92 @@ begin
             writeln('is declared ''type''');
             ok := false
           end
-          else if not SatisfiesCat(given, g^.grCat) then begin
-            { The type is written, so the argument is where the reader looks
-              and there is no determining position to name. }
-            ReportCat(gen, n, g, given, a^.line, a^.col, 0);
-            ok := false
-          end
-          else AppendType(tuple, tupleTail, given)
+          else begin
+            { The type is written, so the argument is where a reader looks and
+              there is no determining position to name: `curArg` stays 0, which
+              is what ReportCat reads it for. }
+            bs.curLine := a^.line;
+            bs.curCol := a^.col;
+            bs.curArg := 0;
+            BindType(bs, n^.dnAt, n^.dnLen, given)
+          end;
+          a := a^.next
         end
+      end
+    end
+    else if a <> nil then a := a^.next;
+    NextFormal(g, n)
+  end;
+
+  { Read the rest off the actuals. Only a determining position is checked
+    here, and it is marked so CheckArguments does not check it again. }
+  if ok and (nWritten < nTypes) then begin
+    FirstFormal(gen, g, n);
+    a := args;
+    j := 0;
+    argn := 0;
+    while (g <> nil) and (a <> nil) do begin
+      if g^.grIsTypeDisc then begin
+        j := j + 1;
+        if j <= nWritten then begin
+          argn := argn + 1;
+          a := a^.next
+        end
+      end
+      else begin
+        { The actual's own number, counted over what the program wrote: an
+          omitted type parameter occupies no position in the list, and a
+          written one occupies its own, so this is what a reader would count
+          to (AP 6.7.3.10.5). }
+        argn := argn + 1;
+        { A procedural actual is an identifier and not an expression, and it
+          determines nothing: 6.7.3.1 gives it a heading rather than a
+          parameter-form. }
+        if (not g^.grIsProc) and Mentions(gen, g^.grType) then begin
+          if not a^.nChecked then begin
+            CheckExpr(a);
+            a^.nChecked := true
+          end;
+          bs.curLine := a^.line;
+          bs.curCol := a^.col;
+          bs.curArg := argn;
+          Determine(gen, g^.grType, a^.ntype, bs)
+        end;
+        a := a^.next
       end;
-      if a <> nil then a := a^.next;
       NextFormal(g, n)
     end
+  end;
+
+  { The tuple, in the order the type parameters were written -- which is the
+    order 6.4.7 gives a tuple its identity in, so an inferred activation, a
+    partial one and a written one with the same types all produce the same
+    instantiation and share a cache entry. One walk for all three forms: by
+    here every type parameter that has a type has it in `bs`, whether an
+    argument named it or an actual determined it. }
+  FirstFormal(gen, g, n);
+  while (g <> nil) and ok do begin
+    if g^.grIsTypeDisc then begin
+      k := BoundSlot(bs, n^.dnAt, n^.dnLen);
+      given := nil;
+      if k > 0 then given := bs.b[k].ty;
+      if given = nil then begin
+        ErrorAt(line, col);
+        write('nothing in this call says what ''');
+        WritePool(n^.dnAt, n^.dnLen);
+        write(''' of ''');
+        WritePool(gen^.at, gen^.len);
+        write(''' is: write the type arguments, or pass an argument whose ');
+        writeln('type determines it');
+        ok := false
+      end
+      else if not SatisfiesCat(given, g^.grCat) then begin
+        ReportCat(gen, n, g, given, bs.b[k].line, bs.b[k].col, bs.b[k].argn);
+        ok := false
+      end
+      else AppendType(tuple, tupleTail, given)
+    end;
+    NextFormal(g, n)
   end;
 
   if ok then begin
@@ -21410,17 +21451,26 @@ begin
       further on: elsewhere a parser's node is left in place and its real
       operands moved out, and here the node is removed outright, because
       CodeGen walks this list to emit actuals and a type has none. }
-    if not inferred then begin
+    if nWritten > 0 then begin
       prev := nil;
       a := args;
+      j := 0;
       FirstFormal(gen, g, n);
       while (g <> nil) and (a <> nil) do begin
-        nxt := a^.next;
         if g^.grIsTypeDisc then begin
-          if prev = nil then args := nxt else prev^.next := nxt
+          j := j + 1;
+          { An omitted type parameter consumed no actual, so the walk does not
+            step over one for it. }
+          if j <= nWritten then begin
+            nxt := a^.next;
+            if prev = nil then args := nxt else prev^.next := nxt;
+            a := nxt
+          end
         end
-        else prev := a;
-        a := nxt;
+        else begin
+          prev := a;
+          a := a^.next
+        end;
         NextFormal(g, n)
       end
     end
