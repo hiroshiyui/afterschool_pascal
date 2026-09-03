@@ -6755,3 +6755,84 @@ twelve programs anyone wrote here to be read rather than to pin a clause.
   would be the corpus that finds the next `JsonLine`, and it is the one row
   here that pays twice: every example is also a case, and a case that fails
   is a finding.
+
+## The tour, and what writing it found
+
+`doc/roadmap.md`'s chapter *What would make this practical to pick up* opened
+on 2026-09-02 with three rows under *Getting it and learning it*. Two closed
+the next day — the binary and the examples — and the third closed on
+2026-09-03: [`doc/tour.md`](tour.md) is eleven sections of prose with short
+programs in it, for a reader who knows Turbo Pascal and has never seen this
+dialect. It is linked from the top of `README.md` and from that page's
+Documentation section, and `examples/` is its other half, pointed at from six
+of the eleven sections rather than inlined.
+
+**No ADR.** A document that states what is already decided constrains nothing
+and deviates from nothing, which is the bar `CLAUDE.md` sets for a record; the
+two roadmap rows and the README link are the whole of what moved. The one
+thing the tour *decides* is what a reader is told first, and it is written
+down where a reader can disagree with it: what a compiler is and why it does
+not link, then what is familiar, then modules — because everything after
+section 3 imports something.
+
+**Every fragment was compiled**, which is the discipline the examples row set
+and the only one available: a tour is prose, and prose about a compiler is a
+claim nothing else here can contradict. Nine complete programs were written
+into a scratch directory and run through `tools/pascalcc` against the built
+compiler and `lib/`: hello, a module and its client, strings, a text walk, a
+fallible chain, an owned list, a generic vector, a generic map, two tasks and
+a channel, and two `external` bindings. Three of the nine were wrong on the
+first draft, and each was wrong in a way a reader would have hit.
+
+**A source named with no directory finds no sibling module.** The module
+section's whole point is that a program and its modules in one directory need
+no manifest and no build order, which is ADR-0244's first search rule and a
+sentence `README.md` already carried. `pascalcc sayhello.pas` answers *no
+interface named 'greeting' has been exported*; `pascalcc ./sayhello.pas`
+compiles. `SourceDir` scans back for a `/` and answers the empty string when
+there is none, and `AddPath` deliberately drops an empty directory, an empty
+entry in `AFTERSCHOOL_PASCAL_PATH` being a POSIX surprise nobody wants. So the
+claim is true of every spelling but the one a person types, and **no oracle
+here could have seen it**: every case is compiled by a harness that passes a
+path — `install-layout` an absolute prefix, `import_by_name` an
+`--import-path` — which is `long-path`'s argument and `stale-component`'s met
+a third time. It is a roadmap row rather than a fix, because the tour's job
+was to be written and the compiler change wants a case of its own.
+
+**The library is wordier than the language now requires, and its own header
+says why in the past tense.** `lib/dialect/pascontainer.pas` opens with a
+worked example writing `VecInit(IntVec, v, 8)`, `VecPush(IntVec, integer, v,
+42)` and `VecFree(IntVec, v)`, and a paragraph headed *Why two type arguments
+and not one* explaining that the second is redundant and waiting on §6.4.9.
+Both have expired: `VecPush`'s signature now reads `x: type of v^.a[1]`, so
+there is no second type argument to explain, and ADR-0254's inference means
+`VecInit(v, 8)`, `VecPush(v, k * k)`, `VecLen(v)` and `VecFree(v)` all compile
+with no types written at all — as do `MapInit`, `MapPut`, `MapHas`,
+`MapCount` and `MapFree`. What still needs its types is `VecGet` and
+`MapGet`, and for the reason the roadmap's *Writing a daily program* already
+gives: the element type appears only in the *result*, nothing in the call
+determines it, and inference is all-or-nothing. That is a sharper statement of
+the finding than the row had — the complaint is not that the library is behind
+the language everywhere, it is that one shape cannot infer and drags the rest
+of its call with it. `examples/word_freq.pas` writes the redundant arguments
+too.
+
+**The tour is where the four warnings and the traps land in one paragraph
+each**, and writing them found nothing wrong — which is worth recording,
+because the three sections that pay a reader back fastest are the three
+nobody had had to explain in ordinary words before: what an owned pointer is
+*for* (it moves *who frees this* out of the reader's head and into the
+declaration), when `try` is the wrong shape (it propagates by leaving the
+routine, so it cannot stand where a program must still answer), and why a
+task cannot close the channel downstream of it. The last is ADR-0295's first
+finding, restated as a rule a reader follows rather than as a defect report.
+
+### The row as it stood
+
+- **No tour.** `doc/afterschool-pascal-spec.md` is an amendment in ISO
+  numbering, `doc/adr/` is an audit trail, and `README.md`'s language section
+  is a feature list 900 lines long. Nothing in the tree explains the dialect
+  to a person who knows Turbo Pascal and wants an HTTP client by evening —
+  what an owned pointer is *for*, when to reach for `T ! E` and when for an
+  accessor, why a module's heading is its interface. The examples above are
+  half of that document; the other half is prose that says why.

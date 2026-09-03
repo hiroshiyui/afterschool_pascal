@@ -23,7 +23,7 @@ nobody has decided yet.
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this easier to work on](#what-would-make-this-easier-to-work-on) | nothing queued either: eight items for someone working *on* the compiler, all closed, one style decision left to whoever maintains this source, and the three lessons about how this page is written |
-| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
+| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -250,13 +250,27 @@ the first row here to close, the day after the chapter was written
   The row as it stood is in
   [`doc/history.md`](history.md#the-examples-and-what-writing-them-found).
 
-- **No tour.** `doc/afterschool-pascal-spec.md` is an amendment in ISO
-  numbering, `doc/adr/` is an audit trail, and `README.md`'s language section
-  is a feature list 900 lines long. Nothing in the tree explains the dialect
-  to a person who knows Turbo Pascal and wants an HTTP client by evening —
-  what an owned pointer is *for*, when to reach for `T ! E` and when for an
-  accessor, why a module's heading is its interface. The examples above are
-  half of that document; the other half is prose that says why.
+- ~~**No tour.**~~ **Written**: [`doc/tour.md`](tour.md), eleven sections of
+  prose with short programs in it, linked from the top of `README.md`. The row
+  as it stood and what writing it found are in
+  [`doc/history.md`](history.md#the-tour-and-what-writing-it-found).
+
+- **A source named with no directory finds no sibling module.** ADR-0244's
+  first search rule is *the directory the source being translated is in*, and
+  `SourceDir` computes that from the path it was handed: a bare `prog.pas` has
+  no `/` in it, so the answer is the empty string and `AddPath` drops it — an
+  empty entry being deliberately skipped, since one in
+  `AFTERSCHOOL_PASCAL_PATH` would name the working directory. So a program and
+  its modules in one directory find each other under `pascalc ./prog.pas` and
+  do not under `pascalc prog.pas`, which is the shape a person types.
+  `README.md` says such a checkout compiles with no configuration and it is
+  half true. The command that shows it: put `greeting.pas` and `sayhello.pas`
+  beside each other and run both spellings — the second answers *no interface
+  named 'greeting' has been exported*. Found by writing `doc/tour.md`'s module
+  section; no oracle here could see it, every case being compiled by a harness
+  that passes a path. The fix looks like one line — answer `'./'` where there
+  is no separator — and wants a case of its own, since `install-layout` drives
+  an absolute prefix and `import_by_name` an `--import-path`.
 
 ### Writing a daily program
 
@@ -347,13 +361,15 @@ the first row here to close, the day after the chapter was written
   all there — and a language nobody has run on a laptop is not yet practical
   whatever else is true of it.
 
-- **A user's own multi-module program already builds itself**, and nothing
-  tells them so. `import` resolution is transitive, `--dump-imports` tells
-  `pascalcc` what to translate, and `AFTERSCHOOL_PASCAL_PATH` reaches an
-  installed library (ADR-0244) — so there is no manifest to write and no
-  order to maintain. That is better than most languages and it is stated in
-  `README.md` only as a consequence of the install layout. It belongs in the
-  tour.
+- ~~**A user's own multi-module program already builds itself**, and nothing
+  tells them so.~~ **Told**: it is
+  [`doc/tour.md`](tour.md#there-is-no-manifest-and-no-build-order-to-maintain),
+  under a heading of its own — resolution is transitive, `--dump-imports`
+  tells `pascalcc` what to translate, `AFTERSCHOOL_PASCAL_PATH` reaches an
+  installed library, and there is no manifest and no order to maintain
+  (ADR-0244). Writing that section is what found the row above it in *Getting
+  it and learning it*: the claim is true of every spelling of the command but
+  the one a person types.
 
 **If one row from each section were taken first**: a binary, a line in every
 trap, `references`, and the examples. Three of the four were taken the next

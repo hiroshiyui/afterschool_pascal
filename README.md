@@ -20,6 +20,11 @@ Bootstrapping was the previous long-term goal and it is **done**: the compiler
 compiles itself, and stage 2 equals stage 3. It is now a constraint on the order
 features can land in rather than a destination.
 
+**New here?** [`doc/tour.md`](doc/tour.md) is the tour: a compiler, a program,
+modules, strings and text, errors, memory, generics, tasks, C and the editor,
+written for someone who knows Turbo Pascal and wants something running this
+evening. This page is the reference beneath it.
+
 ## Building
 
 **Getting a binary.** Every release from v3.5.0 carries
@@ -2216,6 +2221,10 @@ front end both went with the conformance modes.
 how to run the proofs.
 
 ## Documentation
+
+[`doc/tour.md`](doc/tour.md) is where a new reader starts: eleven sections of
+prose with short programs in them, aimed at somebody who knows Turbo Pascal
+and has never seen this dialect. `examples/` is its other half.
 
 [`doc/implementation-defined.md`](doc/implementation-defined.md) is what this
 processor decides where a clause leaves it open, and it is the one to read next
