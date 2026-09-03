@@ -1045,8 +1045,8 @@ inside a task included — `release(c)`, `c := nil` and `c := take(d)` all do �
 so a pipeline of stages each closing the one downstream of it terminates; the
 release performed by the *end* of a task's block only drops that task's
 reference, which is what lets a pool of workers share one job channel.
-`channel`, `task`, `spawn`, `send`, `receive` and `wait` are nobody's words —
-a program that declares any of them keeps it.
+`channel`, `task`, `spawn`, `send`, `receive`, `wait` and `select` are
+nobody's words — a program that declares any of them keeps it.
 
 **A task can be named, and waited for** (ADR-0312):
 
@@ -1071,9 +1071,39 @@ into read as work that was done. It takes nothing out of the block's join: a
 block still joins everything it commenced before releasing anything of its
 own, and `wait` only completes one of them earlier.
 
-What is not here: there is no select over several channels, no timeout on a
-`send`, a `receive` or a `wait`, and no channel of handles — a task may be
+**A program can wait for whichever comes first, and can give up** (ADR-0313):
+
+```pascal
+  select
+    receive(jobs, j):        Handle(j);
+    send(replies, answer):   sent := sent + 1;
+    ok := receive(feed, v):  if not ok then live := false;
+    after 500:               writeln('still idle')
+  end
+```
+
+`select` waits until one of its arms can proceed, performs that operation and
+runs that arm. A `receive` arm proceeds when a value is available *or* when the
+channel has been closed and drained, which is what `ok := receive(c, v)` is
+for — the boolean is `receive`'s own, so a drain loop ends inside a select.
+A `send` arm proceeds while the channel has room, which is how a program feeds
+several consumers without choosing one to block on. `after N` gives up after
+N milliseconds; `otherwise` does not wait at all. The punctuation is the
+case-statement's, and `select`, `after` and the rest are nobody's
+words — `after` is a spelling this construct reserves inside itself and
+nowhere else.
+
+Which arm proceeds when more than one can is **not** the order they are
+written: the start rotates, so a channel that is always ready cannot starve
+the arm below it. A program must not depend on which one goes first.
+
+What is not here: there is no timeout on `wait` — a wait that gave up would
+leave a program holding a task-variable whose activation is still running, and
+nothing here says what that is — and no channel of handles: a task may be
 *given* a socket at the moment it starts and cannot be sent one afterwards.
+An activation cannot close a channel and then drain it either, all three ways
+of closing one emptying the variable as well, so the close a select reports is
+always another activation's.
 
 **`exit` leaves the block early** (ADR-0177), which no standard Pascal has and
 every widely used one does:
