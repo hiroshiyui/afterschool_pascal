@@ -31,6 +31,7 @@ lib_container 0
 lib_container_key 0
 lib_dir 0
 lib_json 0
+lib_json_number 0
 lib_json_wide 0
 lib_list 0
 lib_lsp 0

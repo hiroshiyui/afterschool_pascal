@@ -3661,6 +3661,36 @@ taken by the caller.
   lockstep, a walk that stops and resumes, and a range out of the middle. Not
   convenience — an `ElementAt` would have been that, and is refused.
 
+### A JSON number a person can read (`PasJson`, ADR-0309)
+
+**A real is written as the shortest decimal that reads back as the same
+value**, and `PasJson` converts nothing to get there: `ShortestReal` asks
+`writestr` for the value at a precision, builds the spelling, hands it to
+`readstr`, and keeps the first one that returns what it started from. Until
+ADR-0309 every real came out in §6.9.3.4.1's default floating-point form —
+`0.75` as `7.500000000000E-01`, which is a JSON number by RFC 8259 §6 and the
+form no reader wants. Three things carry it:
+
+- **The search starts at fifteen digits and strips trailing zeros**, not at one
+  and upwards. If a decimal of k ≤ 15 digits reads back as x, rounding x to
+  fifteen digits *is* that decimal padded with zeros — the relative half-ulp is
+  1.1e-16 and half a fifteenth-digit step is 5e-16 — so one probe answers for
+  `0.75` and four is the worst case. Measured 5.8 µs a number against 27 µs for
+  the loop that starts at one. The argument is about a *normalised* value, so a
+  denormal starts at one digit instead, which is what keeps `1e-320` from
+  printing as fourteen digits.
+- **Where the point goes is ECMAScript's `Number::toString`** (from ECMA-262):
+  fixed when `-6 < n ≤ 21`, an exponent otherwise. `10` is `10`,
+  `1e20` is its twenty-one digits, `1e-7` is `1E-7`.
+- **A whole number is untouched.** `whole` (ADR-0120) already carried "the
+  document wrote no fraction and no exponent", and that branch writes
+  `v^.inum:1`; a real that happens to be integral writes `3` and never `3.0`.
+
+What this made visible and does not fix is the **reader**: `ParseNumberNode`
+scales a decade at a time, so `JsonParse` of `1E+300` is not `1e300`.
+`tests/dialect/lib_json_number.pas` prints that as a second column, so the day
+it is corrected the golden says so.
+
 ### A compiler diagnostic in the protocol's shape (`PasLspDiag`)
 
 **What the language server needed and no module supplied** — the roadmap's

@@ -12,6 +12,6 @@
   "empty": {},
   "none": null,
   "quoted": "say \"hi\"\tnow",
-  "ratio": 7.500000000000E-01
+  "ratio": 0.75
 }
 -- 8 top-level members, "name" is -1 (absent members read as the default)

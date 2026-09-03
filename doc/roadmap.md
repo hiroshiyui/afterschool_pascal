@@ -292,13 +292,18 @@ the first row here to close, the day after the chapter was written
   because every rename moves the collision rather than removing it.
 
 - **Two smaller reports from the same pass** (ADR-0295, findings 5 and 6):
-  `PasJson` renders `0.75` as `7.500000000000E-01`, which
-  `examples/json_pretty.out` now holds so the day it changes is visible; and
+  ~~`PasJson` renders `0.75` as `7.500000000000E-01`~~ — **done** (ADR-0309),
+  and moved to [`doc/history.md`](history.md#the-fifth-of-the-seven-closed-adr-0309);
+  the writer renders and reads its own output back and keeps the first
+  spelling that returns the value it started from, and
+  `examples/json_pretty.out` moved with it, which is what that golden was for.
+  What it uncovered is the *reader*: `JsonParse` scales a decade at a time and
+  is not correctly rounded, catalogued in the new case's second column. And
   ~~a `MapKey` is 63 characters, so a map keyed by text from outside needs a
   guard the example has to explain~~ — that one was **half wrong** and is
-  **done** (ADR-0310), moved to
-  [`doc/history.md`](history.md#the-capacity-is-the-callers). The map has been
-  generic over its key since ADR-0254 and 63 was `MapKey`'s capacity and never
+  **done** too (ADR-0310), in
+  [`doc/history.md`](history.md#the-capacity-is-the-callers): the map has been
+  generic over its key since ADR-0254, so 63 was `MapKey`'s capacity and never
   the map's; what was real is that a program keyed by text from outside must
   choose a capacity, and the rule for choosing it is now written where the
   library is. ~~The third — an owned pointer refusing

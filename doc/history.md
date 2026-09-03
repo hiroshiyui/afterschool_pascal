@@ -7024,6 +7024,31 @@ uncompilable, its `VecGet(IntVec, integer, v, k)` predating ADR-0304's argument
 order: ADR-0308's *a document can be an oracle*, arriving as the document being
 the thing that was wrong.
 
+### The fifth of the seven, closed (ADR-0309)
+
+`PasJson` wrote `0.75` as `7.500000000000E-01`, and ADR-0295 put that spelling
+in `examples/json_pretty.out` so the day it changed would be visible. It
+changed on 2026-09-03, and the golden is where it was read back.
+
+The writer now renders the value at a precision, hands what it built to
+`readstr` and keeps the first spelling that returns the value it started from,
+so the module converts nothing: both halves of the trip are the processor's
+own. Two things about it are worth carrying. **The search starts at fifteen
+digits rather than at one**, because stripping the trailing zeros off a
+fifteen-digit rounding recovers every shorter spelling -- a normalised double
+lies within a relative 1.1e-16 of the decimal that reads back as it, and half a
+fifteenth-digit step is 5e-16 -- which turned 27 microseconds a number into
+5.8. And **where the point goes is ECMAScript's rule with its citation**
+rather than a threshold somebody picked, JSON being that language's notation.
+
+What closing it found is a defect one layer over: the *reader* scales by a
+decade at a time, so `JsonParse` of `1E+300` is not `1e300`. The old writer put
+an exponent on every real, so the module had never been able to read its own
+output back and nothing had said so. `tests/dialect/lib_json_number.pas` prints
+it as a second column beside the claim, which makes the sixth finding from
+somebody writing a program a finding from somebody testing one -- the same
+sentence one step further along.
+
 ## The concurrency residue
 
 Two of the three rows ADR-0268 wrote about itself are closed, on 2026-09-03,
