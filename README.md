@@ -190,7 +190,7 @@ which modules it uses; the ones that import the library carry a
 | `parse_errors.pas` | `T ! E` read with `try`, and with an `…Or` accessor |
 | `owned_list.pas` | a sorted linked list on `owned ^Node` and `take`, disposed by its block |
 | `graphemes.pas` | `utf8(n)`, `for g in t`, and `PasUnicode`'s scalar view and folding |
-| `pipeline_tasks.pas` | two tasks and a channel, ended by a sentinel |
+| `pipeline_tasks.pas` | two tasks and a channel, each stage closing the next |
 | `fetch_http.pas` | an HTTP GET with `PasHttp`, against a server the program is itself |
 | `c_function.pas` | `external`: `strlen`, `atoi`, `cbrt`, `modf` from the C library |
 | `defer_cleanup.pas` | `defer` removing a file and a directory on every way out of a block |
@@ -1009,21 +1009,42 @@ end
 
 A `channel [n] of T` is a bounded queue and **is** a handle: no copy, released
 when its block ends, `release` to close it earlier. A `task` is a procedure
-only `spawn` may start, and what may cross into one is a **copy** of a
-transferable value or a **reference** to a channel — nothing else, and it may
-name only its own variables. Those two rules together are the whole of
-share-nothing: a task cannot reach a variable another activation may be
-writing.
+only `spawn` may start, and three things may cross into one: a **copy** of a
+transferable value, a **reference** to a channel, and a **handle moved in** —
+nothing else, and it may name only its own variables. Those two rules together
+are the whole of share-nothing: a task cannot reach a variable another
+activation may be writing.
+
+A handle is *moved* where a channel is *lent*, and the actual says so:
+
+```pascal
+task Serve(conn: Socket; back: Reply);
+begin { the task owns the connection and closes it when its block ends } end;
+
+  e := NetAccept(srv, conn);
+  spawn Serve(take(conn), back);      { conn is empty from here on }
+```
+
+`take` (AP 6.4.12.7) is the only value a handle-typed argument may be, because
+a copy would leave two owners. A channel is safe to share because it is the
+one object here with a lock in it; a socket has none, so what crosses is
+ownership.
 
 Every task a block spawned is **joined** before that block releases anything,
 which is what makes a lent channel safe. `send` waits while the channel is
 full and stops the program if it was closed; `receive` waits while it is empty
 and answers *false* once it is closed and drained, which is the loop condition
-above. `channel`, `task`, `spawn`, `send` and `receive` are nobody's words — a
+above. **A release the program writes closes the channel wherever it stands**,
+inside a task included — `release(c)`, `c := nil` and `c := take(d)` all do —
+so a pipeline of stages each closing the one downstream of it terminates; the
+release performed by the *end* of a task's block only drops that task's
+reference, which is what lets a pool of workers share one job channel.
+`channel`, `task`, `spawn`, `send` and `receive` are nobody's words — a
 program that declares any of them keeps it.
 
-What is not here: a task cannot be *given* a handle, there is no way to wait
-for one task, no select over several channels, and no timeout.
+What is not here: there is no way to wait for one task, no select over several
+channels, no timeout, and no channel of handles — a task may be *given* a
+socket at the moment it starts and cannot be sent one afterwards.
 
 **`exit` leaves the block early** (ADR-0177), which no standard Pascal has and
 every widely used one does:

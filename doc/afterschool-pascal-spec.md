@@ -1159,8 +1159,10 @@ a routine shall declare a type-identifier for it.
 one actual-parameter, which shall be a variable-access of an owned-pointer-type
 and shall not be threatened (§6.9.4). The function-designator shall stand only
 as the whole right side of an assignment-statement whose target is a
-variable-access of the same type; it shall be the only value of an
-owned-pointer-type an assignment-statement admits.
+variable-access of the same type, or as an actual-parameter of a
+spawn-statement (6.9.3.12) corresponding to a formal parameter of a
+handle-type (6.7.8.1); it shall be the only value of an owned-pointer-type an
+assignment-statement admits.
 
 The assignment shall, in this order: obtain the value the actual-parameter's
 variable holds; make that variable empty; release the value the target holds
@@ -1189,10 +1191,19 @@ NOTE 4 — `take` of an empty variable is empty and is not an error. A move that
 moves nothing is the assignment of `nil` this type otherwise has no spelling
 for, and 6.4.14.3's release still applies to what the target held.
 
-NOTE 5 — This clause says nothing of handle-types (6.4.12), whose one
-assignment is 6.4.12.2's. A move between two handles would release the source
-without releasing its value, which is a distinct operation from the one here;
-it waits for a client (ADR-0182).
+NOTE 5 — The operation of this clause applies to a handle-type as well, and
+6.4.12.7 is where it is stated: what is written there is this clause read one
+type over, and the two are one rule (ADR-0267). The second position named
+above is a handle's alone — nothing spawns with an owned pointer, an owned
+pointer not being transferable (6.4.16.3) and not being a handle (ADR-0302).
+
+NOTE 6 — The second position is the only place in this language where an
+affine value leaves a variable other than by an assignment, and it is admitted
+for the reason the assignment is: what the actual-parameter's variable held is
+obtained and the variable made empty *before* the activation the value crosses
+into is commenced, so at no moment do two activations hold one value. A copy
+in that position would leave two owners and two releases, which is what
+6.4.12.3 exists to prevent.
 
 NOTE 6 — `nil` is not admitted, and the asymmetry with 6.4.12.2 — where a
 handle-type variable *is* assigned `nil`, and that assignment is its release —
@@ -1632,10 +1643,52 @@ apply.
 handle-type, no owned-pointer-type, no slice and no procedural type, at any
 depth.
 
-NOTE — What crosses between two activations is a *value*, and a value holding a
+NOTE 1 — What crosses between two activations is a *value*, and a value holding a
 reference is a name for something the other side does not own. The rule is
 asked structurally rather than of the kind, because a record of records of
 pointers is as unsendable as a pointer.
+
+NOTE 2 — A fixed-capacity string-type (ISO/IEC 10206:1991 §6.4.3.3) and a
+text-type (6.4.15) are transferable: each is a length beside a buffer, both in
+the value, so what the reader receives shares nothing with what the sender
+sent.
+
+**6.4.16.4 Releasing a channel [added].** Releasing (6.4.12.3) a channel by a
+release the program has written — the release-function (6.4.12.5), or an
+assignment-statement whose target is the variable holding it (6.4.12.2,
+6.4.12.7) — shall **close** the channel: no further value
+shall be sent, every activation waiting on it shall be resumed, and a receive
+that finds it empty shall report the close (6.9.3.13.2).
+
+Releasing a channel by the ceasing to exist of the variable holding it shall
+close the channel where that variable is not a formal parameter of a
+task-declaration (6.7.8), and shall not close it where it is.
+
+NOTE 1 — The two paragraphs answer two different questions, and reading the
+second as the whole rule is what made a pipeline unwritable. *This activation
+has finished with the channel* is what the end of a task's block says, and a
+task of a pool that has run out of work must not close the channel its
+colleagues are still draining — so the second paragraph is right. *Close it*
+is what a program writing `release(c)` says, and before this clause that
+statement did nothing at all: the reference count went down, the channel
+stayed open, and every activation downstream waited for ever with no error
+reported anywhere (ADR-0295 finding 1, ADR-0302).
+
+NOTE 2 — The first paragraph is therefore not an exception to 6.4.12.3 but a
+statement about what releasing a *channel* releases. A handle's value is the
+object, and closing is the observable half of letting go of one that several
+activations hold.
+
+NOTE 3 — A task that closes a channel it was given cannot destroy it.
+6.9.3.12.1 makes the block that spawned the task complete that task before
+releasing any of its own variables, so a variable of the spawning block still
+holds the channel throughout; where no such variable does, the task is the
+last activation holding it and there is nothing left to protect.
+
+NOTE 4 — The spellings of the program's own release mean one thing, which is
+why they are named together: `release(c)`, `c := nil` and `c := take(d)` each
+release what `c` held, and a rule that separated them would be a rule about
+syntax rather than about the channel.
 
 ### 6.5 Declarations and denotations of variables
 
@@ -2663,11 +2716,19 @@ second token is required to be an identifier as well, so a program that has
 written `task` alone gets the diagnostic it got before.
 
 **6.7.8.1 What may cross into a task.** Every formal parameter of a
-task-declaration shall be a value parameter, and its type shall be either
-transferable (6.4.16.3) or a channel-type.
+task-declaration shall be a value parameter, and its type shall be
+transferable (6.4.16.3), a channel-type, or a handle-type (6.4.12).
 
 It shall not be a variable parameter, and it shall not be a procedural or
 functional parameter (§6.7.3.4, §6.7.3.5).
+
+A formal parameter of a handle-type that is not a channel-type shall be
+**moved** into the task: the corresponding actual-parameter shall be `take`
+(6.4.14.6) applied to a variable-access of that same handle-type. The
+variable shall be made empty before the activation is commenced, and the
+formal parameter shall hold the value the variable held; the value shall be
+released (6.4.12.3) when the activation of the task-declaration's block
+ends.
 
 NOTE 1 — **This clause is where share-nothing is enforced, and it is the whole
 of it.** A task's body cannot name a variable of the activation that spawned
@@ -2686,10 +2747,25 @@ reference to it, so the two activations name one object — which is what a
 channel is for, and it is safe because that object is the only one in this
 language with a lock in it.
 
-NOTE 4 — A handle that is not a channel is refused, so a task cannot yet be
-*given* a stream or a socket. 6.4.12.7's move exists and this clause does not
-use it; that is a boundary of this increment rather than a property of the
-model (ADR-0267, ADR-0268).
+NOTE 4 — A handle that is not a channel is **moved** where a channel is lent,
+and the difference is the whole of what makes each safe. A channel is the one
+object two activations may name, and it is safe because it is the only object
+in this language with a lock in it; a stream or a socket has no lock, so what
+crosses is ownership and not a second name. `take` is required as the
+*spelling* rather than inferred, so a reader of the spawn-statement can see
+that the variable beside it is empty from that point on (ADR-0302).
+
+NOTE 5 — The value is released when the task's block ends, which is the
+ordinary rule for a handle-variable and needs no clause of its own. The
+activation that spawned the task no longer holds the value, so 6.9.3.12.1's
+join is not what keeps this correct — it is what keeps the *channel* case
+correct. Nothing here releases a handle twice, because at no moment do two
+variables hold it.
+
+NOTE 6 — A handle-type is not transferable (6.4.16.3), so a channel cannot
+carry one. A task may be given a socket; it may not be *sent* one. What would
+make sending one expressible is a rule about which activation owns a value in
+a bounded queue, and no program here has wanted it (ADR-0302).
 
 **6.7.8.2 What a task's body may name.** A variable-access occurring in the
 block of a task-declaration, or in the block of any procedure or function
@@ -2910,7 +2986,10 @@ spawn-statement shall commence an activation of that task which proceeds
 concurrently with the statement following, and shall not wait for it.
 
 The actual parameters shall be evaluated, and each value copied, before the
-activation commences.
+activation commences. An actual-parameter corresponding to a formal parameter
+of a handle-type that is not a channel-type shall be `take` (6.4.14.6) applied
+to a variable-access of that type, and what is copied shall be the value that
+variable held, the variable being made empty (6.7.8.1).
 
 `spawn` is not a word-symbol, and the position is `defer`'s (6.9.3.11): a
 statement beginning with an identifier can continue only as a designator, as a
@@ -2945,15 +3024,15 @@ nothing.
 **6.9.3.13.1 send.** The required procedure-identifier `send` shall take a
 channel-variable and an expression assignable to the channel's component type.
 The value shall be copied into the channel. Where the channel is full the
-activation shall wait until it is not; where the channel has been released
-(6.4.12.5) it shall be an error.
+activation shall wait until it is not; where the channel has been closed
+(6.4.16.4) it shall be an error.
 
 **6.9.3.13.2 receive.** The required function-identifier `receive` shall take a
 channel-variable and a variable of the channel's component type, and shall
 yield a value of type `boolean`. Where a value is available it shall be
 written into the variable and the result shall be *true*. Where the channel is
-empty the activation shall wait; where it is empty and has been released the
-result shall be *false* and the variable shall not be written.
+empty the activation shall wait; where it is empty and has been closed
+(6.4.16.4) the result shall be *false* and the variable shall not be written.
 
 The variable shall be threatened (§6.9.4) as `read`'s is.
 
@@ -2964,10 +3043,11 @@ receive has an ordinary second outcome — the channel is closed and drained —
 and that outcome *is* the loop condition a reader wants: `while receive(c, v)
 do` reads as what it does, where a procedure would need a flag beside it.
 
-NOTE 2 — A released channel is drained before the close is reported, so the
+NOTE 2 — A closed channel is drained before the close is reported, so the
 values still in flight when a program closes a channel are delivered. That is
 what makes closing a job channel the way to tell a pool of workers that there
-is no more work.
+is no more work — and, since 6.4.16.4, what makes a pipeline of tasks each
+closing the channel downstream of it terminate.
 
 NOTE 3 — Both are required identifiers, so a program that declares its own
 `send` or `receive` keeps it (§6.1.3), which is `int64`'s and `exit`'s route

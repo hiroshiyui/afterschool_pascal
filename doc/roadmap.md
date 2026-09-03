@@ -105,9 +105,9 @@ shape to expect from here on:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| **to give a task a handle** | AP 6.4.12.7's move exists — a handle moves (ADR-0267) — and the argument block does not use it, so a task takes channels and transferable values and cannot be handed a socket or a stream. ADR-0267 was landed *for* this and is one increment early; the two records say so rather than implying each other |
+| ~~**to give a task a handle**~~ | **Done** (ADR-0303), and the whole of what was missing was a *position*: `take` stood on the right of an assignment and nowhere else. A task formal may be a handle-type and the actual is `take(v)` — moved, where a channel is lent. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
 | **to wait for one task** | There is no `Task` variable, no select over several channels, and no timeout on a send or a receive. A block joins every task it spawned, and a program needing anything finer writes a second channel |
-| **to send a string** | `Transferable` admits one and the implementation copies `esize` bytes, which is right for a fixed-capacity `string(n)`. It has no case, so it is **unclaimed** rather than done — the distinction ADR-0080 exists to keep |
+| ~~**to send a string**~~ | **Done** (ADR-0302), and writing the case is what showed the reading was wrong twice over: `send` chose its path with `IsStructured`, which a variable-string is not, so the module did not assemble; and a string *value* is shorter than the element it goes into, so copying `esize` bytes read past it. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
 
 **And one shape with no client at all**, which is what is left of the FFI rows:
 a struct **member** that is itself a pointer. A record crosses as a `var`
@@ -283,24 +283,15 @@ the first row here to close, the day after the chapter was written
   over. The row said that half had not been probed; probing it took four
   lines.
 
-- **Concurrency is one increment short**, and the rows are in [What each
-  landed feature left open](#what-each-landed-feature-left-open): a task
-  cannot be handed a socket, cannot be waited on singly, has no select and no
-  timeout. Nothing to add here but the observation that these are the three
-  things the first real server written with tasks will want in its first
-  hour.
-
-- **A task cannot close the channel downstream of it, and the program that
-  tries deadlocks in silence** (ADR-0295, finding 1). `release(c)` on a
-  channel a task was *handed* drops that task's reference and does not
-  close — `runtime/pasrt_task.c`'s `pas_chan_unref` says so and nothing a
-  program's author reads does — so a pipeline of stages each closing the
-  next is unwritable by close, and the first draft of
-  `examples/pipeline_tasks.pas` hung at once. The command that shows it:
-  give a stage `k := release(out)` after its loop and run it under
-  `timeout 5`. The example ends its stages on a sentinel. The cheap answer is
-  a compile-time refusal of `release` on a channel parameter inside a task;
-  the other is a sentence in AP 6.9.3.13.
+- **Concurrency is one row short**, and it is in [What each landed feature
+  left open](#what-each-landed-feature-left-open): a task cannot be waited on
+  singly, and there is no select and no timeout. A task *can* now be handed a
+  socket (ADR-0303) and a stage *can* close the channel downstream of it
+  (ADR-0302). What is left is the observation that a single task's completion
+  is the next thing the first real server written with tasks will want, and
+  that a **channel of handles** is the shape behind both of the closed rows:
+  a task may be given a socket at the moment it starts and not afterwards, so
+  a fixed pool of workers taking connections off a queue is still unwritable.
 
 - ~~**Four of twelve example programs collided with a library name on their
   first draft**~~ — **done** (ADR-0306), and moved to

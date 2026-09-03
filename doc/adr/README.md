@@ -308,6 +308,8 @@ the alternatives that were rejected and why.
 | [0297](0297-the-library-uses-the-feature-it-asked-for.md) | The library uses the feature it asked for | Accepted |
 | [0298](0298-no-two-library-modules-export-one-spelling.md) | No two library modules export one spelling | Accepted |
 | [0299](0299-every-file-variable-is-bindable.md) | Every file variable is bindable | Accepted |
+| [0302](0302-the-release-a-program-wrote-closes-the-channel.md) | The release a program wrote closes the channel | Accepted |
+| [0303](0303-a-task-is-handed-a-handle.md) | A task is handed a handle | Accepted |
 | [0304](0304-a-prefix-of-the-type-arguments.md) | A prefix of the type arguments | Accepted |
 | [0305](0305-the-capacity-is-the-callers.md) | The capacity is the caller's, and the language already reports the cut | Accepted |
 | [0306](0306-a-message-does-not-name-a-placeholder.md) | A message does not name a placeholder type | Accepted |

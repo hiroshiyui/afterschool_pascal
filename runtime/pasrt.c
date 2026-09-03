@@ -756,6 +756,23 @@ void *pas_handle_lend(void *slot) {
   return h->value;
 }
 
+/* AP 6.4.16.4 (ADR-0302): what the slot holds, or a null pointer, and no
+ * error either way.
+ *
+ * `pas_handle_lend` above is the one a program's own call goes through and
+ * traps on an empty variable, because a foreign routine given NULL
+ * dereferences it. This is the other question: the compiler asks it where it
+ * is about to release a channel, so that the channel can be closed before the
+ * reference is dropped -- and a release of an empty variable is not an error
+ * anywhere in this language, which is `pas_handle_release_result`'s own
+ * sentence. It is in this file rather than beside the channel because the
+ * slot is `struct pas_handle` and that type is private here; what it answers
+ * is a pointer the concurrency runtime then reads. */
+void *pas_handle_peek(void *slot) {
+  struct pas_handle *h = slot;
+  return h->value;
+}
+
 static void pas_link_open(struct pas_file *f) {
   f->prev_open = NULL;
   f->next_open = pas_open_files;

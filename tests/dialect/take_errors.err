@@ -13,10 +13,10 @@
 <source>:42:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
 <source>:44:8: error: 'take' takes one variable of an owned pointer type
 <source>:44:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:47:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
-<source>:48:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:47:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:48:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
 <source>:48:8: error: argument 1 of 'lend' is a var parameter and needs a variable
-<source>:49:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:49:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
 <source>:51:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:53:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:53:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
 <source>:53:3: error: cannot assign list: it contains an owned pointer, and a second name for one would dispose one variable twice

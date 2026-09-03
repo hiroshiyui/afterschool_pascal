@@ -1310,6 +1310,35 @@ begin
   writeln(ircode, '  store ptr null, ptr @pas_at')
 end;
 
+{ AP 6.4.16.4 (ADR-0302): a release the *program* wrote closes the channel.
+
+  Two closers decide what happens when a channel-variable ceases to exist --
+  the owner's marks it closed and drops its reference, a task's parameter's
+  drops the reference and does not close, because a worker that has finished
+  must not close the channel its colleagues are still draining. That answers
+  the question whose variable is going away, and it is the wrong answer to the
+  other one: a stage of a pipeline writing `release(out)` means *close it*,
+  and before this it meant nothing at all -- the reference went down, the
+  channel stayed open, and every reader downstream waited for ever with no
+  diagnostic from anywhere (ADR-0295 finding 1).
+
+  So the close is emitted where the program's release is, ahead of the release
+  itself, and the closer that follows goes on doing exactly what it did. The
+  slot's value is read with `pas_handle_peek` rather than `pas_handle_lend`
+  because an empty handle-variable may be released and is not an error, which
+  is the release's own rule; `pas_chan_shut` is null-safe for that reason. }
+procedure EmitChanShut(protected var slot: str);
+var v: str;
+begin
+  Def(v);
+  write(ircode, 'call ptr @pas_handle_peek(ptr ');
+  PutOp(slot);
+  writeln(ircode, ')');
+  write(ircode, '  call void @pas_chan_shut(ptr ');
+  PutOp(v);
+  writeln(ircode, ')')
+end;
+
 procedure PutHex(v: integer);
 var d: integer;
 begin
@@ -5734,6 +5763,9 @@ begin
     second copy of them here would be a copy free to drift. }
   else if e^.clBuiltin = biRelease then begin
     EmitAddress(e^.clArgs, x);
+    { AP 6.4.16.4: a channel is closed by the release the program wrote,
+      whichever variable holds it (ADR-0302). }
+    if IsChannel(e^.clArgs^.ntype) then EmitChanShut(x);
     Def(v);
     write(ircode, 'call i32 @pas_handle_release_result(ptr ');
     PutOp(x);
@@ -7193,6 +7225,9 @@ begin
     designatorGuard := vgWrite;
     EmitAddress(s^.asTarget, dst);
     designatorGuard := vgRead;
+    { AP 6.4.16.4, as the release below: what the target held is released
+      here, and a channel released by the program is closed (ADR-0302). }
+    if IsChannel(s^.asTarget^.ntype) then EmitChanShut(dst);
     write(ircode, '  call void @pas_handle_set(ptr ');
     PutOp(dst);
     write(ircode, ', ptr ');
@@ -7213,6 +7248,10 @@ begin
       designatorGuard := vgWrite;
       EmitAddress(s^.asTarget, dst);
       designatorGuard := vgRead;
+      { AP 6.4.16.4 (ADR-0302): `c := nil` is AP 6.4.12.2's early release
+        written as an assignment, so it closes the channel exactly as
+        `release(c)` does -- one meaning for the two spellings. }
+      if IsChannel(s^.asTarget^.ntype) then EmitChanShut(dst);
       write(ircode, '  call void @pas_handle_set(ptr ');
       PutOp(dst);
       write(ircode, ', ptr ');
@@ -8158,7 +8197,7 @@ end;
 
 procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
-    chSlot, chan, chVal, chTmp, chMark: str;
+    chSlot, chan, chVal, chTmp, chMark, chHdr: str;
     disposeValue: boolean;
     status: str;
     domain, idx: typePtr; head, msg, k: integer;
@@ -8219,10 +8258,48 @@ begin
     PutOp(chSlot);
     writeln(ircode, ')');
     EmitAtDone;
-    { A structured value has no register form (ADR-0017), so what a
-      designator of one yields *is* an address and the runtime copies from
-      it -- no temporary at all. }
-    if IsStructured(s^.pcArgs^.ntype^.elem) then begin
+    { A value that has no register form yields an *address* (ADR-0017), so the
+      runtime copies from it and there is no temporary at all.
+
+      The question is `IsMemory` and not `IsStructured`, which is ADR-0191's
+      split met a second time: a `string(n)` is a length beside a buffer and
+      travels by address, and it is not structured -- so the arm below tried
+      to `store` an aggregate through a pointer EmitExpr had answered with,
+      and the module did not assemble. A channel of `string(16)` was
+      `Transferable`, admitted by every check in the front end, and unwritable
+      (ADR-0302). }
+    { ...but a string is not one of those, and that is the second half of what
+      ADR-0302 found. A `string(n)` is a length beside a buffer, so what the
+      channel holds is `LlSize` bytes and what a *value* of one occupies is
+      only as many as it has -- `'ab' + s` lives in the arena and is four
+      bytes and two. Copying the element's size out of it reads past what the
+      expression produced. And 6.4.6 c)'s padding has to happen somewhere:
+      what crosses is the element type's value and not the expression's. So
+      the store is an ordinary assignment into a temporary of the element
+      type, which is where padding, the capacity check and -- for a text --
+      AP 6.4.15.5's normalisation all already live. }
+    if IsStringType(s^.pcArgs^.ntype^.elem) or
+       IsText(s^.pcArgs^.ntype^.elem) then begin
+      Def(chMark);
+      writeln(ircode, 'call ptr @llvm.stacksave.p0()');
+      Def(chTmp);
+      write(ircode, 'alloca ');
+      PutLlType(s^.pcArgs^.ntype^.elem);
+      writeln(ircode);
+      StrClear(chHdr);
+      EmitStringStore(chTmp, s^.pcArgs^.ntype^.elem, s^.pcArgs^.next, chHdr);
+      EmitAt(s^.line, s^.col);
+      write(ircode, '  call void @pas_chan_send(ptr ');
+      PutOp(chan);
+      write(ircode, ', ptr ');
+      PutOp(chTmp);
+      writeln(ircode, ')');
+      EmitAtDone;
+      write(ircode, '  call void @llvm.stackrestore.p0(ptr ');
+      PutOp(chMark);
+      writeln(ircode, ')')
+    end
+    else if IsMemory(s^.pcArgs^.ntype^.elem) then begin
       EmitAddress(s^.pcArgs^.next, chTmp);
       EmitAt(s^.line, s^.col);
       write(ircode, '  call void @pas_chan_send(ptr ');
@@ -9644,13 +9721,14 @@ end;
 
 { AP 6.9.3.12: the type of one field of a task's argument block.
 
-  It is the formal's *slot* type, but for a channel -- where the slot is a
-  handle record and what crosses is the one word the channel is. The block is
+  It is the formal's *slot* type, but for a handle -- where the slot is a
+  handle record and what crosses is the one word the handle is. The block is
   what the two activations have instead of a shared stack, so every field is
-  either a value copied into it or the address of an object with a lock. }
+  a value copied into it, the address of an object with a lock, or a handle
+  the spawning variable has stopped holding (ADR-0302). }
 procedure PutTaskArgType(f: symPtr);
 begin
-  if IsChannel(f^.stype) then write(ircode, 'ptr')
+  if IsHandle(f^.stype) then write(ircode, 'ptr')
   else PutSlotType(f)
 end;
 
@@ -9748,13 +9826,14 @@ var l: symListPtr; addr: str;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    { AP 6.7.8.1: a task's channel parameter is installed by the prologue --
-      the value crossed and the slot takes a reference to it -- so this walk
-      must not *create* a channel over it. Every other handle parameter is a
-      var parameter and was already excluded; this is the one value parameter
-      of a handle-type a routine of this program can have. }
+    { AP 6.7.8.1: a task's handle parameter is installed by the prologue --
+      a channel's slot takes a reference to the value that crossed and a
+      moved handle's takes the value itself (ADR-0302) -- so this walk must
+      not set one up over it. Every other handle parameter is a var parameter
+      and was already excluded; these are the only value parameters of a
+      handle-type a routine of this program can have. }
     if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) and
-       not (IsChannel(l^.sym^.stype) and (l^.sym^.kind = skParam)) then begin
+       not (IsHandle(l^.sym^.stype) and (l^.sym^.kind = skParam)) then begin
       case l^.sym^.binding of
         fbInternal:  binding := 0;
         fbStdInput:  binding := 1;
@@ -10238,7 +10317,7 @@ end;
 procedure EnterFrame(p: symPtr);
 var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
     actual2, chars: str;
-    nohdr, arglen, shdr: str; k, align: integer; comp: typePtr;
+    nohdr, arglen, shdr, closer: str; k, align: integer; comp: typePtr;
 begin
   BeginFunction(p);
   { A level-0 block's record is a global: it has one activation, and a
@@ -10493,11 +10572,25 @@ begin
         because a worker that has finished must not close the channel its
         colleagues are still draining. Two closers for one type, and which
         one a variable gets says whether it owns the channel or shares it. }
-      else if (l^.sym^.kind <> skVarParam) and IsChannel(l^.sym^.stype) then
+      else if (l^.sym^.kind <> skVarParam) and IsHandle(l^.sym^.stype) then
       begin
         write(ircode, '  call void @pas_handle_init(ptr ');
         PutOp(slot);
-        writeln(ircode, ', ptr @pas_chan_unref)');
+        if IsChannel(l^.sym^.stype) then
+          writeln(ircode, ', ptr @pas_chan_unref)')
+        else begin
+          { AP 6.7.8.1 (ADR-0302): a handle **moved** into a task, so the slot
+            gets the type's own closer -- the task owns what it was given, and
+            its block releases it exactly as the block that used to hold it
+            would have. The spawning variable was emptied by `take` before the
+            thread existed, so no closer runs twice. }
+          StrClear(closer);
+          AppendPool(closer, l^.sym^.stype^.handleAt,
+                     l^.sym^.stype^.handleLen);
+          write(ircode, ', ptr @');
+          PutOp(closer);
+          writeln(ircode, ')')
+        end;
         write(ircode, '  call void @pas_handle_set(ptr ');
         PutOp(slot);
         write(ircode, ', ptr ');
@@ -10636,9 +10729,11 @@ begin
     { A structured value parameter travels as an address everywhere in this
       emitter, so the field itself is what crosses -- and the block outlives
       this activation, which a frame slot of the spawning one would not. }
-    if IsStructured(l^.sym^.stype) and not IsChannel(l^.sym^.stype) then
+    if IsStructured(l^.sym^.stype) and not IsHandle(l^.sym^.stype) then
       AppendOpnd(ops, opTail, fld, true, nil)
-    else if IsChannel(l^.sym^.stype) then begin
+    { A channel's word, or a handle's -- the field holds one pointer either
+      way and the prologue decides what the slot does with it (ADR-0302). }
+    else if IsHandle(l^.sym^.stype) then begin
       Def(val);
       write(ircode, 'load ptr, ptr ');
       PutOp(fld);
@@ -10729,7 +10824,32 @@ begin
   l := task^.params;
   k := 1;
   while (arg <> nil) and (l <> nil) do begin
-    if IsChannel(l^.sym^.stype) then begin
+    { AP 6.7.8.1 (ADR-0302): a handle that is not a channel is **moved** in.
+      The actual is `take(v)` -- Sema admits nothing else here -- so the two
+      calls of AP 6.4.12.7 become one: `pas_handle_take` empties the spawning
+      variable *without* calling the closer, and the value goes into the
+      argument block instead of into another slot. The prologue of the task
+      is where `pas_handle_set` then happens, one thread later, which is why
+      the order that matters for a move is not at risk here: nothing holds the
+      value between the two but the block, and the block belongs to the
+      thread about to be started. }
+    if IsHandle(l^.sym^.stype) and not IsChannel(l^.sym^.stype) then begin
+      EmitAddress(arg^.clArgs, val);
+      Def(link);
+      write(ircode, 'call ptr @pas_handle_take(ptr ');
+      PutOp(val);
+      writeln(ircode, ')');
+      Def(fld);
+      write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
+      PutOp(blk);
+      writeln(ircode, ', i32 0, i32 ', k:1);
+      write(ircode, '  store ptr ');
+      PutOp(link);
+      write(ircode, ', ptr ');
+      PutOp(fld);
+      writeln(ircode)
+    end
+    else if IsChannel(l^.sym^.stype) then begin
       EmitAddress(arg, val);
       EmitAt(arg^.line, arg^.col);
       Def(link);
@@ -10937,6 +11057,9 @@ begin
   writeln(ircode, 'declare void @pas_chan_ref(ptr)');
   writeln(ircode, 'declare i32 @pas_chan_unref(ptr)');
   writeln(ircode, 'declare void @pas_chan_send(ptr, ptr)');
+  { AP 6.4.16.4 (ADR-0302) }
+  writeln(ircode, 'declare void @pas_chan_shut(ptr)');
+  writeln(ircode, 'declare ptr @pas_handle_peek(ptr)');
   writeln(ircode, 'declare ptr @llvm.stacksave.p0()');
   writeln(ircode, 'declare void @llvm.stackrestore.p0(ptr)');
   writeln(ircode, 'declare i32 @pas_chan_receive(ptr, ptr)');

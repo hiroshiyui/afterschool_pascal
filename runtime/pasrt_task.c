@@ -148,6 +148,34 @@ int pas_chan_close(void *p) {
   return 0;
 }
 
+/* AP 6.4.16.4 (ADR-0302): close the channel and leave the count alone.
+ *
+ * The two closers above answer the question *whose variable is going away*;
+ * this answers a different one, *the program said close*. A release the
+ * program wrote -- `release(c)`, or `c := nil` -- means the same thing
+ * wherever it stands, so the compiler emits this before the release and the
+ * closer that follows then does what it always did: the owner's drops its
+ * reference, a task's drops its own.
+ *
+ * A task closing a channel it was lent cannot free it. The block that spawned
+ * it holds a reference until it joins (AP 6.9.3.12.1), and the join is before
+ * that block releases anything -- so the count cannot reach zero in a task
+ * whose spawner still holds the variable, and where it does reach zero the
+ * task is the last user and freeing is right. Nothing here has to know which.
+ *
+ * Idempotent, and null-safe because an empty handle-variable may be released.
+ */
+void pas_chan_shut(void *p) {
+  struct pas_chan *c = p;
+  if (!c)
+    return;
+  pthread_mutex_lock(&c->m);
+  c->closed = 1;
+  pthread_cond_broadcast(&c->notempty);
+  pthread_cond_broadcast(&c->notfull);
+  pthread_mutex_unlock(&c->m);
+}
+
 /* AP 6.9.3.13's send. Blocks while the channel is full.
  *
  * Sending to a closed channel **stops the program**, and that is this
