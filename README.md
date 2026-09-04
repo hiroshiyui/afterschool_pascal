@@ -945,6 +945,25 @@ walked by a recursive procedure rather than by a loop assigning a second
 pointer — a second pointer would be a copy. `owned` is not a reserved word; a
 program may still have a type of that name.
 
+**Its domain may be a schema, so a growable container can own its storage**
+(ADR-0320, AP 6.4.14.2). §6.4.7 fixes an array's extent at the declaration, so
+anything that grows lives on the heap behind `new(p, cap)` — which is every
+container in `lib/`. That shape used to be refused outright:
+
+```pascal
+type Vec(cap: integer) = record n: integer; a: array [1..cap] of integer end;
+     OV = owned ^Vec;          { now legal: the block disposes it }
+...
+new(v, 8); v^.a[1] := 3        { and `v^.cap` is the discriminant }
+```
+
+The condition is what the variable *holds*. Releasing an owned variable releases
+everything owned inside it, which means walking its type — and a schema's
+extents are read from a descriptor an activation has and the heap has not. So a
+schema domain is refused when the type it produces contains a file, a handle or
+another owned pointer, and admitted when it does not, because then the release
+is just giving the storage back.
+
 **And what it owns may not be released while something is borrowing it**
 (ADR-0317, AP 6.4.14.7). A `var` parameter bound to `o^` is a second name for
 what `o` owns for the duration of the call, and a `with` on `o^` is one for the
