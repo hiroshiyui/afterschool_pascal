@@ -24,6 +24,7 @@ nobody has decided yet.
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
 | [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it, and the server completes a name (ADR-0301) — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
+| [The object model (proposed)](#the-object-model-proposed) | the one design on this page with nothing built: methods and traits without inheritance (ADR-0315), what asked for it, its three increments, and what is settled about it — which is everything except whether to build it |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, in the dialect's own terms: one gap, three capacities and two decisions — the two lists headed by the standards retired on 2026-09-02, everything they stated being in the register already |
@@ -105,42 +106,12 @@ on 2026-08-30:
 | concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
 | memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
 
-**A fifth area is proposed, and ADR-0109 does not name it.** That record's four
-came from asking what a program needs of the world outside it — a socket, a
-text, a second thread, a lifetime — and each row is a facility a program
-*reaches for* and cannot otherwise have. An **object model** is not that shape.
-Nothing is unreachable without one: every program in `examples/` was written
-without it, and the containers, the JSON reader and the language server are all
-built out of records and routines over them.
-
-What argues for it is the other half of ADR-0109's test. The question was never
-*does the language have it* but **does a program someone would actually write
-today need it, and can it get it** — and the second clause is what this tree's
-own library answers badly. **139 of 486 exported names repeat their own
-module's noun** — `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut` — and
-that is forced rather than chosen: §6.11.2 puts every imported name into one
-scope, so two modules may not export one spelling, and ADR-0298's
-`export-unique` gate refuses a collision outright. The prefix is a receiver,
-spelled by hand, at every declaration and every call site. It was found by
-writing programs in the language, which is the only way anything gets onto
-this page — ADR-0306 renamed four examples' worth of those names before anyone
-counted them.
-
-| Area | Where it is answered |
-| --- | --- |
-| an object model | **Proposed only** — [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md), which is the first record in this tree with that status. No clause, no code, and no commitment to build it |
-
-The proposal is Rust's decomposition and not Object Pascal's: methods with an
-explicit receiver written out as the first parameter, traits with no
-inheritance, and `dyn T` behind an owned pointer for the one case that needs a
-vtable — in three increments, of which **only the first has to be built for the
-other two to be judged**. Its four open factors were settled on 2026-09-03 and
-its one technical question on 2026-09-04, which is what turned up ADR-0316: a
-whole array could not determine a generic's type parameter, and nothing here
-had ever tried it. **Whether the object model is built is not settled**, and
-this row says so rather than implying a plan — the two goals before this one
-were finished before they were left, and a fifth area announced and abandoned
-would be the first thing on this page that was neither.
+**A fifth area is proposed and ADR-0109 does not name it** — an **object
+model**, which is a different shape from the four above: nothing is
+unreachable without one, and every program in `examples/` was written without
+it. It has a chapter of its own, [The object model
+(proposed)](#the-object-model-proposed), because it is a design on paper with
+nothing built and a table row here would read as a plan.
 
 **That is not the goal met**, and the distinction is the one this page exists
 to keep making. A facility that exists is not a facility that is pleasant to
@@ -479,7 +450,7 @@ been settled** — the last of them by ADR-0268.
 | ARC | Swift | aliasing | **Withdrawn as posed** (ADR-0201): ADR-0117's containment fixes what `^T` means and ARC changes it, so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it was already here**: a `var` parameter bound to an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. *Unformable* rather than checked (ADR-0201) |
 | Actors / share-nothing tasks | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Done** (ADR-0268), and it is the row this table was really about — the one sentence left of the aliasing fork, *two threads of control*. `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: a task takes only transferable values and channels, may name only its own variables, and every task a block spawned is joined before that block releases anything — which is what makes *a borrow cannot outlive the call* true again. The lineage read was Pascal's own: Concurrent Pascal had `process` and `monitor` in 1975. **Built without meeting ADR-0116's bar**, which the record says in as many words — nothing in this tree wants it, and the compiler is one thread and must stay so, the seed compiling it. What it left open is [above](#what-each-landed-feature-left-open) |
-| Traits / protocols | Rust, Swift | abstraction | **Half done, and narrowing.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason — and abstraction over **behaviour** is a further thing again that nothing has asked for |
+| Traits / protocols | Rust, Swift | abstraction | **Half done, and something has now asked for the other half.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason. This row read *nothing has asked for* abstraction over **behaviour** until 2026-09-03, and [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is what asked: [The object model (proposed)](#the-object-model-proposed) |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
 
 **The lesson this table is kept for**, drawn four times over and once against
@@ -498,6 +469,113 @@ means, and neither required settling the memory-safety fork. Four estimates in
 a row — ADR-0122, ADR-0123, ADR-0176, ADR-0177 — assumed a feature would need
 its own machinery and none of them did. Probe before believing an estimate of
 that shape.
+
+---
+
+## The object model (proposed)
+
+**Nothing here is built, and this chapter exists so that stays legible.**
+[ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is the first
+record in this tree with the status `Proposed`, and it was written that way on
+purpose: the design was asked for on paper before any of it is implemented, so
+that the shape could be argued about while the alternatives were still live.
+Whether it is built is **not settled**. The two goals before this one —
+bootstrapping, then conformance — were each finished before they were left, and
+an area announced and abandoned would be the first thing on this page that was
+neither.
+
+### What asked for it
+
+Not a missing facility. Every program in `examples/` was written without an
+object model, and the containers, the JSON reader and the language server are
+all records with routines over them. What asked is the *second* clause of
+ADR-0109's test — **can a program get it pleasantly** — measured on this tree's
+own library:
+
+- **139 of 486 exported names repeat their own module's noun**:
+  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. That is forced rather
+  than chosen. §6.11.2 puts every imported name into one scope, so two modules
+  may not export one spelling, and ADR-0298's `export-unique` gate refuses a
+  collision outright. **The prefix is a receiver, spelled by hand, at every
+  declaration and every call site**, and ADR-0306 renamed four examples' worth
+  of them before anyone counted the rest.
+- **14 routine-valued parameters and 30 call sites** thread `StrHash, StrEq`
+  through `lib/passort.pas` and `lib/dialect/pascontainer.pas`, because where a
+  property belongs to a type the caller has to carry it instead.
+- `lib/passort.pas` **never sees an element** — it sorts by `less(i, j)` and
+  `swap(i, j)` — which is the *Traits / protocols* row of
+  [Where the ideas come from](#where-the-ideas-come-from) said from the
+  library's end.
+
+### The shape
+
+**Rust's decomposition and not Object Pascal's**, and the difference is the
+whole of the proposal: methods and traits without inheritance, so there is no
+base class, no virtual by default, and no `is`/`as`. A method is an ordinary
+routine whose first parameter is written out with its type — value,
+`protected var` and `var` being what Rust spells `self`, `&self` and
+`&mut self` — declared in an `impl T; … end;` block, and `x.M(a)` means
+`M(x, a)`. Three increments, and **only the first has to be built for the
+other two to be judged**:
+
+| Increment | What it adds | What it retires |
+| --- | --- | --- |
+| **A. Methods** | the impl block, the receiver rule, `x.M(a)`, the type's own scope | the 139 prefixes. No new representation, no compatibility rule, no vtable, and CodeGen untouched — a method is an ordinary routine |
+| **B. Traits, static** | the trait-type, `impl … for`, `Self`, and `T: Trait` bounds | the 14 routine parameters and 30 call sites. Resolved at instantiation, so still no vtable |
+| **C. `dyn T`** | dynamic dispatch, permitted only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first thing here that emits a vtable |
+
+**Four factors were settled on 2026-09-03**, each against a real alternative:
+all three increments are in scope including `dyn`; the declaration is a block
+rather than a marker on each routine; the receiver is **written out with its
+type** rather than implied; and one library module is rewritten as proof before
+any judgement about the other thirty.
+
+The argument that arrived *after* that choice is the best one for it: a trait
+impl repeating only the routine's name is not new syntax at all —
+
+```pascal
+impl Ord for Point;
+  function Compare;
+  begin Compare := self.x - other.x end;
+end;
+```
+
+— it is §6.7's own parameterless definition, the shape this compiler's source
+writes **248 times** after a `forward`. A trait heading plays the part
+`forward` plays.
+
+### What is settled, and what is not
+
+**Settled.** The four factors above. And the one technical question that gated
+increment B, settled by probe on 2026-09-04: a trait bound **cannot narrow
+inference, because inference has no candidates to narrow** — `Determine` reads
+one type off the first determining actual and `BindType` is first-wins, so
+AP 6.7.3.10.5's category is checked *after* the tuple is built and a trait
+bound takes that same position. Two things fell out of settling it. The
+receiver is the determining position **for free**, being the first parameter.
+And the tuple holds the actual's *own* type, so `1..9` is bound and not
+`integer` — every existing category goes through `Base(t)` and none can tell a
+subrange from its host, which makes a trait bound the first constraint that
+could; the record decides the impl lookup **follows `Base()`**, so a subrange
+takes its host's implementation and cannot carry one of its own.
+
+**Not settled.** Whether to build any of it. What increment A's one rewritten
+module reads like, which is the evidence the rest waits on. And what to do
+about the one cost no gate will see: `x.M(a)` resolving in the type's scope
+means a reader can no longer find a routine by grepping its name — `Put` will
+be declared in a dozen impls. `--dump-uses` already answers *where is this name
+declared* and the language server reads it, so the tooling is ready and a
+person with `grep` is not. That is the feature working as intended, which is
+why it is written down here rather than discovered later.
+
+**A note on what to call it.** This chapter is not titled *a Rust-flavoured
+Pascal dialect*, though the description is fair — eleven of the eighteen rows
+in [Where the ideas come from](#where-the-ideas-come-from) are Rust or Rust and
+somebody else, and slices, optionals, moves, owned pointers, `Result` and `?`
+are all already here. That table **is** the Rust-flavour chapter, written per
+borrowing and tied to the open decision each one settled, and a second chapter
+under that name would say the same things with the discipline taken out. What
+is new here is one proposal, so the chapter is named after the proposal.
 
 ---
 
