@@ -2097,6 +2097,16 @@ params     procedure p(var v: vector) — a schematic formal parameter, whose
            bounds come from the actual: one body serves every tuple, and
            v.n reads the tuple the argument brought. A value parameter of
            one is copied on entry, at whatever size the tuple says
+params     procedure p(x: string(5)) and function f: string(5) — a
+           *discriminated* schema where §6.7.3.1 requires a parameter-form
+           to be a name and §6.7.2 requires a result-type to be one. It
+           names one type rather than serving every tuple, so the
+           discriminants are constants and a var parameter takes only a
+           variable of that very type; `type Cap5 = string(5)` and
+           `string(5)` are interchangeable. The addition is one production
+           alternative — a parameter's type is still not a type-denoter,
+           and an inline record, array, set, subrange, enumeration or
+           pointer denoter is refused in both positions
 records    a schema may produce a record holding a dynamically bounded
            array as its *last* field — the shape `string` has: a length
            beside a buffer whose capacity is the discriminant. Only last,
