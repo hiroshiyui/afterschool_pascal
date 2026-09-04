@@ -944,6 +944,23 @@ walked by a recursive procedure rather than by a loop assigning a second
 pointer — a second pointer would be a copy. `owned` is not a reserved word; a
 program may still have a type of that name.
 
+**And what it owns may not be released while something is borrowing it**
+(ADR-0317, AP 6.4.14.7). A `var` parameter bound to `o^` is a second name for
+what `o` owns for the duration of the call, and a `with` on `o^` is one for the
+duration of the body — so releasing `o` under either would leave the borrow
+naming disposed storage. Both are refused where one activation can be asked
+about them:
+
+```pascal
+P(o, o^);                                  { refused: an owner and a borrow of it }
+with o^ do begin dispose(o); v := 1 end    { refused: dispose, new, or an assignment }
+```
+
+`Two(o^, o^)` is two borrows and no owner, and still compiles. What is *not*
+caught is a callee that reaches `o` some other way — as a variable of an
+enclosing block, or through a further call — which is why the rule is a
+narrowing rather than a guarantee.
+
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names
 fixed by the language:
