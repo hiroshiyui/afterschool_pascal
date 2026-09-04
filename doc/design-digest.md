@@ -559,6 +559,25 @@ checks they agree, which is the same arrangement the version number has. A
   of the eleven ordinary pointer types outside the compiler are legal as
   `owned ^T` after it; the two that are not are `PasJson`'s, refused by the
   variant-part half of the same clause.
+- **And a third way a block reaches an owner** (ADR-0326, AP 6.4.14.9 amended).
+  ADR-0319's rule asks whether the *called* block can name the owner, and its
+  NOTE 1 claimed that with 6.4.14.7 the pair was exhaustive. The enumeration it
+  rests on is right — an owned pointer's only names are the variable, a `var`
+  parameter bound to it, and a component of what contains it — and the
+  inference is not: that enumerates **names**, and the requirement is about
+  **releases**. A block releases an owned variable it cannot name by activating
+  a §6.7.3.4 procedural parameter that can, and `Runner(p^, Killer)` printed a
+  value read from disposed storage and exited 0. Both halves of the clause had
+  it. `ProcActualReaching` asks it of the actual and not of the formal, and it
+  runs **after** the argument loop because `ProcActualSym` reads what
+  `CheckProcArgument` resolved — asked at the top of `CheckArguments`, where
+  the with-statement half lives, it would have found nil for every routine and
+  refused nothing in silence. No transitive requirement is needed and that is a
+  property of Pascal: a block obtains a routine by scope or by being handed
+  one, there being no procedure-variable, and the only activation-point where a
+  borrow is formed from its owner is one that can name the owner — so the
+  routine and the borrow meet at a single call. The residue is now an argument
+  rather than an assertion, which is the difference this record is for.
 - **And adopting it found the clause narrower than the compiler** (ADR-0321,
   AP 6.4.14.1). The owned-pointer production said `type-identifier`, where
   6.4.4.1 defines a **domain-type** for every pointer-type -- a schema-name

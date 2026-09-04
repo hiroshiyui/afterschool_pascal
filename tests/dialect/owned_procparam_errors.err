@@ -1,0 +1,4 @@
+<source>:50:11: error: this borrows what 'p' owns, and the routine it is given, 'killer' can name 'p', being declared inside 'holder': releasing it there would leave this naming disposed storage
+<source>:54:13: error: this borrows what 'p' owns, and the routine it is given, 'killer' can name 'p', being declared inside 'holder': releasing it there would leave this naming disposed storage
+<source>:59:5: error: an enclosing 'with' is bound to what 'p' owns, and the routine it is given, 'killer' can name 'p', being declared inside 'holder': releasing it there would leave this naming disposed storage
+<source>:65:14: error: undeclared identifier 'nosuchroutine'

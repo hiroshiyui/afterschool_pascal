@@ -761,3 +761,66 @@ Feature: Owned-pointer-types
       """
       5
       """
+
+  # AP 6.4.14.9's third paragraph (ADR-0326). A block need not *name* an owned
+  # variable to release it: it releases it by activating a procedural parameter
+  # that can. The clause's own NOTE 1 said there was no third way, and the
+  # first of these compiled, printed a value read from disposed storage and
+  # terminated normally.
+  @afterschool:6.4.14.9
+  Scenario: a routine handed alongside a borrow may not name the owner
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure runner(protected var n: node; procedure k);
+      begin k; writeln(n.key) end;
+      procedure run;
+      var o: np;
+        procedure killer; begin dispose(o) end;
+      begin new(o); o^.key := 4; runner(o^, killer) end;
+      begin run end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  @afterschool:6.4.14.9
+  Scenario: and the same through a with-statement's binding
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure bare(procedure k);
+      begin k end;
+      procedure run;
+      var o: np;
+        procedure killer; begin dispose(o) end;
+      begin new(o); o^.key := 4; with o^ do begin bare(killer); writeln(key) end end;
+      begin run end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  @afterschool:6.4.14.9
+  Scenario: a routine that cannot name the owner is still admitted
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure quiet; begin end;
+      procedure runner(protected var n: node; procedure k);
+      begin k; writeln(n.key) end;
+      procedure run;
+      var o: np;
+      begin new(o); o^.key := 4; runner(o^, quiet) end;
+      begin run end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      4
+      """

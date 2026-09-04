@@ -214,7 +214,7 @@ looked.
 | traits | [proposed, nothing built](#the-object-model-proposed) | ADR-0315 |
 | lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the four rows below |
 
-#### 1. The borrow rule was enforced in one direction — closed 2026-09-04
+#### 1. The borrow rule was enforced in one direction — closed 2026-09-04, reopened and closed again 2026-09-05
 
 Rust's aliasing rule has two halves: a borrow may not outlive what it borrows,
 **and** the owner may not be released while a borrow of it is live. ADR-0201
@@ -256,6 +256,7 @@ candidates were designed against this shape and the first was taken:
 | **release only in the block that declares the pointer** | sound under one thread — a declaring block is suspended for the whole life of any borrow | unaffordable, and measured: all **ten** of `PasList`'s exported routines take `var l: List` and **five** release through it, so the module could not be written |
 | a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
 | **also taken**, and it is what closed the row: refuse the borrow where it is *formed*, wherever the called block can **name** the owner (ADR-0319) | an owned structure held in a variable of the outermost block cannot be lent at all — 12 sites in this tree, every one of them a test written for the construct | nothing. 6.4.14.3 forbids copying the value, so an owned variable's only names are itself, a variable parameter bound to it, and a component of what contains it; the second is 6.4.14.7's activation-point and the first is scope, and there is no third |
+| **and a third there was** (ADR-0326), found by probing the sentence to the left rather than reading it | `Runner(p^, Killer)` no longer compiles: a routine handed alongside a borrow may not name the owner | nothing known, and the residue is now an *argument* rather than an assertion — see below |
 
 Real lifetimes are the fourth candidate and are unavailable: **a borrow here
 is a parameter binding and not a value**, so there is nothing for a lifetime
@@ -266,6 +267,30 @@ against escape and is exactly what makes invalidation invisible* — ADR-0201
 reads the borrow's absence from the type system as strength, and it is strength
 in one direction only. That still stands, for the escape half, which nothing
 checks.
+
+**The row was struck on 2026-09-04 and the strike was wrong**, which is the
+part of this row worth reading. The claim in the last cell above — *and there
+is no third* — was an enumeration of the **names** an owned pointer has,
+offered as an enumeration of the ways it can be **released**. A block does not
+have to name an owned variable to release it. It releases it by activating a
+§6.7.3.4 procedural parameter that can, and a procedural parameter has been in
+this language since ADR-0030:
+
+```pascal
+procedure Runner(var m: N; procedure k);      { names nothing of Holder's }
+begin k; writeln(m.v:1) end;                  { m is disposed storage }
+...
+new(p); p^.v := 7; Runner(p^, Killer)         { printed garbage, exited 0 }
+```
+
+Both halves of AP 6.4.14.9 had it, and the only diagnostic was the fourth
+warning suggesting `protected` — which does not help, protection stopping a
+write where this is a read. ADR-0326 adds the paragraph and rewrites the NOTE,
+and what stands in its place is an **argument** and not an assertion: a block
+obtains a routine by scope or by being handed one, both are asked, and the two
+meet at a single activation-point because that is where a borrow is formed. It
+can be wrong the way its predecessor was, and the way to find out is to probe
+it again.
 
 **The invalidation half is closed**, and what it leaves is a different sentence.
 Two records costed mechanisms for the residue — a call-graph summary and a

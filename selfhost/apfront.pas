@@ -6843,6 +6843,45 @@ begin
   writeln(': releasing it there would leave this naming disposed storage')
 end;
 
+{ AP 6.4.14.9 as ADR-0326 amended it: which routine handed to this call can
+  name `v`, or nil.
+
+  §6.7.3.4's procedural parameter is the third way a block reaches an owned
+  variable, and the clause's NOTE 1 said there was no third way. A block that
+  can name nothing of the owner's scope still releases it if it is *given* a
+  routine that can -- `Runner(p^, Killer)` -- and asking only about the callee
+  found nothing to refuse.
+
+  It is asked of the actual and not of the formal, because the formal's
+  heading says what a routine looks like and never which one arrived. And it
+  needs no transitive walk: Pascal has no procedure variable, so a routine
+  reaches another only by being handed it, and the only place a borrow of an
+  owned variable is *formed* from its owner is a call in the owner's own
+  scope -- which is this call. }
+function ProcActualReaching(callee, v: symPtr; args: nodePtr): symPtr;
+var a: nodePtr; p: symListPtr; sym: symPtr;
+begin
+  ProcActualReaching := nil;
+  a := args;
+  p := callee^.params;
+  while (a <> nil) and (p <> nil) do begin
+    if p^.sym^.kind = skProcParam then begin
+      sym := ProcActualSym(a);
+      if sym <> nil then
+        if CanName(sym, v) then begin
+          ProcActualReaching := sym;
+          a := nil;
+          p := nil
+        end
+    end;
+    if a <> nil then begin
+      a := a^.next;
+      p := p^.next
+    end
+  end
+end;
+
+
 { The symbol a threatened variable-access belongs to. 6.9.4 h) makes a threat
   to a component a threat to the variable containing it, which is what walking
   to the root is. }
@@ -13210,7 +13249,8 @@ end;
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
     borrowSym, ownerSym: symPtr; thruOwned, thruOwner: boolean;
-    bi, ai: integer; w: symListPtr; reported, pairHit: boolean;
+    bi, ai: integer; w: symListPtr; reported, pairHit, withHit: boolean;
+    reaching: symPtr;
     { 6.6.3.7.1's "all possess the same type", which is a rule about a
       *section* and so needs the first actual of the one being walked. }
     sectionType: typePtr; sectionOf: integer;
@@ -13249,6 +13289,10 @@ begin
     end;
     w := w^.next
   end;
+  { ADR-0326's half of this loop cannot be asked here: `ProcActualSym` reads
+    what CheckProcArgument resolved, and that runs in the argument loop below.
+    It is the last thing this routine does. }
+  withHit := reported;
   a := args;
   p := callee^.params;
   i := 1;
@@ -13862,9 +13906,45 @@ begin
           WritePool(callee^.at, callee^.len);
           WhyCanName(callee, borrowSym)
         end
+        else if thruOwned then begin
+          { ADR-0326, the third way. The callee names nothing of the owner's,
+            and is handed a routine that does -- so the release happens one
+            activation further on and this borrow is what it invalidates. }
+          reaching := ProcActualReaching(callee, borrowSym, args);
+          if reaching <> nil then begin
+            reported := true;
+            ErrorAt(a^.line, a^.col);
+            write('this borrows what ''');
+            WritePool(borrowSym^.at, borrowSym^.len);
+            write(''' owns, and the routine it is given, ''');
+            WritePool(reaching^.at, reaching^.len);
+            WhyCanName(reaching, borrowSym)
+          end
+        end
       end;
       p := p^.next;
       a := a^.next
+    end
+  end;
+  { ADR-0326, the with-statement's half, asked here because the procedural
+    actuals are resolved by now and were not at the top of this routine. The
+    binding is live for the whole body, so a call in it that hands on a
+    routine reaching the owner is the same fault as one that can name the
+    owner itself -- which is what the loop at the top refuses. }
+  if not (reported or withHit) then begin
+    w := withOwnedTop;
+    while (w <> nil) and not reported do begin
+      reaching := ProcActualReaching(callee, w^.sym, args);
+      if reaching <> nil then begin
+        reported := true;
+        ErrorAt(line, col);
+        write('an enclosing ''with'' is bound to what ''');
+        WritePool(w^.sym^.at, w^.sym^.len);
+        write(''' owns, and the routine it is given, ''');
+        WritePool(reaching^.at, reaching^.len);
+        WhyCanName(reaching, w^.sym)
+      end;
+      w := w^.next
     end
   end
 end;

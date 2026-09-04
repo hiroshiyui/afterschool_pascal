@@ -1040,10 +1040,20 @@ The same question is asked of a `with` bound to a borrow, and there it reaches
 any call in the body — even one taking no arguments, since what decides is what
 the called routine can *name* and not what it is passed.
 
-Between the two rules there is nothing left: an owned pointer cannot be copied,
-so the only names a variable of one has are itself, a `var` parameter bound to
-it, and a component of what contains it — the second is the rule above and the
-first is this one.
+**And a routine handed alongside a borrow may not name the owner either**
+(ADR-0326). The two rules above ask what the *called* routine can reach, and a
+routine reaches an owner it cannot name by being given one that can:
+
+```pascal
+Runner(p^, Killer)     { refused: Runner names nothing of p's, Killer disposes p }
+```
+
+That compiled, printed a value read from disposed storage and exited 0 until
+2026-09-05. Between the three there is nothing known left: an owned pointer
+cannot be copied, so the only names a variable of one has are itself, a `var`
+parameter bound to it, and a component of what contains it; and a block obtains
+a routine by scope or by being handed one. The first two are the rules above,
+and the third is this one.
 
 **And a generic body's `take` moves where the type moves** (ADR-0323, AP
 6.4.14.6). `take` is the only operation here whose *applicability* is a fact

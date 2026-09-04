@@ -1422,19 +1422,38 @@ variable-access is the with-element of a with-statement (§6.9.3.10), no
 activation-point within that statement's body shall activate a block that can
 name that entire-variable.
 
+Neither activation-point shall have an actual-parameter corresponding to a
+procedural or functional formal-parameter (§6.7.3.4, §6.7.3.5) that denotes a
+block that can name that entire-variable.
+
 A block can name a variable if the variable's defining-point is in the
 outermost block of a program-component, or if the block's defining-point is
 within the block containing the variable's defining-point and is not that
 block.
 
-NOTE 1 — This clause and 6.4.14.7 are one requirement asked of the two ways a
-block can obtain a name for an owned variable, and between them they are
-exhaustive. 6.4.14.3 forbids copying the value, so the only names an
-owned-pointer variable has are the variable itself, a variable
-formal-parameter bound to it, and a component of a variable containing it — and
-a block obtains the second at an activation-point, which is 6.4.14.7, or has
-the first by scope, which is this clause. There is no third way, and so no
-residue: what 6.4.14.7's NOTE 6 recorded as undetected is detected here.
+NOTE 1 — This clause and 6.4.14.7 are one requirement asked of the ways a block
+can come to release an owned variable. 6.4.14.3 forbids copying the value, so
+the only names an owned-pointer variable has are the variable itself, a
+variable formal-parameter bound to it, and a component of a variable containing
+it — and a block obtains the second at an activation-point, which is 6.4.14.7,
+or has the first by scope, which is the first paragraph of this clause.
+
+The second paragraph is the third way, and until ADR-0326 this NOTE said there
+was none. A block need not *name* an owned variable to release it: it releases
+it by activating a procedural parameter that can, and the enumeration above is
+of names rather than of releases. `Runner(p^, Killer)`, where `Runner` is
+declared where `p` is not in scope and `Killer` beside `p`, formed a borrow
+that `Runner` invalidated by activating what it was handed — compiled, printed
+a value read from disposed storage, and terminated normally.
+
+NOTE 1a — The second paragraph needs no transitive requirement, and that is a
+property of Pascal rather than a simplification. A block obtains a routine only
+by being declared where it is in scope — which the first paragraph already asks
+about — or by being handed it as an actual-parameter, there being no
+procedure-variable in this language; and the only activation-point at which a
+borrow is *formed* from its owner is one in a block that can name the owner. So
+the routine and the borrow meet at a single activation-point, and that is the
+one this clause examines.
 
 NOTE 2 — The requirement is on the **formation** of the borrow and not on the
 release, which is what makes it decidable at translation time and independent
@@ -1450,10 +1469,11 @@ variables are those of the new activation, not of the activating one, so
 `Len(o^.next)` within `Len` is admitted — and an owned chain has no traversal
 that is not of that form (6.4.14's NOTE 1).
 
-NOTE 4 — The second paragraph reaches an activation-point whose actual-
+NOTE 4 — The with-statement paragraph reaches an activation-point whose actual-
 parameters contain no borrow at all, and reaches one with no actual-parameters.
 A with-element is bound for the whole of the body, so what decides is what the
-activated block can name and never what it is passed.
+activated block can name. What it is *passed* decides as well, by the paragraph
+after it, and the two are asked of the same activation-point.
 
 NOTE 5 — A processor cannot admit this where the owner is a variable of the
 outermost block by observing that the activated block does not in fact release
@@ -4322,3 +4342,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.14 NOTE 2 (amended) | ADR-0322 |
 | 6.4.14.6 (amended) | ADR-0323 |
 | 6.7.2.1, 6.7.3.1.1 | ADR-0324 |
+| 6.4.14.9 (amended) | ADR-0326 |
