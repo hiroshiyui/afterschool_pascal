@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 850
-instrumented 11132
-decisions 5566
+uncovered 849
+instrumented 11146
+decisions 5573
 
 accept 0/4
 accumulate 1/32
@@ -267,7 +267,7 @@ emitmodule 1/6
 emitnewselectors 1/6
 emitnewtuple 2/10
 emitoptionaltest 1/4
-emitownrels 1/12
+emitownrels 1/16
 emitposglobals 0/2
 emitprocargument 1/6
 emitprocbody 0/14
@@ -383,7 +383,7 @@ groupfieldname 0/10
 hastypeparam 0/4
 headerof 1/4
 headersize 1/8
-heapfromschema 2/18
+heapfromschema 1/18
 heapheader 1/20
 holdsfile 1/18
 importedsymbol 1/10
@@ -665,6 +665,7 @@ schematicstandsfor 0/10
 sel 4/18
 selectedsize 0/10
 selectslot 0/2
+selfownedfield 0/10
 seq 0/10
 setindex 0/6
 setvaluetypeof 0/14

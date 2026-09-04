@@ -40,6 +40,21 @@ type
   Gen(T: type; cap: integer) = record n: integer; g: array [1..cap] of T end;
   OwnedInts = owned ^Gen(integer);
 
+  { A domain that is not a record at all. Nothing in it can own anything, so
+    its release is the deallocation and there is no field to continue at
+    (ADR-0322). }
+  Row  = array [1..4] of integer;
+  ORow = owned ^Row;
+
+  { And a record owning something of a *different* domain, which is what parts
+    a chain from a containment: releasing an Outer walks into its `held` and
+    recurses, because continuing there would be continuing at another type's
+    release. }
+  Inner  = owned ^InnerRec;
+  InnerRec = record z: integer end;
+  Outer  = owned ^OuterRec;
+  OuterRec = record held: Inner; y: integer end;
+
 { A borrow of one, which is what an accessor takes now (ADR-0318): the caller
   keeps ownership and the routine cannot release it. }
 function Total(protected var v: OV): integer;
@@ -70,7 +85,8 @@ begin
 end;
 
 procedure Run;
-var v, w: OV; b: Box; p: Pair; late: LateOV; gi: OwnedInts; i, t: integer;
+var v, w: OV; b: Box; p: Pair; late: LateOV; gi: OwnedInts;
+    row: ORow; out_: Outer; i, t: integer;
 begin
   new(v, 4);
   Fill(v, 10);
@@ -105,6 +121,16 @@ begin
   new(gi, 3);
   gi^.n := 3; gi^.g[3] := 30;
   writeln('gen    ', gi^.cap:1, ' ', gi^.g[3]:1);
+
+  { a domain that is not a record }
+  new(row);
+  row^[1] := 4; row^[4] := 9;
+  writeln('row    ', row^[1] + row^[4]:1);
+
+  { and a record owning a different domain, which recurses rather than loops }
+  new(out_); new(out_^.held);
+  out_^.y := 2; out_^.held^.z := 5;
+  writeln('outer  ', out_^.y + out_^.held^.z:1);
 
   { A `with` on a record that owns nothing is not a borrow, so a call in its
     body has nothing to be refused against (AP 6.4.14.9): the open-with list

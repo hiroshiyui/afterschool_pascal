@@ -2664,9 +2664,39 @@ end;
 
   The parameter is named rather than numbered so it cannot collide with the
   `%vN` Def hands out. }
+{ AP 6.4.14.3's release is recursive because a type may own something of its
+  own type -- and that is what made a long enough owned chain end in a signal
+  rather than a diagnostic (ADR-0322): one frame per node, and a million nodes
+  is more stack than there is. This is the field the release *continues* at
+  instead of recursing into: a direct field of the domain whose type is an
+  owned pointer to that same domain, which is what a chain is.
+
+  Only the fixed part is walked and that is not an omission: 6.4.14.2 refuses an
+  owned pointer in a variant part, so every owned field of a record is here.
+
+  The first such field, and the choice is arbitrary between several -- a record
+  with two self-referential owned fields is a binary tree, and whichever is
+  chosen the other still recurses. What is bought is that a *chain* costs one
+  frame, which is the shape PasList and every owned list in this tree have. }
+function SelfOwnedField(dom: typePtr): fieldPtr;
+var f, found: fieldPtr;
+begin
+  found := nil;
+  if IsRecord(dom) then begin
+    f := dom^.fields;
+    while (f <> nil) and (found = nil) do begin
+      if IsOwnedPointer(f^.ftype) then
+        if f^.ftype^.elem = dom then found := f;
+      f := f^.next
+    end
+  end;
+  SelfOwnedField := found
+end;
+
 procedure EmitOwnRels;
-var r: ownRelPtr; more: boolean; own, empty, raw: str; doneB, workB: integer;
-    head: integer;
+var r: ownRelPtr; more: boolean; own, empty, raw, cur, nextv, fld, blk: str;
+    doneB, workB, loopB: integer;
+    head: integer; chain: fieldPtr;
 begin
   repeat
     more := false;
@@ -2690,11 +2720,24 @@ begin
                 '(ptr %own) {');
         nextReg := 0;
         nextBlock := 0;
-        StrClear(own);
-        AppendLit(own, '%own            ');
+        chain := SelfOwnedField(r^.dom);
         StartBlock(NewBlock);
+        loopB := NewBlock;
         workB := NewBlock;
         doneB := NewBlock;
+        { The cursor is an `alloca` and it is in the entry block, which is
+          where ADR-0102 says one belongs: this block is reached once per call
+          however many nodes the loop then walks. }
+        Def(cur);
+        writeln(ircode, 'alloca ptr');
+        writeln(ircode, '  store ptr %own, ptr ', '%v', nextReg:1);
+        writeln(ircode, '  br label %L', loopB:1);
+
+        StartBlock(loopB);
+        Def(own);
+        write(ircode, 'load ptr, ptr ');
+        PutOp(cur);
+        writeln(ircode);
         Def(empty);
         write(ircode, 'icmp eq ptr ');
         PutOp(own);
@@ -2704,6 +2747,21 @@ begin
         writeln(ircode, ', label %L', doneB:1, ', label %L', workB:1);
 
         StartBlock(workB);
+        { Take the continuation out of the variable *before* the walk, so the
+          walk finds nil where it would otherwise recurse and the loop below
+          releases that node instead. It is 6.4.14.6's move, written by the
+          release rather than by a program: obtain, empty, and the emptied
+          variable is disposed a few lines down. }
+        if chain <> nil then begin
+          FieldAddress(own, r^.dom, chain, fld, 0, 0, 0);
+          Def(nextv);
+          write(ircode, 'load ptr, ptr ');
+          PutOp(fld);
+          writeln(ircode);
+          write(ircode, '  store ptr null, ptr ');
+          PutOp(fld);
+          writeln(ircode)
+        end;
         if HoldsFile(r^.dom) then
           WalkFiles(own, r^.dom, false, 0, 0, 0, 0, 0);
         { Stepping back over a tuple header, as dispose's own arm does, and
@@ -2717,17 +2775,31 @@ begin
           schema-domain owned pointer reached free() with the variable's
           address and aborted with `free(): invalid size`. }
         head := HeaderSize(r^.dom);
+        blk := own;
         if head <> 0 then begin
           raw := own;
-          Def(own);
+          Def(blk);
           write(ircode, 'getelementptr i8, ptr ');
           PutOp(raw);
           writeln(ircode, ', i32 ', -head:1)
         end;
         write(ircode, '  call void @pas_dispose(ptr ');
-        PutOp(own);
+        PutOp(blk);
         writeln(ircode, ')');
-        writeln(ircode, '  br label %L', doneB:1);
+        { And round again at what was taken out, or stop. }
+        if chain <> nil then begin
+          write(ircode, '  store ptr ');
+          PutOp(nextv);
+          write(ircode, ', ptr ');
+          PutOp(cur);
+          writeln(ircode)
+        end
+        else begin
+          write(ircode, '  store ptr null, ptr ');
+          PutOp(cur);
+          writeln(ircode)
+        end;
+        writeln(ircode, '  br label %L', loopB:1);
 
         StartBlock(doneB);
         writeln(ircode, '  ret void');

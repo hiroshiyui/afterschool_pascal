@@ -556,6 +556,24 @@ checks they agree, which is the same arrangement the version number has. A
   `PasContainer`, whose routines assign to the pointer and would all convert at
   once; and an owned container cannot be aliased or returned, which is right for
   a tree one block owns and wrong for one callers pass around.
+- **And the release of a chain costs one frame** (ADR-0322). AP 6.4.14.3
+  releases every value owned within the variable and a type may own one of its
+  own type, so the generated per-domain routine called itself and then disposed
+  -- not a tail call, one frame per node, and an owned chain longer than the
+  stack died with a SIGSEGV at the end of its block. Measured between half a
+  million and a million nodes on an 8 MB stack, with `built` printed first,
+  which is what said it was the release and not the build. It was the one
+  capacity here ending in a signal rather than a diagnostic, which is what
+  ADR-0012 says a bounded resource must not do. The routine is now a loop over a
+  cursor: where the domain has a direct field whose type is an owned pointer to
+  that same domain, the release **empties** that field, walks the rest, disposes
+  the variable and goes round at what it took -- 6.4.14.6's move written by the
+  release, and the emptying is the whole of what stops a double release, the
+  walk then finding nil where it would have recursed. The cursor is an `alloca`
+  in the entry block, which ADR-0102 requires: the loop body would claim stack
+  per iteration and put the defect back. A **tree** still costs a frame per
+  level, whichever self-referential field is chosen leaving the others to
+  recurse, and that half of the row stands.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

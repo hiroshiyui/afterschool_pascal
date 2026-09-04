@@ -1441,8 +1441,14 @@ and the handle's is not.
 
 NOTE 2 — The release is a generated routine per domain type, not straight-line
 code at each release point: a type may own a variable of its own type, so the
-depth is the program's and not the translation's. A list long enough will
-therefore exhaust the stack on release, as it would on any recursive traversal.
+depth is the program's and not the translation's. **A chain costs no depth**
+(ADR-0322): where the domain has a field whose type is an owned pointer to that
+same domain, the release empties that field, releases the rest of the variable,
+disposes it, and goes round again at what it took out — so it is a loop and not
+a recursion, and this NOTE said the opposite until a chain of a million nodes
+was measured ending in a signal. A **tree** still costs a frame per level, the
+second and later self-referential fields having nowhere to be continued at, and
+a processor is not required to bound that.
 
 NOTE 3 — This clause settles nothing about *aliasing*, and is available for that
 reason. ADR-0151 divides the memory-safety model into lifetime and aliasing and

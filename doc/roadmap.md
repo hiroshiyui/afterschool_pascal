@@ -374,7 +374,7 @@ the reason has changed twice: it is no longer that nothing *could* take the word
 nor that a rewrite is needed, but that taking it is sometimes the wrong answer —
 and a warning cannot know which.
 
-#### 3. There is no shared ownership, and the release walk ends in a signal — the shape is written down as of 2026-09-04
+#### 3. There is no shared ownership; the release walk ended in a signal and no longer does for a chain — 2026-09-04
 
 The dialect's answer to aliasing is refusal, given three times (ADR-0201), so
 there is no `Rc` and no language-level arena, and an owned pointer admits no
@@ -383,22 +383,35 @@ index, no tail pointer, every traversal recursive. What was not written down is
 the failure mode. AP 6.4.14's NOTE 2 predicts it and this is the measurement,
 taken again on 2026-09-04 with an 8 MB stack and narrowed:
 
-| An owned chain of | On release |
-| --- | --- |
-| 200 000 nodes | clean, balance 0 |
-| 500 000 nodes | clean |
-| 1 000 000 nodes | `built 1000000` prints, **then exit 139** |
-| 2 000 000 nodes | the same |
+| An owned chain of | On release, before ADR-0322 | after |
+| --- | --- | --- |
+| 200 000 nodes | clean, balance 0 | clean |
+| 500 000 nodes | clean | clean |
+| 1 000 000 nodes | `built 1000000` prints, **then exit 139** | clean, 35 ms, balance 0 |
+| 8 000 000 nodes | the same | clean |
 
-The boundary is between half a million and a million, and the message printing
-first is what says it is the *release* and not the build: both are recursive,
-and the build survives what the release does not, having no owned value to
+The boundary was between half a million and a million, and the message printing
+first is what says it was the *release* and not the build: both were recursive,
+and the build survives what the release did not, having no owned value to
 release per frame.
 
-It is the one capacity in this language that ends in a signal instead of a
+It was the one capacity in this language that ended in a signal instead of a
 diagnostic. ADR-0012's claim is that a full buffer is survivable **as a
-diagnostic**, and the per-domain release routine is outside that claim: the
-safe container's release path is the crash. Two ways out, both Rust's —
+diagnostic**, and the per-domain release routine was outside that claim: the
+safe container's release path was the crash.
+
+**It is a loop now, for a chain.** Where the domain has a field whose type is an
+owned pointer to that same domain, the release empties that field, releases the
+rest, disposes the variable and goes round again at what it took out — 6.4.14.6's
+move written by the release rather than by a program, and the emptying is what
+keeps the walk from releasing it twice. One frame, however long the chain.
+
+**A tree still costs a frame per level**, the second and later self-referential
+fields having nowhere to be continued at, so a degenerate tree is still a deep
+recursion and nothing bounds it. That is what is left of this half of the row,
+and the alternative — a depth counter and a diagnostic — is priced in ADR-0322:
+a call per node released, on every program, to report a case no program here
+reaches. Two ways out, both Rust's —
 reference counting, which then owes an answer about cycles; or the
 arena-and-index shape, which is what a Rust programmer reaches for when the
 data is not a tree and which **needs no language change at all**.

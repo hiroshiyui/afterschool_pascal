@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 20200
+instrumented 20236
 
 accept 0/4
 accumulate 0/84
@@ -296,7 +296,7 @@ emitmodule 0/22
 emitnewselectors 0/27
 emitnewtuple 7/65
 emitoptionaltest 0/13
-emitownrels 0/45
+emitownrels 0/73
 emitposglobals 0/8
 emitprocargument 0/27
 emitprocbody 0/40
@@ -766,6 +766,7 @@ schematicstandsfor 0/3
 sel 0/51
 selectedsize 0/14
 selectslot 0/6
+selfownedfield 0/8
 seq 0/25
 setformatrange 0/2
 setindex 0/47
