@@ -961,6 +961,33 @@ caught is a callee that reaches `o` some other way — as a variable of an
 enclosing block, or through a further call — which is why the rule is a
 narrowing rather than a guarantee.
 
+**And a routine can promise it will not release, by taking the word ISO already
+has for it** (ADR-0318, AP 6.4.14.8). §6.7.3.1's `protected` marks a `var`
+parameter as one the routine may read and not write, and an owned pointer may
+now take it — a name for what a variable owns that may be read through and
+through which nothing may be released:
+
+```pascal
+function Len(protected var o: Own): integer;
+begin
+  if o = nil then Len := 0
+  else Len := 1 + Len(o^.next)   { reading through it is what it is for }
+end;
+```
+
+Inside such a routine `dispose(o)`, `new(o)`, `o := take(x)`, `take(o)` and
+handing `o` to a plain `var` parameter are all refused, and so is each of them
+written one dereference deeper — `dispose(o^.next)` releases storage the caller
+owns just as surely. Writing a *field* is not a release and is still allowed, so
+`o^.v := 1` compiles: the word protects ownership, not contents. And because the
+routine can release nothing, the rule above lets `P(o, o^)` through when `P`
+takes its first parameter protected, which is the shape that record left with no
+workaround.
+
+`PasList` is where this shows: four of its ten routines take the chain
+`protected`, so a caller can ask for the length without granting the right to
+destroy the list.
+
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names
 fixed by the language:
