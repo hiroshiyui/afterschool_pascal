@@ -1,8 +1,17 @@
 # Roadmap
 
-What is open, in three parts: **the language**, **the standard library**, and
-**the first-party utilities** around them — preceded by the goal all three
-serve, and followed by the rules this page is written under.
+**A Pascal you can get daily work done in** (ADR-0109): a dialect and a
+standard core library for networking, internationalisation, concurrent
+execution, and memory safety as a property of the language rather than a
+convention. Two goals came before it — bootstrapping, then conformance — and
+both are **finished**; this is the only one left.
+
+What is open toward it, in three parts: **the language**, **the standard
+library**, and **the first-party utilities** around them, followed by the
+rules this page is written under. **All four of ADR-0109's areas already have
+an answer**, the last on 2026-08-30, and that is [not the goal
+met](#the-goal-adr-0109) — which is the distinction this page exists to keep
+making.
 
 **How the compiler got here is [`doc/history.md`](history.md)** — the
 bootstrap, both standards, the conformance sweeps, the dialect increment by
@@ -20,11 +29,10 @@ nobody has decided yet.
 
 | Part | What it holds |
 | --- | --- |
-| [The goal](#the-goal-adr-0109) | what this is all for — all four areas ADR-0109 names have an answer, which is not the same as the goal being met |
 | [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the object model nobody has committed to building, and the limitations a program meets |
 | [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
-| [How this page is written](#how-this-page-is-written) | the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
+| [How this page is written](#how-this-page-is-written) | [the goal](#the-goal-adr-0109) and the test it sets, the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
 
 **The three parts are new, and the chapters inside them are not.** This page
 was arranged by *how a row was learned* — a chapter for what a feature left
@@ -32,75 +40,20 @@ behind it, a chapter for what writing a program found, a chapter for what
 picking the language up needed. That grouping is what taught the lessons at
 the end, and it is kept inside the parts rather than thrown away; what changed
 is that a reader asking *what is open in the language* now has one place to
-look. The chapter that stood as **What would make this practical to pick up**
-is the one that split: its *Writing a daily program* section was about the
-library and is under the library, and everything else in it was about the
-tooling and is under the utilities.
+look. Two chapters split rather than moved. **What would make this practical
+to pick up** gave its *Writing a daily program* section to the library and the
+rest to the utilities. **The goal (ADR-0109)** gave its four areas to the two
+parts that answer them — concurrency and memory safety to the language,
+networking and internationalisation to the library — and kept its *test* and
+its table at the end, among the rules, because *the four areas are answered
+and that is not the goal met* is a rule about what may be written here and not
+a status line.
 
 **Read the parts in order the first time and by name after that.** They are
 not equally full, and the shape of that is the state of the project: the
 language has a proposal and three shapes, the library has nothing, and the
 utilities have most of what is left.
 
----
-
-## The goal (ADR-0109)
-
-**A Pascal you can get daily work done in**: a dialect and a standard core
-library for networking, internationalisation, concurrent execution, and memory
-safety as a property of the language rather than a convention.
-
-Two goals came before this one — bootstrapping, then conformance — and both are
-**finished**: the compiler compiles itself, and every clause of both standards
-was implemented. **This is now the only goal**, and version 3 is what made that
-literally true: ADR-0232 removed `--std` and the two conformance modes, so
-there is one language and no mode to be put into. What the standards still are
-is where this language came from — it contains Extended Pascal, so every clause
-reading in this tree still describes it — and not an obligation it is under.
-
-**All four of the areas ADR-0109 names now have an answer**, the last of them
-on 2026-08-30:
-
-| Area | Where it is answered |
-| --- | --- |
-| networking | `PasNet` — a socket is a handle and both ends are strings, so `getaddrinfo` decides what they mean and no program writes a byte order — with `NetWait` over `poll`, and `PasTls` and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265) |
-| internationalisation | AP 6.4.15's text model: UTF-8 in normal form C, an element is an extended grapheme cluster, an integer index refused — and Unicode's own conformance files judge it, which is the one oracle here nobody in this project wrote (ADR-0189 – ADR-0193, ADR-0196, ADR-0199) |
-| concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
-| memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
-
-**A fifth area is proposed and ADR-0109 does not name it** — an **object
-model**, which is a different shape from the four above: nothing is
-unreachable without one, and every program in `examples/` was written without
-it. It has a section of its own under [the language](#the-language) — [The object
-model (proposed)](#the-object-model-proposed) — because it is a design on
-paper with nothing built, and a table row here would read as a plan.
-
-**That is not the goal met**, and the distinction is the one this page exists
-to keep making. A facility that exists is not a facility that is pleasant to
-use, and ADR-0109's test was never *does the language have it* — no standard
-governs this language, so that question has no asker — but **does a program
-someone would actually write today need it, and can it get it**. What answers
-that is somebody writing a program and finding it hard, which is what
-[What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for)
-is waiting for and what [the language server](history.md#the-language-server-and-the-bound-it-found-before-it-ran)
-was written to produce. Two of the four areas have been used in anger by
-something in this tree and two have not.
-
-**The four *decisions* the goal forced are all made too** — three of them by
-discovery rather than by design, and the fourth by deleting the thing it was
-about. Not one decided the question its row was written to pose, which is the
-part worth reading: the table, with what each answer cost, is in
-[`doc/history.md`](history.md#the-four-decisions-the-goal-forced).
-
-**One thing outlived its row.** The C++ reference front end went (ADR-0232),
-and with it the last comparison of this front end against a second answer —
-which is [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
-and `doc/sop.md` §7's largest entry, and is stated there rather than here so
-that one fact does not come to disagree with itself.
-
-What is already in hand and was not built for this: modules and separate
-compilation (ADR-0053, ADR-0079) mean a library needs no new language
-mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 ---
 
 ## The language
@@ -111,6 +64,23 @@ in this part needs a reason of its own, and the three chapters below are the
 three kinds of reason that have worked. A feature *left something behind* and
 the record named it. Somebody *asked* for something the language does not
 have. Or a program *met* a limit and the limit is written down.
+
+**Two of ADR-0109's four areas are answered here**, and both are properties of
+the language rather than facilities beside it — a third, internationalisation,
+is a clause of the language too and is listed under [the standard
+library](#the-standard-library) because that is where a program meets it:
+
+- **concurrent execution** — `task`, `spawn`, `channel [n] of T`, `send` and
+  `receive`, reserving no word-symbol: share-nothing, only transferable values
+  and channels cross, and every task a block spawned is joined before that
+  block releases anything (ADR-0268).
+- **memory safety** — optionals and no bare null, slices carrying their
+  bounds, scope-based release, `owned ^T` for a variable `new` created, and
+  the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181,
+  ADR-0182, ADR-0267).
+
+Neither is finished in the sense that matters, and what each left behind it is
+the first section below.
 
 **Nothing in this part is scheduled.** The one proposal in it is `Proposed`
 and has no commitment behind it, and that is said again where it stands.
@@ -381,10 +351,32 @@ page and it is a finding rather than an omission: the chapter that listed
 library gaps struck the last of them at v3.2.0, and what replaced it is the
 lesson about how those rows got there.
 
+**The other two of ADR-0109's four areas are answered here**, and they are not
+answered the same way — which is the one thing worth knowing before reading
+the split as tidy:
+
+- **networking** is a library facility outright. `PasNet`, where a socket is a
+  handle and both ends are strings, so `getaddrinfo` decides what they mean
+  and no program writes a byte order, with `NetWait` over `poll` and `PasTls`
+  and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265).
+  No clause of the language mentions a socket.
+- **internationalisation is a language rule with a library under it**, and is
+  listed here because that is where a program meets it. AP 6.4.15 is a
+  *clause* — UTF-8 in normal form C, an element is an extended grapheme
+  cluster, an integer index refused — and `runtime/pasrt_unicode.c` is the
+  tables it is decided by, judged against Unicode's own conformance files,
+  the one oracle here nobody in this project wrote (ADR-0189 – ADR-0193,
+  ADR-0196, ADR-0199). **So the four areas do not partition by these three
+  parts**, and pretending they did would be the kind of tidiness this page's
+  own lessons warn about.
+
 **A row will appear here the way every good one did** — somebody writing a
 program and finding it hard, not somebody reading a list. Two of that
 chapter's eight rows said why they were blocked and both reasons were wrong,
-which is why this part is kept open and empty rather than closed.
+which is why this part is kept open and empty rather than closed. **Two of the
+four areas have been used in anger by something in this tree and two have
+not**, and which two is a fact about this page's own error rate rather than
+about the modules.
 
 ### What a daily program still cannot reach for
 
@@ -674,11 +666,77 @@ constant's, and the ABI arguments travel by are outside it.
 
 ## How this page is written
 
-**The rules, the lineage, and the one risk that is not a task.** Nothing in
-this part is an item of work: the lessons are for whoever adds the next row,
-the borrowings table records where each idea came from and what it settled,
-the standing risk is read every time and finished never, and the index at the
-end says where everything this file used to carry went.
+**The goal, the rules, the lineage, and the one risk that is not a task.**
+Nothing in this part is an item of work. The goal is here rather than at the
+top because the useful half of it is a **test** — *does a program someone
+would actually write today need it, and can it get it* — which governs what
+may be written in the three parts above; the lessons are for whoever adds the
+next row; the borrowings table records where each idea came from and what it
+settled; the standing risk is read every time and finished never; and the
+index at the end says where everything this file used to carry went.
+
+### The goal (ADR-0109)
+
+**A Pascal you can get daily work done in**: a dialect and a standard core
+library for networking, internationalisation, concurrent execution, and memory
+safety as a property of the language rather than a convention.
+
+Two goals came before this one — bootstrapping, then conformance — and both are
+**finished**: the compiler compiles itself, and every clause of both standards
+was implemented. **This is now the only goal**, and version 3 is what made that
+literally true: ADR-0232 removed `--std` and the two conformance modes, so
+there is one language and no mode to be put into. What the standards still are
+is where this language came from — it contains Extended Pascal, so every clause
+reading in this tree still describes it — and not an obligation it is under.
+
+**All four of the areas ADR-0109 names now have an answer**, the last of them
+on 2026-08-30. Each is set out in the part that answers it — the first two
+under [the language](#the-language), the last two under [the standard
+library](#the-standard-library) — and the table is kept whole here because it
+is one claim and not four:
+
+| Area | Where it is answered |
+| --- | --- |
+| networking | `PasNet` — a socket is a handle and both ends are strings, so `getaddrinfo` decides what they mean and no program writes a byte order — with `NetWait` over `poll`, and `PasTls` and `PasHttp`/`PasHttps` above it (ADR-0203, ADR-0205, ADR-0264, ADR-0265) |
+| internationalisation | AP 6.4.15's text model: UTF-8 in normal form C, an element is an extended grapheme cluster, an integer index refused — and Unicode's own conformance files judge it, which is the one oracle here nobody in this project wrote (ADR-0189 – ADR-0193, ADR-0196, ADR-0199) |
+| concurrent execution | `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: share-nothing, only transferable values and channels cross, and every task a block spawned is joined before that block releases anything (ADR-0268) |
+| memory safety | Optionals and no bare null, slices carrying their bounds, scope-based release, `owned ^T` for a variable `new` created, and the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181, ADR-0182, ADR-0267) |
+
+**A fifth area is proposed and ADR-0109 does not name it** — an **object
+model**, which is a different shape from the four above: nothing is
+unreachable without one, and every program in `examples/` was written without
+it. It has a section of its own under [the language](#the-language) — [The
+object model (proposed)](#the-object-model-proposed) — because it is a design
+on paper with nothing built, and a table row here would read as a plan.
+
+**That is not the goal met**, and the distinction is why this section sits
+among the rules rather than at the top of the page. A facility that exists is
+not a facility that is pleasant to use, and ADR-0109's test was never *does the
+language have it* — no standard governs this language, so that question has no
+asker — but **does a program someone would actually write today need it, and
+can it get it**. What answers that is somebody writing a program and finding it
+hard, which is what [What a daily program still cannot reach
+for](#what-a-daily-program-still-cannot-reach-for) is waiting for and what [the
+language server](history.md#the-language-server-and-the-bound-it-found-before-it-ran)
+was written to produce. **So a row in any of the three parts is evidence from a
+program and not an item from a list**, which is the same rule the three lessons
+below give in three other ways.
+
+**The four *decisions* the goal forced are all made too** — three of them by
+discovery rather than by design, and the fourth by deleting the thing it was
+about. Not one decided the question its row was written to pose, which is the
+part worth reading: the table, with what each answer cost, is in
+[`doc/history.md`](history.md#the-four-decisions-the-goal-forced).
+
+**One thing outlived its row.** The C++ reference front end went (ADR-0232),
+and with it the last comparison of this front end against a second answer —
+which is [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+two sections below, and `doc/sop.md` §7's largest entry, and is stated there
+rather than here so that one fact does not come to disagree with itself.
+
+What is already in hand and was not built for this: modules and separate
+compilation (ADR-0053, ADR-0079) mean a library needs no new language
+mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 **Three lessons govern how this page is written**, and they are here rather
 than in the history because they are rules for the next row somebody adds.
