@@ -989,6 +989,36 @@ workaround.
 `protected`, so a caller can ask for the length without granting the right to
 destroy the list.
 
+**And a borrow may be lent only to a routine that cannot reach what it borrows
+from** (ADR-0319, AP 6.4.14.9). The rule above catches a release the same call
+can make; this one catches the release a routine makes on its own, by naming the
+owner as a variable it can already see:
+
+```pascal
+var g: Own;                        { a variable of the program }
+procedure Kill(var n: Node);
+begin dispose(g); n.v := 1 end;    { reaches g without being handed it }
+...
+Kill(g^)                           { refused: 'kill' can name 'g' }
+```
+
+A routine can name a variable of the outermost block, or one belonging to a
+block it is declared inside. So the fix is to declare the owned data in a
+procedure rather than at program level, and lend from there — a routine
+declared beside that procedure cannot see its variables. **A recursive call is
+admitted**, which is what keeps every owned traversal legal: the callee's
+parameters belong to its own activation, so `Len(o^.next)` inside `Len` borrows
+nothing of the caller's.
+
+The same question is asked of a `with` bound to a borrow, and there it reaches
+any call in the body — even one taking no arguments, since what decides is what
+the called routine can *name* and not what it is passed.
+
+Between the two rules there is nothing left: an owned pointer cannot be copied,
+so the only names a variable of one has are itself, a `var` parameter bound to
+it, and a component of what contains it — the second is the rule above and the
+first is this one.
+
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names
 fixed by the language:
