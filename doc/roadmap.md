@@ -278,11 +278,40 @@ new(a); b := a; dispose(a); b^ := 5; writeln(b^)   { compiles clean, prints 5, e
 compiler is written with, and the unchecked one (ADR-0019, and the *one gap*
 of [Known limitations](#known-limitations)). `owned ^T` is the safe form and
 costs a word to say. ADR-0117's containment fixes what `^T` **means** and
-settles nothing about what the compiler may **say**: a fifth warning in
-ADR-0272's frame — a `new` of an ordinary `^T` whose variable is never copied,
-where `owned` would have compiled — refuses no program, needs no clause, and
-is swept over every implementation source by `warning-free` on the day it is
-written. It is the cheapest move on this page toward the goal in the heading.
+settles nothing about what the compiler may **say**, so this row proposed a
+fifth warning in ADR-0272's frame: a `new` of an ordinary `^T` whose variable
+is never copied, where `owned` would have compiled.
+
+**It was measured before it was written, and the measurement retired it —
+and found something better than the warning would have.** Every ordinary
+pointer type-definition outside the compiler was counted on 2026-09-04. There
+are **nine**, and not one of them could take the word:
+
+| Why not | Which | Clause |
+| --- | --- | --- |
+| the domain is a **schema** | `CountMap`, `WordVec`, `JsonChars`, `PathVec`, `DocMap` | AP 6.4.14.2 |
+| passed by **value**, or answered by a function | `JsonPtr`, `SMapPtr`, `StrVecPtr`, `IVecPtr` | AP 6.4.14.3 |
+
+The compiler's own 34 are the second row again and harder: `nodePtr`,
+`symPtr` and `typePtr` stand as a value parameter or a result 341, 156 and 198
+times. A warning firing nowhere is what ADR-0116 rejects and what ADR-0272's
+four already-shipped warnings each avoided by finding something on their first
+run, so **it is not built**.
+
+**What the count actually says is about the type and not about the warning.**
+`owned ^T` has no client here not because nothing wants ownership, but
+because **the only borrow this language has is a `var` parameter**, and every
+container in `lib/` hands its handle to a *value* parameter — `JsonKindOf(v:
+JsonPtr)`, `SMapGet(m: SMapPtr, …)`, `IVecLen(v: IVecPtr)`. AP 6.4.14.3
+forbids exactly that, so adopting the safe pointer means rewriting every
+accessor to take `var`, which then collides with the rule of
+[the row above](#1-the-borrow-rule-was-enforced-in-one-direction--narrowed-2026-09-04).
+The missing facility is a **second borrow form** — a lend that is not a
+variable parameter, Rust's `&T` where the `var` parameter is its `&mut T` —
+and until there is one, `owned ^T` is reachable only by code written for it
+from the start, which is why `PasList` is the only client and had to be
+written new. That is the item to weigh, and it is a language change with a
+clause rather than a warning with a catalogue.
 
 #### 3. There is no shared ownership, and the release walk ends in a signal
 
