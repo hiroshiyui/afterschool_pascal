@@ -6782,6 +6782,49 @@ begin
   NestedIn := found
 end;
 
+{ AP 6.4.14.9 (ADR-0319): could an activation of `callee` name the variable
+  `v`? That is the whole of what parts a borrow this processor can vouch for
+  from one it cannot, and it is a question about *scope* and not about what the
+  routine does -- an interprocedural summary of what a routine releases is what
+  ADR-0317 costed and declined, §6.13.2 having no room to carry one across a
+  program-component boundary.
+
+  Two ways to answer yes. A variable of the outermost block is nameable by
+  every routine of the component and, if its module exports it, by every
+  importer; and a routine declared inside the block that declares the variable
+  reaches it up the static chain (ADR-0016).
+
+  A routine is **not** nested in itself for this purpose, which is the case the
+  rule turns on rather than an edge of it: a recursive call activates a frame
+  of its own, and 6.7.3.3's parameters of that activation are not the caller's.
+  `ListLen(l^.next)` is every traversal an owned chain has, and it is the
+  answer no. }
+function CanName(callee, v: symPtr): boolean;
+begin
+  CanName := false;
+  if (callee <> nil) and (v <> nil) then
+    if v^.level = 0 then
+      CanName := true
+    else if v^.owner <> nil then
+      CanName := (callee <> v^.owner) and NestedIn(callee, v^.owner)
+end;
+
+{ The tail both of AP 6.4.14.9's messages share, and the half that says why:
+  which of CanName's two answers this was. }
+procedure WhyCanName(callee, v: symPtr);
+begin
+  write(''' can name ''');
+  WritePool(v^.at, v^.len);
+  if v^.level = 0 then
+    write(''', a variable of the outermost block')
+  else begin
+    write(''', being declared inside ''');
+    WritePool(v^.owner^.at, v^.owner^.len);
+    write('''')
+  end;
+  writeln(': releasing it there would leave this naming disposed storage')
+end;
+
 { The symbol a threatened variable-access belongs to. 6.9.4 h) makes a threat
   to a component a threat to the variable containing it, which is what walking
   to the root is. }
@@ -13130,7 +13173,7 @@ end;
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
     borrowSym, ownerSym: symPtr; thruOwned, thruOwner: boolean;
-    bi, ai: integer;
+    bi, ai: integer; w: symListPtr; reported, pairHit: boolean;
     { 6.6.3.7.1's "all possess the same type", which is a rule about a
       *section* and so needs the first actual of the one being walked. }
     sectionType: typePtr; sectionOf: integer;
@@ -13142,6 +13185,33 @@ begin
     denotes the function, where CheckExpr would read it as a call of it. The
     arity is only tested afterwards, so a wrong count still reports whatever
     is wrong *inside* each argument as well. }
+  { AP 6.4.14.9 (ADR-0319), the with-statement's half. ADR-0317 refused a
+    release *written* in the body of a with bound to what an owned pointer
+    owns; a call from that body reaching the same variable non-locally is the
+    same defect one activation further on, and the binding is live for the
+    whole body either way. Asked here rather than at the with, because what
+    the body may reach is a property of each call it makes and not of the
+    statement -- and asked of every call, a routine that can name the owner
+    being able to release it whatever else it does.
+
+    Reported once. A body under three open `with`s has one mistake, and
+    naming the innermost owner it can reach says as much as naming all of
+    them. }
+  pairHit := false;
+  w := withOwnedTop;
+  reported := false;
+  while (w <> nil) and not reported do begin
+    if CanName(callee, w^.sym) then begin
+      reported := true;
+      ErrorAt(line, col);
+      write('an enclosing ''with'' is bound to what ''');
+      WritePool(w^.sym^.at, w^.sym^.len);
+      write(''' owns, and ''');
+      WritePool(callee^.at, callee^.len);
+      WhyCanName(callee, w^.sym)
+    end;
+    w := w^.next
+  end;
   a := args;
   p := callee^.params;
   i := 1;
@@ -13686,6 +13756,14 @@ begin
         This is the only escape hatch the clause has, and it is a proof and not
         a suppression -- which is what makes it worth having, the refusal
         otherwise having no answer but to restructure the call. }
+      { AP 6.4.14.9 (ADR-0319), the other route to the same defect. The rule
+        below asks what one activation-point binds; this asks what the callee
+        can reach on its own, which is the half ADR-0317 recorded as Annex
+        C.12 and could not close with a summary. The two together are complete
+        over the ways a routine can name an owned variable: an owned pointer
+        cannot be copied (6.4.14.3), so the only names for one are the variable
+        itself, a variable parameter bound to it, and a component of it -- and
+        the first two are exactly these two rules. }
       if p^.sym^.kind = skVarParam then begin
         b := args;
         q := callee^.params;
@@ -13703,6 +13781,7 @@ begin
                 borrowSym := nil
             end;
             if (borrowSym <> nil) and (borrowSym = ownerSym) then begin
+              pairHit := true;
               ErrorAt(a^.line, a^.col);
               write('arguments ', bi:1, ' and ', ai:1, ' of ''');
               WritePool(callee^.at, callee^.len);
@@ -13717,6 +13796,36 @@ begin
         end
       end;
       ai := ai + 1;
+      p := p^.next;
+      a := a^.next
+    end
+  end;
+  { AP 6.4.14.9's first form, walked once over the whole call rather than per
+    actual. Two things follow from that and both were wrong when it was written
+    inside the loop above. It is **one message per call**: `Two(o^, o^)` binds
+    two borrows and they are invalidated by one release, so naming the first
+    says everything the second would. And it is **silent where the pairwise
+    rule spoke**: both are about one mistake -- something this call can reach
+    releases what an actual borrows -- and where the owner is itself an
+    argument, naming the argument says more than naming the scope. `Q(o^, o)`
+    reported under both until this pass was hoisted out. }
+  if not pairHit then begin
+    a := args;
+    p := callee^.params;
+    reported := false;
+    while (a <> nil) and (p <> nil) and not reported do begin
+      if p^.sym^.kind = skVarParam then begin
+        borrowSym := OwnedRoot(a, thruOwned);
+        if thruOwned and CanName(callee, borrowSym) then begin
+          reported := true;
+          ErrorAt(a^.line, a^.col);
+          write('this borrows what ''');
+          WritePool(borrowSym^.at, borrowSym^.len);
+          write(''' owns, and ''');
+          WritePool(callee^.at, callee^.len);
+          WhyCanName(callee, borrowSym)
+        end
+      end;
       p := p^.next;
       a := a^.next
     end

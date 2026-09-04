@@ -33,7 +33,6 @@ type Own = owned ^Node;
                     kids: array [1..2] of Own end;
      Box = record p: Own; q: Own end;
 
-var o: Own; r: Box;
 
 { The two arguments this clause is about: one releases, the other names what
   it owns. }
@@ -60,6 +59,13 @@ begin m.v := n.v end;
 procedure ByValue(var a: Own; n: integer);
 begin a^.v := n end;
 
+{ The owned variables are locals rather than the program's: AP 6.4.14.9
+  (ADR-0319) refuses a borrow of what a variable of the outermost block owns,
+  and the refusals wanted here are 6.4.14.7's. Both rules would fire on most of
+  these lines and only one message is written, so the file says which by
+  putting the variables where the other rule has nothing to say. }
+procedure Run;
+var o: Own; r: Box;
 begin
   new(o);
   new(r.p);
@@ -110,4 +116,8 @@ begin
   new(o^.plain);
   P(o, o^.plain^);
   dispose(o^.plain)
+end;
+
+begin
+  Run
 end.

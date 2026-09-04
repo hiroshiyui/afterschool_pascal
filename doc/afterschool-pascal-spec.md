@@ -1265,9 +1265,10 @@ variable, which nothing empties.
 
 NOTE 6 — Where a release is reached through a further activation — the
 releasing block naming the pointer as a non-local, or being handed it by
-something other than the activation-point that made the borrow — this
-processor does not detect it. Annex C.12 is the entry, and ADR-0317 has what
-detecting it would take.
+something other than the activation-point that made the borrow — this clause
+does not reach it. 6.4.14.9 does, by refusing the borrow where it is formed
+rather than the release where it happens, and the two together leave no
+residue. Annex C.12 was this NOTE's entry and is withdrawn.
 
 NOTE 7 — Where the formal parameter an owner corresponds to is protected
 (6.4.14.8), a) does not apply. Nothing the activation may do can release the
@@ -1326,16 +1327,71 @@ NOTE 5 — Only a variable-access **of an owned-pointer-type** is carried up.
 threatens nothing of o. The clause protects ownership and not contents, which
 is the whole of what parts it from a constant-access.
 
-NOTE 6 — The clause is complete where 6.4.14.7 is a narrowing, and the
-difference is §6.9.4 b): an actual-parameter corresponding to an unprotected
+NOTE 6 — The clause is complete in its own right, and the difference from
+6.4.14.7 is §6.9.4 b): an actual-parameter corresponding to an unprotected
 variable formal-parameter is a threat, so a protected borrow cannot be handed
-to anything that could reach a release. There is no route through a further
-activation for Annex C.12 to be about.
+to anything that could reach a release through it. What it does not answer is a
+block that names the owner without being handed it, which is 6.4.14.9's.
 
 NOTE 7 — A protected borrow is not a lifetime and does not become one. What it
 says is that this activation will not release what it was lent; what says the
 borrow cannot outlive the lending is still ADR-0201's argument, that no value
 naming a variable parameter can be formed.
+
+**6.4.14.9 Where a borrow may be formed.** A variable-access reached through a
+dereference of an owned-pointer-type shall not be an actual-parameter
+corresponding to a variable formal-parameter of an activation-point whose
+activated block can name the entire-variable that owns it; and where such a
+variable-access is the with-element of a with-statement (§6.9.3.10), no
+activation-point within that statement's body shall activate a block that can
+name that entire-variable.
+
+A block can name a variable if the variable's defining-point is in the
+outermost block of a program-component, or if the block's defining-point is
+within the block containing the variable's defining-point and is not that
+block.
+
+NOTE 1 — This clause and 6.4.14.7 are one requirement asked of the two ways a
+block can obtain a name for an owned variable, and between them they are
+exhaustive. 6.4.14.3 forbids copying the value, so the only names an
+owned-pointer variable has are the variable itself, a variable
+formal-parameter bound to it, and a component of a variable containing it — and
+a block obtains the second at an activation-point, which is 6.4.14.7, or has
+the first by scope, which is this clause. There is no third way, and so no
+residue: what 6.4.14.7's NOTE 6 recorded as undetected is detected here.
+
+NOTE 2 — The requirement is on the **formation** of the borrow and not on the
+release, which is what makes it decidable at translation time and independent
+of separate translation. A rule on the release would need to know, of every
+block an activation-point may reach, whether it releases a particular
+non-local variable, and §6.13.2's module-heading carries no such summary
+(ADR-0317).
+
+NOTE 3 — A block is not within itself for the purpose of the second paragraph,
+and this is the case the clause turns on rather than a boundary of it. A
+recursive activation-point activates a block whose parameters and local
+variables are those of the new activation, not of the activating one, so
+`Len(o^.next)` within `Len` is admitted — and an owned chain has no traversal
+that is not of that form (6.4.14's NOTE 1).
+
+NOTE 4 — The second paragraph reaches an activation-point whose actual-
+parameters contain no borrow at all, and reaches one with no actual-parameters.
+A with-element is bound for the whole of the body, so what decides is what the
+activated block can name and never what it is passed.
+
+NOTE 5 — A processor cannot admit this where the owner is a variable of the
+outermost block by observing that the activated block does not in fact release
+it. That is the summary NOTE 2 declines, and it is not available across a
+program-component boundary in either direction: a module's exported variable is
+nameable by every importer, and an imported block's own outermost variables are
+nameable by it.
+
+NOTE 6 — The cost is that an owned structure held in a variable of the
+outermost block cannot be lent at all. The program's answer is to declare it in
+a block that the routines it lends to are not within, which is one procedure;
+the corpus this clause was measured against had twelve such borrows and every
+one of them was in a test written for the construct, no library or example
+program having any (ADR-0319).
 
 NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
 binds to the variable and not to the value, and a component of a record or an
@@ -3862,21 +3918,23 @@ The requirement stands as 6.4.14.3 writes it; closing it means a runtime
 registry and a per-block release runner, which is 6.9.3.11's shape, and
 ADR-0181 declined that against what it buys. `doc/sop.md` §7 carries it.
 
-**C.12 A release of an owned pointer reached through a further activation is
-not detected while a borrow of what it owns is open** (6.4.14.7). The clause
-requires two forms to be detected and they are — the two actual-parameters of
-one activation-point, and a with-statement's own binding — and both are
-questions about one activation, which is what makes them answerable where the
-program is translated. What is left is the release the borrowing activation
-performs indirectly: the callee names the pointer as a non-local and releases
-it, or calls something that does, and the borrow it was handed then names
-disposed storage. Detecting it means a summary per routine of the non-local
-owned pointers it may release, closed over the call graph — the fixed-point
-shape ADR-0283's protected-parameter rule already has — and an answer for a
-routine imported from another program-component, whose module-heading carries
-no such summary (§6.13.2). ADR-0317 records the three candidate mechanisms and
-why the one that is complete was not the one taken first. `doc/sop.md` §7
-carries it.
+**C.12 [withdrawn]** — *a release of an owned pointer reached through a further
+activation is not detected while a borrow of what it owns is open* (6.4.14.7).
+The entry stood from ADR-0317 to ADR-0319 and named the release the borrowing
+activation performs indirectly: the callee names the pointer as a non-local and
+releases it, or calls something that does, and the borrow it was handed then
+names disposed storage. It recorded that detecting it means a summary per
+routine of the non-local owned pointers it may release, closed over the call
+graph, and an answer for a routine imported from another program-component
+whose module-heading carries no such summary (§6.13.2).
+
+Both are true and neither is needed. 6.4.14.9 asks the question at the
+**formation** of the borrow instead of at the release: a borrow is refused
+where the activated block can *name* the owner, which is a fact about scope and
+so is available where the program is translated and across a program-component
+boundary in both directions. The entry is kept, withdrawn, because the reason
+it was wrong is worth more than the entry was — a gap can be an artefact of
+where a question is asked.
 
 ## Annex D (informative) — The library
 
@@ -4104,5 +4162,6 @@ nothing but a requirement no processor here could meet.
 | 6.5.1 | ADR-0299 |
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |
 | 6.9.3.15, 6.9.3.13 NOTE 4, Annex A.8, Annex A.9 | ADR-0313 |
-| 6.4.14.7, Annex C.12 | ADR-0317 |
+| 6.4.14.7, Annex C.12 (withdrawn by ADR-0319) | ADR-0317 |
 | 6.4.14.8 | ADR-0318 |
+| 6.4.14.9 | ADR-0319 |

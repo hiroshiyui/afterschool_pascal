@@ -500,6 +500,27 @@ checks they agree, which is the same arrangement the version number has. A
   under it — the probe that found that is in the record. `PasList`'s four
   read-only routines take the word, and ADR-0283's fourth warning found five
   more places for it in code written before there was one.
+- **And the residue both left was an artefact of the question** (ADR-0319,
+  AP 6.4.14.9). ADR-0317 recorded, and costed two mechanisms for, the release a
+  callee reaches non-locally: a per-routine summary closed over the call graph,
+  which §6.13.2 cannot carry across a component, and a dynamic borrow flag, a
+  word per block and a check at each release point. Both answer *may this
+  release happen*. The requirement is symmetric — a borrow and a release may not
+  coexist — so it can be enforced at either end, and the other end is a question
+  about **scope**: a borrow is refused where the called block can *name* the
+  owner, which is decided by where the owner is declared. 6.4.14.3 forbids
+  copying the value, so an owned variable's only names are itself, a variable
+  parameter bound to it, and a component of what contains it; the second is
+  6.4.14.7's activation-point and the first is scope, and there is no third, so
+  the two rules are exhaustive and Annex C.12 is withdrawn. `CanName` is the
+  whole of it — declared in the outermost block, or the callee declared inside
+  the block containing it and not being it, that last clause being what admits
+  recursion and so `PasList`. Measured before it was written: 31 borrow sites in
+  the tree, 12 rooted at an outermost-block variable and every one of those in a
+  test written for the construct. The **cross-component** case is what makes the
+  first clause load-bearing — within one component the owner walk reaches the
+  outermost block anyway — and it exists as a case because the first mutation
+  written for that clause produced an equivalent program and killed nothing.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

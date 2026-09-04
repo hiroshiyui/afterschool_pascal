@@ -327,3 +327,4 @@ the alternatives that were rejected and why.
 | [0316](0316-an-array-says-what-its-components-are.md) | An array says what its components are | Accepted |
 | [0317](0317-the-other-half-of-the-borrow-argument.md) | The other half of the borrow argument | Accepted |
 | [0318](0318-the-borrow-that-may-not-release.md) | The borrow that may not release | Accepted |
+| [0319](0319-a-borrow-is-refused-where-it-is-formed.md) | A borrow is refused where it is formed | Accepted |

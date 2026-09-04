@@ -1,0 +1,5 @@
+<source>:46:12: error: this borrows what 'loc' owns, and 'inner' can name 'loc', being declared inside 'outer': releasing it there would leave this naming disposed storage
+<source>:53:9: error: this borrows what 'g' owns, and 'kill' can name 'g', a variable of the outermost block: releasing it there would leave this naming disposed storage
+<source>:56:13: error: arguments 1 and 2 of 'both_' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:60:5: error: an enclosing 'with' is bound to what 'g' owns, and 'free_' can name 'g', a variable of the outermost block: releasing it there would leave this naming disposed storage
+<source>:66:5: error: an enclosing 'with' is bound to what 'g' owns, and 'quiet' can name 'g', a variable of the outermost block: releasing it there would leave this naming disposed storage

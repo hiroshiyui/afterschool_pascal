@@ -462,10 +462,12 @@ Feature: Owned-pointer-types
            node = record key: integer end;
       procedure two(var m, n: node);
       begin m.key := n.key + 1 end;
+      procedure run;
       var o: np;
       begin
         new(o); o^.key := 4; two(o^, o^); writeln(o^.key)
-      end.
+      end;
+      begin run end.
       """
     When it is compiled and run
     Then it exits successfully
@@ -605,12 +607,119 @@ Feature: Owned-pointer-types
            node = record key: integer end;
       procedure q(protected var a: np; var n: node);
       begin n.key := n.key + 1 end;
+      procedure run;
       var o: np;
-      begin new(o); o^.key := 1; q(o, o^); writeln(o^.key) end.
+      begin new(o); o^.key := 1; q(o, o^); writeln(o^.key) end;
+      begin run end.
       """
     When it is compiled and run
     Then it exits successfully
      And it prints
       """
       2
+      """
+
+  # AP 6.4.14.9 -- where a borrow may be formed. The question 6.4.14.7 asks of
+  # one activation-point, asked of scope instead: a borrow may be lent only to
+  # a block that cannot name what it borrows from. Together the two are
+  # exhaustive over the ways a block obtains a name for an owned variable.
+  @afterschool:6.4.14.9
+  Scenario: a borrow of what a variable of the outermost block owns may not be lent
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      var o: np;
+      procedure kill(var n: node);
+      begin dispose(o); n.key := 1 end;
+      begin new(o); kill(o^) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a variable of the outermost block
+      """
+
+  @afterschool:6.4.14.9
+  Scenario: a borrow may not be lent to a block declared inside the one that owns it
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure outer;
+      var loc: np;
+        procedure inner(var n: node);
+        begin dispose(loc); n.key := 1 end;
+      begin new(loc); inner(loc^) end;
+      begin outer end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      being declared inside 'outer'
+      """
+
+  @afterschool:6.4.14.9
+  Scenario: a block is not within itself, so a recursive traversal is admitted
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer; next: np end;
+      function len(protected var o: np): integer;
+      begin if o = nil then len := 0 else len := 1 + len(o^.next) end;
+      procedure run;
+      var o: np;
+      begin new(o); new(o^.next); writeln(len(o)) end;
+      begin run end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      2
+      """
+
+  @afterschool:6.4.14.9
+  Scenario: a call within a with-statement bound to a borrow is refused whatever it takes
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      var o: np;
+      procedure quiet;
+      begin end;
+      begin new(o); with o^ do quiet end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      an enclosing 'with' is bound to what 'o' owns
+      """
+
+  @afterschool:6.4.14.9
+  Scenario: a sibling cannot name a local, so the borrow is admitted
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure bump(var n: node);
+      begin n.key := n.key + 1 end;
+      procedure run;
+      var o: np;
+      begin new(o); o^.key := 4; bump(o^); writeln(o^.key) end;
+      begin run end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      5
       """

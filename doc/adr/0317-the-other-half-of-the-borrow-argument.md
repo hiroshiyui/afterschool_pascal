@@ -7,7 +7,9 @@ Date: 2026-09-04
 Accepted, 2026-09-04. Narrows a defect ADR-0201 left open without naming;
 adds AP 6.4.14.7 and Annex C.12. **Amended by ADR-0318**: rule a) is discharged
 where the owner's formal parameter is protected, which is the workaround this
-record shipped without. ADR-0201 is not superseded — every sentence
+record shipped without. **Its NOTE 6 and Annex C.12 are withdrawn by ADR-0319**,
+which closes the residue this record costed two mechanisms for by asking the
+question at the formation of the borrow instead of at the release. ADR-0201 is not superseded — every sentence
 in it is still true, and this record is about a sentence that is not in it.
 
 ## Context

@@ -1,0 +1,1 @@
+<source>:12:12: error: this borrows what 'held' owns, and 'wipe' can name 'held', a variable of the outermost block: releasing it there would leave this naming disposed storage

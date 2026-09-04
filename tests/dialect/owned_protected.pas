@@ -57,6 +57,12 @@ begin o^.v := o^.v + 1 end;
 procedure Set2(protected var o: Own);
 begin with o^ do v := v + 1 end;
 
+{ The owned variables are locals and not the program's: a variable of the
+  outermost block can be named by every routine, so AP 6.4.14.9 (ADR-0319)
+  refuses lending a borrow of what it owns -- including to a routine whose
+  owner parameter is protected, protection binding the parameter and not the
+  name the routine reaches non-locally. }
+procedure Run;
 var head: Own; b: Box; op: Ord;
 begin
   new(head); head^.v := 1;
@@ -79,4 +85,8 @@ begin
   writeln('ord  ', op^.o^.v:1);
   dispose(op^.o);
   dispose(op)
+end;
+
+begin
+  Run
 end.

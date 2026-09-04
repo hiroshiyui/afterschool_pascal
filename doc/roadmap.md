@@ -214,7 +214,7 @@ looked.
 | traits | [proposed, nothing built](#the-object-model-proposed) | ADR-0315 |
 | lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the four rows below |
 
-#### 1. The borrow rule was enforced in one direction — narrowed 2026-09-04
+#### 1. The borrow rule was enforced in one direction — closed 2026-09-04
 
 Rust's aliasing rule has two halves: a borrow may not outlive what it borrows,
 **and** the owner may not be released while a borrow of it is live. ADR-0201
@@ -255,18 +255,27 @@ candidates were designed against this shape and the first was taken:
 | **also taken**, a day later: let the program say the callee will not release, by protecting the owner's formal parameter (ADR-0318) | nothing again, `protected` being a word §6.7.3.1 already had in that position | it is a *guarantee on request* and not a closure either — but where it is asked for it is complete, since a protected owned pointer refuses every release point and refuses being handed to anything unprotected |
 | **release only in the block that declares the pointer** | sound under one thread — a declaring block is suspended for the whole life of any borrow | unaffordable, and measured: all **ten** of `PasList`'s exported routines take `var l: List` and **five** release through it, so the module could not be written |
 | a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
+| **also taken**, and it is what closed the row: refuse the borrow where it is *formed*, wherever the called block can **name** the owner (ADR-0319) | an owned structure held in a variable of the outermost block cannot be lent at all — 12 sites in this tree, every one of them a test written for the construct | nothing. 6.4.14.3 forbids copying the value, so an owned variable's only names are itself, a variable parameter bound to it, and a component of what contains it; the second is 6.4.14.7's activation-point and the first is scope, and there is no third |
 
 Real lifetimes are the fourth candidate and are unavailable: **a borrow here
 is a parameter binding and not a value**, so there is nothing for a lifetime
 to be written on.
 
-**The sentence to carry out of this row**: *unformability is what protects
-against escape and is exactly what makes invalidation invisible.* ADR-0201
-reads the borrow's absence from the type system as strength, and it is
-strength in one direction only. What would close the row is the third
-candidate; what has landed is the first and second, and the row stands
-narrowed — with the difference that a program which wants the guarantee can now
-ask for it in one word, where a day earlier there was nothing it could say.
+**The sentence to carry out of this row** was *unformability is what protects
+against escape and is exactly what makes invalidation invisible* — ADR-0201
+reads the borrow's absence from the type system as strength, and it is strength
+in one direction only. That still stands, for the escape half, which nothing
+checks.
+
+**The invalidation half is closed**, and what it leaves is a different sentence.
+Two records costed mechanisms for the residue — a call-graph summary and a
+dynamic flag — and both were answering *may this release happen*. The
+requirement is symmetric, so it can be enforced at either end, and the other end
+is a question about **scope**: it costs nothing at run time and crosses a
+program-component boundary in both directions. **A gap can be an artefact of
+where the question is asked.** Annex C.12 is withdrawn, `doc/sop.md` §7's row is
+struck, and what is left of this row is ADR-0201's original property — held by
+construction, watched by nothing.
 
 #### 2. The unsafe subset is the unmarked default
 
@@ -309,7 +318,7 @@ parameter — `JsonKindOf(v: JsonPtr)`, `SMapGet(m: SMapPtr, …)`, `IVecLen(v:
 IVecPtr)`. AP 6.4.14.3 forbids exactly that, so adopting the safe pointer means
 rewriting every accessor to take `var` — and a plain `var` grants the caller's
 ownership away, which collides with the rule of
-[the row above](#1-the-borrow-rule-was-enforced-in-one-direction--narrowed-2026-09-04).
+[the row above](#1-the-borrow-rule-was-enforced-in-one-direction--closed-2026-09-04).
 
 **That is settled, and the answer was one word shorter than the question**
 (ADR-0318, AP 6.4.14.8, landed 2026-09-04). The second borrow form was not

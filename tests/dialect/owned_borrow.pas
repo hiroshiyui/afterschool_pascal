@@ -22,14 +22,20 @@
   two `var` parameters bound to one variable, and a move between them. It is a
   self-move, it is safe, and the heap balances -- `take` empties the variable
   before the target's address is taken (ADR-0182), so the value goes straight
-  back where it came from. }
+  back where it came from.
+
+  **The owned variables are locals of `Run` and not variables of the program**,
+  and that is AP 6.4.14.9 (ADR-0319) rather than a style. A variable of the
+  outermost block can be named by every routine of the component, so a borrow
+  of what it owns could be released by the very routine it was lent to; a local
+  of `Run` can be named by `Run` and by anything declared inside it, and `Bump`
+  and `Read` are declared beside it rather than in it. This file used to write
+  them at program level and was the reason the rule was measured against the
+  corpus. }
 program owned_borrow(output);
 
 type Node = record v: integer; next: ^Node end;
      Own = owned ^Node;
-
-var o, spare: Own;
-    i: integer;
 
 { A borrow. The record is reached through a var parameter, so `n` and `o^` are
   one variable for as long as this runs -- and `o` still owns it. }
@@ -47,6 +53,11 @@ begin dst := take(src) end;
 function Read(var n: Node): integer;
 begin Read := n.v end;
 
+{ Every owned variable in this file lives here: see the last paragraph of the
+  heading. }
+procedure Run;
+var o, spare: Own;
+    i: integer;
 begin
   new(o);
   o^.v := 1;
@@ -75,4 +86,8 @@ begin
     visible through the owner. }
   for i := 1 to 3 do Bump(spare^);
   writeln('still one value:     ', spare^.v:1)
+end;
+
+begin
+  Run
 end.
