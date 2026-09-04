@@ -1,7 +1,8 @@
 # Roadmap
 
-What is open: the goal, what blocks it, the questions no record has answered,
-and what is wrong or absent today.
+What is open, in three parts: **the language**, **the standard library**, and
+**the first-party utilities** around them — preceded by the goal all three
+serve, and followed by the rules this page is written under.
 
 **How the compiler got here is [`doc/history.md`](history.md)** — the
 bootstrap, both standards, the conformance sweeps, the dialect increment by
@@ -17,68 +18,29 @@ nobody has decided yet.
 
 ## How to read this
 
-| Chapter | What it holds |
+| Part | What it holds |
 | --- | --- |
-| [The goal](#the-goal-adr-0109) | what this is all for — and all four areas ADR-0109 names now have an answer, which is not the same as the goal being met |
-| [What each landed feature left open](#what-each-landed-feature-left-open) | the residue of the concurrency increment — three rows the record named itself — one FFI shape that has never found a client, and the chapter's prior about how few of them turn out to need the memory model |
-| [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | nothing — the six library gaps and two language absences it listed are all built, and what is left is the chapter's lesson about its own error rate |
-| [What would make this practical to pick up](#what-would-make-this-practical-to-pick-up) | for someone working *with* the compiler rather than on it: no binary, no tour, a trap that names no line, a server that completes nothing — the tour is written now (`doc/tour.md`) and found one defect in doing it, and the server completes a name (ADR-0301) — every row measured on 2026-09-02 with its command beside it, and the examples row already closed (ADR-0295) with seven findings from writing them |
-| [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig — every row that named an open decision is now settled, the last by ADR-0268 |
-| [The object model (proposed)](#the-object-model-proposed) | the one design on this page with nothing built: methods and traits without inheritance (ADR-0315), what asked for it, its three increments, and what is settled about it — which is everything except whether to build it |
-| [The open questions](#the-open-questions) | the one structural risk no record can close — and it is the only entry left |
-| [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
-| [Known limitations](#known-limitations) | what is wrong or absent today, in the dialect's own terms: one gap, three capacities and two decisions — the two lists headed by the standards retired on 2026-09-02, everything they stated being in the register already |
-| [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record and its narrative in `doc/history.md` |
+| [The goal](#the-goal-adr-0109) | what this is all for — all four areas ADR-0109 names have an answer, which is not the same as the goal being met |
+| [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the object model nobody has committed to building, and the limitations a program meets |
+| [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
+| [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
+| [How this page is written](#how-this-page-is-written) | the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
 
-Nothing here is a work queue with owners and dates. Where a decision has been
-made it has an ADR; where it has not, that is the point of the entry.
+**The three parts are new, and the chapters inside them are not.** This page
+was arranged by *how a row was learned* — a chapter for what a feature left
+behind it, a chapter for what writing a program found, a chapter for what
+picking the language up needed. That grouping is what taught the lessons at
+the end, and it is kept inside the parts rather than thrown away; what changed
+is that a reader asking *what is open in the language* now has one place to
+look. The chapter that stood as **What would make this practical to pick up**
+is the one that split: its *Writing a daily program* section was about the
+library and is under the library, and everything else in it was about the
+tooling and is under the utilities.
 
-**Three lessons govern how this page is written**, and they are here rather
-than in the history because they are rules for the next row somebody adds.
-They were learned by the chapter that used to stand between *What a daily
-program cannot reach for* and *What would make this practical to pick up* --
-**What would make this easier to work on**, archived to
-[`doc/history.md`](history.md#what-would-make-this-easier-to-work-on) on
-2026-09-03 when the last of its eleven items closed.
-
-**A number needs a date *and* a command.** The suite item said 262 seconds,
-and every word of it was true of a configuration nothing used: it was measured
-serially while CI had run `-j"$(nproc)"` on every push since the workflow was
-written. The figure had a date, had been re-measured twice after an earlier
-round of six wrong figures, and was still wrong — so the rule this chapter
-gave itself was not enough. What closed it was a flag worth 3.4× (ADR-0281).
-
-**A row saying a feature is blocked is a row nobody has tried.** Three rows in
-succession were settled by attempting them, and each had carried a stated
-reason it could not be done. The `protected var` warning said §6.6.3.6's
-congruity made the fix illegal — it does, and the answer is to defer the
-diagnostic to the end of the component, which is one page of code (ADR-0283);
-the estimate under it said 81 sites where the truth is a **fixed point**, one
-pass reporting 130 and seven reporting zero. `textDocument/rangeFormatting`
-said the printer had to be *told* where its indent begins, which only a parse
-can answer; the printer accumulates that depth itself as it walks the token
-stream, and the whole feature is a gate on two routines (ADR-0284).
-
-**And the lesson is not about this page.** ADR-0286 is the third instance and
-it was found in `doc/sop.md` §7, which is a register of what is *not* checked
-and so is the one document here whose rows are supposed to be uncomfortable.
-A row there said nothing holds ADR-0283's zero, and gave a reason for
-declining a gate: the count is a fixed point rather than a number, so a gate
-would have to iterate to convergence. Iterating is what **reaching** zero
-needed; holding it needs one sweep. The gate is 1.2 seconds, and removing one
-`protected` from the compiler's own source leaves 798 of 798 cases green — so
-the row was right about the gap and wrong about the cost, which is the same
-shape twice over. **A reason written beside a declined item is an estimate
-like any other**, wherever it is written, and this page's own rule applies to
-it: it is a report or it is a guess.
-
-**An item can be re-scoped by measuring it rather than by arguing about it.**
-`--dump-uses --at line:col` was asked for and the measurement closed it the
-other way: the flag saves no compiler time, and narrowing the query would have
-cost the per-document cache that took five hovers from 795 ms to 159
-(ADR-0276).
-
----
+**Read the parts in order the first time and by name after that.** They are
+not equally full, and the shape of that is the state of the project: the
+language has a proposal and three shapes, the library has nothing, and the
+utilities have most of what is left.
 
 ---
 
@@ -109,9 +71,9 @@ on 2026-08-30:
 **A fifth area is proposed and ADR-0109 does not name it** — an **object
 model**, which is a different shape from the four above: nothing is
 unreachable without one, and every program in `examples/` was written without
-it. It has a chapter of its own, [The object model
-(proposed)](#the-object-model-proposed), because it is a design on paper with
-nothing built and a table row here would read as a plan.
+it. It has a section of its own under [the language](#the-language) — [The object
+model (proposed)](#the-object-model-proposed) — because it is a design on
+paper with nothing built, and a table row here would read as a plan.
 
 **That is not the goal met**, and the distinction is the one this page exists
 to keep making. A facility that exists is not a facility that is pleasant to
@@ -139,10 +101,21 @@ that one fact does not come to disagree with itself.
 What is already in hand and was not built for this: modules and separate
 compilation (ADR-0053, ADR-0079) mean a library needs no new language
 mechanism, and `runtime/pasrt.c` is where the outside world already enters.
-
 ---
 
-## What each landed feature left open
+## The language
+
+**What the compiler accepts.** Both standards were implemented and there is
+one language now (ADR-0232), so nothing here is owed to a standard; a feature
+in this part needs a reason of its own, and the three chapters below are the
+three kinds of reason that have worked. A feature *left something behind* and
+the record named it. Somebody *asked* for something the language does not
+have. Or a program *met* a limit and the limit is written down.
+
+**Nothing in this part is scheduled.** The one proposal in it is `Proposed`
+and has no commitment behind it, and that is said again where it stands.
+
+### What each landed feature left open
 
 Every row a survey of daily needs put here has been struck, and so has every
 row the FFI and container increments left behind them. What stands here now is
@@ -191,8 +164,9 @@ question with an answer nobody has needed yet.
 
 **And one proposal awaiting a decision** (ADR-0315): **methods and traits,
 without inheritance.** It is the first record in this tree that is *Proposed*
-rather than *Accepted*, and it stands here rather than in a chapter of its own
-because it is a decision and not a queue. The evidence for it is this
+rather than *Accepted*. It is named here because it is what this feature's
+residue turned into, and set out in full three sections down, in [The object
+model (proposed)](#the-object-model-proposed). The evidence for it is this
 project's own library: **139 of 486 exported names repeat their module's
 noun** — `JsonMember`, `StreamOpenWrite`, `NetListen` — because §6.11.2 puts
 every imported name into one scope and `export-unique` (ADR-0298) refuses a
@@ -230,9 +204,189 @@ where it does not apply, which is what makes it a prior and not a rule — a
 factory's whole point is that the callee's answer *outlives* the call. Where
 the answer is no, expect the ownership rule the five easy ones did not need.
 
+### The object model (proposed)
+
+**Nothing here is built, and this section exists so that stays legible.**
+[ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is the first
+record in this tree with the status `Proposed`, and it was written that way on
+purpose: the design was asked for on paper before any of it is implemented, so
+that the shape could be argued about while the alternatives were still live.
+Whether it is built is **not settled**. The two goals before this one —
+bootstrapping, then conformance — were each finished before they were left, and
+an area announced and abandoned would be the first thing on this page that was
+neither.
+
+#### What asked for it
+
+Not a missing facility. Every program in `examples/` was written without an
+object model, and the containers, the JSON reader and the language server are
+all records with routines over them. What asked is the *second* clause of
+ADR-0109's test — **can a program get it pleasantly** — measured on this tree's
+own library:
+
+- **139 of 486 exported names repeat their own module's noun**:
+  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. That is forced rather
+  than chosen. §6.11.2 puts every imported name into one scope, so two modules
+  may not export one spelling, and ADR-0298's `export-unique` gate refuses a
+  collision outright. **The prefix is a receiver, spelled by hand, at every
+  declaration and every call site**, and ADR-0306 renamed four examples' worth
+  of them before anyone counted the rest.
+- **14 routine-valued parameters and 30 call sites** thread `StrHash, StrEq`
+  through `lib/passort.pas` and `lib/dialect/pascontainer.pas`, because where a
+  property belongs to a type the caller has to carry it instead.
+- `lib/passort.pas` **never sees an element** — it sorts by `less(i, j)` and
+  `swap(i, j)` — which is the *Traits / protocols* row of
+  [Where the ideas come from](#where-the-ideas-come-from) said from the
+  library's end.
+
+#### The shape
+
+**Rust's decomposition and not Object Pascal's**, and the difference is the
+whole of the proposal: methods and traits without inheritance, so there is no
+base class, no virtual by default, and no `is`/`as`. A method is an ordinary
+routine whose first parameter is written out with its type — value,
+`protected var` and `var` being what Rust spells `self`, `&self` and
+`&mut self` — declared in an `impl T; … end;` block, and `x.M(a)` means
+`M(x, a)`. Three increments, and **only the first has to be built for the
+other two to be judged**:
+
+| Increment | What it adds | What it retires |
+| --- | --- | --- |
+| **A. Methods** | the impl block, the receiver rule, `x.M(a)`, the type's own scope | the 139 prefixes. No new representation, no compatibility rule, no vtable, and CodeGen untouched — a method is an ordinary routine |
+| **B. Traits, static** | the trait-type, `impl … for`, `Self`, and `T: Trait` bounds | the 14 routine parameters and 30 call sites. Resolved at instantiation, so still no vtable |
+| **C. `dyn T`** | dynamic dispatch, permitted only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first thing here that emits a vtable |
+
+**Four factors were settled on 2026-09-03**, each against a real alternative:
+all three increments are in scope including `dyn`; the declaration is a block
+rather than a marker on each routine; the receiver is **written out with its
+type** rather than implied; and one library module is rewritten as proof before
+any judgement about the other thirty.
+
+The argument that arrived *after* that choice is the best one for it: a trait
+impl repeating only the routine's name is not new syntax at all —
+
+```pascal
+impl Ord for Point;
+  function Compare;
+  begin Compare := self.x - other.x end;
+end;
+```
+
+— it is §6.7's own parameterless definition, the shape this compiler's source
+writes **248 times** after a `forward`. A trait heading plays the part
+`forward` plays.
+
+#### What is settled, and what is not
+
+**Settled.** The four factors above. And the one technical question that gated
+increment B, settled by probe on 2026-09-04: a trait bound **cannot narrow
+inference, because inference has no candidates to narrow** — `Determine` reads
+one type off the first determining actual and `BindType` is first-wins, so
+AP 6.7.3.10.5's category is checked *after* the tuple is built and a trait
+bound takes that same position. Two things fell out of settling it. The
+receiver is the determining position **for free**, being the first parameter.
+And the tuple holds the actual's *own* type, so `1..9` is bound and not
+`integer` — every existing category goes through `Base(t)` and none can tell a
+subrange from its host, which makes a trait bound the first constraint that
+could; the record decides the impl lookup **follows `Base()`**, so a subrange
+takes its host's implementation and cannot carry one of its own.
+
+**Not settled.** Whether to build any of it. What increment A's one rewritten
+module reads like, which is the evidence the rest waits on. And what to do
+about the one cost no gate will see: `x.M(a)` resolving in the type's scope
+means a reader can no longer find a routine by grepping its name — `Put` will
+be declared in a dozen impls. `--dump-uses` already answers *where is this name
+declared* and the language server reads it, so the tooling is ready and a
+person with `grep` is not. That is the feature working as intended, which is
+why it is written down here rather than discovered later.
+
+**A note on what to call it.** This section is not titled *a Rust-flavoured
+Pascal dialect*, though the description is fair — eleven of the eighteen rows
+in [Where the ideas come from](#where-the-ideas-come-from) are Rust or Rust and
+somebody else, and slices, optionals, moves, owned pointers, `Result` and `?`
+are all already here. That table **is** the Rust-flavour chapter, written per
+borrowing and tied to the open decision each one settled, and a second section
+under that name would say the same things with the discipline taken out. What
+is new here is one proposal, so the chapter is named after the proposal.
+
+### Known limitations
+
+Things that are wrong or absent today, listed so they are not rediscovered as
+surprises. **Until 2026-09-02 this chapter was two lists headed by the two
+standards**, and every entry in them was classified as a deviation from a
+clause. ADR-0232 made that the wrong question — there is one language and no
+clause governs it — and every fact the lists stated was already in
+[`doc/implementation-defined.md`](implementation-defined.md), which is the
+register of what this processor decides. What stays here is what is still
+open in the dialect's own terms: one gap, three capacities and two decisions.
+The chapter as it stood, with the two entries that had closed inside it, is
+in [`doc/history.md`](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards).
+
+Six entries that stood here are the language's rule now and are looked up in
+the register rather than here: an identifier may contain an underscore (§5);
+`ExpDigits` is what C's `%E` writes (§2.3, E.13); §6.5.6's substring aliasing
+rule is not enforced (§3, D.17); a variable created by `new(p, c1, …, cn)`
+may be assigned or passed (§3, D.25); a textfile's last line need not end in a
+terminator (§2.4); and a `char` is a byte, which ADR-0189 records *cannot*
+change and answers with a type beside the string rather than underneath it
+(§2.2, ADR-0191).
+
+**One gap: an ordinary pointer can dangle.** `dispose(p)` stores nil into the
+variable it was given, which turns the common form of use-after-dispose into
+the nil trap, and does nothing for a second pointer to the same storage
+(ADR-0019; the register's §3, D.4 and D.5). It is the aliasing half of the
+memory-safety question, and ADR-0109 names memory safety as a property of the
+language rather than a convention. The dialect's `owned ^T` sidesteps rather
+than closes it: storage declared that way can have no second pointer, so
+there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
+ADR-0181 withdraws nothing. What would close it is a decision about the
+ordinary pointer — kept as it is, retired in favour of the owned one, or
+given a check — and it has not been asked with a caller. *The one entry here
+that is a limitation in ADR-0109's sense.*
+
+**Three capacities**, each a decision with a record and each a refusal or a
+trap a program can meet:
+
+| A program meets | Decided in |
+| --- | --- |
+| nesting deeper than 1000 levels is refused, and an operator chain is counted toward the same limit because it is flat for the parser and deep for everything after it | ADR-0020, ADR-0110; the register's §6 |
+| a set's base type must have its values in 0..255, every set being one 256-bit word — so `set of integer` is refused, and so is `set of 1..m` for a bound the block evaluates, which cannot be checked against 0..255 before the program runs | ADR-0028, ADR-0133; §6 |
+| string concatenation draws from an arena released at the end of every statement, so one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
+
+**One decision, and it has no record yet:**
+
+- **`string(5)` as a parameter form** (ADR-0171). §6.7.3.1 admits
+  `type-name | schema-name | type-inquiry`, so `procedure q(x: string)` is
+  inside the grammar and `procedure q(x: string(5))` is outside it, and this
+  compiler accepts both; three sources under `tests/extended/` write the
+  second. There is no mode to refuse it under any more, so what is left is to
+  admit it with a clause of its own or refuse it and edit three sources.
+  Admitting it is the likely answer — it is exactly the convenience ADR-0109
+  says belongs here and the spelling already passes ADR-0140's test — and
+  what it wants is a clause and a record, not a change. Written down rather
+  than done because refusing it takes something away from every program that
+  uses it.
+
+The adversarial audits that filled the old lists — four of them, ADR-0162,
+ADR-0167, ADR-0168 and ADR-0171 — are [open question
+§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
+instrument, and that entry says when the next is worth running.
+
 ---
 
-## What a daily program still cannot reach for
+## The standard library
+
+**Thirty-one modules, and nothing open.** That is the shortest part of this
+page and it is a finding rather than an omission: the chapter that listed
+library gaps struck the last of them at v3.2.0, and what replaced it is the
+lesson about how those rows got there.
+
+**A row will appear here the way every good one did** — somebody writing a
+program and finding it hard, not somebody reading a list. Two of that
+chapter's eight rows said why they were blocked and both reasons were wrong,
+which is why this part is kept open and empty rather than closed.
+
+### What a daily program still cannot reach for
 
 **Nothing this page has thought of.** The chapter that stood here listed six
 library gaps and two absences in the language itself, and version 3.2.0 struck
@@ -249,53 +403,6 @@ found in an afternoon. A row here should be a report, not an estimate.
 
 **Thirty-one modules exist** — eight conforming and twenty-three dialect,
 listed by name in `README.md`'s module table.
-
-## What would make this practical to pick up
-
-The chapter above is for someone working *on* the compiler. This one is for
-someone working **with** it, and it was written on 2026-09-02 by asking what
-separates the tree as it stands from a language a person picks up on a
-Tuesday and has a program running by the afternoon. Every row was measured
-before it was written, and the command is beside the number so that a reader
-can take it again; where a cost is given it is a guess and says so, because
-the chapter above has three rows that were wrong about exactly that.
-
-Almost everything here is on the **outside** of the compiler. ADR-0109's four
-areas are answered and both standards are complete, so what is missing is not
-what the compiler accepts but what surrounds it — how it is obtained, how it
-is learned, and what an editor can ask of it. None of these is a language
-feature and none needs a spelling. What it said when a program stopped was
-the first row here to close, the day after the chapter was written
-(ADR-0293), and `doc/history.md` has what doing it found.
-
-### Getting it and learning it
-
-- ~~**No release carries a binary.**~~ — **done** (ADR-0296), and moved to
-  [`doc/history.md`](history.md#the-first-archive). A `v*` tag now attaches
-  an `x86_64-linux` and an `aarch64-linux` archive to its release, each
-  checked the way `install-layout` checks a prefix before it is uploaded.
-  The guess was an afternoon, most of it the CI job; the CI job was the
-  cheap half, and the afternoon went on making the script fail on every push
-  rather than at the tag.
-
-- ~~**No program to read that is not a test.**~~ **Built** (ADR-0295):
-  `examples/` holds twelve programs of a page each, every one a case, and
-  writing them found seven things, all in *Writing a daily program* below.
-  The row as it stood is in
-  [`doc/history.md`](history.md#the-examples-and-what-writing-them-found).
-
-- ~~**No tour.**~~ **Written**: [`doc/tour.md`](tour.md), eleven sections of
-  prose with short programs in it, linked from the top of `README.md`. The row
-  as it stood and what writing it found are in
-  [`doc/history.md`](history.md#the-tour-and-what-writing-it-found).
-
-- ~~**A source named with no directory finds no sibling module.**~~ — **done**
-  (ADR-0308), the day the tour that found it landed. `SourceDir` answered the
-  empty string where the answer is `./`, and `AddPath` drops an empty
-  directory on purpose, so ADR-0244's first rule held for every spelling but
-  `pascalc prog.pas`. Two right answers to two different questions, wrong
-  together; `bare-source-name` is the gate, and it has to be one because no
-  test case can choose how it is named.
 
 ### Writing a daily program
 
@@ -381,6 +488,62 @@ the first row here to close, the day after the chapter was written
   own lesson a third time: the row that says a feature is unavailable is worth
   less than the four lines that ask the compiler.
 
+---
+
+## First-party utilities
+
+**Everything outside the compiler**, and it is where most of what is left
+lives. None of it is a language feature and none needs a spelling: how the
+compiler is obtained, how it is learned, what an editor may ask of it, how it
+is packaged, and which machines it runs on.
+
+The two parts above are for someone working *on* the compiler and on what it
+compiles. **This one is for someone working with it**, and it was written on
+2026-09-02 — as the chapter *What would make this practical to pick up*, whose
+other half is now under [the standard
+library](#writing-a-daily-program) — by asking what separates the tree as it
+stands from a language a person picks up on a Tuesday and has a program
+running by the afternoon. Every row was measured before it was written, and
+the command is beside the number so that a reader can take it again; where a
+cost is given it is a guess and says so, because [the language
+part](#what-each-landed-feature-left-open) has three rows that were wrong
+about exactly that.
+
+ADR-0109's four areas are answered and both standards are complete, so what is
+missing here is not what the compiler accepts but what surrounds it. What it
+said when a program stopped was the first row to close, the day after the
+chapter was written (ADR-0293), and `doc/history.md` has what doing it
+found.
+
+### Getting it and learning it
+
+- ~~**No release carries a binary.**~~ — **done** (ADR-0296), and moved to
+  [`doc/history.md`](history.md#the-first-archive). A `v*` tag now attaches
+  an `x86_64-linux` and an `aarch64-linux` archive to its release, each
+  checked the way `install-layout` checks a prefix before it is uploaded.
+  The guess was an afternoon, most of it the CI job; the CI job was the
+  cheap half, and the afternoon went on making the script fail on every push
+  rather than at the tag.
+
+- ~~**No program to read that is not a test.**~~ **Built** (ADR-0295):
+  `examples/` holds twelve programs of a page each, every one a case, and
+  writing them found seven things, all in *Writing a daily program* below.
+  The row as it stood is in
+  [`doc/history.md`](history.md#the-examples-and-what-writing-them-found).
+
+- ~~**No tour.**~~ **Written**: [`doc/tour.md`](tour.md), eleven sections of
+  prose with short programs in it, linked from the top of `README.md`. The row
+  as it stood and what writing it found are in
+  [`doc/history.md`](history.md#the-tour-and-what-writing-it-found).
+
+- ~~**A source named with no directory finds no sibling module.**~~ — **done**
+  (ADR-0308), the day the tour that found it landed. `SourceDir` answered the
+  empty string where the answer is `./`, and `AddPath` drops an empty
+  directory on purpose, so ADR-0244's first rule held for every spelling but
+  `pascalc prog.pas`. Two right answers to two different questions, wrong
+  together; `bare-source-name` is the gate, and it has to be one because no
+  test case can choose how it is named.
+
 ### Tooling
 
 - ~~**The server answers thirteen methods and none of them completes a
@@ -423,9 +586,150 @@ findings in *Writing a daily program* above. The fourth went the same day
 after (ADR-0300, ADR-0301). What is left in this chapter is the tour and the
 findings the examples produced.
 
+### Cross-platform support
+
+The repository is developed on x86-64 Linux and **built and tested on aarch64
+on every push**, natively, from a seed whose header lines still say x86-64.
+That port was measured rather than estimated (2026-08-22), and the lock turned
+out to be three things for an LP64 little-endian target — two lines of emitted
+text, one size constant, and a seed for the new host — of which the first two
+are done (ADR-0155, ADR-0156, ADR-0157, ADR-0159). The measurements are in
+[`doc/history.md`](history.md#cross-platform-support-measured); what follows is
+what they leave.
+
+**Where every target stands on layout**, from `target-layout`'s own comparison
+run by hand over 25 targets rather than the two the compiler admits, on
+2026-08-22, against the 4538 offsets there were that day. **Read the
+proportions and not the absolute**: the denominator is every field of every
+frame the compiler emits for its own source, so it moves with each declaration
+added to any of the three program-components. **The gate prints its own count
+and this sentence does not**, that number having been quoted here and gone
+stale in two days: it said 4999 and the gate then said 8955. **And this
+sentence went stale in its turn**, which is the argument rather than an
+embarrassment -- 8955 stood here while `CLAUDE.md` said 9320 and the gate, run
+on 2026-09-01, says **10 346**. Two documents answered differently about one
+gate and neither was right. Run it.
+
+**The split is why, and not by adding a declaration.** A module emits the
+frame *type* of every frame it can index, which includes the frames of the
+modules it imports — a static link is walked across a module boundary and its
+layout has to be spelled to do it — while the routines themselves are
+`declare`d and defined once. So the three translations emit 85, 487 and 706
+frame types against 710 functions defined in total: the counts are cumulative,
+and the gate folds roughly 1.8 frames per frame there is. Harmless, the gate
+comparing each against every target either way, and worth knowing before
+reading the denominator as a measure of the compiler's size.
+
+The comparison has no mode that reproduces itself, so the day it was taken is
+part of what it says.
+
+| target | offsets differing | |
+| --- | --- | --- |
+| aarch64, riscv64, powerpc64le, loongarch64, mips64el | 0 | LP64 little-endian |
+| powerpc64, mips64, aarch64_be, sparcv9 | 0 | LP64 big-endian — endianness decides what a byte means, not where a field sits |
+| x86_64 and arm64 apple-darwin; x86_64 and aarch64 windows | 0 | Mach-O and COFF agree |
+| s390x | **13** | aligns `i256` to 8 where every other target says 16 — ADR-0028's shape exactly |
+| i686, arm, riscv32, mipsel, powerpc, x32, … | 3858–3904 | **every 32-bit target** |
+
+#### What is left
+
+**32-bit, which is the real work.** `LlSize` says a pointer is 8 by
+construction; `tyProc` and `tySlice` are two pointers; `tyFile`'s alignment is
+8. All of those become target-dependent, which means `LlAlign` and `LlSize`
+stop being constants and start asking the target — and ADR-0129's `i64` count
+at the foreign boundary is a second, independent question with a decision in it
+rather than a lowering. Nothing here is blocked on measurement any more.
+
+**The rest is small and specific.** s390x's `tySet` alignment (13 offsets, and
+`target-layout` fails loudly if it is ever admitted). Windows: `fmemopen` and
+`open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two
+hand-written `FILE*`-over-memory functions, `access` is `_access`, and MSVC
+lacks the `_Complex` §6.7.6.2's functions are written in. **macOS needs none
+of it** — the runtime's five non-ISO names are all there — and has never been
+tried, which makes it the cheapest unknown in the chapter.
+
+#### What is not claimed
+
+**aarch64 works and is shipped; it is not seeded.** Since ADR-0296 every
+release attaches an `aarch64-linux` archive, built and put through the whole
+suite on an arm64 runner. What that archive does not claim is written in the
+record and worth repeating: `seed/*.ll` is generated for x86-64 and
+`seed/README.md`'s target lock stands, the compiler in the archive writes an
+x86-64 header unless `--target=` or `AFTERSCHOOL_PASCAL_TARGET` says
+otherwise (clang overrides it when it assembles, so a program is right and a
+`pascalcc -S` file names the wrong machine), and CI establishes that the port
+*works* — the seed retargets textually, the layout rules hold for a second
+machine, the runtime's constants clear it — not that every oracle has run
+there.
+
+**Not every oracle follows.** `llc-second-backend` skips on the arm64 job, and
+the SMT proofs are about the lowering *model*, the same file on either machine.
+A miscompilation only an aarch64 backend produces has nothing looking for it
+(`doc/sop.md` §7).
+
+**The layout gate sees frames and nothing else.** A global's alignment, a string
+constant's, and the ABI arguments travel by are outside it.
+
 ---
 
-## Where the ideas come from
+## How this page is written
+
+**The rules, the lineage, and the one risk that is not a task.** Nothing in
+this part is an item of work: the lessons are for whoever adds the next row,
+the borrowings table records where each idea came from and what it settled,
+the standing risk is read every time and finished never, and the index at the
+end says where everything this file used to carry went.
+
+**Three lessons govern how this page is written**, and they are here rather
+than in the history because they are rules for the next row somebody adds.
+They were learned by the chapter that used to stand between *What a daily
+program cannot reach for* and *What would make this practical to pick up* --
+the second of which is now split across the library and utilities parts --
+**What would make this easier to work on**, archived to
+[`doc/history.md`](history.md#what-would-make-this-easier-to-work-on) on
+2026-09-03 when the last of its eleven items closed.
+
+**A number needs a date *and* a command.** The suite item said 262 seconds,
+and every word of it was true of a configuration nothing used: it was measured
+serially while CI had run `-j"$(nproc)"` on every push since the workflow was
+written. The figure had a date, had been re-measured twice after an earlier
+round of six wrong figures, and was still wrong — so the rule this chapter
+gave itself was not enough. What closed it was a flag worth 3.4× (ADR-0281).
+
+**A row saying a feature is blocked is a row nobody has tried.** Three rows in
+succession were settled by attempting them, and each had carried a stated
+reason it could not be done. The `protected var` warning said §6.6.3.6's
+congruity made the fix illegal — it does, and the answer is to defer the
+diagnostic to the end of the component, which is one page of code (ADR-0283);
+the estimate under it said 81 sites where the truth is a **fixed point**, one
+pass reporting 130 and seven reporting zero. `textDocument/rangeFormatting`
+said the printer had to be *told* where its indent begins, which only a parse
+can answer; the printer accumulates that depth itself as it walks the token
+stream, and the whole feature is a gate on two routines (ADR-0284).
+
+**And the lesson is not about this page.** ADR-0286 is the third instance and
+it was found in `doc/sop.md` §7, which is a register of what is *not* checked
+and so is the one document here whose rows are supposed to be uncomfortable.
+A row there said nothing holds ADR-0283's zero, and gave a reason for
+declining a gate: the count is a fixed point rather than a number, so a gate
+would have to iterate to convergence. Iterating is what **reaching** zero
+needed; holding it needs one sweep. The gate is 1.2 seconds, and removing one
+`protected` from the compiler's own source leaves 798 of 798 cases green — so
+the row was right about the gap and wrong about the cost, which is the same
+shape twice over. **A reason written beside a declined item is an estimate
+like any other**, wherever it is written, and this page's own rule applies to
+it: it is a report or it is a guess.
+
+**An item can be re-scoped by measuring it rather than by arguing about it.**
+`--dump-uses --at line:col` was asked for and the measurement closed it the
+other way: the flag saves no compiler time, and narrowing the query would have
+cost the per-document cache that took five hovers from 795 ms to 159
+(ADR-0276).
+
+Nothing here is a work queue with owners and dates. Where a decision has been
+made it has an ADR; where it has not, that is the point of the entry.
+
+### Where the ideas come from
 
 Rust, Swift and Zig are the reference points, and they do not all fit equally:
 Pascal's grain is value semantics, explicitness and a small orthogonal core,
@@ -470,116 +774,7 @@ a row — ADR-0122, ADR-0123, ADR-0176, ADR-0177 — assumed a feature would nee
 its own machinery and none of them did. Probe before believing an estimate of
 that shape.
 
----
-
-## The object model (proposed)
-
-**Nothing here is built, and this chapter exists so that stays legible.**
-[ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is the first
-record in this tree with the status `Proposed`, and it was written that way on
-purpose: the design was asked for on paper before any of it is implemented, so
-that the shape could be argued about while the alternatives were still live.
-Whether it is built is **not settled**. The two goals before this one —
-bootstrapping, then conformance — were each finished before they were left, and
-an area announced and abandoned would be the first thing on this page that was
-neither.
-
-### What asked for it
-
-Not a missing facility. Every program in `examples/` was written without an
-object model, and the containers, the JSON reader and the language server are
-all records with routines over them. What asked is the *second* clause of
-ADR-0109's test — **can a program get it pleasantly** — measured on this tree's
-own library:
-
-- **139 of 486 exported names repeat their own module's noun**:
-  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. That is forced rather
-  than chosen. §6.11.2 puts every imported name into one scope, so two modules
-  may not export one spelling, and ADR-0298's `export-unique` gate refuses a
-  collision outright. **The prefix is a receiver, spelled by hand, at every
-  declaration and every call site**, and ADR-0306 renamed four examples' worth
-  of them before anyone counted the rest.
-- **14 routine-valued parameters and 30 call sites** thread `StrHash, StrEq`
-  through `lib/passort.pas` and `lib/dialect/pascontainer.pas`, because where a
-  property belongs to a type the caller has to carry it instead.
-- `lib/passort.pas` **never sees an element** — it sorts by `less(i, j)` and
-  `swap(i, j)` — which is the *Traits / protocols* row of
-  [Where the ideas come from](#where-the-ideas-come-from) said from the
-  library's end.
-
-### The shape
-
-**Rust's decomposition and not Object Pascal's**, and the difference is the
-whole of the proposal: methods and traits without inheritance, so there is no
-base class, no virtual by default, and no `is`/`as`. A method is an ordinary
-routine whose first parameter is written out with its type — value,
-`protected var` and `var` being what Rust spells `self`, `&self` and
-`&mut self` — declared in an `impl T; … end;` block, and `x.M(a)` means
-`M(x, a)`. Three increments, and **only the first has to be built for the
-other two to be judged**:
-
-| Increment | What it adds | What it retires |
-| --- | --- | --- |
-| **A. Methods** | the impl block, the receiver rule, `x.M(a)`, the type's own scope | the 139 prefixes. No new representation, no compatibility rule, no vtable, and CodeGen untouched — a method is an ordinary routine |
-| **B. Traits, static** | the trait-type, `impl … for`, `Self`, and `T: Trait` bounds | the 14 routine parameters and 30 call sites. Resolved at instantiation, so still no vtable |
-| **C. `dyn T`** | dynamic dispatch, permitted only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first thing here that emits a vtable |
-
-**Four factors were settled on 2026-09-03**, each against a real alternative:
-all three increments are in scope including `dyn`; the declaration is a block
-rather than a marker on each routine; the receiver is **written out with its
-type** rather than implied; and one library module is rewritten as proof before
-any judgement about the other thirty.
-
-The argument that arrived *after* that choice is the best one for it: a trait
-impl repeating only the routine's name is not new syntax at all —
-
-```pascal
-impl Ord for Point;
-  function Compare;
-  begin Compare := self.x - other.x end;
-end;
-```
-
-— it is §6.7's own parameterless definition, the shape this compiler's source
-writes **248 times** after a `forward`. A trait heading plays the part
-`forward` plays.
-
-### What is settled, and what is not
-
-**Settled.** The four factors above. And the one technical question that gated
-increment B, settled by probe on 2026-09-04: a trait bound **cannot narrow
-inference, because inference has no candidates to narrow** — `Determine` reads
-one type off the first determining actual and `BindType` is first-wins, so
-AP 6.7.3.10.5's category is checked *after* the tuple is built and a trait
-bound takes that same position. Two things fell out of settling it. The
-receiver is the determining position **for free**, being the first parameter.
-And the tuple holds the actual's *own* type, so `1..9` is bound and not
-`integer` — every existing category goes through `Base(t)` and none can tell a
-subrange from its host, which makes a trait bound the first constraint that
-could; the record decides the impl lookup **follows `Base()`**, so a subrange
-takes its host's implementation and cannot carry one of its own.
-
-**Not settled.** Whether to build any of it. What increment A's one rewritten
-module reads like, which is the evidence the rest waits on. And what to do
-about the one cost no gate will see: `x.M(a)` resolving in the type's scope
-means a reader can no longer find a routine by grepping its name — `Put` will
-be declared in a dozen impls. `--dump-uses` already answers *where is this name
-declared* and the language server reads it, so the tooling is ready and a
-person with `grep` is not. That is the feature working as intended, which is
-why it is written down here rather than discovered later.
-
-**A note on what to call it.** This chapter is not titled *a Rust-flavoured
-Pascal dialect*, though the description is fair — eleven of the eighteen rows
-in [Where the ideas come from](#where-the-ideas-come-from) are Rust or Rust and
-somebody else, and slices, optionals, moves, owned pointers, `Result` and `?`
-are all already here. That table **is** the Rust-flavour chapter, written per
-borrowing and tied to the open decision each one settled, and a second chapter
-under that name would say the same things with the discipline taken out. What
-is new here is one proposal, so the chapter is named after the proposal.
-
----
-
-## The open questions
+### The open questions
 
 Seven structural questions about the dialect and five items of *what is next*
 used to stand here. **Eleven of the twelve are answered** — the table at the
@@ -598,7 +793,7 @@ premise of §2. Neither entry gained a new problem; each lost what partly
 covered it, and §2 was then taken *because* it was shrinking. It bought §1 a
 row back, and not the two it lost.
 
-### 1. The dialect has no external authority, and every gate here is anchored in one
+#### 1. The dialect has no external authority, and every gate here is anchored in one
 
 A standing **risk** rather than a task, and the one entry no record can close.
 
@@ -693,7 +888,7 @@ ADR-0171) and the last findings of the fourth closed on 2026-08-23; the
 worth running whenever that chapter has not moved for a while, and the note
 belongs here, since a claim no test names is a claim nothing checks.
 
-### 2, 3 and 4 — answered
+#### 2, 3 and 4 — answered
 
 A third-party differential (ADR-0234), mutation testing committed to the tree
 (ADR-0207) and *should the dialect read a type off a component?* (ADR-0215)
@@ -702,162 +897,7 @@ were the other three questions this chapter carried. Each has a row in
 [`doc/history.md`](history.md#what-the-roadmap-answered). §1 above is the only
 one left, and it is the one no record can close.
 
-
----
-
-
-## Cross-platform support
-
-The repository is developed on x86-64 Linux and **built and tested on aarch64
-on every push**, natively, from a seed whose header lines still say x86-64.
-That port was measured rather than estimated (2026-08-22), and the lock turned
-out to be three things for an LP64 little-endian target — two lines of emitted
-text, one size constant, and a seed for the new host — of which the first two
-are done (ADR-0155, ADR-0156, ADR-0157, ADR-0159). The measurements are in
-[`doc/history.md`](history.md#cross-platform-support-measured); what follows is
-what they leave.
-
-**Where every target stands on layout**, from `target-layout`'s own comparison
-run by hand over 25 targets rather than the two the compiler admits, on
-2026-08-22, against the 4538 offsets there were that day. **Read the
-proportions and not the absolute**: the denominator is every field of every
-frame the compiler emits for its own source, so it moves with each declaration
-added to any of the three program-components. **The gate prints its own count
-and this sentence does not**, that number having been quoted here and gone
-stale in two days: it said 4999 and the gate then said 8955. **And this
-sentence went stale in its turn**, which is the argument rather than an
-embarrassment -- 8955 stood here while `CLAUDE.md` said 9320 and the gate, run
-on 2026-09-01, says **10 346**. Two documents answered differently about one
-gate and neither was right. Run it.
-
-**The split is why, and not by adding a declaration.** A module emits the
-frame *type* of every frame it can index, which includes the frames of the
-modules it imports — a static link is walked across a module boundary and its
-layout has to be spelled to do it — while the routines themselves are
-`declare`d and defined once. So the three translations emit 85, 487 and 706
-frame types against 710 functions defined in total: the counts are cumulative,
-and the gate folds roughly 1.8 frames per frame there is. Harmless, the gate
-comparing each against every target either way, and worth knowing before
-reading the denominator as a measure of the compiler's size.
-
-The comparison has no mode that reproduces itself, so the day it was taken is
-part of what it says.
-
-| target | offsets differing | |
-| --- | --- | --- |
-| aarch64, riscv64, powerpc64le, loongarch64, mips64el | 0 | LP64 little-endian |
-| powerpc64, mips64, aarch64_be, sparcv9 | 0 | LP64 big-endian — endianness decides what a byte means, not where a field sits |
-| x86_64 and arm64 apple-darwin; x86_64 and aarch64 windows | 0 | Mach-O and COFF agree |
-| s390x | **13** | aligns `i256` to 8 where every other target says 16 — ADR-0028's shape exactly |
-| i686, arm, riscv32, mipsel, powerpc, x32, … | 3858–3904 | **every 32-bit target** |
-
-### What is left
-
-**32-bit, which is the real work.** `LlSize` says a pointer is 8 by
-construction; `tyProc` and `tySlice` are two pointers; `tyFile`'s alignment is
-8. All of those become target-dependent, which means `LlAlign` and `LlSize`
-stop being constants and start asking the target — and ADR-0129's `i64` count
-at the foreign boundary is a second, independent question with a decision in it
-rather than a lowering. Nothing here is blocked on measurement any more.
-
-**The rest is small and specific.** s390x's `tySet` alignment (13 offsets, and
-`target-layout` fails loudly if it is ever admitted). Windows: `fmemopen` and
-`open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two
-hand-written `FILE*`-over-memory functions, `access` is `_access`, and MSVC
-lacks the `_Complex` §6.7.6.2's functions are written in. **macOS needs none
-of it** — the runtime's five non-ISO names are all there — and has never been
-tried, which makes it the cheapest unknown in the chapter.
-
-### What is not claimed
-
-**aarch64 works and is shipped; it is not seeded.** Since ADR-0296 every
-release attaches an `aarch64-linux` archive, built and put through the whole
-suite on an arm64 runner. What that archive does not claim is written in the
-record and worth repeating: `seed/*.ll` is generated for x86-64 and
-`seed/README.md`'s target lock stands, the compiler in the archive writes an
-x86-64 header unless `--target=` or `AFTERSCHOOL_PASCAL_TARGET` says
-otherwise (clang overrides it when it assembles, so a program is right and a
-`pascalcc -S` file names the wrong machine), and CI establishes that the port
-*works* — the seed retargets textually, the layout rules hold for a second
-machine, the runtime's constants clear it — not that every oracle has run
-there.
-
-**Not every oracle follows.** `llc-second-backend` skips on the arm64 job, and
-the SMT proofs are about the lowering *model*, the same file on either machine.
-A miscompilation only an aarch64 backend produces has nothing looking for it
-(`doc/sop.md` §7).
-
-**The layout gate sees frames and nothing else.** A global's alignment, a string
-constant's, and the ABI arguments travel by are outside it.
-
----
-
-## Known limitations
-
-Things that are wrong or absent today, listed so they are not rediscovered as
-surprises. **Until 2026-09-02 this chapter was two lists headed by the two
-standards**, and every entry in them was classified as a deviation from a
-clause. ADR-0232 made that the wrong question — there is one language and no
-clause governs it — and every fact the lists stated was already in
-[`doc/implementation-defined.md`](implementation-defined.md), which is the
-register of what this processor decides. What stays here is what is still
-open in the dialect's own terms: one gap, three capacities and two decisions.
-The chapter as it stood, with the two entries that had closed inside it, is
-in [`doc/history.md`](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards).
-
-Six entries that stood here are the language's rule now and are looked up in
-the register rather than here: an identifier may contain an underscore (§5);
-`ExpDigits` is what C's `%E` writes (§2.3, E.13); §6.5.6's substring aliasing
-rule is not enforced (§3, D.17); a variable created by `new(p, c1, …, cn)`
-may be assigned or passed (§3, D.25); a textfile's last line need not end in a
-terminator (§2.4); and a `char` is a byte, which ADR-0189 records *cannot*
-change and answers with a type beside the string rather than underneath it
-(§2.2, ADR-0191).
-
-**One gap: an ordinary pointer can dangle.** `dispose(p)` stores nil into the
-variable it was given, which turns the common form of use-after-dispose into
-the nil trap, and does nothing for a second pointer to the same storage
-(ADR-0019; the register's §3, D.4 and D.5). It is the aliasing half of the
-memory-safety question, and ADR-0109 names memory safety as a property of the
-language rather than a convention. The dialect's `owned ^T` sidesteps rather
-than closes it: storage declared that way can have no second pointer, so
-there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
-ADR-0181 withdraws nothing. What would close it is a decision about the
-ordinary pointer — kept as it is, retired in favour of the owned one, or
-given a check — and it has not been asked with a caller. *The one entry here
-that is a limitation in ADR-0109's sense.*
-
-**Three capacities**, each a decision with a record and each a refusal or a
-trap a program can meet:
-
-| A program meets | Decided in |
-| --- | --- |
-| nesting deeper than 1000 levels is refused, and an operator chain is counted toward the same limit because it is flat for the parser and deep for everything after it | ADR-0020, ADR-0110; the register's §6 |
-| a set's base type must have its values in 0..255, every set being one 256-bit word — so `set of integer` is refused, and so is `set of 1..m` for a bound the block evaluates, which cannot be checked against 0..255 before the program runs | ADR-0028, ADR-0133; §6 |
-| string concatenation draws from an arena released at the end of every statement, so one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
-
-**One decision, and it has no record yet:**
-
-- **`string(5)` as a parameter form** (ADR-0171). §6.7.3.1 admits
-  `type-name | schema-name | type-inquiry`, so `procedure q(x: string)` is
-  inside the grammar and `procedure q(x: string(5))` is outside it, and this
-  compiler accepts both; three sources under `tests/extended/` write the
-  second. There is no mode to refuse it under any more, so what is left is to
-  admit it with a clause of its own or refuse it and edit three sources.
-  Admitting it is the likely answer — it is exactly the convenience ADR-0109
-  says belongs here and the spelling already passes ADR-0140's test — and
-  what it wants is a clause and a record, not a change. Written down rather
-  than done because refusing it takes something away from every program that
-  uses it.
-
-The adversarial audits that filled the old lists — four of them, ADR-0162,
-ADR-0167, ADR-0168 and ADR-0171 — are [open question
-§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
-instrument, and that entry says when the next is worth running.
-
----
-
-## Answered, and where
+### Answered, and where
 
 Every question this file has carried and closed. The narrative of each — what
 the survey found, what the estimate got wrong — is in
