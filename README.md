@@ -184,7 +184,7 @@ which modules it uses; the ones that import the library carry a
 | --- | --- |
 | `hello_args.pas` | `argcount` and `argument(k)`, and a substring |
 | `word_count.pas` | `wc`: a text read line by line into a `string(4096)` |
-| `word_freq.pas` | `PasContainer`'s generic `Map` and `PasStrVec`, with inferred type arguments |
+| `word_freq.pas` | `PasContainer`'s generic `Map` and `Vec`, both `owned` by the program block, with inferred type arguments |
 | `dir_sizes.pas` | `du`: `PasDir` and `PasFS.Info` over a tree, recursively |
 | `json_pretty.pas` | `PasJson`: parse standard input, walk the tree, print it indented |
 | `parse_errors.pas` | `T ! E` read with `try`, and with an `…Or` accessor |
@@ -1037,6 +1037,33 @@ Between the two rules there is nothing left: an owned pointer cannot be copied,
 so the only names a variable of one has are itself, a `var` parameter bound to
 it, and a component of what contains it — the second is the rule above and the
 first is this one.
+
+**And a generic body's `take` moves where the type moves** (ADR-0323, AP
+6.4.14.6). `take` is the only operation here whose *applicability* is a fact
+about the type it is applied to, and a generic is written before that type is
+known — so the two features did not compose. A growable container replaces what
+a variable holds, and each spelling of that is refused by half of the
+instantiations:
+
+```pascal
+{ inside PasContainer, one module written once over a type argument }
+new(fresh, Claimed(want));  ...  dispose(v);
+v := fresh          { a copy: refused where Ptr is `owned ^Vec(T)` }
+v := take(fresh)    { empties nothing: refused where Ptr is `^Vec(T)` }
+```
+
+Inside a generic's body `take` is now admitted for any type that is not affine,
+and denotes the variable's value — the variable unchanged, and not threatened,
+so a generic may `take` its own `protected` parameter where the same body at an
+owned type argument may not. A **file** is still refused, inside a generic and
+out. Nothing is lowered differently: at a type with no value for a variable to
+stop holding, the statement is the assignment written without the word.
+
+So `PasContainer` is written once for both, and each caller chooses — which is
+what `examples/word_freq.pas` does, its map and its vector `owned` by the
+program block with no `Free` call in the program at all, while
+`lib/dialect/pasjson.pas` keeps the ordinary pointer its variant part obliges
+it to.
 
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names
