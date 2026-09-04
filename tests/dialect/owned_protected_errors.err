@@ -1,0 +1,12 @@
+<source>:15:15: error: 'o' is a protected parameter, so it cannot be released by 'dispose'
+<source>:19:11: error: 'o' is a protected parameter, so it cannot be given a new variable by 'new'
+<source>:23:17: error: 'o' is a protected parameter, so it cannot be emptied by 'take'
+<source>:27:7: error: 'o' is a protected parameter, so it cannot be assigned to
+<source>:32:12: error: 'o' is a protected parameter, so it cannot be passed to the var parameter 'o' of 'sink'
+<source>:37:16: error: 'b' is a protected parameter, so it cannot be released by 'dispose'
+<source>:45:17: error: 'o' is a protected parameter, so it cannot be released by 'dispose'
+<source>:48:9: error: 'o' is a protected parameter, so it cannot be assigned to
+<source>:51:19: error: 'o' is a protected parameter, so it cannot be emptied by 'take'
+<source>:54:14: error: 'o' is a protected parameter, so it cannot be passed to the var parameter 'o' of 'sink'
+<source>:59:26: error: the record of an enclosing with statement is a protected parameter, so it cannot be released by 'dispose'
+<source>:62:28: error: the record of an enclosing with statement is a protected parameter, so it cannot be emptied by 'take'

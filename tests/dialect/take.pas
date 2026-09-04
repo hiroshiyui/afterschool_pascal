@@ -40,12 +40,12 @@ begin
   if n <> nil then n := take(n^.next)
 end;
 
-procedure Show(var n: List);
+procedure Show(protected var n: List);
 begin
   if n <> nil then begin write(' ', n^.key:1); Show(n^.next) end
 end;
 
-function Len(var n: List): integer;
+function Len(protected var n: List): integer;
 begin
   if n = nil then Len := 0 else Len := 1 + Len(n^.next)
 end;

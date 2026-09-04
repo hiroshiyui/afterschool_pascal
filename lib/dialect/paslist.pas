@@ -69,15 +69,22 @@ procedure ListPush(var l: List; item: ListItem);
   and one assignment. }
 function ListPop(var l: List; var item: ListItem): boolean;
 
-{ The first item without removing it. }
-function ListPeek(var l: List; var item: ListItem): boolean;
+{ The first item without removing it.
 
-function ListEmpty(var l: List): boolean;
+  `protected` on the four routines that only read the chain is AP 6.4.14.8
+  (ADR-0318), and this module is why the clause exists: an owned pointer cannot
+  be a value parameter (6.4.14.3), so before it there was one way to accept a
+  chain and it granted every caller the right to release it. The word is not a
+  convenience here -- it is the difference between a reader and an owner, and
+  it is checked. }
+function ListPeek(protected var l: List; var item: ListItem): boolean;
+
+function ListEmpty(protected var l: List): boolean;
 
 { How many. O(n): there is no count to keep, since every routine that would
   maintain one would have to be the only way to reach the chain, and a caller
   holding `var l` is not bound to go through this module. }
-function ListLen(var l: List): integer;
+function ListLen(protected var l: List): integer;
 
 { Put an item on the far end. O(n), a tail pointer being a second name for a
   node and 6.4.14.3 having none. }
@@ -85,7 +92,7 @@ procedure ListAppend(var l: List; item: ListItem);
 
 { The i'th item, counting from 1; false when there is no such item, which is
   how a caller learns the length without asking for it. }
-function ListGet(var l: List; i: integer; var item: ListItem): boolean;
+function ListGet(protected var l: List; i: integer; var item: ListItem): boolean;
 
 { Remove and dispose the i'th item; false when there is no such item. }
 function ListDrop(var l: List; i: integer): boolean;

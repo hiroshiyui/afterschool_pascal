@@ -206,7 +206,7 @@ looked.
 | `Drop`, RAII | scope-based release | present since 1982, unnamed until ADR-0151 |
 | a move, `mem::take` | `take` (AP 6.4.14.6, AP 6.4.12.7) | forced by writing `PasList`, not designed (ADR-0182, ADR-0267) |
 | `&mut T` | a `var` parameter bound to `o^` | *unformable* rather than checked (ADR-0201) |
-| `&T` | `protected var` (§6.7.3.1) | ISO's own word (ADR-0283) |
+| `&T` | `protected var` (§6.7.3.1), and since 2026-09-04 over an owned pointer too | ISO's own word (ADR-0283, ADR-0318) |
 | `Option<T>` | `?T` (AP 6.4.11) | ADR-0123 |
 | `Result<T, E>` and `?` | `T ! E` and `try` (AP 6.4.13, AP 6.8.9) | ADR-0176, ADR-0178 |
 | `&[T]` | `array of T` (AP 6.7.3.9) | ADR-0125 |
@@ -252,6 +252,7 @@ candidates were designed against this shape and the first was taken:
 | Candidate | What it costs | Why it is not enough |
 | --- | --- | --- |
 | **taken**: refuse the call-site shape and the with-binding — the two forms one activation can be asked about | nothing; no program in this tree is refused, and the corpus carries five that must go on compiling | it is a narrowing and not a closure: the callee can reach the owner indirectly, `Bump(g^)` → `Clear` → `ClearIt(g)` → `dispose` of its own `var` parameter, and no local rule sees that |
+| **also taken**, a day later: let the program say the callee will not release, by protecting the owner's formal parameter (ADR-0318) | nothing again, `protected` being a word §6.7.3.1 already had in that position | it is a *guarantee on request* and not a closure either — but where it is asked for it is complete, since a protected owned pointer refuses every release point and refuses being handed to anything unprotected |
 | **release only in the block that declares the pointer** | sound under one thread — a declaring block is suspended for the whole life of any borrow | unaffordable, and measured: all **ten** of `PasList`'s exported routines take `var l: List` and **five** release through it, so the module could not be written |
 | a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
 
@@ -263,7 +264,9 @@ to be written on.
 against escape and is exactly what makes invalidation invisible.* ADR-0201
 reads the borrow's absence from the type system as strength, and it is
 strength in one direction only. What would close the row is the third
-candidate; what has landed is the first, and the row stands narrowed.
+candidate; what has landed is the first and second, and the row stands
+narrowed — with the difference that a program which wants the guarantee can now
+ask for it in one word, where a day earlier there was nothing it could say.
 
 #### 2. The unsafe subset is the unmarked default
 
@@ -300,18 +303,30 @@ run, so **it is not built**.
 
 **What the count actually says is about the type and not about the warning.**
 `owned ^T` has no client here not because nothing wants ownership, but
-because **the only borrow this language has is a `var` parameter**, and every
-container in `lib/` hands its handle to a *value* parameter — `JsonKindOf(v:
-JsonPtr)`, `SMapGet(m: SMapPtr, …)`, `IVecLen(v: IVecPtr)`. AP 6.4.14.3
-forbids exactly that, so adopting the safe pointer means rewriting every
-accessor to take `var`, which then collides with the rule of
+because **the only borrow this language had was an unprotected `var`
+parameter**, and every container in `lib/` hands its handle to a *value*
+parameter — `JsonKindOf(v: JsonPtr)`, `SMapGet(m: SMapPtr, …)`, `IVecLen(v:
+IVecPtr)`. AP 6.4.14.3 forbids exactly that, so adopting the safe pointer means
+rewriting every accessor to take `var` — and a plain `var` grants the caller's
+ownership away, which collides with the rule of
 [the row above](#1-the-borrow-rule-was-enforced-in-one-direction--narrowed-2026-09-04).
-The missing facility is a **second borrow form** — a lend that is not a
-variable parameter, Rust's `&T` where the `var` parameter is its `&mut T` —
-and until there is one, `owned ^T` is reachable only by code written for it
-from the start, which is why `PasList` is the only client and had to be
-written new. That is the item to weigh, and it is a language change with a
-clause rather than a warning with a catalogue.
+
+**That is settled, and the answer was one word shorter than the question**
+(ADR-0318, AP 6.4.14.8, landed 2026-09-04). The second borrow form was not
+missing; §6.7.3.1's `protected` is exactly a lend that may be read and not
+written, and an owned pointer was excluded from it by §6.4.1 — whose stated
+reason, that a pointer value can be copied out and disposed of through the
+copy, AP 6.4.14.3 had already made false for this type. A handle-type had been
+protectable all along on identical facts. `PasList`'s four read-only routines
+now take `protected var l: List`, and the fourth warning found five more places
+for the word in code written before there was one.
+
+**What is left of this row is the rewrite and not the facility.** `JsonPtr`,
+`SMapPtr`, `StrVecPtr` and `IVecPtr` are still value parameters, and adopting
+`owned ^T` in those four containers is still a change to every accessor — but
+it now has a destination that grants the same permission the value parameter
+granted, which it did not before. The five schema-domain ones stay out of reach
+(AP 6.4.14.2). The warning is still not built and the count is still why.
 
 #### 3. There is no shared ownership, and the release walk ends in a signal
 

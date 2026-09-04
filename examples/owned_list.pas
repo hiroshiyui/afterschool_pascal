@@ -33,7 +33,7 @@ begin
     Insert(l^.next, key)
 end;
 
-procedure Show(var l: List);
+procedure Show(protected var l: List);
 begin
   if l <> nil then begin
     write(' ', l^.key:1);

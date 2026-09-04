@@ -468,6 +468,38 @@ checks they agree, which is the same arrangement the version number has. A
   fork is withdrawn rather than decided — the two differ about escaping
   aliases, and refusal covers the three affine kinds while containment fixes
   what `^T` means. `doc/sop.md` §7 carries what nothing watches.
+- **And that argument had another half, unwritten** (ADR-0317, AP 6.4.14.7).
+  A borrow that cannot outlive the call is safe only while what it borrows
+  outlives the call too, and AP 6.4.14.3 gives the callee three ways to end it
+  early. `P(q, q^)` with a `dispose` in the body writes through disposed storage
+  and exits 0; `with q^ do begin dispose(q); v := 999 end` is the same defect
+  inside one block. Two forms are refused — the actual-parameters of one
+  activation-point, walked pairwise with the owner required to be an
+  entire-variable, and a release under a with-binding reached through the
+  pointer, which `withOwnedTop` records one entry per `with`. `OwnedRoot` is the
+  designator walk both ask: the entire-variable a path reaches when every
+  dereference on the way is of an owned pointer, which is what *inside what this
+  variable owns* means. What no local rule sees is a release one activation
+  further on, and that is Annex C.12.
+- **And the answer to it was a word §6.7.3.1 already had** (ADR-0318,
+  AP 6.4.14.8). §6.4.1 excludes a pointer-type from the protectable types
+  because "a pointer *value* can be copied out and disposed of" — a premise
+  AP 6.4.14.3 withdrew for this type and this type alone, `take` being the only
+  operation that moves the value and §6.5.1 already refusing it for a protected
+  variable. A handle-type had been protectable all along on the same facts,
+  passing §6.4.1 only because it is not spelled as a pointer. So `protected var
+  o: Own` is the second borrow form, and two rules make it mean what it says:
+  `dispose` **threatens** an owned pointer, being AP 6.4.14.3's release point
+  and therefore §6.9.4 a)'s case; and a threat to an owned-typed designator is a
+  threat to the variable that **owns** it, so `dispose(o^.next)` and the five
+  other spellings that root at a dereference are attributed to `o` rather than
+  to nothing. `ThreatSym` is the one place, because §6.9.4 is one list; the
+  `with` form needs the binding to remember what it was reached through, which
+  is `ownedVia` on the symbol. Shipped shallow, it would have refused a borrow
+  the release of the node it was handed and admitted the release of every node
+  under it — the probe that found that is in the record. `PasList`'s four
+  read-only routines take the word, and ADR-0283's fourth warning found five
+  more places for it in code written before there was one.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

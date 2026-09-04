@@ -24,7 +24,7 @@ var
   s: ListItem;
   i: integer;
 
-procedure ShowAll(var q: List; label_: ListItem);
+procedure ShowAll(protected var q: List; label_: ListItem);
 var k: integer; item: ListItem;
 begin
   write(label_);

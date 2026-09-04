@@ -5380,6 +5380,7 @@ begin
   s^.secLine := 0;
   s^.secCol := 0;
   s^.isProtected := false;
+  s^.ownedVia := nil;
   s^.initValue := nil;
   s^.constValue := nil;
   s^.isConstBinding := false;
@@ -6596,6 +6597,21 @@ begin
         constant-access (§6.9.3.10). It would take a function answering an
         owned pointer, which 6.4.14.3 refuses. }
       if e^.kind = nkVar then s := e^.vrSym;
+      { AP 6.4.14.8 (ADR-0318): a with-binding reached through an owned
+        dereference stands for the designator that reached it, so the walk
+        continues at the variable that owns that. Every other symbol answers
+        nil here and the walk stops, which is every symbol but a binding.
+
+        The nil test is the line above's condition read a second time: s is
+        assigned exactly when the node is an nkVar, and the paragraph above
+        says why that is never false over this corpus. It is written because
+        the alternative is a dereference of whatever an unresolved name left,
+        and the reason to keep a check that cannot fire today is ADR-0146's. }
+      if s <> nil then
+        if s^.ownedVia <> nil then begin
+          thruOwned := true;
+          s := s^.ownedVia
+        end;
       walking := false
     end
   end;
@@ -6604,6 +6620,20 @@ begin
     thruOwned := false
   end;
   OwnedRoot := s
+end;
+
+{ AP 6.4.14.8 (ADR-0318): is a release written on this designator already
+  refused, because the variable that owns what it names is protected? Asked so
+  that 6.4.14.7's with-statement rule stays quiet where 6.4.14.8 has spoken --
+  one mistake and one message, which is the wart CheckRelease's comment names.
+  It answers for the direct case too, `dispose(o)` on a protected o rooting at
+  o itself with no dereference crossed. }
+function ProtectedOwner(e: nodePtr): boolean;
+var sym: symPtr; thruOwned: boolean;
+begin
+  sym := OwnedRoot(e, thruOwned);
+  ProtectedOwner := false;
+  if sym <> nil then ProtectedOwner := sym^.isProtected
 end;
 
 { Is this owned pointer the one an enclosing `with` was reached through?
@@ -6755,13 +6785,41 @@ end;
 { The symbol a threatened variable-access belongs to. 6.9.4 h) makes a threat
   to a component a threat to the variable containing it, which is what walking
   to the root is. }
+{ AP 6.4.14.8 (ADR-0318) adds the second paragraph. A threat to a
+  variable-access of an owned-pointer-type is a threat to the variable that
+  *owns* it, because 6.4.14.3's release reaches everything an owner owns and
+  6.9.4 h)'s unit is the containing variable. So `dispose(o^.next)`,
+  `o^.next := take(x)`, `take(o^.next)` and `Sink(o^.next)` are each attributed
+  to o, and a protected o refuses all four -- which is what makes 6.4.14.8 a
+  statement about the chain and not about its first node.
+
+  Only an **owned-typed** designator is carried up. `o^.v := 1` writes a field
+  of the identified variable, releases nothing, and answers nil as it always
+  did: the clause protects ownership and not contents, which is the whole
+  difference between it and a constant-access. }
 function ThreatSym(e: nodePtr; var r: nodePtr): symPtr;
+var res, deep: symPtr; thruOwned: boolean;
 begin
   r := RootDesignator(e);
-  ThreatSym := nil;
-  if r <> nil then
-    if r^.kind = nkVar then ThreatSym := r^.vrSym
-    else if r^.kind = nkField then ThreatSym := r^.fdQualified
+  res := nil;
+  { Inside the one test, because RootDesignator answers nil for a nil
+    designator and for nothing else: a second `e <> nil` would be a decision
+    with a direction no program can take. }
+  if r <> nil then begin
+    if r^.kind = nkVar then res := r^.vrSym
+    else if r^.kind = nkField then res := r^.fdQualified;
+    { Asked whatever the spine bottomed out at, and not only where it answered
+      nothing: inside a `with` the spine bottoms out at the *binding*, which is
+      a symbol like any other, so a test for nil would see
+      `with o^ do take(next)` resolved and leave it alone. `thruOwned` is the
+      whole condition -- it is false for `r.p`, whose root is r and which this
+      must not disturb. }
+    if IsOwnedPointer(e^.ntype) then begin
+      deep := OwnedRoot(e, thruOwned);
+      if thruOwned then res := deep
+    end
+  end;
+  ThreatSym := res
 end;
 
 { 6.9.4's list has ten entries and two consumers, and they do not need the
@@ -13617,7 +13675,17 @@ begin
         The pair is walked the way the conformant-array section rule above
         walks it -- every earlier actual against this one -- and both
         directions are asked, an owner being writable after its borrow as
-        easily as before it. }
+        easily as before it.
+
+        Nothing is refused where the owner's **formal** is protected, and that
+        is AP 6.4.14.8 (ADR-0318) discharging this clause rather than an
+        exception to it: 6.4.14.8 refuses every one of 6.4.14.3's release
+        points through a protected owned pointer, and refuses handing it to a
+        parameter that is not itself protected, so the release this rule
+        predicts cannot occur in the call or in anything the call reaches.
+        This is the only escape hatch the clause has, and it is a proof and not
+        a suppression -- which is what makes it worth having, the refusal
+        otherwise having no answer but to restructure the call. }
       if p^.sym^.kind = skVarParam then begin
         b := args;
         q := callee^.params;
@@ -13626,11 +13694,11 @@ begin
           if q^.sym^.kind = skVarParam then begin
             borrowSym := OwnedRoot(a, thruOwned);
             ownerSym := OwnedRoot(b, thruOwner);
-            if not thruOwned or thruOwner or
+            if not thruOwned or thruOwner or q^.sym^.isProtected or
                not ContainsOwnedPointer(q^.sym^.stype) then begin
               borrowSym := OwnedRoot(b, thruOwned);
               ownerSym := OwnedRoot(a, thruOwner);
-              if not thruOwned or thruOwner or
+              if not thruOwned or thruOwner or p^.sym^.isProtected or
                  not ContainsOwnedPointer(p^.sym^.stype) then
                 borrowSym := nil
             end;
@@ -17277,20 +17345,40 @@ begin
       write. `dispose(q)` is deliberately not on 6.9.4's list: it reads the
       pointer and stores nothing through it.
 
-      RecordThreat and not Threatened, because the *refusal* half of 6.9.4 is
-      unreachable here and says so by construction: 6.7.3.1's `protected`
-      requires a Protectable type, which a pointer is not and neither is
-      anything holding one, so no argument of `new` can ever be protected;
+      Threatened and not RecordThreat since AP 6.4.14.8 (ADR-0318). This was
+      the bare recording, on the argument that the *refusal* half of 6.9.4 is
+      unreachable here: 6.7.3.1's `protected` required a Protectable type,
+      which no pointer was, so no argument of `new` could ever be protected,
       and a control-variable is an ordinal, so it can never be one either.
-      A message no program can produce is what
-      tests/checks/unreachable_diagnostics.txt exists to keep out.
+      Admitting the owned pointer to 6.4.1 made the first half of that false,
+      and the message the argument declined to write is now the one refusing a
+      release through a borrow. The control-variable half of it still stands
+      and still cannot fire.
 
       This is also the half 6.7.2 reads: a function-block must contain "at
       least one statement threatening" its result variable, and a function
       whose result is allocated rather than assigned -- `new(res)` and then
       `res^ := v` -- was refused for never writing to it (ADR-0134 built the
       flag; this is the entry that was missing from the list feeding it). }
-    if (p^.pcStd = spNew) and IsDesignator(a) then RecordThreat(a);
+    if (p^.pcStd = spNew) and IsDesignator(a) then
+      if Threatened(a) then
+        writeln('it cannot be given a new variable by ''new''');
+    { AP 6.4.14.3 makes `dispose` of an owned pointer one of that type's
+      release points, and a release empties the variable -- so for this type
+      alone the paragraph above is wrong the other way round and dispose *is*
+      6.9.4 a)'s threat, which is CheckTake's sentence one procedure over. For
+      an ordinary pointer 6.9.4's own reading stands: dispose reads it and
+      stores nothing through it, and nothing of the sort is recorded.
+
+      The recording matters as much as the refusal. Without it a routine whose
+      only write through `var l: List` is a `dispose` would be advised to
+      protect the parameter (ADR-0283), and taking that advice would refuse the
+      dispose -- advice that does not compile, which is the defect ADR-0300 was
+      about, arriving by a second route. }
+    if (p^.pcStd = spDispose) and IsDesignator(a) and (a^.ntype <> nil) then
+      if IsOwnedPointer(a^.ntype) then
+        if Threatened(a) then
+          writeln('it cannot be released by ''dispose''');
     if (p^.pcStd = spNew) and not IsDesignator(a) then begin
       ErrorAt(a^.line, a^.col);
       write('''');
@@ -17318,7 +17406,7 @@ begin
       an owned pointer only: releasing an *ordinary* pointer that happens to
       sit inside the owned variable frees storage the owner never held, and
       the binding is untouched. }
-    else if IsOwnedPointer(a^.ntype) and
+    else if IsOwnedPointer(a^.ntype) and not ProtectedOwner(a) and
             ActiveOwnedBorrow(OwnedRoot(a, thruOwned)) then begin
       ErrorAt(a^.line, a^.col);
       write('''');
@@ -17742,6 +17830,17 @@ begin
       if root^.kind = nkVar then
         if root^.vrSym <> nil then
           entry^.sym^.isProtected := root^.vrSym^.isProtected;
+    { AP 6.4.14.8 (ADR-0318): and where the element was reached *through* an
+      owned pointer the binding remembers which, so a release written on one of
+      its fields is attributed to the variable that owns it. This is the same
+      sentence as the line above one construct over -- the protection travels
+      onto the binding because the name stops being written down -- and it is a
+      separate field because the two say different things: 6.5.1 refuses every
+      threat to a protected variable, and 6.4.14.8 refuses only a release. A
+      field of the record may still be assigned through a `with` whose element
+      is owned, exactly as it may be through the dereference itself. }
+    entry^.sym^.ownedVia := OwnedRoot(w^.wtRecord, thruOwned);
+    if not thruOwned then entry^.sym^.ownedVia := nil;
     entry^.sym^.isConstBinding := constAccess;
     w^.wtBinding := entry^.sym;
 
@@ -18738,6 +18837,7 @@ begin
             third step. An enclosing `with` reached through this variable is
             bound to what it owns and nothing empties that binding. }
           else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  not ProtectedOwner(s^.asTarget) and
                   ActiveOwnedBorrow(OwnedRoot(s^.asTarget, thruOwned)) then
           begin
             ErrorAt(s^.line, s^.col);

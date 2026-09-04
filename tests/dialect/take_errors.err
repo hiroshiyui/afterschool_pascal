@@ -1,22 +1,21 @@
-<source>:25:33: error: 'n' cannot be protected: list is not a protectable type
-<source>:27:13: error: 'n' is a protected parameter, so it cannot be emptied by 'take'
-<source>:32:13: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
-<source>:32:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:33:13: error: 'take' empties an owned pointer or a handle and this is plain: nothing else has a value one variable can stop holding
-<source>:33:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:34:15: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
-<source>:34:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:41:13: error: 'take' empties an owned pointer or a handle and this is nil: nothing else has a value one variable can stop holding
-<source>:41:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:42:13: error: 'extstream' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
-<source>:42:13: error: 'take' empties a variable, so its argument must be one
-<source>:42:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:44:8: error: 'take' takes one variable of an owned pointer type
-<source>:44:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:47:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
-<source>:48:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
-<source>:48:8: error: argument 1 of 'lend' is a var parameter and needs a variable
-<source>:49:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
-<source>:51:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:53:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
-<source>:53:3: error: cannot assign list: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:31:13: error: 'n' is a protected parameter, so it cannot be emptied by 'take'
+<source>:36:13: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
+<source>:36:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:37:13: error: 'take' empties an owned pointer or a handle and this is plain: nothing else has a value one variable can stop holding
+<source>:37:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:38:15: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
+<source>:38:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:45:13: error: 'take' empties an owned pointer or a handle and this is nil: nothing else has a value one variable can stop holding
+<source>:45:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:46:13: error: 'extstream' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:46:13: error: 'take' empties a variable, so its argument must be one
+<source>:46:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:48:8: error: 'take' takes one variable of an owned pointer type
+<source>:48:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:51:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:52:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:52:8: error: argument 1 of 'lend' is a var parameter and needs a variable
+<source>:53:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:55:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:57:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:57:3: error: cannot assign list: it contains an owned pointer, and a second name for one would dispose one variable twice

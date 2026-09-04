@@ -1396,6 +1396,19 @@ type
       is where that name stops being written down. }
     isProtected: boolean;
 
+    { AP 6.4.14.8 (ADR-0318): the owned-pointer variable a `with` statement's
+      element was reached *through*, when every dereference on the way was of
+      an owned-pointer-type -- and nil for every other symbol, which is every
+      symbol but a with-binding.
+
+      It is here for the reason isProtected rides on a binding: a `with` is
+      where a variable's name stops being written down, and 6.4.14.8 attributes
+      a threat to an owned-typed designator to the variable that owns it. Only
+      the binding knows what that was. Without it `with o^ do dispose(next)`
+      reaches a release the same statement written `dispose(o^.next)` is
+      refused, which is one construct's worth of hole in the clause. }
+    ownedVia: symPtr;
+
     { Where a *nested* block threatens this variable, or 0. 6.8.3.9 forbids
       the procedure-and-function-declaration-part of the block containing a
       for-statement to threaten its control-variable, and those bodies are
@@ -2861,7 +2874,20 @@ function IsMemory(t: typePtr): boolean;
   pointer, or is structured and holds one. The standard's own NOTE gives both
   reasons: nearly every operation on a file modifies it, and a pointer *value*
   can be copied out and disposed of -- so protecting the variable would protect
-  nothing. Only 6.7.3.1 asks this today. }
+  nothing. Only 6.7.3.1 asks this today.
+
+  AP 6.4.14.8 (ADR-0318) admits the owned-pointer-type, and does it by
+  answering the clause's own reason rather than by making an exception to it.
+  That reason is that the value can be copied out; AP 6.4.14.3 says it cannot,
+  and the one operation that moves it -- `take` -- requires an unthreatened
+  variable-access, which 6.5.1 already refuses for a protected one. So for this
+  type alone the sentence is void, and what is left is a name for what a
+  variable owns that may be read through and not released.
+
+  A handle-type was already protectable and is the evidence the exclusion is by
+  representation and not by the reason: it is affine, uncopyable and released
+  by `release`, exactly as this is, and it passes here only because IsPointer
+  answers no about it. }
 function Protectable(t: typePtr): boolean;
 
 function IsOrdinal(t: typePtr): boolean;
@@ -3843,13 +3869,26 @@ end;
   pointer, or is structured and holds one. The standard's own NOTE gives both
   reasons: nearly every operation on a file modifies it, and a pointer *value*
   can be copied out and disposed of -- so protecting the variable would protect
-  nothing. Only 6.7.3.1 asks this today. }
+  nothing. Only 6.7.3.1 asks this today.
+
+  AP 6.4.14.8 (ADR-0318) admits the owned-pointer-type, and does it by
+  answering the clause's own reason rather than by making an exception to it.
+  That reason is that the value can be copied out; AP 6.4.14.3 says it cannot,
+  and the one operation that moves it -- `take` -- requires an unthreatened
+  variable-access, which 6.5.1 already refuses for a protected one. So for this
+  type alone the sentence is void, and what is left is a name for what a
+  variable owns that may be read through and not released.
+
+  A handle-type was already protectable and is the evidence the exclusion is by
+  representation and not by the reason: it is affine, uncopyable and released
+  by `release`, exactly as this is, and it passes here only because IsPointer
+  answers no about it. }
 function Protectable;
 var f: fieldPtr; ok: boolean;
 begin
   if t = nil then
     Protectable := true
-  else if IsFile(t) or IsPointer(t) then
+  else if IsFile(t) or (IsPointer(t) and not IsOwnedPointer(t)) then
     Protectable := false
   else if IsArray(t) then
     Protectable := Protectable(t^.elem)

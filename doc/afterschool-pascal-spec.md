@@ -1269,6 +1269,74 @@ something other than the activation-point that made the borrow — this
 processor does not detect it. Annex C.12 is the entry, and ADR-0317 has what
 detecting it would take.
 
+NOTE 7 — Where the formal parameter an owner corresponds to is protected
+(6.4.14.8), a) does not apply. Nothing the activation may do can release the
+owner, so the error this clause predicts cannot arise, and refusing the call
+would refuse the one shape that is provably safe.
+
+**6.4.14.8 Borrowing.** §6.4.1's exclusion of a pointer-type from the
+protectable types shall not apply to an owned-pointer-type. A formal parameter
+of an owned-pointer-type, or of a type containing one, may therefore be
+protected (§6.7.3.1).
+
+`dispose` (§6.7.5.3) applied to a variable-access of an owned-pointer-type
+shall threaten that variable-access in the sense of §6.9.4 a).
+
+A threat (§6.9.4) to a variable-access of an owned-pointer-type shall be a
+threat to the entire-variable that owns the variable it identifies, where every
+dereference between the two is of an owned-pointer-type. Where a with-statement
+(§6.9.3.10) was entered through such a dereference, its with-element shall be
+that variable-access for the purpose of this paragraph.
+
+NOTE 1 — §6.4.1 excludes a pointer-type for a reason it states: the value can be
+copied out of the protected variable and disposed of through the copy, so
+protecting the variable would protect nothing. 6.4.14.3 says the value cannot be
+copied, and the one operation that moves it (6.4.14.6) requires a
+variable-access that is not threatened, which §6.5.1 already refuses for a
+protected one. The reason is therefore void for this type alone, and the clause
+above is the reason answered rather than an exception to it. A handle-type is
+the same argument already accepted: it is affine, uncopyable, released by
+`release`, and protectable, and it passes §6.4.1 only because it is not spelled
+as a pointer.
+
+NOTE 2 — What the clause produces is a second form of borrow. A variable
+formal-parameter of an owned-pointer-type is a name for what a variable owns
+(6.4.14.7's NOTE 1); protected, it is a name that may be read through and
+through which nothing may be released. The two stand to one another as
+§6.7.3.1's protected and unprotected variable parameters do everywhere else,
+and this language has no third.
+
+NOTE 3 — The second paragraph is what makes `dispose` reach §6.5.1 at all.
+§6.9.4 does not list it, and 6.4.14.7's own commentary gives the reason — for an
+ordinary pointer-type `dispose` reads the variable and stores nothing through
+it. For an owned-pointer-type it is 6.4.14.3's release point, and a release
+empties the variable, which is a) 's own case. The other three release points
+were already threats: `new` by §6.9.4 e), an assignment by a), and 6.4.14.6's
+move by a) as well.
+
+NOTE 4 — The third paragraph is what makes the clause a statement about
+everything a variable owns rather than about its first node. Without it a
+protected borrow could not be released and everything below it could:
+`dispose(o^.next)`, `o^.next := take(s)`, `take(o^.next)` and passing
+`o^.next` to an unprotected variable parameter each release storage the owner
+owns, and each roots at a dereference rather than at a variable.
+
+NOTE 5 — Only a variable-access **of an owned-pointer-type** is carried up.
+`o^.v := 1` writes a field of the identified variable, releases nothing, and
+threatens nothing of o. The clause protects ownership and not contents, which
+is the whole of what parts it from a constant-access.
+
+NOTE 6 — The clause is complete where 6.4.14.7 is a narrowing, and the
+difference is §6.9.4 b): an actual-parameter corresponding to an unprotected
+variable formal-parameter is a threat, so a protected borrow cannot be handed
+to anything that could reach a release. There is no route through a further
+activation for Annex C.12 to be about.
+
+NOTE 7 — A protected borrow is not a lifetime and does not become one. What it
+says is that this activation will not release what it was lent; what says the
+borrow cannot outlive the lending is still ADR-0201's argument, that no value
+naming a variable parameter can be formed.
+
 NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
 binds to the variable and not to the value, and a component of a record or an
 array, which then owns it. Those two are the whole of how a program reaches what
@@ -1288,7 +1356,10 @@ reason. ADR-0151 divides the memory-safety model into lifetime and aliasing and
 records that the second becomes decidable only at the first construct admitting
 two live names for one owned value. An owned pointer admits none — it cannot be
 copied at all — so it extends the lifetime half to the heap without deciding
-between ARC and borrowing, which is 6.4.12's move a second time.
+between ARC and borrowing, which is 6.4.12's move a second time. 6.4.14.8 does
+not disturb that: a protected parameter is a binding and not a value, so it
+admits no second live *name* for an owned value either, and what it decides is
+what an activation may do with the one name it was given.
 
 NOTE 4 — 6.4.14.3's release on termination by a `goto` or a `halt` is the one
 requirement of this clause this processor does not fully meet: it releases every
@@ -4034,3 +4105,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |
 | 6.9.3.15, 6.9.3.13 NOTE 4, Annex A.8, Annex A.9 | ADR-0313 |
 | 6.4.14.7, Annex C.12 | ADR-0317 |
+| 6.4.14.8 | ADR-0318 |

@@ -515,3 +515,102 @@ Feature: Owned-pointer-types
       """
       9 TRUE
       """
+
+  # AP 6.4.14.8 -- the second borrow form. A protected variable parameter of an
+  # owned-pointer-type may be read through and nothing may be released through
+  # it, which is what lets a module accept a chain without being granted the
+  # right to destroy it.
+  @afterschool:6.4.14.8
+  Scenario: an owned pointer may be a protected variable parameter
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer; next: np end;
+      function len(protected var n: np): integer;
+      begin if n = nil then len := 0 else len := 1 + len(n^.next) end;
+      var o: np;
+      begin new(o); new(o^.next); writeln(len(o)) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      2
+      """
+
+  @afterschool:6.4.14.8
+  Scenario: nothing may be released through a protected owned pointer
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure r(protected var n: np);
+      begin dispose(n) end;
+      var o: np;
+      begin new(o); r(o) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      it cannot be released by 'dispose'
+      """
+
+  @afterschool:6.4.14.8
+  Scenario: the protection reaches everything the variable owns and not only its first node
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer; next: np end;
+      procedure r(protected var n: np);
+      begin dispose(n^.next) end;
+      var o: np;
+      begin new(o); new(o^.next); r(o) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      it cannot be released by 'dispose'
+      """
+
+  @afterschool:6.4.14.8
+  Scenario: a field of what is borrowed may still be written
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure bump(protected var n: np);
+      begin n^.key := n^.key + 1 end;
+      var o: np;
+      begin new(o); o^.key := 6; bump(o); writeln(o^.key) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      7
+      """
+
+  @afterschool:6.4.14.8
+  Scenario: a protected owner discharges the rule of 6.4.14.7
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure q(protected var a: np; var n: node);
+      begin n.key := n.key + 1 end;
+      var o: np;
+      begin new(o); o^.key := 1; q(o, o^); writeln(o^.key) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      2
+      """

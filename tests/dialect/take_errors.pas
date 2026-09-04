@@ -16,12 +16,16 @@ begin end;
 type Stream = handle external 'fclose';
 function ExtStream(path, mode: string): Stream; external 'fopen';
 { 6.9.4 a): emptying a variable threatens it, so `take` asks Threatened as
-  every other threat does. Both lines below are errors and that is the point:
-  an owned pointer is not a protectable type, so this arm of CheckTake is
-  reachable only in a program already refused for another reason. The guard
-  stays anyway -- it is the shared list of threats, and dropping a check
-  because today's type rules make it unreachable is how a permission comes to
-  leak later (ADR-0146). }
+  every other threat does.
+
+  This comment used to read that an owned pointer is not a protectable type,
+  so the arm below was reachable only in a program already refused for another
+  reason -- and that the guard stays anyway, because dropping a check because
+  today's type rules make it unreachable is how a permission comes to leak
+  later (ADR-0146). AP 6.4.14.8 (ADR-0318) made the type protectable and the
+  arm is now the ordinary way this is reported: one error here, not two. The
+  argument for keeping it was written before there was anything to keep it
+  for, and this is what it bought. }
 procedure Protect(protected var n: List);
 begin
   m := take(n)

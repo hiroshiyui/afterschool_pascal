@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 20125
+instrumented 20145
 
 accept 0/4
 accumulate 0/84
@@ -138,7 +138,7 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
-checkstdproc 19/385
+checkstdproc 19/391
 checkstmt 2/256
 checkstorage 0/3
 checkstringargs 0/13
@@ -148,7 +148,7 @@ checktaskformals 0/26
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
-checkwith 1/107
+checkwith 1/109
 checkwrite 2/83
 checkwriteargs 0/20
 claimboundsslot 0/7
@@ -571,7 +571,7 @@ nestwith 0/8
 newblock 0/2
 newnode 0/93
 newresultslot 0/7
-newsymbol 0/100
+newsymbol 0/101
 newtype 0/41
 nextformal 0/4
 nonvarying 3/42
@@ -594,7 +594,7 @@ ordinalhi 1/6
 ordinallo 0/3
 otherlistsparameter 0/1
 overlaps 0/7
-ownedroot 0/24
+ownedroot 0/28
 ownrelid 0/13
 packedcomponent 0/8
 pad 0/2
@@ -675,6 +675,7 @@ procactualsym 0/2
 producefromschema 0/192
 protectable 1/14
 protectablecandidate 0/1
+protectedowner 0/3
 pushseq 0/3
 pushstmt 0/6
 put 0/1
@@ -808,7 +809,7 @@ tasksetbase 0/4
 tasksetslot 0/4
 textofcapacity 1/23
 threatened 0/30
-threatsym 0/5
+threatsym 0/9
 tocomplex 0/5
 toint64 0/8
 tokenize 0/15

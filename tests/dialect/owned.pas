@@ -41,12 +41,12 @@ begin
     Push(n^.next, key)
 end;
 
-function Len(var n: NodePtr): integer;
+function Len(protected var n: NodePtr): integer;
 begin
   if n = nil then Len := 0 else Len := 1 + Len(n^.next)
 end;
 
-function Sum(var n: NodePtr): integer;
+function Sum(protected var n: NodePtr): integer;
 begin
   if n = nil then Sum := 0 else Sum := n^.key + Sum(n^.next)
 end;
