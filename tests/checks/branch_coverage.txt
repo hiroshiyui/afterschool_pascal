@@ -16,8 +16,8 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 850
-instrumented 11098
-decisions 5549
+instrumented 11132
+decisions 5566
 
 accept 0/4
 accumulate 1/32
@@ -76,13 +76,14 @@ buildformals 8/116
 buildsearchpath 0/12
 calledsym 2/6
 calltakescaret 3/22
+canname 2/10
 catofname 0/8
 chainarms 0/2
 chainfield 1/12
 chainhas 0/10
 chainnames 0/2
 chainrecof 0/4
-checkarguments 10/232
+checkarguments 10/252
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 2/10
@@ -266,7 +267,7 @@ emitmodule 1/6
 emitnewselectors 1/6
 emitnewtuple 2/10
 emitoptionaltest 1/4
-emitownrels 1/10
+emitownrels 1/12
 emitposglobals 0/2
 emitprocargument 1/6
 emitprocbody 0/14
@@ -520,7 +521,7 @@ ordinalhi 1/10
 ordinallo 0/4
 otherlistsparameter 0/14
 overlaps 0/10
-ownedroot 2/22
+ownedroot 0/22
 ownrelid 0/8
 packedcomponent 1/18
 padstofixedstring 2/18
@@ -638,8 +639,8 @@ resolvehandle 0/14
 resolveinquiry 1/14
 resolvename 0/6
 resolveoptional 0/8
-resolvependingpointers 0/18
-resolvepointer 1/34
+resolvependingpointers 0/16
+resolvepointer 1/36
 resolverecord 0/6
 resolverestricted 3/14
 resolveset 1/8
@@ -716,6 +717,7 @@ warnpartialresult 0/22
 warnunreachable 0/18
 warnunusedlocals 1/24
 warnunwrittenvarparams 0/28
+whycanname 0/2
 widenordinal 0/4
 writeboundname 0/2
 writedistincttypenote 2/18

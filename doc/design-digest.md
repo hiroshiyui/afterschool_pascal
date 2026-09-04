@@ -521,6 +521,26 @@ checks they agree, which is the same arrangement the version number has. A
   first clause load-bearing — within one component the owner walk reaches the
   outermost block anyway — and it exists as a case because the first mutation
   written for that clause produced an equivalent program and killed nothing.
+- **And the domain restriction reached further than its reason did** (ADR-0320,
+  AP 6.4.14.2). An owned pointer's domain could not be a schema, because
+  releasing the variable means walking its type and a schema's extents are
+  discriminants read from a descriptor an activation holds, where a heap
+  variable carries only the tuple `new(p, d)` fixed. Exactly true, and about the
+  **walk** -- which happens only where the variable holds a file, a handle or
+  another owned pointer, and that is the condition `EmitOwnRels` was already
+  asking to decide whether to walk. So the refusal becomes `ContainsFile` of the
+  *produced* type, asked on both resolution paths, the direct one and the
+  pending list a later-named domain goes through. The emitter's half is the one
+  its own comment predicted: the release routine steps back over the tuple
+  header before `pas_dispose`, as dispose's arm always did, because what was
+  allocated is the header and the variable together -- relaxing only the Sema
+  half reaches `free()` with the variable's address and aborts with
+  `free(): invalid size`. It matters because a growable container *is* a pointer
+  to a schema: 6.4.7 fixes an extent at the declaration, so growth needs the
+  heap, and the restriction put every container in `lib/` outside 6.4.14. Nine
+  of the eleven ordinary pointer types outside the compiler are legal as
+  `owned ^T` after it; the two that are not are `PasJson`'s, refused by the
+  variant-part half of the same clause.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

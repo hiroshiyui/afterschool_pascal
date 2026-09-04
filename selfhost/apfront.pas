@@ -6802,6 +6802,17 @@ end;
 function CanName(callee, v: symPtr): boolean;
 begin
   CanName := false;
+  { Two of the three tests here are guards rather than cases, and neither is
+    false over any program: every caller of CheckArguments resolves the callee
+    before calling, so `callee <> nil` never short-circuits, and a variable at
+    a level above the outermost has a block that declares it, so `v^.owner`
+    is never nil there. `v <> nil` is the real one -- OwnedRoot answers nil for
+    a with-element that is not inside anything owned, and the with-form asks
+    about every open statement.
+
+    The two are written because the alternative is a walk from nil, and
+    ADR-0146's reason for keeping a check today's rules make unreachable
+    applies to a nil test as much as to a permission. }
   if (callee <> nil) and (v <> nil) then
     if v^.level = 0 then
       CanName := true
@@ -9193,20 +9204,27 @@ begin
   ErrorFieldNotA(line, col, at, len, true)
 end;
 
-{ AP 6.4.14.2: an owned pointer's domain shall not be a schema. Releasing the
-  variable means walking its type, and a schema-produced type's lengths are
-  discriminants (ADR-0040) read from the descriptor a *frame* holds -- the
-  tuple header a heap variable carries is stepped back over by dispose and
-  read by nothing else, so a release routine has no way to ask how long an
-  array in it is. Refused rather than deferred: the alternative is a release
-  that walks a length it guessed. }
+{ AP 6.4.14.2 as amended by ADR-0320. The clause refused a schema domain
+  outright, and gave its reason: releasing the variable means walking its type,
+  and a schema-produced type's lengths are discriminants (ADR-0040) read from
+  the descriptor a *frame* holds -- the tuple header a heap variable carries is
+  stepped back over by dispose and read by nothing else, so a release routine
+  has no way to ask how long an array in it is.
+
+  The reason is exact and it is about the **walk**, which happens only where the
+  variable holds something that must itself be released. Where it holds nothing
+  affine the release is the free `dispose` already performs, and the condition
+  is the one EmitOwnRels was already asking to decide whether to walk at all.
+  So the refusal is now conditional, and what it names is what the program would
+  have to take out rather than the shape of the type. }
 procedure ErrorOwnedSchema(line, col, at, len: integer);
 begin
   ErrorAt(line, col);
   write('the domain of an owned pointer cannot be the schema ''');
   WritePool(at, len);
-  writeln(''': releasing the variable would have to walk it, and the lengths ',
-          'a schema''s tuple fixes are read from a frame the heap has not got')
+  writeln(''': it holds a file, a handle or an owned pointer, and releasing ',
+          'the variable would have to walk it -- the lengths a schema''s ',
+          'tuple fixes are read from a frame the heap has not got')
 end;
 
 function ResolvePointer(d: nodePtr): typePtr;
@@ -9276,11 +9294,17 @@ begin
         if l^.sym = s then busy := true;
         l := l^.next
       end;
-      if d^.ptOwns then begin
-        ErrorOwnedSchema(d^.line, d^.col, d^.ptAt, d^.ptLen);
-        t^.elem := intType   { keep the tree checkable }
+      if busy then PendPointer(t, d, s)
+      else if d^.ptOwns then begin
+        t^.elem := HeapFromSchema(s, d);
+        { Asked of the produced type and not of the schema: what a body holds
+          is fixed, the discriminants choosing extents and not members, so one
+          production answers for every tuple. }
+        if ContainsFile(t^.elem) then begin
+          ErrorOwnedSchema(d^.line, d^.col, d^.ptAt, d^.ptLen);
+          t^.elem := intType   { keep the tree checkable }
+        end
       end
-      else if busy then PendPointer(t, d, s)
       else t^.elem := HeapFromSchema(s, d)
       end
     end
@@ -9303,10 +9327,6 @@ begin
     s := Lookup(p^.at, p^.len);
     if (s <> nil) and (s^.kind = skType) then
       p^.ptype^.elem := s^.stype
-    else if (s <> nil) and (s^.kind = skSchema) and p^.ptype^.owns then begin
-      ErrorOwnedSchema(p^.line, p^.col, p^.at, p^.len);
-      p^.ptype^.elem := intType
-    end
     else if (s <> nil) and (s^.kind = skSchema) then begin
       d := NewNode(nkPointer, p^.line, p^.col);
       d^.ptOwns := false;
@@ -9318,7 +9338,17 @@ begin
         constituents are all in place before the type part begins. }
       d^.ptQualAt := 0;
       d^.ptQualLen := 0;
-      p^.ptype^.elem := HeapFromSchema(s, d)
+      p^.ptype^.elem := HeapFromSchema(s, d);
+      { The recursive case of the same question, and it must be asked here as
+        well: a pointer pends exactly when its domain is the schema being
+        produced, so `owned ^Vec` inside Vec's own body reaches this arm and
+        not the one in ResolveTypeDenoter. A schema owning something of its own
+        type holds an owned pointer and is refused by that alone. }
+      if p^.ptype^.owns then
+        if ContainsFile(p^.ptype^.elem) then begin
+          ErrorOwnedSchema(p^.line, p^.col, p^.at, p^.len);
+          p^.ptype^.elem := intType
+        end
     end
     else begin
       ErrorAt(p^.line, p^.col);

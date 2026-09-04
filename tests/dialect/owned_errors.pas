@@ -12,15 +12,19 @@ program owned_errors(output);
 type
   NodePtr = owned ^Node;
   Node = record key: integer; next: NodePtr end;
-  Sch(n: integer) = array [1..n] of integer;
-  { 6.4.14.2: releasing the variable would have to walk it, and a schema's
-    lengths are read from a descriptor a frame holds }
+  Sch(n: integer) = array [1..n] of text;
+  { 6.4.14.2 as amended (ADR-0320): a schema domain is refused where the
+    produced type holds something that must itself be released, because
+    releasing the variable would then have to walk it and a schema's lengths
+    are read from a descriptor a frame holds. The element is a `text` for
+    exactly that reason -- over `integer` this now compiles, and
+    tests/dialect/owned_schema.pas is where it does. }
   SchPtr = owned ^Sch;
   { and again with the schema named *later*, which is the other path: a domain
     whose name is not yet defined pends, and the refusal has to be made a
     second time where the pending list is drained }
   LatePtr = owned ^Late;
-  Late(n: integer) = array [1..n] of integer;
+  Late(n: integer) = array [1..n] of text;
   Sel = 1..2;
   { 6.4.14.2: two arms share one slot, and there is no answer to which arm's
     pointer is to be disposed }

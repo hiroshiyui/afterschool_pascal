@@ -57,11 +57,49 @@ Feature: Owned-pointer-types
       """
 
   @afterschool:6.4.14.2
-  Scenario: the domain may not be a schema
+  Scenario: the domain may be a schema whose produced type holds nothing affine
     Given the Afterschool Pascal program
       """
       program p(output);
-      type s(n: integer) = array [1..n] of integer;
+      type s(n: integer) = record a: array [1..n] of integer end;
+           sp = owned ^s;
+      procedure run;
+      var q: sp;
+      begin new(q, 4); q^.a[1] := 7; writeln(q^.n, ' ', q^.a[1]) end;
+      begin run end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      4 7
+      """
+
+  @afterschool:6.4.14.2
+  Scenario: the domain may not be a schema whose produced type holds a file
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type s(n: integer) = array [1..n] of text;
+           sp = owned ^s;
+      var q: sp;
+      begin new(q, 4) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      the domain of an owned pointer cannot be the schema
+      """
+
+  @afterschool:6.4.14.2
+  Scenario: a schema domain holding an owned pointer is refused for the same reason
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+           s(n: integer) = record a: array [1..n] of np end;
            sp = owned ^s;
       var q: sp;
       begin new(q, 4) end.

@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 20145
+instrumented 20200
 
 accept 0/4
 accumulate 0/84
@@ -83,6 +83,7 @@ buildformals 7/151
 buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
+canname 0/6
 catofname 0/5
 chainarms 0/6
 chainfield 0/11
@@ -90,7 +91,7 @@ chainhas 0/10
 chainnames 0/4
 chainrecof 0/3
 check 0/1
-checkarguments 6/270
+checkarguments 6/301
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
@@ -295,7 +296,7 @@ emitmodule 0/22
 emitnewselectors 0/27
 emitnewtuple 7/65
 emitoptionaltest 0/13
-emitownrels 0/38
+emitownrels 0/45
 emitposglobals 0/8
 emitprocargument 0/27
 emitprocbody 0/40
@@ -737,8 +738,8 @@ resolvehandle 0/33
 resolveinquiry 1/41
 resolvename 0/12
 resolveoptional 0/20
-resolvependingpointers 0/26
-resolvepointer 0/28
+resolvependingpointers 0/27
+resolvepointer 0/30
 resolverecord 0/20
 resolverestricted 6/31
 resolveset 1/22
@@ -834,6 +835,7 @@ warnpartialresult 0/11
 warnunreachable 0/13
 warnunusedlocals 0/13
 warnunwrittenvarparams 0/33
+whycanname 0/8
 widenordinal 0/8
 writebinding 0/5
 writebinop 0/21

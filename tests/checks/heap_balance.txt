@@ -51,6 +51,7 @@ owned_borrow 0
 owned_list 0
 owned_nonlocal 0
 owned_protected 0
+owned_schema 0
 parse_errors 0
 pasls 0
 pointer_domain_shadow 2

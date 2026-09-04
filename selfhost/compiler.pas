@@ -2665,7 +2665,8 @@ end;
   The parameter is named rather than numbered so it cannot collide with the
   `%vN` Def hands out. }
 procedure EmitOwnRels;
-var r: ownRelPtr; more: boolean; own, empty: str; doneB, workB: integer;
+var r: ownRelPtr; more: boolean; own, empty, raw: str; doneB, workB: integer;
+    head: integer;
 begin
   repeat
     more := false;
@@ -2705,11 +2706,24 @@ begin
         StartBlock(workB);
         if HoldsFile(r^.dom) then
           WalkFiles(own, r^.dom, false, 0, 0, 0, 0, 0);
-        { No stepping back over a tuple header, where dispose's own arm does
-          it: 6.4.14.2 refuses a schema domain, so HeaderSize is zero for
-          every type that can reach here and the arm would be unreachable. If
-          that restriction is ever lifted, this is the second place to change
-          -- the release and dispose must give back the same address. }
+        { Stepping back over a tuple header, as dispose's own arm does, and
+          for the reason written there: what was allocated is the header and
+          the variable together, so what is given back has to be the block.
+          The comment here used to say the arm was unreachable because
+          6.4.14.2 refused a schema domain outright, and named itself as the
+          second place to change if that were ever lifted (ADR-0320). It was,
+          and this is it -- the release and dispose must give back the same
+          address, and until this line existed a block-scoped release of a
+          schema-domain owned pointer reached free() with the variable's
+          address and aborted with `free(): invalid size`. }
+        head := HeaderSize(r^.dom);
+        if head <> 0 then begin
+          raw := own;
+          Def(own);
+          write(ircode, 'getelementptr i8, ptr ');
+          PutOp(raw);
+          writeln(ircode, ', i32 ', -head:1)
+        end;
         write(ircode, '  call void @pas_dispose(ptr ');
         PutOp(own);
         writeln(ircode, ')');

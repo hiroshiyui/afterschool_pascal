@@ -1126,9 +1126,37 @@ The domain shall be a type-identifier and not a type-denoter, for §6.4.4's own
 reason: the name may be one whose defining-point is later in the same
 type-definition-part, which is what lets a type own a variable of its own type.
 
-**6.4.14.2 Restrictions on the domain and on the container.** The domain shall
-not be a schema-name (§6.4.7). An owned-pointer-type shall not be, nor be
-contained by, the type of a field of a variant-part (§6.4.3.4).
+**6.4.14.2 Restrictions on the domain and on the container.** Where the domain
+is a schema-name (§6.4.7), the type it produces shall not contain a file-type
+(§6.4.3.5), a handle-type (6.4.12) or an owned-pointer-type. An
+owned-pointer-type shall not be, nor be contained by, the type of a field of a
+variant-part (§6.4.3.4).
+
+NOTE 1 — The first requirement was a refusal of every schema domain until
+ADR-0320, and its reason is what narrowed it. Releasing a variable of an
+owned-pointer-type means releasing every value owned within it (6.4.14.3),
+which means *walking* the variable's type; a schema-produced type's extents are
+its discriminants, and those are read from a descriptor an activation holds,
+where a variable created by `new` carries only the tuple that §6.7.5.3's second
+form fixed. So the walk has no way to ask how long an array in the variable is.
+
+A walk is needed only where the variable holds something whose release is more
+than giving the storage back, and that is exactly a file, a handle or another
+owned pointer — 6.4.12.3's list. Where the produced type holds none of them the
+release *is* the deallocation, and `dispose` (§6.7.5.3) already performs it for
+such a variable: what is given back is the block, the tuple and the variable
+together, and not the variable's own address.
+
+NOTE 2 — The condition is on the type the schema **produces** and not on the
+tuple, so one production answers for every actual-discriminant-part: a schema's
+discriminants choose extents and never members, so no tuple can introduce a
+file into a body that has none.
+
+NOTE 3 — This is the shape every growable container has — a pointer to a schema
+whose discriminant is its capacity, since §6.4.7 fixes an extent at the
+declaration and growth therefore needs the heap. The requirement as it stood
+put every such container outside 6.4.14, which is where the amendment came
+from.
 
 **6.4.14.3 Ownership.** A value of an owned-pointer-type shall not be copied. It
 follows from §6.4.6 a) and this clause that such a type, and any type
@@ -4165,3 +4193,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.7, Annex C.12 (withdrawn by ADR-0319) | ADR-0317 |
 | 6.4.14.8 | ADR-0318 |
 | 6.4.14.9 | ADR-0319 |
+| 6.4.14.2 (amended) | ADR-0320 |

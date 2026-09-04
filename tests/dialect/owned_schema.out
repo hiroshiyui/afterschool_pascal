@@ -1,0 +1,10 @@
+cap    4
+total  50
+grown  8 total 50
+moved  TRUE 8
+field  7
+pair   15
+late   3 11
+within 6
+nil    FALSE TRUE
+walked 4, w empty: TRUE

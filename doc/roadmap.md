@@ -297,12 +297,26 @@ is never copied, where `owned` would have compiled.
 **It was measured before it was written, and the measurement retired it —
 and found something better than the warning would have.** Every ordinary
 pointer type-definition outside the compiler was counted on 2026-09-04. There
-are **nine**, and not one of them could take the word:
+were **nine**, and not one of them could take the word.
 
-| Why not | Which | Clause |
+**That count was right and its table of reasons was wrong**, which probing it
+later the same day found (ADR-0320). The table said five were refused for a
+schema domain and four for value parameters. In fact `StrMap`, `IntVec` and
+`StrVec` are themselves schemas, so `SMapPtr`, `IVecPtr` and `StrVecPtr`
+belonged in the first row; and `JsonPtr`, put in the second, is refused before
+any parameter is reached, because `JsonNode` has a **variant part**. Ten of
+eleven — the count is eleven since `examples/arena_graph.pas` — were refused by
+AP 6.4.14.2 and one by 6.4.14.3. The lesson is the one this page keeps
+learning: a count taken by machine and a table of reasons written by hand are
+two different measurements, and only the first was made.
+
+**The table as it stands now**, after ADR-0320 narrowed 6.4.14.2 and each type
+was compiled with the word to find out rather than reasoned about:
+
+| Status | Which | Why |
 | --- | --- | --- |
-| the domain is a **schema** | `CountMap`, `WordVec`, `JsonChars`, `PathVec`, `DocMap` | AP 6.4.14.2 |
-| passed by **value**, or answered by a function | `JsonPtr`, `SMapPtr`, `StrVecPtr`, `IVecPtr` | AP 6.4.14.3 |
+| legal as `owned ^T`, needs a usage rewrite | `IVecPtr`, `SMapPtr`, `StrVecPtr`, `CountMap`, `WordVec`, `PathVec`, `DocMap`, and the two in `arena_graph.pas` | value parameters become `protected var` (ADR-0318), assignments become `take`, `p := nil` becomes `dispose` |
+| still refused | `JsonPtr`, `JsonChars` | AP 6.4.14.2's other half: `JsonNode` is a tagged union, so its child pointers are fields of a variant part |
 
 The compiler's own 34 are the second row again and harder: `nodePtr`,
 `symPtr` and `typePtr` stand as a value parameter or a result 341, 156 and 198
@@ -320,22 +334,35 @@ rewriting every accessor to take `var` — and a plain `var` grants the caller's
 ownership away, which collides with the rule of
 [the row above](#1-the-borrow-rule-was-enforced-in-one-direction--closed-2026-09-04).
 
-**That is settled, and the answer was one word shorter than the question**
-(ADR-0318, AP 6.4.14.8, landed 2026-09-04). The second borrow form was not
-missing; §6.7.3.1's `protected` is exactly a lend that may be read and not
-written, and an owned pointer was excluded from it by §6.4.1 — whose stated
-reason, that a pointer value can be copied out and disposed of through the
-copy, AP 6.4.14.3 had already made false for this type. A handle-type had been
-protectable all along on identical facts. `PasList`'s four read-only routines
-now take `protected var l: List`, and the fourth warning found five more places
-for the word in code written before there was one.
+**That is settled, and it took two amendments rather than one** — and neither
+was sufficient alone, which is why the row credited the first with the whole
+job and was wrong.
 
-**What is left of this row is the rewrite and not the facility.** `JsonPtr`,
-`SMapPtr`, `StrVecPtr` and `IVecPtr` are still value parameters, and adopting
-`owned ^T` in those four containers is still a change to every accessor — but
-it now has a destination that grants the same permission the value parameter
-granted, which it did not before. The five schema-domain ones stay out of reach
-(AP 6.4.14.2). The warning is still not built and the count is still why.
+**The borrow form was not missing** (ADR-0318, AP 6.4.14.8). §6.7.3.1's
+`protected` is exactly a lend that may be read and not written, and an owned
+pointer was excluded from it by §6.4.1 — whose stated reason, that a pointer
+value can be copied out and disposed of through the copy, AP 6.4.14.3 had
+already made false for this type. A handle-type had been protectable all along
+on identical facts. `PasList`'s four read-only routines now take
+`protected var l: List`, and the fourth warning found five more places for the
+word in code written before there was one.
+
+**And the schema domain was refused for a reason that reached further than it
+does** (ADR-0320, AP 6.4.14.2). Releasing an owned variable means walking it,
+and a schema's extents are read from a descriptor a frame holds and the heap has
+not got — true, and true only where the variable holds something whose release
+is more than giving the storage back. Where it holds nothing affine the release
+*is* the deallocation, which `dispose` already performed. The condition is the
+one the emitter was already asking to decide whether to walk.
+
+**What is left of this row is the rewrite and not the facility.** Nine of the
+eleven are legal as `owned ^T` today and each needs its accessors changed; the
+two that are not are `PasJson`'s, and they need the variant-part half of
+6.4.14.2, which is harder — arms share storage and there is no answer to which
+arm's pointer to release without reading a tag nothing obliges a program to have
+set. The warning is still not built, and the reason has changed: it is no longer
+that nothing *could* take the word but that nothing *has*, and a warning firing
+on nine call-graph-wide rewrites is advice, not a diagnostic.
 
 #### 3. There is no shared ownership, and the release walk ends in a signal — the shape is written down as of 2026-09-04
 
