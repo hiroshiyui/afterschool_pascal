@@ -708,3 +708,27 @@ Before ADR-0112 the entry was larger still: only `^fred` was refused, while
 and a field named `integer` taking that spelling from the required identifiers
 were all accepted. Same clause, same region; only the occurrence differed.
 
+**And one that is not ISO 7185's but ISO/IEC 10206:1991's: `string(5)` as a
+parameter form.** §6.7.3.1 gives a parameter-form as
+`type-name | schema-name | type-inquiry`, so `procedure q(x: string)` names a
+schema and is inside the grammar, while `procedure q(x: string(5))` writes a
+schema *production* where a name is required and is outside it. This compiler
+accepts both, and always has.
+
+**It is here rather than in §5 because nobody decided it.** The three entries
+of §5 are extensions with a record apiece; this is an acceptance that no
+clause of `doc/afterschool-pascal-spec.md` states and no record argues for —
+the one program shape in this document that is neither refused, specified, nor
+deliberately extended. What it wants is a clause and a record, and admitting
+it is the likely answer: it takes nothing from any program, it is the
+convenience ADR-0109 says belongs in this dialect, and the spelling passes
+ADR-0140's test on its own, a production being written where a name may
+already stand.
+
+**The cost of refusing it is the reason to decide it rather than leave it.**
+Sixteen sources write it, in **22 formal parameters** — among them
+`lib/dialect/pasjson.pas`, which is a shipped library module and not a test.
+`doc/roadmap.md` carried this as *three sources under `tests/extended/`* until
+the count was taken on 2026-09-04; two of the sixteen are under that
+directory. ADR-0171 found it; ADR-0232 removed the mode that could have
+refused it.

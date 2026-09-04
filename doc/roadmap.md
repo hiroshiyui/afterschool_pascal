@@ -85,6 +85,12 @@ the first section below.
 **Nothing in this part is scheduled.** The one proposal in it is `Proposed`
 and has no commitment behind it, and that is said again where it stands.
 
+**And nothing here is where a decision lives.** Every row in this part that is
+decided or implemented is written up in `doc/afterschool-pascal-spec.md`, in
+[`doc/implementation-defined.md`](implementation-defined.md), or in both;
+[the rule](#how-this-page-is-written) says which takes what, and a row that
+closes is not finished until it has gone there.
+
 ### What each landed feature left open
 
 Every row a survey of daily needs put here has been struck, and so has every
@@ -325,17 +331,23 @@ trap a program can meet:
 
 **One decision, and it has no record yet:**
 
-- **`string(5)` as a parameter form** (ADR-0171). §6.7.3.1 admits
-  `type-name | schema-name | type-inquiry`, so `procedure q(x: string)` is
-  inside the grammar and `procedure q(x: string(5))` is outside it, and this
-  compiler accepts both; three sources under `tests/extended/` write the
-  second. There is no mode to refuse it under any more, so what is left is to
-  admit it with a clause of its own or refuse it and edit three sources.
-  Admitting it is the likely answer — it is exactly the convenience ADR-0109
-  says belongs here and the spelling already passes ADR-0140's test — and
-  what it wants is a clause and a record, not a change. Written down rather
-  than done because refusing it takes something away from every program that
-  uses it.
+- **`string(5)` as a parameter form** (ADR-0171), now recorded in
+  [`doc/implementation-defined.md`](implementation-defined.md) §6.1. §6.7.3.1
+  admits `type-name | schema-name | type-inquiry`, so `procedure q(x: string)`
+  is inside the grammar and `procedure q(x: string(5))` writes a production
+  where a name is required and is outside it; this compiler accepts both and
+  always has. There is no mode to refuse it under any more, so what is left is
+  to admit it with a clause of its own or refuse it. Admitting it is the likely
+  answer — it is exactly the convenience ADR-0109 says belongs here, it takes
+  nothing from any program, and the spelling passes ADR-0140's test on its own.
+
+  **This entry said *three sources under `tests/extended/`* until the count was
+  taken on 2026-09-04, and it is sixteen sources and 22 formal parameters** —
+  two of them under that directory, and one of them `lib/dialect/pasjson.pas`,
+  which is a shipped library module and not a test. That does not change which
+  answer is likely; it changes what the other one costs, which is the whole
+  reason to write a number down. It is this page's own first lesson met again:
+  a number needs a date and a command.
 
 The adversarial audits that filled the old lists — four of them, ADR-0162,
 ADR-0167, ADR-0168 and ADR-0171 — are [open question
@@ -737,6 +749,37 @@ rather than here so that one fact does not come to disagree with itself.
 What is already in hand and was not built for this: modules and separate
 compilation (ADR-0053, ADR-0079) mean a library needs no new language
 mechanism, and `runtime/pasrt.c` is where the outside world already enters.
+
+**A decided or implemented thing in [the language](#the-language) belongs in
+`doc/afterschool-pascal-spec.md`, in
+[`doc/implementation-defined.md`](implementation-defined.md), or in both — and
+a row here is not where it lives.** This page is a queue and those two are the
+language: the specification says what the language *is*, clause by clause, and
+the register says what this processor decides where a clause leaves it open.
+So a row that closes is not finished when it is struck through; it is finished
+when the thing it decided can be looked up by somebody who never read this
+file. Which document takes it:
+
+| What was decided | Where it goes |
+| --- | --- |
+| a rule of the language, or a consequence of one a reader would otherwise have to derive | a clause or a NOTE in `doc/afterschool-pascal-spec.md` |
+| an answer this processor gives where a clause leaves it open, a capacity a program can meet, an error not reported, an extension, or a program accepted that the grammar it came from rejects | the matching section of `doc/implementation-defined.md` |
+| a decision **not** to build something, where a reader would otherwise read the absence as an oversight | a NOTE beside the construct it was not given to |
+| why it was decided, and what it cost | an ADR, and neither of the two above |
+
+**The third row is the one that gets missed**, and it is the reason this rule
+is written out. Three of the concurrency residue's standing shapes were
+decisions — a channel cannot carry a handle, an activation cannot close a
+channel and then drain it, and there is no timeout on `wait` — and only the
+first was in the specification; the other two read as things nobody had got to
+(AP 6.4.16.4 NOTE 5 and 6.9.3.14 NOTE 5 now say otherwise). A limitation that
+is a decision and does not say so will be "fixed" by somebody eventually.
+
+**And the check is a reader, not a gate.** `spec-clause-traceability` asks
+whether a clause a scenario cites exists and whether the triage calls it
+testable; nothing here asks whether a *decision* reached either document, and
+nothing can — the question is whether a fact was written down, and only
+somebody reading both can answer it. `doc/sop.md` §7 carries that gap.
 
 **Three lessons govern how this page is written**, and they are here rather
 than in the history because they are rules for the next row somebody adds.

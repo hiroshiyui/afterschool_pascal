@@ -396,6 +396,23 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**Nothing checks that a decision reached the specification or the register.**
+`doc/roadmap.md` is a queue, `doc/afterschool-pascal-spec.md` says what the
+language is, and `doc/implementation-defined.md` says what this processor
+decides where a clause leaves it open — and a row that closes is finished only
+when the thing it decided can be looked up by somebody who never read the
+roadmap. Nothing here asks whether that happened. `spec-clause-traceability`
+asks whether a clause a scenario cites exists and whether the triage calls it
+testable, which is a question about *citations*; `clause-citations` asks
+whether a number names a clause at all. Neither can ask whether a fact was
+written down, and no gate can: the question is about a document's silence, and
+silence has no denominator. Three of the concurrency residue's standing shapes
+were **decisions** and only one of them was in the specification until
+2026-09-04, so the other two read as things nobody had got to — the shape that
+gets a decision undone by somebody later "fixing" it. What is in place instead
+is a rule in the roadmap's own *How this page is written*, saying which
+document takes what, and a reader is the whole of the enforcement.
+
 **Nothing enumerates this tree's sidecar conventions, and the tools that read
 them drift apart** (ADR-0311). `.components`, `.importpath`, `.importenv`,
 `.opt`, `.in`, `.err`, `.warn`, `.epoch`, `.status`, `.flags`, `.dump` and

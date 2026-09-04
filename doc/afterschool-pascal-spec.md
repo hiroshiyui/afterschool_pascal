@@ -1690,6 +1690,16 @@ why they are named together: `release(c)`, `c := nil` and `c := take(d)` each
 release what `c` held, and a rule that separated them would be a rule about
 syntax rather than about the channel.
 
+NOTE 5 — It follows that **an activation cannot close a channel and then go on
+receiving from it**. Each spelling in NOTE 4 empties the variable as well as
+closing the channel, so the close that a `receive` (6.9.3.13.2) or a
+channel-arm (6.9.3.15) reports is always another activation's — the ordinary
+pipeline, where a producer closes what a consumer drains. Closing without
+releasing would be an operation on a channel that this language does not
+have, and it is not one this clause leaves implied: a program that wants to
+drain what it closed writes two variables, or lets the producer close.
+Recorded as a shape rather than an omission (ADR-0302, ADR-0313).
+
 #### 6.4.17 The task-type [added]
 
 The task-type denotes one activation of a task-declaration (6.7.8). A variable
@@ -3240,10 +3250,16 @@ statement.
 
 NOTE 5 — There is no timeout and no way to ask whether an activation is
 complete without waiting for it. Each is a construct of its own and neither is
-implied by this one; they are recorded as open (ADR-0312) rather than
-half-answered by a `wait` that could give up, which would leave a program
-holding a task-variable whose activation is still running and no clause
-saying what that means.
+implied by this one; a `wait` that could give up would leave a program holding
+a task-variable whose activation is still running, and no clause here says
+what that is.
+
+**That is a decision and not a gap**, and 6.9.3.15.4 is what makes it one: a
+timeout-arm gives up on a *channel*, where giving up costs nothing — no value
+was taken and the channel is unchanged — and the same construct was
+deliberately not given to `wait`, where giving up would leave a name for
+something still running. The two were written together and only one of them
+got the arm (ADR-0312, ADR-0313).
 
 NOTE 6 — `wait` is a required identifier, so a program that declares its own
 `wait` keeps it (§6.1.3), which is `send`'s and `exit`'s route (ADR-0128,
