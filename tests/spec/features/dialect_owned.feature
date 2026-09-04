@@ -429,3 +429,89 @@ Feature: Owned-pointer-types
       """
       TRUE TRUE
       """
+
+  # AP 6.4.14.7 -- what may not be released while a borrow of what it owns is
+  # open. ADR-0201 established that a borrow cannot outlive the call that made
+  # it; this is the other half, that what is borrowed does not stop existing
+  # under it. Both detected forms are one activation's own business.
+  @afterschool:6.4.14.7
+  Scenario: an owned pointer and a borrow of what it owns may not be two arguments of one call
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure q(var a: np; var n: node);
+      begin dispose(a); n.key := 1 end;
+      var o: np;
+      begin new(o); q(o, o^) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      are one owned variable and a borrow of what it owns
+      """
+
+  @afterschool:6.4.14.7
+  Scenario: two borrows and no owner are still admitted
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      procedure two(var m, n: node);
+      begin m.key := n.key + 1 end;
+      var o: np;
+      begin
+        new(o); o^.key := 4; two(o^, o^); writeln(o^.key)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      5
+      """
+
+  @afterschool:6.4.14.7
+  Scenario: a with binding is a borrow, so what it was reached through may not be released
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      var o: np;
+      begin
+        new(o);
+        with o^ do begin dispose(o); key := 1 end
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      an enclosing 'with' is bound to what it owns
+      """
+
+  @afterschool:6.4.14.7
+  Scenario: a with on something owning nothing releases what it likes
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+           box = record p: np; key: integer end;
+      var b: box;
+      begin
+        new(b.p); b.p^.key := 2;
+        with b do begin dispose(p); key := 9 end;
+        writeln(b.key, ' ', b.p = nil)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      9 TRUE
+      """

@@ -1,0 +1,1 @@
+<source>:15:22: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage

@@ -205,6 +205,7 @@ stdProcKind:spUnpack unused
 # and it would fail all of them at once, which is the point.
 IsDesignator:nodeKind:1 chains 6 of 66
 IsConstantAccess:nodeKind:1 chains 4 of 66
+OwnedRoot:nodeKind:1 chains 4 of 66
 RootDesignator:nodeKind:1 chains 3 of 66
 ContainerOf:nodeKind:1 chains 3 of 66
 PackedComponent:nodeKind:1 chains 3 of 66

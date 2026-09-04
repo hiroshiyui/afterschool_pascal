@@ -1205,7 +1205,7 @@ into is commenced, so at no moment do two activations hold one value. A copy
 in that position would leave two owners and two releases, which is what
 6.4.12.3 exists to prevent.
 
-NOTE 6 — `nil` is not admitted, and the asymmetry with 6.4.12.2 — where a
+NOTE 7 — `nil` is not admitted, and the asymmetry with 6.4.12.2 — where a
 handle-type variable *is* assigned `nil`, and that assignment is its release —
 is deliberate rather than an omission. An owned pointer already has a statement
 that releases it, `dispose` (§6.7.5.3), and a handle has none; admitting `nil`
@@ -1213,6 +1213,61 @@ here would give one operation two spellings, and admitting it as a plain store
 would leave the identified variable held by no variable, which 6.4.14.3
 forbids. A processor is therefore expected to name `dispose` where it reports
 this (ADR-0307).
+
+**6.4.14.7 Release while borrowed.** It shall be an error to release
+(6.4.14.3) a variable of an owned-pointer-type while a variable it owns, or a
+component of one, is bound to a variable formal-parameter (§6.7.3.3) or to the
+binding of a with-statement (§6.9.3.10).
+
+A processor shall detect two occurrences of this error:
+
+a) an actual-parameter that is a variable-access reached through a dereference
+   of an owned-pointer-type, where another actual-parameter of the same
+   activation-point denotes an entire-variable whose type contains that
+   owned-pointer-type, and both correspond to variable formal-parameters; and
+
+b) `new` (§6.7.5.3), `dispose` (§6.7.5.3) or an assignment-statement
+   (§6.9.2.2) applied to a variable of an owned-pointer-type through which the
+   with-element of an enclosing with-statement was reached.
+
+NOTE 1 — The requirement is one half of an argument the other half of which
+this language has by construction. A borrow cannot outlive the call that made
+it — Pascal has no address-of operator and `new` is the only producer of a
+pointer, so no value can be formed that names what a variable parameter refers
+to (ADR-0201). That says the borrow does not outlive what it borrows; this
+clause says what it borrows does not stop existing under it, and 6.4.14.3
+gives an activation three ways to end it early.
+
+NOTE 2 — The unit of a) is the **entire-variable**, which is §6.9.4 h)'s own
+unit: a threat to a component is a threat to the variable containing it. So
+`P(r.p, r.q^)` for two owned fields of one record is detected although the two
+identify different variables. Comparing the two access paths instead would
+require the value of a subscript, which is not available where the program is
+translated.
+
+NOTE 3 — The owner of a) is an entire-variable and not itself a borrow, so
+`P(o^, o^)` binds two borrows and no owner and is not detected — nothing an
+actual reached through a dereference can release lies outside what the other
+already names.
+
+NOTE 4 — A value formal-parameter raises no such question: §6.7.3.2 attributes
+the actual's value to a variable of the activation before the statement-part
+is executed, so what a value parameter names cannot be released under it. A
+value parameter cannot possess a type containing an owned-pointer-type in any
+case (6.4.14.3).
+
+NOTE 5 — A second name that is itself a *variable* needs no rule here. Each of
+6.4.14.3's release points empties the variable it is applied to, so a second
+variable parameter bound to the same owned pointer meets the error of
+§6.7.5.3 — `dispose` of `nil` — on the second release rather than releasing
+twice. What this clause is about is the second name that is **not** a
+variable, which nothing empties.
+
+NOTE 6 — Where a release is reached through a further activation — the
+releasing block naming the pointer as a non-local, or being handed it by
+something other than the activation-point that made the borrow — this
+processor does not detect it. Annex C.12 is the entry, and ADR-0317 has what
+detecting it would take.
 
 NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
 binds to the variable and not to the value, and a component of a record or an
@@ -3736,6 +3791,22 @@ The requirement stands as 6.4.14.3 writes it; closing it means a runtime
 registry and a per-block release runner, which is 6.9.3.11's shape, and
 ADR-0181 declined that against what it buys. `doc/sop.md` §7 carries it.
 
+**C.12 A release of an owned pointer reached through a further activation is
+not detected while a borrow of what it owns is open** (6.4.14.7). The clause
+requires two forms to be detected and they are — the two actual-parameters of
+one activation-point, and a with-statement's own binding — and both are
+questions about one activation, which is what makes them answerable where the
+program is translated. What is left is the release the borrowing activation
+performs indirectly: the callee names the pointer as a non-local and releases
+it, or calls something that does, and the borrow it was handed then names
+disposed storage. Detecting it means a summary per routine of the non-local
+owned pointers it may release, closed over the call graph — the fixed-point
+shape ADR-0283's protected-parameter rule already has — and an answer for a
+routine imported from another program-component, whose module-heading carries
+no such summary (§6.13.2). ADR-0317 records the three candidate mechanisms and
+why the one that is complete was not the one taken first. `doc/sop.md` §7
+carries it.
+
 ## Annex D (informative) — The library
 
 `lib/` is written in ISO/IEC 10206:1991 and may be used by any conforming
@@ -3962,3 +4033,4 @@ nothing but a requirement no processor here could meet.
 | 6.5.1 | ADR-0299 |
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |
 | 6.9.3.15, 6.9.3.13 NOTE 4, Annex A.8, Annex A.9 | ADR-0313 |
+| 6.4.14.7, Annex C.12 | ADR-0317 |

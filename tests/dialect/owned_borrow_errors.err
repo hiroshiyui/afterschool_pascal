@@ -1,0 +1,9 @@
+<source>:69:9: error: arguments 1 and 2 of 'p' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:70:9: error: arguments 1 and 2 of 'q' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:73:14: error: arguments 1 and 2 of 'thru' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:77:16: error: arguments 1 and 2 of 'p' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:81:18: error: arguments 1 and 2 of 'p' are one owned variable and a borrow of what it owns: releasing it in the call would leave the other naming disposed storage
+<source>:86:13: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage
+<source>:87:9: error: 'new' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage
+<source>:88:5: error: this assignment would release what an enclosing 'with' is bound to, leaving the binding naming disposed storage
+<source>:94:13: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage

@@ -29,7 +29,7 @@ nobody has decided yet.
 
 | Part | What it holds |
 | --- | --- |
-| [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the object model nobody has committed to building, and the limitations a program meets |
+| [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model nobody has committed to building, and the limitations a program meets |
 | [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
 | [How this page is written](#how-this-page-is-written) | [the goal](#the-goal-adr-0109) and the test it sets, the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
@@ -60,10 +60,12 @@ utilities have most of what is left.
 
 **What the compiler accepts.** Both standards were implemented and there is
 one language now (ADR-0232), so nothing here is owed to a standard; a feature
-in this part needs a reason of its own, and the three chapters below are the
-three kinds of reason that have worked. A feature *left something behind* and
-the record named it. Somebody *asked* for something the language does not
-have. Or a program *met* a limit and the limit is written down.
+in this part needs a reason of its own, and the four chapters below are the
+four kinds of reason that have worked. A feature *left something behind* and
+the record named it. A property the language *claims* was measured against the
+goal it is named in and the claim turned out narrower than the record.
+Somebody *asked* for something the language does not have. Or a program *met*
+a limit and the limit is written down.
 
 **Two of ADR-0109's four areas are answered here**, and both are properties of
 the language rather than facilities beside it — a third, internationalisation,
@@ -77,10 +79,12 @@ library](#the-standard-library) because that is where a program meets it:
 - **memory safety** — optionals and no bare null, slices carrying their
   bounds, scope-based release, `owned ^T` for a variable `new` created, and
   the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181,
-  ADR-0182, ADR-0267).
+  ADR-0182, ADR-0267) — and **most of Rust's model, arrived at without
+  reading Rust**, which is also how the four things it is short of went
+  unnoticed until they were probed for.
 
 Neither is finished in the sense that matters, and what each left behind it is
-the first section below.
+the first two sections below.
 
 **Nothing in this part is scheduled.** The one proposal in it is `Proposed`
 and has no commitment behind it, and that is said again where it stands.
@@ -179,6 +183,138 @@ walking on the far side. The factory (ADR-0255, ADR-0256) is the first item
 where it does not apply, which is what makes it a prior and not a rule — a
 factory's whole point is that the callee's answer *outlives* the call. Where
 the answer is no, expect the ownership rule the five easy ones did not need.
+
+### Memory model and memory safety
+
+**ADR-0109 names memory safety as a property of the language, and the bullet at
+the head of this part calls it answered.** It is answered in the sense every
+row here demands: each mechanism has a record, a clause and a case. This
+section is what a review on **2026-09-04** found when the model was read
+against the goal stated as *a Rust-flavoured Pascal* and **probed rather than
+read**. The finding is not that the design is missing a piece. It is that
+**the pieces missing are not the ones the records say are missing** — ADR-0201
+withdrew the aliasing fork as a question this language does not have, and
+three of the four items below are aliasing.
+
+**What is already Rust's, and by what route.** The routes are the interesting
+column: not one of these was taken from Rust, and two were here before anybody
+looked.
+
+| Rust | Here | How it arrived |
+| --- | --- | --- |
+| `Box<T>` | `owned ^T` (AP 6.4.14) | from the file variable and not from Rust (ADR-0181) |
+| `Drop`, RAII | scope-based release | present since 1982, unnamed until ADR-0151 |
+| a move, `mem::take` | `take` (AP 6.4.14.6, AP 6.4.12.7) | forced by writing `PasList`, not designed (ADR-0182, ADR-0267) |
+| `&mut T` | a `var` parameter bound to `o^` | *unformable* rather than checked (ADR-0201) |
+| `&T` | `protected var` (§6.7.3.1) | ISO's own word (ADR-0283) |
+| `Option<T>` | `?T` (AP 6.4.11) | ADR-0123 |
+| `Result<T, E>` and `?` | `T ! E` and `try` (AP 6.4.13, AP 6.8.9) | ADR-0176, ADR-0178 |
+| `&[T]` | `array of T` (AP 6.7.3.9) | ADR-0125 |
+| `Send`, channels | `task`, `channel [n] of T` (AP 6.4.16, AP 6.4.17) | ADR-0268 |
+| traits | [proposed, nothing built](#the-object-model-proposed) | ADR-0315 |
+| lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the four rows below |
+
+#### 1. The borrow rule was enforced in one direction — narrowed 2026-09-04
+
+Rust's aliasing rule has two halves: a borrow may not outlive what it borrows,
+**and** the owner may not be released while a borrow of it is live. ADR-0201
+established the first — a `var` parameter bound to `o^` cannot escape, because
+Pascal has no address-of and `new` is the only producer of a pointer — and
+treated it as the whole rule. The second is unenforced, and AP 6.4.14.3 lists
+three release points a callee can reach: `dispose`, `new`, and an assignment.
+
+```pascal
+procedure P(var o: op; var n: node);
+begin dispose(o); n.v := 42; writeln('n.v = ', n.v) end;
+...
+new(q); q^.v := 1; P(q, q^)          { prints 42, exits 0 }
+```
+
+That is ADR-0201's own probe — `P(o, o)`, two `var` parameters bound to one
+variable, pronounced safe — with `dispose` where the record wrote `take`.
+Every oracle here agreed with it: `heap-balance` read 1/1 because the count is
+honest, and a build under `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address`
+reported nothing. Made observable, the write through the stale borrow lands in
+an unrelated live variable — `dispose(g)`, then `new(h); h^.v := 111`, then
+`n.v := 999`, and `h^.v` reads **999**. A third borrow form needs no call at
+all: a with-statement's binding is a frame slot holding an address, so
+`with q^ do begin dispose(q); v := 999 end` is the same defect inside one
+block.
+
+**Both forms are now refused** (ADR-0317, AP 6.4.14.7): the two
+actual-parameters of one call, and a release under an open with-binding. What
+the clause does *not* reach is the release the callee performs indirectly, and
+that is Annex C.12 and a row of `doc/sop.md` §7 rather than an assumption.
+
+**The cheap refusal does not close it, and shipped saying so.** Three
+candidates were designed against this shape and the first was taken:
+
+| Candidate | What it costs | Why it is not enough |
+| --- | --- | --- |
+| **taken**: refuse the call-site shape and the with-binding — the two forms one activation can be asked about | nothing; no program in this tree is refused, and the corpus carries five that must go on compiling | it is a narrowing and not a closure: the callee can reach the owner indirectly, `Bump(g^)` → `Clear` → `ClearIt(g)` → `dispose` of its own `var` parameter, and no local rule sees that |
+| **release only in the block that declares the pointer** | sound under one thread — a declaring block is suspended for the whole life of any borrow | unaffordable, and measured: all **ten** of `PasList`'s exported routines take `var l: List` and **five** release through it, so the module could not be written |
+| a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
+
+Real lifetimes are the fourth candidate and are unavailable: **a borrow here
+is a parameter binding and not a value**, so there is nothing for a lifetime
+to be written on.
+
+**The sentence to carry out of this row**: *unformability is what protects
+against escape and is exactly what makes invalidation invisible.* ADR-0201
+reads the borrow's absence from the type system as strength, and it is
+strength in one direction only. What would close the row is the third
+candidate; what has landed is the first, and the row stands narrowed.
+
+#### 2. The unsafe subset is the unmarked default
+
+Rust marks its unsafe operations and makes them opt in. Here it is the other
+way round:
+
+```pascal
+new(a); b := a; dispose(a); b^ := 5; writeln(b^)   { compiles clean, prints 5, exits 0 }
+```
+
+`^T` is the ordinary pointer — what every ISO program writes, what this
+compiler is written with, and the unchecked one (ADR-0019, and the *one gap*
+of [Known limitations](#known-limitations)). `owned ^T` is the safe form and
+costs a word to say. ADR-0117's containment fixes what `^T` **means** and
+settles nothing about what the compiler may **say**: a fifth warning in
+ADR-0272's frame — a `new` of an ordinary `^T` whose variable is never copied,
+where `owned` would have compiled — refuses no program, needs no clause, and
+is swept over every implementation source by `warning-free` on the day it is
+written. It is the cheapest move on this page toward the goal in the heading.
+
+#### 3. There is no shared ownership, and the release walk ends in a signal
+
+The dialect's answer to aliasing is refusal, given three times (ADR-0201), so
+there is no `Rc`, no arena, no back-pointer and no cursor. `PasList` states
+the consequence plainly — no index, no tail pointer, every traversal
+recursive. What is not written down is the failure mode. AP 6.4.14's NOTE 2
+predicts it and this is the measurement:
+
+| An owned chain of | On release |
+| --- | --- |
+| 200 000 nodes | clean, balance 0 |
+| 2 000 000 nodes | `built 1`, then **exit 139**, SIGSEGV |
+
+It is the one capacity in this language that ends in a signal instead of a
+diagnostic. ADR-0012's claim is that a full buffer is survivable **as a
+diagnostic**, and the per-domain release routine is outside that claim: the
+safe container's release path is the crash. Two ways out, both Rust's —
+reference counting, which then owes an answer about cycles; or the
+arena-and-index shape, indices into a `PasVec`, which is what a Rust
+programmer reaches for when the data is not a tree and which **needs no
+language change at all**. The second is nearly free and is written down
+nowhere.
+
+#### 4. A record has no `Drop`
+
+A handle names its closer in its own type — `handle external 'fclose'` — and
+that is the only user code this language runs when a value dies. A record
+owning something runs none, and `defer` is per *activation* rather than per
+value (ADR-0175), so a type cannot maintain an invariant across its own
+release. Nothing has asked for it yet, which by ADR-0116's rule is the reason
+it is a row here and not a design.
 
 ### The object model (proposed)
 
@@ -318,7 +454,10 @@ there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
 ADR-0181 withdraws nothing. What would close it is a decision about the
 ordinary pointer — kept as it is, retired in favour of the owned one, or
 given a check — and it has not been asked with a caller. *The one entry here
-that is a limitation in ADR-0109's sense.*
+that is a limitation in ADR-0109's sense.* [Memory model and memory
+safety](#memory-model-and-memory-safety) is where it stands beside the rest of
+the model, and where the other half of the same question — an *owned* pointer
+released while a borrow of it is live — is written down.
 
 **Three capacities**, each a decision with a record and each a refusal or a
 trap a program can meet:

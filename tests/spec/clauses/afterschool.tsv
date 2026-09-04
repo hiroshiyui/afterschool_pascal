@@ -88,6 +88,7 @@
 6.4.14.4	Comparison
 6.4.14.5	Type identity
 6.4.14.6	Move
+6.4.14.7	Release while borrowed
 6.4.15	Text-types
 6.4.15.1	The denoter
 6.4.15.2	The invariant

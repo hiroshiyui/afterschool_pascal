@@ -15,13 +15,14 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 850
-instrumented 11004
-decisions 5502
+uncovered 851
+instrumented 11064
+decisions 5532
 
 accept 0/4
 accumulate 1/32
 activecontrol 0/6
+activeownedborrow 1/8
 addconstituent 0/2
 addexportitem 9/60
 addfield 0/14
@@ -81,7 +82,7 @@ chainfield 1/12
 chainhas 0/10
 chainnames 0/2
 chainrecof 0/4
-checkarguments 10/206
+checkarguments 10/228
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 2/10
@@ -127,8 +128,8 @@ checksetexpr 0/8
 checksetmember 2/12
 checksetvalue 1/12
 checkspawn 4/18
-checkstdproc 30/320
-checkstmt 16/248
+checkstdproc 30/324
+checkstmt 16/252
 checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
@@ -137,7 +138,7 @@ checktaskformals 0/12
 checktypedecl 1/34
 checkvardecl 2/38
 checkvariantpartvalue 4/44
-checkwith 13/58
+checkwith 13/60
 checkwrite 2/58
 checkwriteargs 4/34
 claimboundsslot 0/2
@@ -164,7 +165,7 @@ conststrlt 0/2
 containerof 1/16
 containsfile 1/16
 containshandle 1/14
-containsownedpointer 2/14
+containsownedpointer 1/14
 containsrestricted 3/18
 convertfor 0/6
 copycomponent 1/2
@@ -177,7 +178,7 @@ deferbase 0/2
 deferstmtof 2/8
 definekeyword 1/4
 designatorbindable 5/12
-determine 8/20
+determine 8/22
 determinearg 5/10
 determinetuple 1/6
 discselectorfor 1/6
@@ -519,6 +520,7 @@ ordinalhi 1/10
 ordinallo 0/4
 otherlistsparameter 0/14
 overlaps 0/10
+ownedroot 1/18
 ownrelid 0/8
 packedcomponent 1/18
 padstofixedstring 2/18

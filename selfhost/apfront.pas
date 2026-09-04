@@ -336,6 +336,16 @@ var
   stringCache: array [1..strMax] of typePtr;
   { The bindings of the `with` statements currently open, innermost first. }
   withTop: symListPtr;
+  { The owned pointer each of those `with` statements was reached through,
+    innermost first and one entry per entry of withTop -- nil where the
+    with-element is not inside anything owned. AP 6.4.14.7: while such a
+    binding is open, the pointer's own variable may not be released, the
+    binding being a second name for what it owns and not a variable anything
+    empties. A stack of its own rather than a field on the binding symbol,
+    because the two are pushed and popped together at one place each and a
+    field would put the fact on a symbol every other reader of symRec can
+    see. }
+  withOwnedTop: symListPtr;
   { The record type-denoters being resolved, innermost first. 6.4.3.3 puts a
     field-identifier's defining-point in the record-type containing it and
     6.2.2.4 makes the scope all of that region, so a name written anywhere
@@ -6532,6 +6542,93 @@ begin
     if e^.fdQualified <> nil then RootDesignator := e
     else RootDesignator := RootDesignator(e^.fdBase)
   else RootDesignator := e
+end;
+
+{ AP 6.4.14.7: the entire-variable a designator reaches into, when every
+  dereference on the way is of an owned pointer -- which is what *inside what
+  this variable owns* means. 6.4.14.3's release is recursive through exactly
+  those dereferences and stops at an ordinary pointer, whose domain the owner
+  does not hold, so a path crossing one leaves the owned variable and answers
+  nil.
+
+  `thruOwned` says whether any dereference was passed at all, which is what
+  parts a **borrow** of what a variable owns from the variable itself: `q`
+  answers q with false, `q^.v` answers q with true.
+
+  The unit is the entire-variable and not the component, which is 6.9.4 h)'s
+  own unit -- a threat to a component is a threat to the variable containing
+  it. So `P(r.p, r.q^)` for two owned fields of one record is refused although
+  the two identify different variables; comparing paths would need a
+  subscript's value, which is not a translation-time fact. }
+function OwnedRoot(e: nodePtr; var thruOwned: boolean): symPtr;
+var s: symPtr; walking, left: boolean;
+begin
+  s := nil;
+  thruOwned := false;
+  left := false;
+  walking := e <> nil;
+  while walking do begin
+    if e^.kind = nkIndex then e := e^.ixBase
+    else if e^.kind = nkSubstr then e := e^.ssBase
+    else if e^.kind = nkField then
+      if e^.fdQualified <> nil then begin
+        s := e^.fdQualified;
+        walking := false
+      end
+      else e := e^.fdBase
+    else if e^.kind = nkDeref then
+      if IsOwnedPointer(e^.drBase^.ntype) then begin
+        thruOwned := true;
+        e := e^.drBase
+      end
+      else begin
+        left := true;
+        walking := false
+      end
+    else begin
+      { The test is never false over this corpus and cannot be dropped: 6.5.3.3
+        makes a read through the wrong arm of a variant record an error, and
+        `vrSym` belongs to nkVar's arm alone. What else can bottom out a
+        designator spine is a function-designator, and none of this routine's
+        three callers admits one -- an actual corresponding to a variable
+        formal-parameter and an assignment's target are variable-accesses
+        (§6.7.3.3, §6.9.2.2), and a with-element is a variable-access or a
+        constant-access (§6.9.3.10). It would take a function answering an
+        owned pointer, which 6.4.14.3 refuses. }
+      if e^.kind = nkVar then s := e^.vrSym;
+      walking := false
+    end
+  end;
+  if left then begin
+    s := nil;
+    thruOwned := false
+  end;
+  OwnedRoot := s
+end;
+
+{ Is this owned pointer the one an enclosing `with` was reached through?
+  ActiveControl's shape one construct over, and for the same reason: what the
+  rule is about is a binding that is open *here*, not a property of the
+  symbol. }
+function ActiveOwnedBorrow(sym: symPtr): boolean;
+var w: symListPtr; found: boolean;
+begin
+  found := false;
+  { Never false over this corpus and load-bearing all the same: withOwnedTop
+    carries a nil entry for every open `with` that is *not* inside anything
+    owned, so a nil asked for here would match the first of them and refuse a
+    release the clause says nothing about. No caller can pass nil today --
+    each asks only where the type is an owned pointer, and then the walk ends
+    at a name -- so this guards the next caller rather than the ones there
+    are. }
+  if sym <> nil then begin
+    w := withOwnedTop;
+    while (w <> nil) and not found do begin
+      if w^.sym = sym then found := true;
+      w := w^.next
+    end
+  end;
+  ActiveOwnedBorrow := found
 end;
 
 { ISO 7185 6.6.3.3 and ISO/IEC 10206:1991 6.7.3.3 carry these two sentences
@@ -12974,6 +13071,8 @@ end;
 
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
+    borrowSym, ownerSym: symPtr; thruOwned, thruOwner: boolean;
+    bi, ai: integer;
     { 6.6.3.7.1's "all possess the same type", which is a rule about a
       *section* and so needs the first actual of the one being walked. }
     sectionType: typePtr; sectionOf: integer;
@@ -13452,6 +13551,7 @@ begin
       already known here, so it is reported before the program runs. }
     a := args;
     p := callee^.params;
+    ai := 1;
     while a <> nil do begin
       { ADR-0122 and ADR-0123: not of a foreign heading. `string` there is not
         a schematic formal at all -- there is no tuple, so `a, b: string`
@@ -13493,6 +13593,62 @@ begin
             q := q^.next
           end
         end;
+      { AP 6.4.14.7's first detected form. One activation-point binding both an
+        owned pointer and something reached through it gives the callee a way
+        to release the storage the other argument names, and the borrow is
+        emptied by nothing: `P(q, q^)` with `dispose(o)` in the body writes
+        through disposed storage and exits 0.
+
+        Both must be variable parameters. A *value* parameter is copied where
+        the call is made, before any body runs, so nothing it names can be
+        released under it; and a value parameter cannot be of a type holding
+        an owned pointer anyway (6.4.14.3), which is why only the borrow side
+        needs the test written out.
+
+        The owner side must be an **entire-variable** -- `thruOwner` false.
+        An actual that is itself reached through an owned dereference can
+        release only what lies deeper than itself, so `Two(o^, o^)` binds two
+        borrows and no owner and must go on compiling; telling that from
+        `Q(o^.other, o^.other^)`, where the deeper one is a real owner, needs
+        the two paths compared and a subscript's value is not a
+        translation-time fact. That case is Annex C.12 with the other
+        undetected one.
+
+        The pair is walked the way the conformant-array section rule above
+        walks it -- every earlier actual against this one -- and both
+        directions are asked, an owner being writable after its borrow as
+        easily as before it. }
+      if p^.sym^.kind = skVarParam then begin
+        b := args;
+        q := callee^.params;
+        bi := 1;
+        while b <> a do begin
+          if q^.sym^.kind = skVarParam then begin
+            borrowSym := OwnedRoot(a, thruOwned);
+            ownerSym := OwnedRoot(b, thruOwner);
+            if not thruOwned or thruOwner or
+               not ContainsOwnedPointer(q^.sym^.stype) then begin
+              borrowSym := OwnedRoot(b, thruOwned);
+              ownerSym := OwnedRoot(a, thruOwner);
+              if not thruOwned or thruOwner or
+                 not ContainsOwnedPointer(p^.sym^.stype) then
+                borrowSym := nil
+            end;
+            if (borrowSym <> nil) and (borrowSym = ownerSym) then begin
+              ErrorAt(a^.line, a^.col);
+              write('arguments ', bi:1, ' and ', ai:1, ' of ''');
+              WritePool(callee^.at, callee^.len);
+              write(''' are one owned variable and a borrow of what it owns: ');
+              writeln('releasing it in the call would leave the other naming ',
+                      'disposed storage')
+            end
+          end;
+          bi := bi + 1;
+          b := b^.next;
+          q := q^.next
+        end
+      end;
+      ai := ai + 1;
       p := p^.next;
       a := a^.next
     end
@@ -16592,6 +16748,7 @@ end;
 
 procedure CheckStdProc(p: nodePtr);
 var
+  thruOwned: boolean;
   a, value_: nodePtr;
   unpackedArg, packedArg, indexArg: nodePtr;
   n, v, k, chosen: integer;
@@ -17154,6 +17311,21 @@ begin
       WriteTypeName(a^.ntype);
       writeln
     end
+    { AP 6.4.14.7: both of these release what the pointer identifies -- `new`
+      by 6.4.14.3's fourth release point and `dispose` by its fifth -- and an
+      enclosing `with` reached through this same variable is a second name for
+      what it owns, bound for the whole body and emptied by nothing. Asked of
+      an owned pointer only: releasing an *ordinary* pointer that happens to
+      sit inside the owned variable frees storage the owner never held, and
+      the binding is untouched. }
+    else if IsOwnedPointer(a^.ntype) and
+            ActiveOwnedBorrow(OwnedRoot(a, thruOwned)) then begin
+      ErrorAt(a^.line, a^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      write(''' cannot release this here: an enclosing ''with'' is bound to ');
+      writeln('what it owns, and the binding would name disposed storage')
+    end
     { 6.7.5.3's `new(p)` gives the created variable the domain type, and a
       schema domain has no type until a tuple names one. `dispose(q)` is the
       opposite: the variable it removes already has its tuple. }
@@ -17518,8 +17690,8 @@ end;
   record is designated once, so the binding holds its address and any subscripts
   in the designator are evaluated a single time. }
 procedure CheckWith(w: nodePtr);
-var t: typePtr; at, len, i: integer; entry: symListPtr; saved: stmtPathPtr;
-    root: nodePtr; constAccess, scoped: boolean;
+var t: typePtr; at, len, i: integer; entry, owned: symListPtr; saved: stmtPathPtr;
+    root: nodePtr; constAccess, scoped, thruOwned: boolean;
     mark: entryPtr; owner, k, disc: symPtr; p, q, ds: symListPtr; tv: numPtr;
 begin
   CheckExpr(w^.wtRecord);
@@ -17685,12 +17857,26 @@ begin
       end
     end;
 
+    { AP 6.4.14.7: the owned pointer this binding was reached through, if any.
+      A `with` on `o^` is a second name for what `o` owns for the whole of the
+      body -- the binding is a frame slot holding the address, exactly as a
+      `var` parameter is -- and nothing empties it, so releasing `o` inside
+      the body leaves it naming disposed storage. Recorded here because this
+      is where the element is still a designator; the body sees only the
+      binding. }
+    new(owned);
+    owned^.sym := OwnedRoot(w^.wtRecord, thruOwned);
+    if not thruOwned then owned^.sym := nil;
+    owned^.next := withOwnedTop;
+    withOwnedTop := owned;
+
     entry^.next := withTop;
     withTop := entry;
     stmtPath := PushStmt(stmtPath, w);
     CheckStmt(w^.wtBody);
     stmtPath := saved;
     withTop := withTop^.next;
+    withOwnedTop := withOwnedTop^.next;
     if scoped then begin
       scopeTop := mark;
       scopeDepth := scopeDepth - 1
@@ -18314,7 +18500,7 @@ end;
 
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
-    forEntry: symListPtr; owning: symPtr; badFunc: boolean;
+    forEntry: symListPtr; owning: symPtr; badFunc, thruOwned: boolean;
     counterAt, counterLen: integer; chn: chainPtr;
 begin
   if s <> nil then
@@ -18547,6 +18733,17 @@ begin
             Asked of the *construct*: nothing but a required function can be
             an nkCall answering an owned pointer, CheckedResultType having
             refused a declared function of the type. }
+          { AP 6.4.14.7, and it stands ahead of the admitting arm because
+            `take` into the target releases what the target held: 6.4.14.6's
+            third step. An enclosing `with` reached through this variable is
+            bound to what it owns and nothing empties that binding. }
+          else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  ActiveOwnedBorrow(OwnedRoot(s^.asTarget, thruOwned)) then
+          begin
+            ErrorAt(s^.line, s^.col);
+            write('this assignment would release what an enclosing ''with'' ');
+            writeln('is bound to, leaving the binding naming disposed storage')
+          end
           else if IsOwnedPointer(s^.asTarget^.ntype) and
                   (s^.asValue^.kind = nkCall) and
                   (s^.asValue^.clBuiltin = biTake) and
@@ -26877,6 +27074,7 @@ to begin do
     pendingTail := nil;
     inTypePart := false;
     withTop := nil;
+    withOwnedTop := nil;
     recTop := nil;
     forTop := nil;
     producedHead := nil;

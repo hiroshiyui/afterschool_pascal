@@ -12,11 +12,12 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 393
-instrumented 20053
+instrumented 20125
 
 accept 0/4
 accumulate 0/84
 activecontrol 0/6
+activeownedborrow 0/7
 addconstituent 0/8
 addexportitem 8/82
 addfield 0/25
@@ -89,7 +90,7 @@ chainhas 0/10
 chainnames 0/4
 chainrecof 0/3
 check 0/1
-checkarguments 6/246
+checkarguments 6/270
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
@@ -137,8 +138,8 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
-checkstdproc 19/379
-checkstmt 2/252
+checkstdproc 19/385
+checkstmt 2/256
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
@@ -147,7 +148,7 @@ checktaskformals 0/26
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
-checkwith 1/101
+checkwith 1/107
 checkwrite 2/83
 checkwriteargs 0/20
 claimboundsslot 0/7
@@ -536,7 +537,7 @@ lexoperator 0/47
 lexstring 0/28
 linkstdfile 0/2
 llalign 1/17
-llsize 2/57
+llsize 2/58
 lookslikestructuredvalue 0/20
 lookslikesubrange 0/23
 lookup 0/5
@@ -593,6 +594,7 @@ ordinalhi 1/6
 ordinallo 0/3
 otherlistsparameter 0/1
 overlaps 0/7
+ownedroot 0/24
 ownrelid 0/13
 packedcomponent 0/8
 pad 0/2
