@@ -328,28 +328,58 @@ it now has a destination that grants the same permission the value parameter
 granted, which it did not before. The five schema-domain ones stay out of reach
 (AP 6.4.14.2). The warning is still not built and the count is still why.
 
-#### 3. There is no shared ownership, and the release walk ends in a signal
+#### 3. There is no shared ownership, and the release walk ends in a signal — the shape is written down as of 2026-09-04
 
 The dialect's answer to aliasing is refusal, given three times (ADR-0201), so
-there is no `Rc`, no arena, no back-pointer and no cursor. `PasList` states
-the consequence plainly — no index, no tail pointer, every traversal
-recursive. What is not written down is the failure mode. AP 6.4.14's NOTE 2
-predicts it and this is the measurement:
+there is no `Rc` and no language-level arena, and an owned pointer admits no
+back-pointer and no cursor. `PasList` states the consequence plainly — no
+index, no tail pointer, every traversal recursive. What was not written down is
+the failure mode. AP 6.4.14's NOTE 2 predicts it and this is the measurement,
+taken again on 2026-09-04 with an 8 MB stack and narrowed:
 
 | An owned chain of | On release |
 | --- | --- |
 | 200 000 nodes | clean, balance 0 |
-| 2 000 000 nodes | `built 1`, then **exit 139**, SIGSEGV |
+| 500 000 nodes | clean |
+| 1 000 000 nodes | `built 1000000` prints, **then exit 139** |
+| 2 000 000 nodes | the same |
+
+The boundary is between half a million and a million, and the message printing
+first is what says it is the *release* and not the build: both are recursive,
+and the build survives what the release does not, having no owned value to
+release per frame.
 
 It is the one capacity in this language that ends in a signal instead of a
 diagnostic. ADR-0012's claim is that a full buffer is survivable **as a
 diagnostic**, and the per-domain release routine is outside that claim: the
 safe container's release path is the crash. Two ways out, both Rust's —
 reference counting, which then owes an answer about cycles; or the
-arena-and-index shape, indices into a `PasVec`, which is what a Rust
-programmer reaches for when the data is not a tree and which **needs no
-language change at all**. The second is nearly free and is written down
-nowhere.
+arena-and-index shape, which is what a Rust programmer reaches for when the
+data is not a tree and which **needs no language change at all**.
+
+**The second is now written down**: `examples/arena_graph.pas`. One block holds
+every node and the links are *indices* into it, which is precisely the thing an
+owned pointer refuses — an index may be copied, compared and stored twice, and
+it cannot dangle, because nothing it names is separately freed. The example
+holds a graph with a cycle and with two arcs into one node, neither of which an
+owner per node admits, and then a path of a million nodes: **18.8 MB peak RSS,
+13 ms, walked by a loop and released by two calls to free**, where the owned
+chain of that length dies at the end of its block.
+
+Two costs came out of writing it, and both are in the file. **The arena cannot
+itself be `owned`** — its type is a schema and AP 6.4.14.2 refuses that domain —
+so it is an ordinary pointer whose release is written, which `defer` (ADR-0175)
+is where. And **an index is unchecked in the way a pointer is not**: a subscript
+is bounds-checked (ADR-0017), so an index outside the arena traps, but an index
+into the *wrong* arena is an integer like any other and nothing here can see it.
+That is the trade the shape makes, and it is the one Rust's arena crates make
+too.
+
+What is still open in this row is the first way out. Reference counting is
+unbuilt, and nothing has asked for it: the arena covers the non-tree data, and
+the release-depth crash has a documented shape to move to. **The crash itself
+is unfixed** — a program that wants a chain of a million owned nodes still has
+no diagnostic, only a signal.
 
 #### 4. A record has no `Drop`
 

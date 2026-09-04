@@ -1,0 +1,7 @@
+adjacency
+a -> b
+b -> c
+c -> a d
+d -> b
+around the cycle: a b c a b c a
+chain of 1000000 walked: 1000000

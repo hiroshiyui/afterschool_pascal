@@ -172,7 +172,7 @@ tools/pascalcc --import-path ./mine prog.pas -o prog   # ...or just this once
 
 ### Examples
 
-**`examples/` holds twelve complete programs of a page each** (ADR-0295),
+**`examples/` holds thirteen complete programs of a page each** (ADR-0295),
 written to be read by someone who knows Turbo Pascal and not this dialect,
 and every one of them is a test case with a golden — so an example that stops
 working fails `ctest`. Each starts with a comment saying what it shows and
@@ -189,6 +189,7 @@ which modules it uses; the ones that import the library carry a
 | `json_pretty.pas` | `PasJson`: parse standard input, walk the tree, print it indented |
 | `parse_errors.pas` | `T ! E` read with `try`, and with an `…Or` accessor |
 | `owned_list.pas` | a sorted linked list on `owned ^Node` and `take`, disposed by its block |
+| `arena_graph.pas` | a graph with a cycle held by indices into one arena, where an owner per node cannot go |
 | `graphemes.pas` | `utf8(n)`, `for g in t`, and `PasUnicode`'s scalar view and folding |
 | `pipeline_tasks.pas` | two tasks and a channel, each stage closing the next |
 | `fetch_http.pas` | an HTTP GET with `PasHttp`, against a server the program is itself |
@@ -1578,8 +1579,8 @@ tools/pascalcc prog.pas --import lib/passtrings.pas passtrings.o -o prog
 **An imported name is one of your own declarations.** §6.11.2 puts every name a
 module exports into the importing block's scope, and §6.1 folds case — so
 `import PasFS;` declares `Info` in your block, and `var info: InfoResult` is
-then that name declared twice. Four of the twelve programs in `examples/` met
-this on their first draft (ADR-0295), because a library's best name for a
+then that name declared twice. Four of the twelve programs `examples/` held at
+the time met this on their first draft (ADR-0295), because a library's best name for a
 routine is also a caller's best name for a variable. The ones to expect are
 `Info` (`PasFS`), `Dir` and `List` (`PasDir`), `Parts` (`PasText`) and `Stream`
 (`PasStream`). It is a compile-time error and never a silent one —

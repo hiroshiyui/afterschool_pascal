@@ -10,6 +10,7 @@
 #
 # Regenerate with:  python3 tests/checks/heap_balance.py --write
 #                     --pascalcc tools/pascalcc
+arena_graph 0
 bind_anywhere 0
 case_ranges 0
 complex 0
