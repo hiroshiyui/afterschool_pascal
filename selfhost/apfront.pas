@@ -27250,7 +27250,11 @@ begin
     case b^.kind of
       tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
       tyInteger, tyEnum: LlAlign := 4;
-      tyInt64, tyReal, tyPointer, tyFile, tyHandle: LlAlign := 8;
+      { ADR-0325: five of the seven arms that used to write 8. i386 aligns a
+        pointer, an i64 and a double to 4, and a file and a handle are arrays
+        of i64, so all five follow WordAlign rather than the constant this was
+        until a target that is not LP64 was admitted. }
+      tyInt64, tyReal, tyPointer, tyFile, tyHandle: LlAlign := WordAlign;
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;
@@ -27276,11 +27280,16 @@ begin
         `target-layout` compares every admitted target's offsets on every run,
         and s390x is not one -- but admitting a target whose datalayout names
         no i128 means this line stops being a constant. }
+      { And it is a constant still, on the measurement rather than on the
+        reasoning: clang aligns an i256 to 16 on i386 as it does on both LP64
+        targets, the i386 datalayout naming no i128 but LLVM taking the
+        largest named alignment, which `S128` makes 16. It was checked before
+        this line was left alone (ADR-0325). }
       tySet: LlAlign := 16;
       { A procedural parameter is a pair of pointers: the code, and the static
         link to call it with. ADR-0125's slice is the same two-word shape with
         a length in the second word instead of a link. }
-      tyProc, tySlice: LlAlign := 8;
+      tyProc, tySlice: LlAlign := WordAlign;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -27300,7 +27309,12 @@ begin
       tyVoid, tySubrange: LlSize := 0;
       tyBoolean, tyChar: LlSize := 1;
       tyInteger, tyEnum: LlSize := 4;
-      tyInt64, tyReal, tyPointer: LlSize := 8;
+      tyInt64, tyReal: LlSize := 8;
+      { The sixth and seventh arms of ADR-0325: a pointer is four bytes on
+        i386, and the two-word pair built out of two of them is eight. An i64
+        and a double are eight bytes on every target admitted here -- what
+        moved for those two is the alignment above and not this. }
+      tyPointer: LlSize := PtrSize;
       tyComplex: LlSize := 16;
       { 6.4.2.5 makes the states one-to-one, so the representation *is* the
         underlying type's -- which is the whole of what CodeGen knows about
@@ -27322,7 +27336,7 @@ begin
       tyFile: LlSize := fileSize;
       tyHandle: LlSize := handleSize;
       tySet: LlSize := setBits div 8;
-      tyProc, tySlice: LlSize := 16;
+      tyProc, tySlice: LlSize := PtrSize * 2;
       { 6.4.3.2 bounds the *elements* at maxint already and says nothing
         about bytes, which is the other half: two nested maxint arrays of a
         four-byte element need 1.8e19 of them. Asked before the multiply,

@@ -333,8 +333,8 @@ what makes that findable, since a constant added to the enumeration moves every
 M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
-by default, or `aarch64-linux-gnu`. `pascalcc` hands it to `clang` as well, so
-with a cross toolchain installed it cross-compiles:
+by default, `aarch64-linux-gnu`, or `i386-pc-linux-gnu`. `pascalcc` hands it to
+`clang` as well, so with a cross toolchain installed it cross-compiles:
 
 ```sh
 tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
@@ -342,9 +342,16 @@ tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
 
 Any other target is refused. The list is short because each entry is a claim
 that this compiler's own size and alignment rules have been compared against
-LLVM's for that machine, which has been done for those two and no others — and
-the comparison is re-run on every build, over every frame size and field
-offset the compiler emits.
+LLVM's for that machine, which has been done for those three and no others —
+and the comparison is re-run on every build, over every frame size and field
+offset the compiler emits, and against LLVM's own answer for six record shapes.
+
+**The third is 32-bit**, which is what made those rules stop being constants: a
+pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
+a file and a handle (ADR-0325). 564 of the 570 programs in this repository's
+corpus build and run for it; the six that do not are catalogued, one of them a
+program that allocates 2 GB on purpose and five of them foreign declarations
+naming a C `long` as `int64`, which is a decision this dialect has not taken.
 
 Set `AFTERSCHOOL_PASCAL_TARGET` instead to point a whole run of `pascalcc` at
 one machine without writing the flag each time; an explicit `--target=` wins.

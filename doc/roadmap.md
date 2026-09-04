@@ -923,19 +923,45 @@ part of what it says.
 | powerpc64, mips64, aarch64_be, sparcv9 | 0 | LP64 big-endian — endianness decides what a byte means, not where a field sits |
 | x86_64 and arm64 apple-darwin; x86_64 and aarch64 windows | 0 | Mach-O and COFF agree |
 | s390x | **13** | aligns `i256` to 8 where every other target says 16 — ADR-0028's shape exactly |
-| i686, arm, riscv32, mipsel, powerpc, x32, … | 3858–3904 | **every 32-bit target** |
+| i686, arm, riscv32, mipsel, powerpc, x32, … | 3858–3904 | **every 32-bit target** — and the offsets were the wrong measure of the work: 3858 offsets differ because **seven rules** do, which is what ADR-0325 cost |
 
 #### What is left
 
-**32-bit, which is the real work.** `LlSize` says a pointer is 8 by
-construction; `tyProc` and `tySlice` are two pointers; `tyFile`'s alignment is
-8. All of those become target-dependent, which means `LlAlign` and `LlSize`
-stop being constants and start asking the target — and ADR-0129's `i64` count
-at the foreign boundary is a second, independent question with a decision in it
-rather than a lowering. Nothing here is blocked on measurement any more.
+- ~~**32-bit, which is the real work.**~~ — **done** (ADR-0325) on 2026-09-05,
+  and the row named **four** rules where there are seven. It had `LlSize` says
+  a pointer is 8, `tyProc` and `tySlice` are two pointers, and `tyFile`'s
+  alignment is 8; what it left out is `tyInt64`, `tyReal` and `tyHandle`, which
+  i386 aligns to 4 as well — the three a reader would not have caught, a wrong
+  alignment costing no diagnostic anywhere. `PtrSize` and `WordAlign` are the
+  two functions every one of the seven now asks, `--target=i386-pc-linux-gnu`
+  is admitted, and **564 of the 570 corpus sources build and run there**.
 
-**The rest is small and specific.** s390x's `tySet` alignment (13 offsets, and
-`target-layout` fails loudly if it is ever admitted). Windows: `fmemopen` and
+  **Running it found two defects no arithmetic check here could see**, neither
+  in a layout rule and neither in a frame: `pas_select` indexed its arm array
+  with `sizeof` where the compiler strides `PAS_SELECT_ARM_SIZE` — one number
+  on an LP64 target and two on i386 — and the compiler wrote the arm's fourth
+  field at a literal 16, where i386 puts it at 12. `target-layout` passed with
+  both in place and `tests/dialect/select.pas` segfaulted, which is why
+  `target32` exists.
+
+  **ADR-0129's `i64` at the foreign boundary is the second, independent
+  question and is still open** — the one row below that is a decision rather
+  than work. Five of the six catalogued failures are it: a declaration naming a
+  C `long`, `size_t` or `time_t` as `int64` is right on LP64 and four bytes too
+  wide on i386, and `strlen('hello')` answers 21474836485. The sixth is
+  `tests/index_span.pas`, which allocates 2 GB on purpose.
+
+- **How a foreign declaration should name a C `long`** (ADR-0129, and now
+  measured). It is a decision and not a lowering: the language has `integer`
+  at 32 bits and `int64` at 64, and C's `long` is one on i386 and the other on
+  x86-64. What is wanted is a spelling that means *the C `long` of whichever
+  target this is*, and `lib/` writes `int64` in every such declaration today.
+  Nothing is blocked on measurement: `tests/checks/target32_known.txt` lists
+  exactly which cases it costs.
+
+**The rest is small and specific.** s390x's `tySet` alignment (13 offsets;
+`target-layout`'s second claim is what would catch it now — i386 does not have
+that problem, `i128:128` being in its own datalayout). Windows: `fmemopen` and
 `open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two
 hand-written `FILE*`-over-memory functions, `access` is `_access`, and MSVC
 lacks the `_Complex` §6.7.6.2's functions are written in. **macOS needs none

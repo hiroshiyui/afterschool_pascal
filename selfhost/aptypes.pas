@@ -46,7 +46,8 @@ export ApTypes = (
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, reqProcCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
-  fileSize, tgtCount, tgtX86, tgtAarch64, jumpSize, handleSize, deferSize,
+  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, targetIx, PtrSize,
+  WordAlign, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
   lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
@@ -319,9 +320,15 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 2;
+  tgtCount = 3;
   tgtX86 = 1;
   tgtAarch64 = 2;
+  { ADR-0325's third, and the first that is not LP64. What made it admissible
+    is not new measurement but the layout rules ceasing to be constants:
+    PtrSize and WordAlign below are the whole of what a 32-bit target needed,
+    and `target-layout` compares this compiler's own arithmetic against LLVM's
+    for every admitted target rather than one target against another. }
+  tgtI386 = 3;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.
@@ -2498,6 +2505,20 @@ var
     it is the one that must contain the routine. }
   instDeclHead: nodePtr;
 
+  { Which target the emitted module states, 1..tgtCount, default tgtX86 --
+    which is what the seed was generated for and what this repository is built
+    and tested on.
+
+    **It lives here rather than in the driver that sets it** (ADR-0325). It was
+    a variable of `compiler.pas` while every layout rule was a constant; a
+    32-bit target makes PtrSize and WordAlign ask it, and those are ApFront's
+    since ADR-0287 -- a type's storage being a fact about the source program.
+    So the one thing both components need is in the one component both import.
+
+    The driver still owns the *decision*: `--target=` is parsed there, and this
+    is written once before Compile runs. }
+  targetIx: integer;
+
   { the predefined types, shared singletons }
   intType: typePtr;
   { ADR-0128. A required identifier 6.1.3 lets any program shadow, so it is
@@ -3061,6 +3082,21 @@ procedure WriteOrdinalName(t: typePtr; value_: integer);
   stop agreeing with it. It is asked once per defining-point and only when
   --dump-uses is set, which is a few thousand short comparisons at most. }
 function FileIndexOf(n: pathStr): integer;
+
+{ What a pointer costs on the target the module is being emitted for, and what
+  that target aligns an eight-byte datum to (ADR-0325). Two numbers, and they
+  are what a 32-bit target needed: LlSize and LlAlign wrote 8 in seven arms and
+  each was a pointer, a two-pointer pair, or a datum LLVM aligns the way it
+  aligns a pointer.
+
+  **Seven, and the roadmap's row named four.** It had `LlSize` says a pointer
+  is 8, `tyProc` and `tySlice` are two pointers, and `tyFile`'s alignment is 8;
+  what it left out is `tyInt64`, `tyReal` and `tyHandle`, which i386 aligns to
+  4 as well -- the three that would have misaligned in silence, a wrong
+  alignment costing no diagnostic anywhere. Measured against clang for the two
+  admitted targets and for i386 before a line was written. }
+function PtrSize: integer;
+function WordAlign: integer;
 
 { ------------------------------------------------------------- type names }
 procedure WriteTypeName(t: typePtr);
@@ -4249,6 +4285,16 @@ begin
   end
 end;
 
+function PtrSize;
+begin
+  if targetIx = tgtI386 then PtrSize := 4 else PtrSize := 8
+end;
+
+function WordAlign;
+begin
+  if targetIx = tgtI386 then WordAlign := 4 else WordAlign := 8
+end;
+
 function FileIndexOf;
 var i: integer;
 begin
@@ -4558,6 +4604,7 @@ to begin do
     tokCount := 0;
     pos := 1;
     mainTokBase := 1;
+    targetIx := tgtX86;
     depth := 0;
     aborted := false;
     errorSeen := false;

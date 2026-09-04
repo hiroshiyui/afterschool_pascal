@@ -828,6 +828,20 @@ if(Python3_FOUND)
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
 
+# ...and whether a program built with those numbers behaves (ADR-0325). The
+# row above asks about arithmetic; both defects the i386 port found were in
+# neither a layout rule nor a frame, so it passed with a segfaulting select.
+# RUN_SERIAL for `benchmark`'s reason inverted: it builds a second runtime and
+# links every case against it, so it is the slowest thing here and the one that
+# most wants the other cores. Skips 77 without a 32-bit libc.
+add_test(NAME target32
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/target32.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+set_tests_properties(target32 PROPERTIES
+                     TIMEOUT 1800
+                     SKIP_RETURN_CODE 77
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
 # against the same golden output the C++ compiler is held to, and then by

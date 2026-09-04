@@ -355,7 +355,15 @@ _Thread_local static unsigned pas_select_turn;
  * one construct up.
  */
 int pas_select(void *arms, int n, int bounded, long long wait_ms) {
-  struct pas_select_arm *a = arms;
+  /* Indexed with PAS_SELECT_ARM_SIZE and not with `sizeof`, because those are
+   * two numbers on a target where they differ and the compiler uses the
+   * first. `selectArmSize` is what strides the array the compiler builds in a
+   * frame slot; this struct is 24 bytes on an LP64 target and 16 on a 32-bit
+   * one, so `a[i]` read every arm but the zeroth from the wrong address there.
+   * The header above said the array *is* indexed with the larger and this was
+   * the sentence that made it false; ADR-0325 found it by running the corpus
+   * for i386, and `tests/dialect/select.pas` segfaulted. */
+  char *base = arms;
   struct timespec deadline;
   int i, k;
   if (n <= 0)
@@ -380,7 +388,8 @@ int pas_select(void *arms, int n, int bounded, long long wait_ms) {
     unsigned turn = pas_select_turn++;
     for (k = 0; k < n; k++) {
       i = (int)((turn + (unsigned)k) % (unsigned)n);
-      if (pas_select_try(&a[i])) {
+      if (pas_select_try((struct pas_select_arm *)(base +
+                         (size_t)i * PAS_SELECT_ARM_SIZE))) {
         /* This select has itself changed a channel -- taken a value out or
            put one in -- so another selector may now proceed. The mutex is
            already held here, which is why this is a broadcast and not a call

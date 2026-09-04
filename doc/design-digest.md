@@ -94,6 +94,24 @@ own exception and compare by length instead.
   does. The C++ compiler asked a TargetMachine; there is no TargetMachine now,
   which is why the line is written out — see `CLAUDE.md`'s CodeGen bullets, where
   ADR-0028 records the segfault that came of leaving it unstated.
+- **And a pointer is not always eight bytes** (ADR-0325). The layout rules were
+  constants for two targets and stopped being so when i386 was admitted:
+  `PtrSize` and `WordAlign` are two functions in ApTypes and the seven arms that
+  wrote 8 ask one of them — a pointer, an `i64`, a `double`, a file, a handle,
+  and the two-word pair a procedural parameter and a slice are. **The roadmap's
+  row named four of the seven**; `tyInt64`, `tyReal` and `tyHandle` were the
+  ones it left out and the ones a reader would not catch, a wrong alignment
+  costing no diagnostic anywhere. The set and the complex are unchanged, which
+  was measured rather than reasoned: i386's own datalayout carries `i128:128`,
+  so LLVM aligns an `i256` to 16 there as everywhere. `targetIx` moved from the
+  driver into ApTypes for this — the rules are ApFront's, so the one fact both
+  components need lives in the one they both import. Running the corpus for it
+  found two defects **no arithmetic check here could see**, both a number
+  agreed between two files with an unchecked claim beside it: the runtime
+  strode its select-arm array by `sizeof` where the compiler strides
+  `PAS_SELECT_ARM_SIZE`, and the compiler wrote that arm's fourth field at a
+  literal 16 where i386 puts it at 12. `target32` is the gate that exists
+  because `target-layout` passed with both in place.
 - **A type's storage is a fact about the source program** (ADR-0287), so the
   layout arithmetic lives in ApFront and not in CodeGen, and a size is an
   `int64`. It answered a Pascal `integer` until a channel of an 8 GB element

@@ -182,8 +182,18 @@ def corpus(root):
         if comps.exists():
             for rel in comps.read_text().split():
                 argv += ["--import", str(f.parent / rel)]
-        argv.append(flags.read_text().strip() if flags.exists()
-                    else "--dump-all")
+        # **Split**, not appended whole. A `.flags` file may hold more than
+        # one flag -- `--format --range=22:24` is two -- and passing the line
+        # as a single argument gave the compiler an unknown option, which it
+        # refuses. The sweep checks no exit status, so the three cases with
+        # two flags contributed nothing and reported as nothing: `--range`'s
+        # own two cases had never been run here at all, and the ratchet was
+        # carrying their lines as unreached while `format-check` reached them
+        # on every run. `tests/dumps/run.sh` has always read the file with
+        # `read -r -a`, so the harness and the sweep now read it the same way
+        # -- which is the property the two must have (ADR-0325).
+        argv += (flags.read_text().split() if flags.exists()
+                 else ["--dump-all"])
         jobs.append((f, argv))
 
     # ...and the same corpus again under --dump-all. It was added because

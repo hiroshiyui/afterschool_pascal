@@ -274,10 +274,9 @@ var
     says what is being replaced where a reader can see it. }
   formatOpt: boolean;
   rangeLo, rangeHi: integer;
-  { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
-    what the seed was generated for and what this repository is built and
-    tested on. }
-  targetIx: integer;
+  { Which target the emitted module states is `targetIx`, and it is ApTypes'
+    since ADR-0325 -- the layout rules ask it and they are ApFront's. What is
+    still decided here is the flag that writes it. }
   { --coverage: emit a call to pas_cov_hit before every statement, carrying the
     line it begins on (ADR-0104), and a call to pas_cov_branch on each edge of
     every decision the source writes (ADR-0274). What is *executable* is
@@ -480,6 +479,12 @@ begin
     being canonical already. }
   else if EQ(name, 'aarch64-linux-gnu') or
           EQ(name, 'aarch64-unknown-linux-gnu') then TargetIndex := tgtAarch64
+  { ADR-0325's third target, and the first that is not LP64. `i386` and `i686`
+    name one machine to clang and both are written by people, so both are
+    read. }
+  else if EQ(name, 'i386-pc-linux-gnu') or EQ(name, 'i386-linux-gnu') or
+          EQ(name, 'i386-unknown-linux-gnu') or EQ(name, 'i686-linux-gnu') or
+          EQ(name, 'i686-pc-linux-gnu') then TargetIndex := tgtI386
   else TargetIndex := 0
 end;
 
@@ -487,7 +492,8 @@ procedure TargetName(ix: integer; var name: pathStr);
 begin
   case ix of
     tgtX86: name := 'x86_64-pc-linux-gnu';
-    tgtAarch64: name := 'aarch64-linux-gnu'
+    tgtAarch64: name := 'aarch64-linux-gnu';
+    tgtI386: name := 'i386-pc-linux-gnu'
   end
 end;
 
@@ -9740,10 +9746,17 @@ begin
     AddressOfSym(a^.saSlot, val);
     EmitStore(val, a^.saSlot^.stype, a^.saArgs^.next)
   end;
+  { `8 + PtrSize` and not 16 (ADR-0325). The arm is two ints and then two
+    pointers, and the runtime reads it as that struct, so where the last sits is
+    the target's business: 16 on an LP64 target and **12** on i386. It was
+    written 16, and the two offsets above it are two ints and are 0 and 4 on
+    every target admitted here, which is why only this one moved. `select`
+    segfaulted for i386 with the stride already right -- a wrong offset inside
+    the arm, not a wrong distance between arms. }
   Def(fld);
   write(ircode, 'getelementptr inbounds i8, ptr ');
   PutOp(armp);
-  writeln(ircode, ', i64 16');
+  writeln(ircode, ', i64 ', 8 + PtrSize:1);
   write(ircode, '  store ptr ');
   PutOp(val);
   write(ircode, ', ptr ');
@@ -11875,6 +11888,17 @@ begin
                       'p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-',
                       'S128-Fn32"');
       writeln(ircode, 'target triple = "aarch64-unknown-linux-gnu"')
+    end;
+    { ADR-0325. Not a transcription: it is clang's own line for
+      `i386-pc-linux-gnu`, taken from `clang --target=i386-pc-linux-gnu -x c
+      /dev/null -S -emit-llvm`, which is where the other two came from and is
+      what `target-layout` asks clang for on every run. `p:32:32` is the whole
+      of what makes this target different from the two above it. }
+    tgtI386: begin
+      writeln(ircode, 'target datalayout = "e-m:e-p:32:32-p270:32:32-',
+                      'p271:32:32-p272:64:64-i128:128-f64:32:64-f80:32-',
+                      'n8:16:32-S128"');
+      writeln(ircode, 'target triple = "i386-pc-linux-gnu"')
     end
   end;
   writeln(ircode);

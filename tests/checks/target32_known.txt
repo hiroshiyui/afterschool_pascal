@@ -1,0 +1,25 @@
+# Cases that do not pass for i386-pc-linux-gnu, with why (ADR-0325).
+#
+# The gate beside this file fails in both directions: a case that starts
+# failing is a regression, and a case that stops failing is a defect somebody
+# fixed without saying so. Every row here is one of two things and neither is a
+# layout fault -- the port itself is 564 of 570.
+
+# A 2 GB allocation. The case exists to allocate an array spanning exactly
+# maxint components at one byte each (ADR-0289), and a 32-bit process has
+# nowhere to put it: `new` reports out of memory and the program exits 1. It is
+# the program that is 64-bit and not the compiler, and there is nothing here to
+# fix -- the alternative would be a case that stops measuring what it measures.
+tests/index_span.pas
+
+# ADR-0129's question, which doc/roadmap.md's cross-platform chapter names as a
+# *decision* and not a lowering: how a foreign declaration should name a C
+# `long`, `size_t` or `time_t`. Each of these declares one as `int64`, which is
+# right on an LP64 target and four bytes too wide on i386 -- `strlen('hello')`
+# answers 21474836485, whose low half is 5 and whose high half is whatever was
+# in the register. Nothing about the port fixes these; a decision does.
+tests/extended/timestamp_invalid.pas
+tests/dialect/foreign_record.pas
+tests/dialect/foreign_shared_symbol.pas
+tests/dialect/lib_path.pas
+examples/c_function.pas
