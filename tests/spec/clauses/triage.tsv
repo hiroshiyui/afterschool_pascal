@@ -385,6 +385,10 @@ extended	6.7.3.7.1	testable	conformant array parameters, accepted since this bec
 extended	6.7.3.7.2	testable	conformant array parameters, accepted since this became a level 1 processor
 extended	6.7.3.7.3	testable	conformant array parameters, accepted since this became a level 1 processor
 extended	6.7.3.8	testable	conformant array parameters, accepted since this became a level 1 processor
+afterschool	6.7.2	structural	extends ISO/IEC 10206:1991 6.7.2; the requirement is in its subclause
+afterschool	6.7.2.1	testable	
+afterschool	6.7.3.1	structural	extends ISO/IEC 10206:1991 6.7.3.1; the requirement is in its subclause
+afterschool	6.7.3.1.1	testable	
 afterschool	6.7.3.6	structural	extends ISO/IEC 10206:1991 6.7.3.6; the requirements are in its subclauses
 afterschool	6.7.3.6.1	testable	
 afterschool	6.7.3.6.2	testable	

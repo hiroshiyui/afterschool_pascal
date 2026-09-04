@@ -332,3 +332,4 @@ the alternatives that were rejected and why.
 | [0321](0321-what-adopting-the-owned-pointer-found.md) | What adopting the owned pointer found | Accepted |
 | [0322](0322-a-chain-costs-one-frame.md) | A chain costs one frame | Accepted |
 | [0323](0323-take-inside-a-generic.md) | `take` inside a generic | Accepted |
+| [0324](0324-a-discriminated-schema-where-a-name-is-required.md) | A discriminated schema where a name is required | Accepted |

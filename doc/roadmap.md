@@ -580,7 +580,15 @@ clause. ADR-0232 made that the wrong question — there is one language and no
 clause governs it — and every fact the lists stated was already in
 [`doc/implementation-defined.md`](implementation-defined.md), which is the
 register of what this processor decides. What stays here is what is still
-open in the dialect's own terms: one gap, three capacities and two decisions.
+open in the dialect's own terms: one gap and three capacities. **The two
+decisions this chapter carried are both taken** — what bindability is once no
+clause fixes it to the variable-declaration, by ADR-0299 on 2026-09-04, and
+`string(5)` as a parameter form by ADR-0324 on 2026-09-05. This sentence said
+*two decisions* for a day after the first of them was taken, the body having
+been updated to *one* and the summary above it not: a count in a heading and a
+count in the prose under it are two measurements, which is the lesson this page
+keeps re-learning one document at a time.
+
 The chapter as it stood, with the two entries that had closed inside it, is
 in [`doc/history.md`](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards).
 
@@ -618,25 +626,18 @@ trap a program can meet:
 | a set's base type must have its values in 0..255, every set being one 256-bit word — so `set of integer` is refused, and so is `set of 1..m` for a bound the block evaluates, which cannot be checked against 0..255 before the program runs | ADR-0028, ADR-0133; §6 |
 | string concatenation draws from an arena released at the end of every statement, so one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
 
-**One decision, and it has no record yet:**
-
-- **`string(5)` as a parameter form** (ADR-0171), now recorded in
-  [`doc/implementation-defined.md`](implementation-defined.md) §6.1. §6.7.3.1
-  admits `type-name | schema-name | type-inquiry`, so `procedure q(x: string)`
-  is inside the grammar and `procedure q(x: string(5))` writes a production
-  where a name is required and is outside it; this compiler accepts both and
-  always has. There is no mode to refuse it under any more, so what is left is
-  to admit it with a clause of its own or refuse it. Admitting it is the likely
-  answer — it is exactly the convenience ADR-0109 says belongs here, it takes
-  nothing from any program, and the spelling passes ADR-0140's test on its own.
-
-  **This entry said *three sources under `tests/extended/`* until the count was
-  taken on 2026-09-04, and it is sixteen sources and 22 formal parameters** —
-  two of them under that directory, and one of them `lib/dialect/pasjson.pas`,
-  which is a shipped library module and not a test. That does not change which
-  answer is likely; it changes what the other one costs, which is the whole
-  reason to write a number down. It is this page's own first lesson met again:
-  a number needs a date and a command.
+**And the one decision that had no record has one.** `string(5)` as a
+parameter form (ADR-0171) is **decided and admitted** — AP 6.7.3.1.1 and AP
+6.7.2.1, ADR-0324, moved to
+[`doc/implementation-defined.md`](implementation-defined.md) §5 with the other
+extensions that have a record. Probing it to write the clause found two things
+this row had not: the **result-type** takes the form as well, which is the
+position ADR-0215 wrote down as an open question and believed unwidened; and
+the acceptance is exactly one production alternative, every other type-denoter
+being refused in both positions. The count moved a third time in taking it —
+16 sources and 22 parameters became 18 sources, 24 parameters and one
+result-type, a scan that had not separated a parameter from a result never
+having been asked to.
 
 The adversarial audits that filled the old lists — four of them, ADR-0162,
 ADR-0167, ADR-0168 and ADR-0171 — are [open question

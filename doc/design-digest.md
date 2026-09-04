@@ -758,6 +758,25 @@ able to make.
     which is the test of whether it was encoded in the right place.
   - A produced type **names itself** `vector(3)`, or two productions differing
     only in a discriminant the body never mentions print identically.
+  - **And it may be written where a name is required** (ADR-0324, AP 6.7.3.1.1
+    and AP 6.7.2.1). §6.7.3.1 gives `parameter-form = type-name | schema-name |
+    type-inquiry` and §6.7.2 gives `result-type = type-name`, so
+    `procedure q(x: string(5))` and `function f: string(5)` are outside ISO/IEC
+    10206:1991's grammar — and this compiler has accepted both since the
+    fixed-capacity string formal existed. ADR-0171 found the first and left it
+    as an extension inside a conformance mode; ADR-0232 removed the modes, so
+    the clause was what remained. Nothing in the compiler changed. Two things
+    the probe found that no reading had: the **result-type** takes it too,
+    which is the position ADR-0215 recorded as an open question and believed
+    unwidened; and the acceptance is exactly one production alternative,
+    `ParseFormalParameters` handing the type to `ParseTypeDenoter` but the
+    guard above admitting only an identifier, `type` and `array of` — so an
+    inline record, array, set, subrange, enumeration or pointer denoter is
+    refused in both positions. The **schema-name** alternative is a different
+    requirement and not a second spelling: `x: string` is the schematic formal
+    whose tuple is the actual's (ADR-0040), and `x: string(5)` names one type,
+    which is why the second requires constant discriminants and the first does
+    not.
   - **Discriminants must be constants.** A stated deferral, not an
     oversight — the ADR's "What this does not do" lists all five.
 - **A schematic formal parameter carries its discriminants beside the address**

@@ -1,0 +1,6 @@
+<source>:26:27: error: the discriminants of a schema must be ordinal constants here; 'capacity' is not one
+<source>:30:21: error: the capacity of a string must be greater than zero, found 0
+<source>:34:21: error: schema 'box' has 1 discriminant, found 2
+<source>:50:8: error: var parameter 'x' is string(5), but the argument is string(6)
+<source>:51:7: error: var parameter 'x' is box(3), but the argument is box(4)
+<source>:52:9: error: 'six' does not match the parameter list of procedural parameter 'f'

@@ -1,0 +1,4 @@
+pair 5 [a][bc]
+fill [zz][zz]
+made 246
+result 5 [abcde]

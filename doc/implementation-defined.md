@@ -375,7 +375,7 @@ excluded from the clause because they *require* it.
 ## 5. Extensions
 
 Clause 5.1 g) requires extensions to be described as *extensions to Pascal as
-specified by ISO/IEC 7185*. There are three.
+specified by ISO/IEC 7185*. There are four.
 
 **`halt` takes an optional integer argument, the exit status**, where
 §6.7.5.7 gives it no parameters. `halt` alone exits 0, as it always did;
@@ -410,6 +410,32 @@ record-type is not a name a program can otherwise use in that position, and
 `binding` returns the whole record whether or not a program reads the field.
 Like `bound`, it reports a moment and promises nothing about the next
 statement. AP 6.4.3.4.7, ADR-0240; `tests/dialect/binding_writable.pas`.
+
+**A discriminated-schema may be written where a parameter-form or a
+result-type requires a name.** §6.7.3.1 gives a parameter-form as
+`type-name | schema-name | type-inquiry` and §6.7.2 gives
+`result-type = type-name`, so `procedure q(x: string)` names a schema and is
+inside the grammar, while `procedure q(x: string(5))` and
+`function f: string(5)` write a schema *production* where a name is required
+and are outside it. This compiler accepts both, and always has.
+
+What it denotes is the type that schema and that tuple produce, so every rule
+this language states over types answers here unchanged: a variable parameter
+requires the actual to possess that very type, congruity compares the types two
+parameter-forms denote, and `Cap5 = string(5)` and `string(5)` are
+interchangeable. The addition is one alternative and not a relaxation — a
+parameter's type is still not a type-denoter, and an inline record, array, set,
+subrange, enumeration or pointer denoter is refused in both positions. A
+type-inquiry remains admissible in a parameter-form and inadmissible in a
+result-type.
+
+No conforming program's meaning changes: a discriminated-schema is outside the
+production it is added to, so no conforming program can contain one there. It
+is an extension to ISO 7185 outright, that standard having no schemata at all.
+It was accepted before it was decided — ADR-0171 found it and left it as an
+acceptance no clause stated, and ADR-0232 removed the conformance mode that
+could have refused it. AP 6.7.3.1.1 and AP 6.7.2.1, ADR-0324;
+`tests/dialect/discriminated_form.pas`.
 
 **An identifier may contain an underscore**, where §6.1.3 makes an identifier
 `letter { letter | digit }`. It is how this project spells a name that would
@@ -708,27 +734,3 @@ Before ADR-0112 the entry was larger still: only `^fred` was refused, while
 and a field named `integer` taking that spelling from the required identifiers
 were all accepted. Same clause, same region; only the occurrence differed.
 
-**And one that is not ISO 7185's but ISO/IEC 10206:1991's: `string(5)` as a
-parameter form.** §6.7.3.1 gives a parameter-form as
-`type-name | schema-name | type-inquiry`, so `procedure q(x: string)` names a
-schema and is inside the grammar, while `procedure q(x: string(5))` writes a
-schema *production* where a name is required and is outside it. This compiler
-accepts both, and always has.
-
-**It is here rather than in §5 because nobody decided it.** The three entries
-of §5 are extensions with a record apiece; this is an acceptance that no
-clause of `doc/afterschool-pascal-spec.md` states and no record argues for —
-the one program shape in this document that is neither refused, specified, nor
-deliberately extended. What it wants is a clause and a record, and admitting
-it is the likely answer: it takes nothing from any program, it is the
-convenience ADR-0109 says belongs in this dialect, and the spelling passes
-ADR-0140's test on its own, a production being written where a name may
-already stand.
-
-**The cost of refusing it is the reason to decide it rather than leave it.**
-Sixteen sources write it, in **22 formal parameters** — among them
-`lib/dialect/pasjson.pas`, which is a shipped library module and not a test.
-`doc/roadmap.md` carried this as *three sources under `tests/extended/`* until
-the count was taken on 2026-09-04; two of the sixteen are under that
-directory. ADR-0171 found it; ADR-0232 removed the mode that could have
-refused it.

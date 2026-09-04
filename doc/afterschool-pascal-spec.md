@@ -2199,7 +2199,77 @@ it is an error.
 
 ### 6.7 Procedure and function declarations
 
+##### 6.7.2 Function-declarations [extended]
+
+**6.7.2.1 A discriminated schema as a result-type.** ISO/IEC 10206:1991 §6.7.2
+gives
+
+    result-type = type-name .
+
+A result-type may in addition be a discriminated-schema (§6.4.7). The type it
+denotes shall be the type produced by that schema and that discriminant tuple,
+and the function shall possess it; every requirement §6.7.2 and §6.8.2.2 place
+on a result of that type applies unchanged.
+
+NOTE 1 — This is 6.7.3.1.1 read one production over, and the two are one
+decision (ADR-0324). A function answering a text of a stated capacity had to
+name a type-definition for it in a scope enclosing the declaration, exactly as
+a parameter did.
+
+NOTE 2 — A **type-inquiry** is still not a result-type, and that is ADR-0215's
+question left where it stood rather than answered here. A type-inquiry denotes
+the type of a *variable-access*, so what a result-type built from one would
+denote depends on which variable is in scope at the declaration and at every
+activation; a discriminated-schema names a type outright and raises no such
+question.
+
 #### 6.7.3 Parameters
+
+##### 6.7.3.1 General [extended]
+
+**6.7.3.1.1 A discriminated schema as a parameter-form.** ISO/IEC 10206:1991
+§6.7.3.1 gives
+
+    parameter-form = type-name | schema-name | type-inquiry .
+
+A parameter-form may in addition be a discriminated-schema (§6.4.7). The type
+it denotes shall be the type produced by that schema and that discriminant
+tuple, and each formal-parameter of the section shall possess it; every
+requirement §6.7.3.2, §6.7.3.3 and §6.7.3.4 place on a formal-parameter of
+that type applies unchanged.
+
+NOTE 1 — The three alternatives §6.7.3.1 gives all denote a type without
+writing one, and this is the fourth. It takes nothing from any program: a
+discriminated-schema is outside the production, so no conforming program can
+have written one in this position and none changes meaning (6.0.1). What it
+removes is a type-definition whose only purpose is to give a capacity a name —
+`type Path = string(255)` written in a scope enclosing every routine that
+takes a path.
+
+NOTE 2 — The **schema-name** alternative and this one are different
+requirements and not two spellings of one. A schema-name is ISO/IEC
+10206:1991's schematic formal: the tuple is the actual's, so one routine serves
+every capacity and the formal reads its discriminants from what it was handed
+(ADR-0040). A discriminated-schema names one type, so the tuple is written in
+the declaration and §6.7.3.3's variable-parameter rule requires the actual to
+possess that very type.
+
+NOTE 3 — The discriminants are therefore required to be constant, and that is
+§6.4.7's requirement rather than this clause's. A formal whose capacity is not
+known where it is declared is what the schema-name alternative is for.
+
+NOTE 4 — Congruity (§6.7.3.6) is unaffected and asks what it always asked: two
+parameter-forms denoting the same type match, so a discriminated-schema and a
+type-name for the type it produces are interchangeable, and `string(5)` against
+`string(6)` is not congruous. 6.7.3.6.1's one-directional widening is a rule
+about the schema-name alternative and is untouched.
+
+NOTE 5 — A processor conforming to ISO/IEC 10206:1991 is required to reject
+this, and this processor has accepted it since the fixed-capacity string formal
+existed. ADR-0171 found it, called it an extension admitted inside a
+conformance mode, and left it because refusing it would have taken something
+from working programs; ADR-0232 then removed the modes, so what was left is
+this clause (ADR-0324).
 
 ##### 6.7.3.6 Parameter list congruity [extended]
 
@@ -4251,3 +4321,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.1 (amended) | ADR-0321 |
 | 6.4.14 NOTE 2 (amended) | ADR-0322 |
 | 6.4.14.6 (amended) | ADR-0323 |
+| 6.7.2.1, 6.7.3.1.1 | ADR-0324 |

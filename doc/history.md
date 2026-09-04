@@ -5445,7 +5445,7 @@ length 3 does not fit a capacity of 0*. It is refused now, and that is the only
 variable-access this denoter cannot answer for.
 
 **And it found where the widening stops.** `VecGet` and `MapGet` still take the
-element type, because they *return* it and §6.7.1 makes a result-type a
+element type, because they *return* it and §6.7.2 makes a result-type a
 `type-name`:
 
 ```
@@ -5456,6 +5456,15 @@ So `function VecGet(…): type of v^.a[1]` is unwritable in the dialect too. Tha
 is a second production and wants the same argument made again about a different
 clause; it is not carried here as an open question, because nothing is waiting
 on it — the two-parameter form works and reads fine.
+
+(The clause number here read §6.7.1 until 2026-09-05, as ADR-0215's own text
+still does. §6.7.1 is *Procedure-declarations* and §6.7.2 is
+*Function-declarations*; `clause-citations` cannot tell them apart, both being
+clauses, and ISO 7185's §6.7.1 is *General* — an expressions clause several
+records here cite correctly, which is what made the wrong one read as ordinary.
+ADR-0324 records the correction. **And the production was widened after all**,
+for a discriminated-schema and not for a type-inquiry: `function f: string(5)`
+compiled the whole time and nobody had asked.)
 
 ## Version 3 — what it took, and what it left
 
