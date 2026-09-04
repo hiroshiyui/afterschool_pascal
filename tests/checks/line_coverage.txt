@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 393
-instrumented 20236
+uncovered 392
+instrumented 20242
 
 accept 0/4
 accumulate 0/84
@@ -140,11 +140,11 @@ checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
 checkstdproc 19/391
-checkstmt 2/256
+checkstmt 2/258
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
-checktake 0/21
+checktake 0/22
 checktaskformals 0/26
 checktypedecl 0/60
 checkvardecl 1/67
@@ -434,7 +434,7 @@ hastypeparam 0/6
 headerof 0/6
 headersize 0/9
 headingdigest 0/10
-heapfromschema 1/35
+heapfromschema 0/35
 heapheader 0/16
 holdsfile 0/11
 imof 0/4
@@ -452,7 +452,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/191
+instantiategeneric 0/193
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -755,7 +755,7 @@ roundup 0/2
 row 0/58
 runcodegen 0/95
 rundefersreversed 0/4
-runsema 2/92
+runsema 2/93
 samelink 0/1
 sametuple 0/7
 satisfiescat 0/6

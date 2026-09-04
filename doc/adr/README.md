@@ -331,3 +331,4 @@ the alternatives that were rejected and why.
 | [0320](0320-the-schema-domain-and-the-walk-it-does-not-need.md) | The schema domain, and the walk it does not need | Accepted |
 | [0321](0321-what-adopting-the-owned-pointer-found.md) | What adopting the owned pointer found | Accepted |
 | [0322](0322-a-chain-costs-one-frame.md) | A chain costs one frame | Accepted |
+| [0323](0323-take-inside-a-generic.md) | `take` inside a generic | Accepted |

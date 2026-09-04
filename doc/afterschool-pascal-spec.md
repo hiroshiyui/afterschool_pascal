@@ -1251,6 +1251,45 @@ would leave the identified variable held by no variable, which 6.4.14.3
 forbids. A processor is therefore expected to name `dispose` where it reports
 this (ADR-0307).
 
+Within the body of a generic procedure or function (6.7.3.10) the
+actual-parameter may in addition be a variable-access of a type that neither is
+nor contains a file-type (§6.4.3.5), a handle-type (6.4.12) or an
+owned-pointer-type (6.4.14). The value of the function-designator shall then be
+the value of that variable; the variable shall be unchanged; and the
+actual-parameter shall not thereby be threatened (§6.9.4). The position
+requirement above applies unchanged.
+
+NOTE 8 — `take` is the only operation in this language whose *applicability* is
+a property of the type it is applied to, and a generic's body is written before
+that type is known. Without this paragraph a generic that replaces what a
+variable holds — which every growable container is — can be written for an
+owned-pointer type argument or for every other, and not for both: `v := fresh`
+is a copy, which 6.4.14.3 forbids at the first, and `v := take(fresh)` empties
+nothing at the second. This paragraph is what makes 6.4.14 and 6.7.3.10
+compose, and it was found by the one module in this language written over both
+(ADR-0323).
+
+NOTE 9 — Read inside a generic, `take` means *move where the type moves*. The
+paragraph adds no operation: at a type with no value for a variable to stop
+holding, what the assignment-statement performs is the assignment
+(§6.9.2.2) written without the word, and every requirement §6.9.2.2 places on
+it applies.
+
+NOTE 10 — A file-type is excluded and is affine, which is why the condition is
+written over the three kinds together rather than over the two that move. A
+file has a value one variable would have to stop holding and no representation
+in which it can (6.4.12.7 NOTE, ADR-0181), so `take` of one is refused inside a
+generic exactly as outside it.
+
+NOTE 11 — The threat is the emptying, so where nothing is emptied there is
+none. A generic may therefore apply `take` to its own protected
+variable-parameter (§6.7.3.1), and the same body at an owned-pointer type
+argument may not — the one place in this language where the acceptability of a
+statement is a property of the activation-point rather than of the statement.
+A processor is expected to report such an occurrence at the generic's own
+declaration, 6.7.3.10.2 requiring it, and to name the activation-point that
+asked for the instantiation.
+
 **6.4.14.7 Release while borrowed.** It shall be an error to release
 (6.4.14.3) a variable of an owned-pointer-type while a variable it owns, or a
 component of one, is bound to a variable formal-parameter (§6.7.3.3) or to the
@@ -4210,3 +4249,5 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.9 | ADR-0319 |
 | 6.4.14.2 (amended) | ADR-0320 |
 | 6.4.14.1 (amended) | ADR-0321 |
+| 6.4.14 NOTE 2 (amended) | ADR-0322 |
+| 6.4.14.6 (amended) | ADR-0323 |

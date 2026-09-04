@@ -356,7 +356,7 @@ begin
     fresh^.n := v^.n;
     for i := 1 to v^.n do fresh^.a[i] := v^.a[i];
     dispose(v);
-    v := fresh
+    v := take(fresh)
   end
 end;
 
@@ -534,7 +534,7 @@ begin
         fresh^.count := fresh^.count + 1
       end;
     dispose(m);
-    m := fresh
+    m := take(fresh)
   end;
   slot := FindSlot(Ptr, m, key, hash, eq);
   if slot <> 0 then begin

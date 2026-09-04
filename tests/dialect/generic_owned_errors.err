@@ -1,0 +1,8 @@
+<source>:20:13: error: 'take' empties an owned pointer or a handle and this is text: nothing else has a value one variable can stop holding
+<source>:20:3: error: a file variable cannot be assigned to; use reset, rewrite and the buffer variable
+<source>:44:3: error: this activation is what asked for that instantiation of 'moveit'
+<source>:28:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:28:21: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:45:11: error: this activation is what asked for that instantiation of 'peek'
+<source>:39:16: error: 'a' is a protected parameter, so it cannot be emptied by 'take'
+<source>:47:3: error: this activation is what asked for that instantiation of 'bump'

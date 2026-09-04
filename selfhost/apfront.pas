@@ -465,6 +465,13 @@ var
     way handleBirth says the handle's. A permission rather than a claim, set
     before the value is checked and cleared by CheckTake. }
   takeOk: boolean;
+  { AP 6.4.14.6 (ADR-0323): how many generic bodies enclose what is being
+    checked. `take` is the one operation whose applicability is a fact about
+    the type it is applied to, and a generic's body is written before that
+    type is known -- so inside one it is admitted for every type that is not
+    affine and denotes the variable's value. A counter and not a flag,
+    because a generic may activate another. }
+  genDepth: integer;
   { AP 6.9.3.12 (ADR-0268): the declaration being parsed was written `task`.
     A flag rather than a parameter because ParseProcHeading is reached from
     four places and only one of them can be a task; it is set immediately
@@ -14654,8 +14661,17 @@ begin
       words of the runtime's, and there is no value in it one variable can
       stop holding. So the question is `IsOwned or IsHandle` and not
       `IsAffine`, which would admit the file. }
+    { AP 6.4.14.6 as ADR-0323 amended it. Inside a generic's body the type is
+      whatever the tuple bound, so the question a body cannot ask is not asked
+      of it: `take` is admitted for every type that is not affine and denotes
+      the variable's value, leaving it unchanged. A **file** is still refused
+      by the arm below and refused inside a generic too -- it is affine, so
+      there is a value one variable would have to stop holding, and it is
+      `IsMemory` and has none. `not IsAffine` and not `not IsOwned` is the
+      whole of that distinction (ADR-0181). }
     if not (IsOwnedPointer(c^.clArgs^.ntype) or
-            IsHandle(c^.clArgs^.ntype)) then begin
+            IsHandle(c^.clArgs^.ntype) or
+            ((genDepth > 0) and not IsAffine(c^.clArgs^.ntype))) then begin
       ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
       write('''take'' empties an owned pointer or a handle and this is ');
       WriteTypeName(c^.clArgs^.ntype);
@@ -14669,9 +14685,16 @@ begin
       c^.ntype := c^.clArgs^.ntype;
       { 6.9.4 a) again: emptying a variable threatens it, which is what gives
         `take` of a for-statement's control variable or of a protected
-        parameter the refusal those two already have. }
-      if Threatened(c^.clArgs) then
-        writeln('it cannot be emptied by ''take''');
+        parameter the refusal those two already have.
+
+        Asked only where something is emptied (ADR-0323). Where the type is
+        not affine the variable is read and left holding what it held, which
+        is no more a threat than any other read -- so a generic instantiated
+        at an ordinary type may `take` its own protected parameter, and one
+        instantiated at an owned pointer may not. }
+      if IsOwnedPointer(c^.clArgs^.ntype) or IsHandle(c^.clArgs^.ntype) then
+        if Threatened(c^.clArgs) then
+          writeln('it cannot be emptied by ''take''');
       if not takeOk then begin
         ErrorAt(c^.line, c^.col);
         write('''take'' may stand only as the whole right side of an ');
@@ -18843,11 +18866,33 @@ begin
             only an nkCall could be one, where a handle-valued call has the
             bare spelling too (ADR-0179). }
           takeOk := (IsOwnedPointer(s^.asTarget^.ntype) or
-                     IsHandle(s^.asTarget^.ntype)) and
+                     IsHandle(s^.asTarget^.ntype) or
+                     (genDepth > 0)) and
                     (s^.asValue^.kind = nkCall);
           CheckExpr(s^.asValue);
           handleBirth := false;
           takeOk := false;
+          { AP 6.4.14.6 (ADR-0323): a `take` that moves nothing is the husk of
+            ADR-0044. Where the argument's type is not affine there is no
+            value for a variable to stop holding, so what the statement does
+            is the assignment written without the word -- and Sema says so by
+            moving the argument up, rather than CodeGen growing an arm for a
+            move that does not happen.
+
+            That is the property this is written for. EmitCall still has no
+            arm for biTake, so a `take` reaching CodeGen anywhere but the two
+            affine arms of EmitAssign stops the compiler, which is what AP
+            6.4.14.6 relies on to make every other position unreachable. The
+            amendment adds a *reading* inside a generic and no lowering at
+            all: `verify/lowering.py` is untouched because the model has
+            nothing new to describe. }
+          if (s^.asValue^.kind = nkCall) and
+             (s^.asValue^.clBuiltin = biTake) and
+             (s^.asValue^.clArgs <> nil) and
+             (s^.asValue^.clArgs^.ntype <> nil) and
+             (s^.asValue^.ntype = s^.asValue^.clArgs^.ntype) and
+             not IsAffine(s^.asValue^.clArgs^.ntype) then
+            s^.asValue := s^.asValue^.clArgs;
           { AP 6.4.13 (ADR-0176): `r := x` where r is fallible and x is a value
             of one of its two sides *is* the field assignment that activates
             that arm, so Sema writes the selection the program did not and
@@ -22488,7 +22533,12 @@ begin
         from, and `var t: T` in the body needs it exactly as `var a: T` in the
         heading did. }
       before := errorCount;
+      { AP 6.4.14.6 (ADR-0323): this is what makes `take` mean *move where
+        the type moves* -- the body below is the generic's own source and its
+        types are whatever this tuple bound them to. }
+      genDepth := genDepth + 1;
       CheckProcBody(decl);
+      genDepth := genDepth - 1;
       failedHere := errorCount > before;
 
       scopeDepth := scopeDepth - 1;
@@ -23859,6 +23909,7 @@ begin
   handleClosers := nil;
   handleBirth := false;
   takeOk := false;
+  genDepth := 0;
   parsingTask := false;
   taskBody := nil;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like

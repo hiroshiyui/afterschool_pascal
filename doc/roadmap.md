@@ -317,8 +317,22 @@ was compiled with the word to find out rather than reasoned about:
 | --- | --- | --- |
 | **converted** | the two arenas in `examples/arena_graph.pas` | the block owns them; the `defer dispose` pair is gone and the example says so |
 | legal, and **must not** be | `IVecPtr`, `SMapPtr`, `StrVecPtr` | `owned` is a dialect feature and these are in `lib/`, the conforming layer a reader can port to another Pascal (ADR-0120). Converting them would move three containers into `lib/dialect/` and out of reach of a conforming program |
-| legal, and blocked on one module | `CountMap`, `WordVec`, `PathVec`, `DocMap` | all four are `^Vec(…)` or `^Map(…)` reached through `PasContainer`, whose routines *assign* to the pointer — `dispose(v); v := fresh` in `VecReserve` — so an owned instantiation is refused inside the module. It is a mechanical change, `v := take(fresh)`, at about 22 sites |
+| **converted** | `CountMap`, `WordVec` in `examples/word_freq.pas` | the module was unblocked by ADR-0323 and these two took the word; the two `Free` calls at the foot of that program are gone and the heap balance is the number it was |
+| still refused, and **not** for the reason this row gave | `PathVec`, `DocMap` in `lsp/pasls.pas` | `PathVec` is a *field* of `Document` and `DocMap` holds `Document` values, so an owned `PathVec` makes the record affine and takes away the whole-record assignment the map is built on. AP 6.4.14.3 doing its job, and nothing to lift |
 | still refused | `JsonPtr`, `JsonChars` | AP 6.4.14.2's other half: `JsonNode` is a tagged union, so its child pointers are fields of a variant part |
+
+**That was the table's third error in two days**, and the shape of all three
+is one: a count taken by machine, and the reason beside it written by hand.
+This row said the four waited on `PasContainer`, that the module's routines
+assign to the pointer, and that converting it was "a mechanical change,
+`v := take(fresh)`, at about 22 sites". The count is **two** sites. The change
+is not mechanical and was not about the sites at all: making them `take`
+converts the module and *unconverts* every other client, because `take` is the
+only operation in this language whose applicability is a property of the type
+it is applied to, and `PasContainer` has both kinds of client in this tree.
+That is ADR-0323, and it is a language amendment rather than a library edit —
+AP 6.4.14 and AP 6.7.3.10 did not compose, and the module is the only thing
+here written over both.
 
 The compiler's own 34 are the second row again and harder: `nodePtr`,
 `symPtr` and `typePtr` stand as a value parameter or a result 341, 156 and 198
@@ -369,7 +383,10 @@ loss for a container callers pass around. `PasList` was written owned and has no
 is not a gap.
 
 So the facility is complete and its adoption is now a design question per
-container rather than a restriction to lift. The warning is still not built, and
+container rather than a restriction to lift — and it is a question a caller can
+actually answer, which it was not until ADR-0323: `PasContainer` is now written
+once for an owned type argument and an ordinary one, at two lines, and each
+client chooses. The warning is still not built, and
 the reason has changed twice: it is no longer that nothing *could* take the word,
 nor that a rewrite is needed, but that taking it is sometimes the wrong answer —
 and a warning cannot know which.

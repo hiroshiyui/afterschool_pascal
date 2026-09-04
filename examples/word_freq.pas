@@ -34,8 +34,17 @@ const
 
 type
   WordText = string(LineMax);
-  CountMap = ^Map(WordText, integer);
-  WordVec = ^Vec(WordText);
+  { `owned` (AP 6.4.14), so the program block owns both and neither is freed
+    by hand: leaving the block releases them, and there is no spelling for a
+    second name to dangle from. The word costs nothing here and the two calls
+    it replaced are gone from the foot of this program.
+
+    It reads as an ordinary generic instantiation because it is one --
+    `PasContainer` is written once for both, its reallocation being
+    `v := take(fresh)`, which is the move at an owned type argument and the
+    assignment at any other (ADR-0323). }
+  CountMap = owned ^Map(WordText, integer);
+  WordVec = owned ^Vec(WordText);
 
 var
   counts: CountMap;
@@ -83,7 +92,5 @@ begin
     word := VecGet(WordText, words, k);
     writeln(MapGet(counts, word, 0, StrHash, StrEq):4, ' ', word)
   end;
-  writeln(MapCount(counts):1, ' distinct words');
-  VecFree(words);
-  MapFree(counts)
+  writeln(MapCount(counts):1, ' distinct words')
 end.

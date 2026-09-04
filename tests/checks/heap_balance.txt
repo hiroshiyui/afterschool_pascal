@@ -23,6 +23,7 @@ fallible 0
 fetch_http 0
 funcaccess 4
 generic_constraints 0
+generic_owned 0
 generic_procparam 0
 graphemes 0
 import_by_name 0

@@ -574,6 +574,30 @@ checks they agree, which is the same arrangement the version number has. A
   per iteration and put the defect back. A **tree** still costs a frame per
   level, whichever self-referential field is chosen leaving the others to
   recurse, and that half of the row stands.
+- **And a generic body's `take` moves where the type moves** (ADR-0323, AP
+  6.4.14.6 amended). `take` is the only operation here whose *applicability* is
+  a property of the type it is applied to, so 6.4.14's ownership and 6.7.3.10's
+  generics met in one operation that could not be written: a growable container
+  replaces what a variable holds, and `v := fresh` is refused at an owned type
+  argument while `v := take(fresh)` empties nothing at every other.
+  `PasContainer` has both kinds of client in this tree and cannot give either
+  up -- `examples/word_freq.pas` wants the block to own its map, and
+  `lib/dialect/pasjson.pas`'s `JsonChars` is a field of a variant part, which AP
+  6.4.14.2 refuses an owned pointer in. So inside a generic's body `take` is
+  admitted for every type that is **not affine** and denotes the variable's
+  value, the variable unchanged and unthreatened. Four things keep it narrow.
+  It is a **reading and not a lowering**: Sema moves the argument up in place
+  of the call (ADR-0044's husk), so `EmitCall` still has no arm for `biTake`
+  and a `take` that escaped stops the compiler, which is what makes every other
+  position unreachable; `verify/lowering.py` has nothing new to model. The
+  condition is `not IsAffine` and not `not IsOwned`, ADR-0181's split again --
+  a **file** is refused inside a generic exactly as outside it. The **threat is
+  the emptying**, so a generic may `take` its own protected parameter and the
+  same body at an owned type argument may not, which is the one place here a
+  statement's acceptability is a fact about the activation-point. And
+  `genDepth` is a counter, a generic being free to activate another. The cost
+  is real: a reader of a generic body cannot tell from the line whether a move
+  happens, and no spelling that told them could be written once.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second
