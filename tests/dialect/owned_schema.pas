@@ -31,6 +31,15 @@ type
   LateOV  = owned ^LateVec;
   LateVec(cap: integer) = record m: integer; b: array [1..cap] of integer end;
 
+  { And the domain may bind *type* discriminants, which AP 6.4.14.1's grammar
+    said it could not until ADR-0320 and the processor had accepted all along:
+    6.4.4.1 defines the domain-type for every pointer-type, and only the
+    ordinal discriminants are left for `new` to choose. This is the shape
+    PasContainer's `Vec(T, cap)` has, and so the one a growable *generic*
+    container would be owned as. }
+  Gen(T: type; cap: integer) = record n: integer; g: array [1..cap] of T end;
+  OwnedInts = owned ^Gen(integer);
+
 { A borrow of one, which is what an accessor takes now (ADR-0318): the caller
   keeps ownership and the routine cannot release it. }
 function Total(protected var v: OV): integer;
@@ -61,7 +70,7 @@ begin
 end;
 
 procedure Run;
-var v, w: OV; b: Box; p: Pair; late: LateOV; i, t: integer;
+var v, w: OV; b: Box; p: Pair; late: LateOV; gi: OwnedInts; i, t: integer;
 begin
   new(v, 4);
   Fill(v, 10);
@@ -91,6 +100,11 @@ begin
   new(late, 3);
   late^.m := 3; late^.b[1] := 11;
   writeln('late   ', late^.cap:1, ' ', late^.b[1]:1);
+
+  { a domain binding a type discriminant }
+  new(gi, 3);
+  gi^.n := 3; gi^.g[3] := 30;
+  writeln('gen    ', gi^.cap:1, ' ', gi^.g[3]:1);
 
   { A `with` on a record that owns nothing is not a borrow, so a call in its
     body has nothing to be refused against (AP 6.4.14.9): the open-with list

@@ -315,7 +315,9 @@ was compiled with the word to find out rather than reasoned about:
 
 | Status | Which | Why |
 | --- | --- | --- |
-| legal as `owned ^T`, needs a usage rewrite | `IVecPtr`, `SMapPtr`, `StrVecPtr`, `CountMap`, `WordVec`, `PathVec`, `DocMap`, and the two in `arena_graph.pas` | value parameters become `protected var` (ADR-0318), assignments become `take`, `p := nil` becomes `dispose` |
+| **converted** | the two arenas in `examples/arena_graph.pas` | the block owns them; the `defer dispose` pair is gone and the example says so |
+| legal, and **must not** be | `IVecPtr`, `SMapPtr`, `StrVecPtr` | `owned` is a dialect feature and these are in `lib/`, the conforming layer a reader can port to another Pascal (ADR-0120). Converting them would move three containers into `lib/dialect/` and out of reach of a conforming program |
+| legal, and blocked on one module | `CountMap`, `WordVec`, `PathVec`, `DocMap` | all four are `^Vec(…)` or `^Map(…)` reached through `PasContainer`, whose routines *assign* to the pointer — `dispose(v); v := fresh` in `VecReserve` — so an owned instantiation is refused inside the module. It is a mechanical change, `v := take(fresh)`, at about 22 sites |
 | still refused | `JsonPtr`, `JsonChars` | AP 6.4.14.2's other half: `JsonNode` is a tagged union, so its child pointers are fields of a variant part |
 
 The compiler's own 34 are the second row again and harder: `nodePtr`,
@@ -355,14 +357,22 @@ is more than giving the storage back. Where it holds nothing affine the release
 *is* the deallocation, which `dispose` already performed. The condition is the
 one the emitter was already asking to decide whether to walk.
 
-**What is left of this row is the rewrite and not the facility.** Nine of the
-eleven are legal as `owned ^T` today and each needs its accessors changed; the
-two that are not are `PasJson`'s, and they need the variant-part half of
-6.4.14.2, which is harder — arms share storage and there is no answer to which
-arm's pointer to release without reading a tag nothing obliges a program to have
-set. The warning is still not built, and the reason has changed: it is no longer
-that nothing *could* take the word but that nothing *has*, and a warning firing
-on nine call-graph-wide rewrites is advice, not a diagnostic.
+**What is left of this row is a choice and not a blockage**, which is the third
+thing this row has been wrong about. Nine of the eleven are legal as `owned ^T`
+today. Two are converted. Three *must not* be, because they are the conforming
+layer. Four wait on one module, and that module is where the question actually
+lives: **should a general-purpose container own its storage?** An owned one
+cannot be aliased, cannot be returned by a function, and must travel as a
+variable parameter — which is right for a tree one block owns, and is a real
+loss for a container callers pass around. `PasList` was written owned and has no
+`Free`; `PasStrVec` was written indexed and has one. That the second kind exists
+is not a gap.
+
+So the facility is complete and its adoption is now a design question per
+container rather than a restriction to lift. The warning is still not built, and
+the reason has changed twice: it is no longer that nothing *could* take the word,
+nor that a rewrite is needed, but that taking it is sometimes the wrong answer —
+and a warning cannot know which.
 
 #### 3. There is no shared ownership, and the release walk ends in a signal — the shape is written down as of 2026-09-04
 

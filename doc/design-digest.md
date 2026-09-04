@@ -541,6 +541,21 @@ checks they agree, which is the same arrangement the version number has. A
   of the eleven ordinary pointer types outside the compiler are legal as
   `owned ^T` after it; the two that are not are `PasJson`'s, refused by the
   variant-part half of the same clause.
+- **And adopting it found the clause narrower than the compiler** (ADR-0321,
+  AP 6.4.14.1). The owned-pointer production said `type-identifier`, where
+  6.4.4.1 defines a **domain-type** for every pointer-type -- a schema-name
+  optionally binding *type* discriminants, which decide the identified
+  variable's layout while the ordinal ones are left to `new`. The processor had
+  accepted `owned ^Vec(integer)` all along, so the specification described
+  something narrower than itself, and the divergence was found by probing the
+  neighbouring amendment rather than by reading either clause. It is the form a
+  growable **generic** container would be owned as, so the clause as written
+  forbade the case ADR-0320 existed for. What the adoption itself found is that
+  the remaining non-adoption is a **choice**: three containers are in `lib/`,
+  the conforming layer ADR-0120 keeps free of dialect constructs; four wait on
+  `PasContainer`, whose routines assign to the pointer and would all convert at
+  once; and an owned container cannot be aliased or returned, which is right for
+  a tree one block owns and wrong for one callers pass around.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

@@ -1114,7 +1114,7 @@ dispose it never releases what it holds (ADR-0181).
 
 **6.4.14.1 The denoter.**
 
-    owned-pointer-type = 'owned' '^' type-identifier .
+    owned-pointer-type = 'owned' '^' domain-type .
 
 `owned` shall not be a word-symbol. A type-denoter is complete after a
 type-identifier, so no conforming program can write `^` in the position
@@ -1122,9 +1122,18 @@ following one, and the two tokens together are a juxtaposition the conformance
 modes reject as a syntax error — 6.4.12.1's test and 6.7.3.9's, asked of the
 juxtaposition rather than of a spelling (ADR-0140).
 
-The domain shall be a type-identifier and not a type-denoter, for §6.4.4's own
-reason: the name may be one whose defining-point is later in the same
+The domain shall be a domain-type (6.4.4.1) and not a type-denoter, for §6.4.4's
+own reason: the name may be one whose defining-point is later in the same
 type-definition-part, which is what lets a type own a variable of its own type.
+
+NOTE — This clause read `type-identifier` until ADR-0321, and the narrower
+production said something the processor had never done: `owned ^Vec(integer)`
+was accepted from the day 6.4.4.1 was written, that clause defining the
+domain-type for every pointer-type and not for the ordinary one alone. The
+divergence was found by probing 6.4.14.2's amendment rather than by reading it,
+and it is the reason a growable *generic* container can be owned at all — the
+type discriminants decide the identified variable's layout, which a
+pointer-type must know, and only the ordinal ones are left to `new`.
 
 **6.4.14.2 Restrictions on the domain and on the container.** Where the domain
 is a schema-name (§6.4.7), the type it produces shall not contain a file-type
@@ -4194,3 +4203,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.8 | ADR-0318 |
 | 6.4.14.9 | ADR-0319 |
 | 6.4.14.2 (amended) | ADR-0320 |
+| 6.4.14.1 (amended) | ADR-0321 |

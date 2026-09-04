@@ -17,14 +17,21 @@
   names is separately freed. Ownership moves up to the block, where there is
   exactly one of it.
 
-  Two things it costs, and both are visible below. **The arena cannot itself be
-  owned**: its type is a schema, which AP 6.4.14.2 refuses -- releasing it
-  would have to walk it, and the lengths a schema's tuple fixes live in a frame
-  the heap has not got. So it is an ordinary pointer and its release is
-  written, which `defer` (ADR-0175) is where. And **an index is unchecked in
-  the way a pointer is not**: `g^.a[i]` traps on an i outside the arena because
-  every subscript is bounds-checked (ADR-0017), but an index into the *wrong*
-  arena is an integer like any other and nothing here can see it.
+  **The arena owns itself**, which is the whole of its release: `owned ^Nodes`
+  (AP 6.4.14) makes the variable holding it the owner, so leaving the block
+  gives the storage back and there is nothing to write. That is a schema
+  domain, which 6.4.14.2 refused outright until ADR-0320 narrowed it to the
+  case its reason reaches -- releasing an owned variable means *walking* it,
+  and a schema's extents are read from a descriptor the heap has not got, but
+  a walk is needed only where the variable holds something whose release is
+  more than giving the storage back. An arena of plain records holds nothing
+  of the kind, so its release is the deallocation.
+
+  What it costs is that **an index is unchecked in the way a pointer is not**:
+  `g^.a[i]` traps on an i outside the arena because every subscript is
+  bounds-checked (ADR-0017), but an index into the *wrong* arena is an integer
+  like any other and nothing here can see it. That is the trade the shape
+  makes, and it is the one an arena makes in any language.
 
   Nothing is imported. }
 program arena_graph(output);
@@ -41,13 +48,13 @@ type
 
   Nodes(cap: integer) = record n: integer; a: array [1..cap] of NodeRec end;
   Arcs (cap: integer) = record n: integer; a: array [1..cap] of ArcRec  end;
-  NodesPtr = ^Nodes;
-  ArcsPtr  = ^Arcs;
+  NodesPtr = owned ^Nodes;
+  ArcsPtr  = owned ^Arcs;
 
 var
   g: NodesPtr; e: ArcsPtr; i, k, steps: integer;
 
-function AddNode(g: NodesPtr; tag: char): integer;
+function AddNode(protected var g: NodesPtr; tag: char): integer;
 begin
   g^.n := g^.n + 1;
   g^.a[g^.n].tag := tag;
@@ -56,7 +63,8 @@ begin
 end;
 
 { Pushed onto the front of the source's list, so arcs come out newest first. }
-procedure AddArc(g: NodesPtr; e: ArcsPtr; src, dst: integer);
+procedure AddArc(protected var g: NodesPtr; protected var e: ArcsPtr;
+                 src, dst: integer);
 begin
   e^.n := e^.n + 1;
   e^.a[e^.n].dst := dst;
@@ -66,7 +74,8 @@ end;
 
 { A loop, not a recursion: `i` is a second name for a node and costs nothing,
   which is the sentence this whole file is about. }
-function Length_(g: NodesPtr; e: ArcsPtr; from: integer): integer;
+function Length_(protected var g: NodesPtr; protected var e: ArcsPtr;
+                 from: integer): integer;
 var i, k, cnt: integer;
 begin
   cnt := 0; i := from;
@@ -82,8 +91,8 @@ begin
   { Four nodes and five arcs: b has two arcs into it and c has two out of it,
     and c -> a closes a cycle. Not one of the three is writable with an owner
     per node. }
-  new(g, Chain); defer dispose(g);
-  new(e, Chain); defer dispose(e);
+  new(g, Chain);
+  new(e, Chain);
   g^.n := 0; e^.n := 0;
   for i := 1 to 4 do k := AddNode(g, chr(ord('a') + i - 1));
   AddArc(g, e, 1, 2);            { a -> b }
@@ -111,11 +120,14 @@ begin
   end;
   writeln;
 
-  { And the length the owned pointer cannot release. The nodes are made in one
-    pass and linked as a path; walking it costs one frame and releasing it is
-    the two `defer`s above -- two calls to free, whatever Chain is. An owned
-    chain of this length builds and then dies with a SIGSEGV at the end of the
-    block, its release walking one frame per node. }
+  { And the length an owned *chain* cannot release. The nodes are made in one
+    pass and linked as a path; walking it costs one frame, and releasing it is
+    what leaving this block does -- two calls to free, whatever Chain is,
+    because what the block owns is the two arenas and not the million nodes
+    inside them. An owned chain of this length builds and then dies with a
+    SIGSEGV at the end of its block, its release walking one frame per node.
+    Which is the point: the arena moves the ownership up to where there is one
+    of it, and the links inside are integers that own nothing. }
   g^.n := 0; e^.n := 0;
   k := AddNode(g, '.');
   for i := 2 to Chain do begin

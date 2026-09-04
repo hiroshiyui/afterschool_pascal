@@ -329,3 +329,4 @@ the alternatives that were rejected and why.
 | [0318](0318-the-borrow-that-may-not-release.md) | The borrow that may not release | Accepted |
 | [0319](0319-a-borrow-is-refused-where-it-is-formed.md) | A borrow is refused where it is formed | Accepted |
 | [0320](0320-the-schema-domain-and-the-walk-it-does-not-need.md) | The schema domain, and the walk it does not need | Accepted |
+| [0321](0321-what-adopting-the-owned-pointer-found.md) | What adopting the owned pointer found | Accepted |
