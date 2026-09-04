@@ -4,10 +4,11 @@
   and the safety that buys costs two things. A node has exactly one owner, so
   nothing may point *back* at it -- no parent link, no cursor, no second edge
   into a node -- and traversal is recursive, because a loop would need a second
-  name for the current node and an owned pointer has no copy. The release is
-  recursive for the same reason, so a chain longer than the stack ends in a
-  signal rather than a diagnostic (AP 6.4.14 NOTE 2). Both costs are one fact:
-  an owned pointer describes a tree.
+  name for the current node and an owned pointer has no copy. The *release* was
+  recursive for the same reason, until ADR-0322 made it a loop where a domain
+  continues at a field of its own type: a chain of any length now costs one
+  frame to release, and a tree still costs one per level (AP 6.4.14 NOTE 2).
+  Both costs are one fact: an owned pointer describes a tree.
 
   A graph is not a tree. What is reached for here is an **arena** -- one block
   holding every node, the links being *indices* into it rather than pointers --
@@ -38,7 +39,7 @@ program arena_graph(output);
 
 const
   None  = 0;         { the arena's nil -- an index no node and no arc has }
-  Chain = 1000000;   { longer than an owned chain's release survives }
+  Chain = 1000000;   { two calls to free, whatever this is }
 
 type
   { Fixed-size, so the arena holds one dynamically-sized array and holds it
@@ -120,14 +121,16 @@ begin
   end;
   writeln;
 
-  { And the length an owned *chain* cannot release. The nodes are made in one
-    pass and linked as a path; walking it costs one frame, and releasing it is
-    what leaving this block does -- two calls to free, whatever Chain is,
+  { And a million nodes, to say what the arena costs to release. They are made
+    in one pass and linked as a path; walking it costs one frame, and releasing
+    it is what leaving this block does -- two calls to free, whatever Chain is,
     because what the block owns is the two arenas and not the million nodes
-    inside them. An owned chain of this length builds and then dies with a
-    SIGSEGV at the end of its block, its release walking one frame per node.
-    Which is the point: the arena moves the ownership up to where there is one
-    of it, and the links inside are integers that own nothing. }
+    inside them. This was the length an owned *chain* could not release, and it
+    is not any more (ADR-0322), so what separates the two shapes here is the
+    *graph* above and not the path below: no arrangement of owners admits a
+    cycle or a second edge into a node. Which is the point -- the arena moves
+    the ownership up to where there is one of it, and the links inside are
+    integers that own nothing. }
   g^.n := 0; e^.n := 0;
   k := AddNode(g, '.');
   for i := 2 to Chain do begin
