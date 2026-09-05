@@ -259,6 +259,7 @@ candidates were designed against this shape and the first was taken:
 | a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
 | **also taken**, and it is what closed the row: refuse the borrow where it is *formed*, wherever the called block can **name** the owner (ADR-0319) | an owned structure held in a variable of the outermost block cannot be lent at all — 12 sites in this tree, every one of them a test written for the construct | nothing. 6.4.14.3 forbids copying the value, so an owned variable's only names are itself, a variable parameter bound to it, and a component of what contains it; the second is 6.4.14.7's activation-point and the first is scope, and there is no third |
 | **and a third there was** (ADR-0326), found by probing the sentence to the left rather than reading it | `Runner(p^, Killer)` no longer compiles: a routine handed alongside a borrow may not name the owner | nothing known, and the residue is now an *argument* rather than an assertion — see below |
+| **and the cost was larger than it read** (ADR-0332): the routine handed over may be a **formal**, whose defining-point is inside the block that declares the owner | none — it gives programs back. A block owning a variable could lend a borrow of it to nothing at all, the ordinary callback included | the argument is unchanged and one implementation of it was wrong; a formal is bound before its activation exists |
 
 Real lifetimes are the fourth candidate and are unavailable: **a borrow here
 is a parameter binding and not a value**, so there is nothing for a lifetime
@@ -293,6 +294,19 @@ obtains a routine by scope or by being handed one, both are asked, and the two
 meet at a single activation-point because that is where a borrow is formed. It
 can be wrong the way its predecessor was, and the way to find out is to probe
 it again.
+
+**And the cost of closing it was mispriced in the same cell.** ADR-0326's row
+said *nothing known*, and what it had taken away was every callback: `CanName`
+answers from a defining-point, a formal's is inside the block that declares it,
+and so a block that owns a variable could hand a borrow of it to no routine at
+all — five sites, both paragraphs, and no case in the tree had the shape because
+the rule was written and reviewed against programs whose procedural actual was a
+*declared* routine. ADR-0332 is the fourth paragraph: a formal is bound before
+its activation exists, so what is bound to it was denoted in a block whose
+activation is a proper ancestor and cannot name this one's variables. The
+lesson is the row above's, one column over — **a cost cell is a report and not
+an estimate**, and this one was written from the programs that motivated the
+rule rather than from the programs it reached.
 
 **The invalidation half is closed**, and what it leaves is a different sentence.
 Two records costed mechanisms for the residue — a call-graph summary and a

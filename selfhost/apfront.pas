@@ -6805,7 +6805,20 @@ end;
   rule turns on rather than an edge of it: a recursive call activates a frame
   of its own, and 6.7.3.3's parameters of that activation are not the caller's.
   `ListLen(l^.next)` is every traversal an owned chain has, and it is the
-  answer no. }
+  answer no.
+
+  And a **procedural parameter of the block that declares the variable** is
+  the answer no, which is 6.4.14.9's fourth paragraph and was a false positive
+  until ADR-0332. Asked of a formal, this used to answer from the formal's own
+  defining-point, which is inside that block -- so `Runner(p^, k)` in a
+  `Holder(procedure k)` owning `p` was refused, and that is the ordinary
+  callback: a routine lending a borrow of its own local to the routine it was
+  handed. Whatever is bound to `k` was denoted at an activation-point *of*
+  Holder, in a block whose activation is a proper ancestor of this one -- a
+  formal is bound before the activation exists -- so it cannot name this
+  activation's `p`. A procedural parameter of a block nested one deeper is a
+  different question and still answers yes: there the actual is denoted inside
+  the block that declares the variable. }
 function CanName(callee, v: symPtr): boolean;
 begin
   CanName := false;
@@ -6824,7 +6837,9 @@ begin
     if v^.level = 0 then
       CanName := true
     else if v^.owner <> nil then
-      CanName := (callee <> v^.owner) and NestedIn(callee, v^.owner)
+      CanName := (callee <> v^.owner) and NestedIn(callee, v^.owner) and
+                 not ((callee^.kind = skProcParam) and
+                      (callee^.owner = v^.owner))
 end;
 
 { The tail both of AP 6.4.14.9's messages share, and the half that says why:

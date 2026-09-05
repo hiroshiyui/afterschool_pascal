@@ -594,6 +594,18 @@ checks they agree, which is the same arrangement the version number has. A
   borrow is formed from its owner is one that can name the owner — so the
   routine and the borrow meet at a single call. The residue is now an argument
   rather than an assertion, which is the difference this record is for.
+- **And the routine handed over may be a formal** (ADR-0332, AP 6.4.14.9's
+  fourth paragraph). `CanName` answers from a defining-point, and a formal's is
+  inside the block that declares it -- so a block that owns a variable could
+  lend a borrow of it to nothing at all, the ordinary callback
+  `Holder(procedure k)` doing `Runner(p^, k)` being refused at five distinct
+  sites. The routine bound to a formal of `Holder` was denoted at an
+  activation-point *of* `Holder`, whose activation is a proper ancestor of this
+  one, so it cannot name this activation's variables: a formal is bound before
+  its activation exists. One conjunct in `CanName`, so both paragraphs get it,
+  and **both halves of the conjunct are the rule** -- a procedural formal of a
+  block nested one deeper is denoted *inside* the owner's block, where a
+  routine that can name the owner is in scope, and still answers yes.
 - **And adopting it found the clause narrower than the compiler** (ADR-0321,
   AP 6.4.14.1). The owned-pointer production said `type-identifier`, where
   6.4.4.1 defines a **domain-type** for every pointer-type -- a schema-name

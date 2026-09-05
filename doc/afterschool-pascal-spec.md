@@ -1494,6 +1494,9 @@ outermost block of a program-component, or if the block's defining-point is
 within the block containing the variable's defining-point and is not that
 block.
 
+A procedural or functional formal-parameter of a block does not denote a block
+that can name a variable whose defining-point is in that same block.
+
 NOTE 1 — This clause and 6.4.14.7 are one requirement asked of the ways a block
 can come to release an owned variable. 6.4.14.3 forbids copying the value, so
 the only names an owned-pointer variable has are the variable itself, a
@@ -1517,6 +1520,19 @@ procedure-variable in this language; and the only activation-point at which a
 borrow is *formed* from its owner is one in a block that can name the owner. So
 the routine and the borrow meet at a single activation-point, and that is the
 one this clause examines.
+
+NOTE 1b — The fourth paragraph is why the ordinary callback is admitted, and
+without it neither of the first two paragraphs was usable: a block that owns a
+variable and is handed a routine could lend a borrow of that variable to
+nothing at all. An actual-parameter corresponding to a formal-parameter of a
+block is denoted at an activation-point *of* that block, in a block whose
+activation is a proper ancestor of the one being established, so it cannot
+name a variable of the activation being established — a formal is bound before
+its activation exists. The paragraph is exact rather than conservative: a
+procedural formal of a block nested one deeper is denoted at an
+activation-point *within* the block that declares the variable, where a
+routine that can name the variable is in scope, and the third paragraph
+answers yes for it (ADR-0332).
 
 NOTE 2 — The requirement is on the **formation** of the borrow and not on the
 release, which is what makes it decidable at translation time and independent
@@ -4406,4 +4422,5 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.6 (amended) | ADR-0323 |
 | 6.7.2.1, 6.7.3.1.1 | ADR-0324 |
 | 6.4.14.9 (amended) | ADR-0326 |
+| 6.4.14.9 (amended) | ADR-0332 |
 | 6.4.2.7, 6.4.2.7.2 | ADR-0328 |

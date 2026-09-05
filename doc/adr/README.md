@@ -340,3 +340,4 @@ the alternatives that were rejected and why.
 | [0329](0329-a-walk-that-could-not-find-the-tuple.md) | A walk that could not find the tuple | Accepted |
 | [0330](0330-a-gate-that-can-skip-needs-a-job-that-cannot.md) | A gate that can skip needs a job that cannot | Accepted |
 | [0331](0331-the-second-backend-on-the-second-machine.md) | The second backend, on the second machine | Accepted |
+| [0332](0332-a-formal-is-bound-before-its-activation-exists.md) | A formal is bound before its activation exists | Accepted |

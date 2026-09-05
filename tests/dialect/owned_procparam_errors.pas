@@ -69,4 +69,21 @@ begin
   with p^ do Bare(Quiet)
 end;
 
-begin Holder end.
+{ 6. the boundary of AP 6.4.14.9's fourth paragraph (ADR-0332). A procedural
+     formal of the block that *declares* the owner cannot reach it, being
+     bound before that activation exists -- but a formal of a block nested one
+     deeper can, because the actual is denoted inside the block that declares
+     the owner. `Nested`'s k is bound at a call in Outer, where Killer2 is in
+     scope. }
+procedure Outer;
+var p: ON;
+  procedure Killer2; begin dispose(p) end;
+  procedure Nested(procedure k);
+  begin Runner(p^, k) end;
+begin
+  new(p);
+  p^.v := 7;
+  Nested(Killer2)
+end;
+
+begin Holder; Outer end.
