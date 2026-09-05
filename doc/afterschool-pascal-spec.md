@@ -1579,14 +1579,20 @@ and the handle's is not.
 
 NOTE 2 — The release is a generated routine per domain type, not straight-line
 code at each release point: a type may own a variable of its own type, so the
-depth is the program's and not the translation's. **A chain costs no depth**
-(ADR-0322): where the domain has a field whose type is an owned pointer to that
-same domain, the release empties that field, releases the rest of the variable,
-disposes it, and goes round again at what it took out — so it is a loop and not
-a recursion, and this NOTE said the opposite until a chain of a million nodes
-was measured ending in a signal. A **tree** still costs a frame per level, the
-second and later self-referential fields having nowhere to be continued at, and
-a processor is not required to bound that.
+depth is the program's and not the translation's. **Nothing a domain owns
+directly costs depth** (ADR-0322, ADR-0333): the first field whose type is an
+owned pointer to that same domain is the release's *link*, and the release
+empties it and goes round again at what it took out; every other such field is
+emptied and pushed onto a work list threaded through the link fields of the
+nodes waiting on it, the value a link held being rescued in front of the node
+that is pushed. So a chain, a tree and a tree degenerate on any of its fields
+are each one frame, and this NOTE has now been wrong in this place twice — it
+said a list long enough would exhaust the stack, and then that a tree would.
+
+What still costs a frame per level is a self-owned pointer the domain does not
+hold *directly* — one inside an array or a sub-record component, which has no
+link field to thread — and a cycle of two or more domains, whose routines call
+one another. A processor is not required to bound either.
 
 NOTE 3 — This clause settles nothing about *aliasing*, and is available for that
 reason. ADR-0151 divides the memory-safety model into lifetime and aliasing and
@@ -4419,6 +4425,7 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.2 (amended) | ADR-0320 |
 | 6.4.14.1 (amended) | ADR-0321 |
 | 6.4.14 NOTE 2 (amended) | ADR-0322 |
+| 6.4.14 NOTE 2 (amended again) | ADR-0333 |
 | 6.4.14.6 (amended) | ADR-0323 |
 | 6.7.2.1, 6.7.3.1.1 | ADR-0324 |
 | 6.4.14.9 (amended) | ADR-0326 |

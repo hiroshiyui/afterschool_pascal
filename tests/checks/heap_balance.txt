@@ -56,6 +56,7 @@ owned_nonlocal 0
 owned_protected 0
 owned_schema 0
 owned_schema_array 0
+owned_tree 0
 parse_errors 0
 pasls 0
 pointer_domain_shadow 2

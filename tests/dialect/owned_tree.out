@@ -1,0 +1,5 @@
+left  400000, front 400000
+right 400000, front 400000
+zig   400000, front 400000
+tree  12, root 12, left 11, right 11
+released

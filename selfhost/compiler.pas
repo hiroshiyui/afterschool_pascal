@@ -2715,19 +2715,33 @@ end;
   Only the fixed part is walked and that is not an omission: 6.4.14.2 refuses an
   owned pointer in a variant part, so every owned field of a record is here.
 
-  The first such field, and the choice is arbitrary between several -- a record
-  with two self-referential owned fields is a binary tree, and whichever is
-  chosen the other still recurses. What is bought is that a *chain* costs one
-  frame, which is the shape PasList and every owned list in this tree have. }
-function SelfOwnedField(dom: typePtr): fieldPtr;
+  The first such field is the **link**, and since ADR-0333 that is all it is:
+  every other self-owned field is taken out and *pushed onto the work list*
+  rather than recursed into, and the list is threaded through the link field of
+  the nodes waiting on it. So the choice between several is arbitrary in the
+  way a choice of representation is, and not in the way ADR-0322's was --
+  there, whichever field was not chosen still recursed, and a program's
+  survival depended on which of two identically typed fields had been declared
+  first.
+
+  `others` is the second answer of the same walk and is what the work list is
+  for: a domain with one self-owned field has nothing to push and gets exactly
+  the code ADR-0322 wrote, second cursor and all. Two answers from one walk
+  rather than two functions, because the second would have needed its own
+  `IsRecord` guard and no domain can reach the false side of it -- the caller
+  asks only where this one already answered a field. }
+function SelfOwnedField(dom: typePtr; var others: boolean): fieldPtr;
 var f, found: fieldPtr;
 begin
   found := nil;
+  others := false;
   if IsRecord(dom) then begin
     f := dom^.fields;
-    while (f <> nil) and (found = nil) do begin
+    while f <> nil do begin
       if IsOwnedPointer(f^.ftype) then
-        if f^.ftype^.elem = dom then found := f;
+        if f^.ftype^.elem = dom then
+          if found = nil then found := f
+          else others := true;
       f := f^.next
     end
   end;
@@ -2736,8 +2750,9 @@ end;
 
 procedure EmitOwnRels;
 var r: ownRelPtr; more: boolean; own, empty, raw, cur, nextv, fld, blk: str;
-    doneB, workB, loopB: integer;
-    head: integer; chain: fieldPtr;
+    pend, sub, node, atEnd, link, held: str;
+    doneB, workB, loopB, pushB, bodyB, afterB: integer;
+    head: integer; chain, other: fieldPtr; threaded: boolean;
 begin
   repeat
     more := false;
@@ -2761,17 +2776,24 @@ begin
                 '(ptr %own) {');
         nextReg := 0;
         nextBlock := 0;
-        chain := SelfOwnedField(r^.dom);
+        chain := SelfOwnedField(r^.dom, threaded);
         StartBlock(NewBlock);
         loopB := NewBlock;
         workB := NewBlock;
         doneB := NewBlock;
         { The cursor is an `alloca` and it is in the entry block, which is
           where ADR-0102 says one belongs: this block is reached once per call
-          however many nodes the loop then walks. }
+          however many nodes the loop then walks. The second one is the push
+          loop's, and is emitted only where there is something to push. }
         Def(cur);
         writeln(ircode, 'alloca ptr');
-        writeln(ircode, '  store ptr %own, ptr ', '%v', nextReg:1);
+        write(ircode, '  store ptr %own, ptr ');
+        PutOp(cur);
+        writeln(ircode);
+        if threaded then begin
+          Def(pend);
+          writeln(ircode, 'alloca ptr')
+        end;
         writeln(ircode, '  br label %L', loopB:1);
 
         StartBlock(loopB);
@@ -2801,7 +2823,98 @@ begin
           writeln(ircode);
           write(ircode, '  store ptr null, ptr ');
           PutOp(fld);
+          writeln(ircode);
+          write(ircode, '  store ptr ');
+          PutOp(nextv);
+          write(ircode, ', ptr ');
+          PutOp(cur);
           writeln(ircode)
+        end
+        else begin
+          write(ircode, '  store ptr null, ptr ');
+          PutOp(cur);
+          writeln(ircode)
+        end;
+        { ADR-0333. Every *other* self-owned field is taken out and pushed onto
+          the work list rather than recursed into, and the list is threaded
+          through the link field of the nodes on it -- so the release of a tree
+          costs one frame, as a chain has since ADR-0322, and no owned field of
+          the domain decides the depth by having been declared first.
+
+          Pushing a node overwrites its link, which is why the push is a loop:
+          what the link held is rescued and pushed in front of it, which walks
+          that node's own link-chain. The invariant it maintains is that the
+          link of a node on the work list holds the next item -- and it holds
+          on the tail without being written, a node still in the original chain
+          having its own link there, which is why the value taken out of `own`
+          above is stored straight into the cursor and needs no push of its
+          own. }
+        other := nil;
+        if threaded then other := r^.dom^.fields;
+        while other <> nil do begin
+          if (other <> chain) and IsOwnedPointer(other^.ftype) then
+           if other^.ftype^.elem = r^.dom then begin
+            FieldAddress(own, r^.dom, other, fld, 0, 0, 0);
+            Def(sub);
+            write(ircode, 'load ptr, ptr ');
+            PutOp(fld);
+            writeln(ircode);
+            write(ircode, '  store ptr null, ptr ');
+            PutOp(fld);
+            writeln(ircode);
+            write(ircode, '  store ptr ');
+            PutOp(sub);
+            write(ircode, ', ptr ');
+            PutOp(pend);
+            writeln(ircode);
+            pushB := NewBlock;
+            bodyB := NewBlock;
+            afterB := NewBlock;
+            writeln(ircode, '  br label %L', pushB:1);
+
+            StartBlock(pushB);
+            Def(node);
+            write(ircode, 'load ptr, ptr ');
+            PutOp(pend);
+            writeln(ircode);
+            Def(atEnd);
+            write(ircode, 'icmp eq ptr ');
+            PutOp(node);
+            writeln(ircode, ', null');
+            write(ircode, '  br i1 ');
+            PutOp(atEnd);
+            writeln(ircode, ', label %L', afterB:1, ', label %L', bodyB:1);
+
+            StartBlock(bodyB);
+            FieldAddress(node, r^.dom, chain, link, 0, 0, 0);
+            Def(held);
+            write(ircode, 'load ptr, ptr ');
+            PutOp(link);
+            writeln(ircode);
+            Def(blk);
+            write(ircode, 'load ptr, ptr ');
+            PutOp(cur);
+            writeln(ircode);
+            write(ircode, '  store ptr ');
+            PutOp(blk);
+            write(ircode, ', ptr ');
+            PutOp(link);
+            writeln(ircode);
+            write(ircode, '  store ptr ');
+            PutOp(node);
+            write(ircode, ', ptr ');
+            PutOp(cur);
+            writeln(ircode);
+            write(ircode, '  store ptr ');
+            PutOp(held);
+            write(ircode, ', ptr ');
+            PutOp(pend);
+            writeln(ircode);
+            writeln(ircode, '  br label %L', pushB:1);
+
+            StartBlock(afterB)
+           end;
+          other := other^.next
         end;
         if HoldsFile(r^.dom) then
           WalkFiles(own, r^.dom, false, 0, 0, 0, 0, 0);
@@ -2827,19 +2940,8 @@ begin
         write(ircode, '  call void @pas_dispose(ptr ');
         PutOp(blk);
         writeln(ircode, ')');
-        { And round again at what was taken out, or stop. }
-        if chain <> nil then begin
-          write(ircode, '  store ptr ');
-          PutOp(nextv);
-          write(ircode, ', ptr ');
-          PutOp(cur);
-          writeln(ircode)
-        end
-        else begin
-          write(ircode, '  store ptr null, ptr ');
-          PutOp(cur);
-          writeln(ircode)
-        end;
+        { And round again at whatever the cursor now holds: what was taken out
+          of the link field, with any pushed subtrees in front of it. }
         writeln(ircode, '  br label %L', loopB:1);
 
         StartBlock(doneB);

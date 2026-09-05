@@ -432,7 +432,7 @@ the reason has changed twice: it is no longer that nothing *could* take the word
 nor that a rewrite is needed, but that taking it is sometimes the wrong answer —
 and a warning cannot know which.
 
-#### 3. There is no shared ownership; the release walk ended in a signal and no longer does for a chain — 2026-09-04
+#### 3. There is no shared ownership; the release walk ended in a signal and no longer does — 2026-09-05
 
 The dialect's answer to aliasing is refusal, given three times (ADR-0201), so
 there is no `Rc` and no language-level arena, and an owned pointer admits no
@@ -464,12 +464,29 @@ rest, disposes the variable and goes round again at what it took out — 6.4.14.
 move written by the release rather than by a program, and the emptying is what
 keeps the walk from releasing it twice. One frame, however long the chain.
 
-**A tree still costs a frame per level**, the second and later self-referential
-fields having nowhere to be continued at, so a degenerate tree is still a deep
-recursion and nothing bounds it. That is what is left of this half of the row,
-and the alternative — a depth counter and a diagnostic — is priced in ADR-0322:
-a call per node released, on every program, to report a case no program here
-reaches. Two ways out, both Rust's —
+**And a tree costs one frame as well** (ADR-0333, 2026-09-05). ADR-0322 left
+*a tree still costs a frame per level* and priced it as the shape that does not
+occur. Two programs written side by side say what the sentence hides:
+
+| `Node = record v: integer; l, r: Own end`, 400 000 nodes | On release |
+| --- | --- |
+| `fresh^.l := take(head)` | clean, exit 0 |
+| `fresh^.r := take(head)` | `built` prints, **then exit 139** |
+
+The same program, differing in which of two identically typed fields it uses,
+and nothing in either source says which one the release will walk. **A capacity
+that moves when a declaration is reordered is worse than a bound**, and 400 000
+is not a large tree. Every self-owned field is now emptied and pushed onto a
+work list *threaded through the link fields of the nodes waiting on it* — no
+allocation, and the one-field case emits exactly the code it did before.
+
+What is left is stated rather than measured, which is the difference: a
+self-owned pointer the domain does not hold **directly**, inside an array or a
+sub-record component, has no link to thread; and a cycle of two domains is two
+routines calling one another. Neither is reachable by writing a list or a tree.
+The alternative — a depth counter and a diagnostic — is priced in ADR-0322: a
+call per node released, on every program, to report a case that is now much
+harder to reach. Two ways out, both Rust's —
 reference counting, which then owes an answer about cycles; or the
 arena-and-index shape, which is what a Rust programmer reaches for when the
 data is not a tree and which **needs no language change at all**.

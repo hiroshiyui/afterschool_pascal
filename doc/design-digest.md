@@ -636,9 +636,24 @@ checks they agree, which is the same arrangement the version number has. A
   release, and the emptying is the whole of what stops a double release, the
   walk then finding nil where it would have recursed. The cursor is an `alloca`
   in the entry block, which ADR-0102 requires: the loop body would claim stack
-  per iteration and put the defect back. A **tree** still costs a frame per
-  level, whichever self-referential field is chosen leaving the others to
-  recurse, and that half of the row stands.
+  per iteration and put the defect back.
+- **And so does a tree** (ADR-0333). ADR-0322's residue read as a bound on a
+  shape that does not occur; it was a dependence on *invisible source order* --
+  `Node = record v: integer; l, r: Own end` with 400 000 nodes chained on `l`
+  releases and exits 0, and the same program chained on `r` exits 139, nothing
+  in either source saying which field the release walks. Every self-owned field
+  is now emptied and **pushed onto a work list threaded through the link
+  fields** of the nodes waiting on it, the link being ADR-0322's field. Pushing
+  is a loop because writing the thread into a node's link overwrites what it
+  held, so that value is rescued and pushed in front -- which walks the node's
+  own link-chain iteratively. The invariant is that *a node on the list has the
+  next item in its link*, and it holds on the tail without being written, a node
+  still in an original chain having its own link there. So the one-field case
+  emits exactly ADR-0322's code and the second cursor is not allocated. The
+  emptying is about **correctness** and the pushing about **depth**: dropping
+  the store kills a three-node program with a double release. What is left is a
+  self-owned pointer the domain does not hold *directly*, which has no link to
+  thread, and a cycle of two domains, whose routines call one another.
 - **And the release walk could not find a heap variable's tuple** (ADR-0329).
   `WalkFiles`'s array arm asks `DynLength` for the length, because it may be a
   discriminant's (ADR-0040), and passed an **empty** header — right for every
