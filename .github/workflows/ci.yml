@@ -522,6 +522,73 @@ jobs:
             exit 1
           fi
 
+  thirty-two-bit:
+    # Does the corpus still run when a pointer is four bytes? (ADR-0325)
+    #
+    # `target32` builds a runtime for `i386-pc-linux-gnu` and runs all 570
+    # corpus sources against a catalogue. It exists because `target-layout`
+    # passed with `tests/dialect/select.pas` segfaulting: both defects the
+    # 32-bit port found were in neither a layout rule nor a frame, so no
+    # arithmetic check here could see them.
+    #
+    # **A job of its own, for `second-backend`'s reason.** It needs a 32-bit
+    # libc, which the documented build does not, and putting that into the
+    # `test` job's install line would make the documented dependency list a
+    # lie. The ctest case skips (77) without it, so a developer needs none of
+    # this.
+    #
+    # It is here because `doc/sop.md` §7 recorded `TARGET32_REQUIRE` as a
+    # variable nothing sets -- exactly the shape that register already carries
+    # for `fpc-differential`, which shipped with a `*_REQUIRE` no job set and
+    # answered only on the machine its author had.
+    name: a pointer is four bytes
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies, and a 32-bit libc on top
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang libclang-rt-dev git python3
+          # The packages no other job here needs. `libc6-dev-i386` is what
+          # `clang --target=i386-pc-linux-gnu` links against and `libc6-i386`
+          # carries the loader the resulting binary names -- both halves are
+          # required, because this gate *runs* what it builds and a link that
+          # succeeds proves nothing about that.
+          dpkg --add-architecture i386
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            libc6-dev-i386 libc6-i386
+
+      - uses: actions/checkout@v4
+
+      - name: Record that a 32-bit binary runs here at all
+        run: |
+          printf 'int main(void){return 0;}\n' > /tmp/probe.c
+          clang --target=i386-pc-linux-gnu -o /tmp/probe /tmp/probe.c
+          /tmp/probe
+          echo "i386 links and runs"
+        # Asked with C, before anything of this compiler is built, so a
+        # missing package is reported as what it is rather than as a Pascal
+        # failure. The gate itself makes the same probe and skips on it; this
+        # step is what turns a wrong package name into a red job with an
+        # obvious cause.
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Run it, and refuse to pass by skipping
+        run: ctest --test-dir build -R target32 --output-on-failure
+        env:
+          # Without this the case skips wherever the packages above did not
+          # arrive, and ctest reports a skip as success -- a green job that
+          # built no runtime and ran no program. Same arrangement as
+          # `second-backend` and `unicode-conformance`.
+          TARGET32_REQUIRE: '1'
+
   model-drift:
     # doc/sop.md gate A1, made mechanical: verify/lowering.py is a model of the
     # code generator, and the rules prove that model against a statement of the
