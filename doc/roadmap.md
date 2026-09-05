@@ -34,7 +34,7 @@ program-component, and the suite is green at `-O2` and at `-O0`.
 | | |
 | --- | --- |
 | **Open and ready to do** | the platforms, and only the platforms. **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
-| **Open and awaiting a decision** | the object model (ADR-0315, `Proposed` — three increments, four factors settled, *whether to build it* not); a record's `Drop`, which nothing has asked for; and what becomes of the ordinary `^T`, the one entry under [Known limitations](#known-limitations) that is a limitation in ADR-0109's sense |
+| **Open and awaiting a decision** | the object model, and only it — ADR-0315 is `Proposed`, and what a retaken count changed about it is below. **Three rows left this cell on 2026-09-05, none by being built**: the ordinary `^T` is *kept* and written down as the unchecked form (ADR-0336); a record's `Drop` stays a row for a corrected reason, one asker being below the threshold for a design and wanting an ordering hook rather than a release; and whether a container owns its storage is answered *both, per container*, with the rule written down (ADR-0337) |
 | **Open and awaiting a program** | [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for), whose inventory is **empty** and whose lesson is what it keeps in its place. A row here is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
@@ -549,8 +549,34 @@ A handle names its closer in its own type — `handle external 'fclose'` — and
 that is the only user code this language runs when a value dies. A record
 owning something runs none, and `defer` is per *activation* rather than per
 value (ADR-0175), so a type cannot maintain an invariant across its own
-release. Nothing has asked for it yet, which by ADR-0116's rule is the reason
-it is a row here and not a design.
+release.
+
+**This row said "nothing has asked for it yet" and that was wrong**, in the
+shape ADR-0116 already catches twice: a reason written by hand beside a row
+and re-read by nobody. One thing has asked, precisely, and says so in its own
+header — `PasTls.Connection` (`lib/dialect/pastls.pas`) wants `SSL_shutdown`
+sent before its three handles are released, because without the close-notify
+"the far end cannot then distinguish the end of the data from a connection
+that was cut".
+
+**What that asker wants is not a release, and the distinction is the finding.**
+Every affine kind a record can own is *already* released from inside it: one
+walk (`WalkFiles`) has a record branch that recurses on every field answering
+`HoldsFile`, and the block epilogue, `dispose` and the generated `@ownrelN`
+bodies are its four call sites. A record holding a file gets `pas_file_done`
+per field; one holding foreign handles gets a `pas_handle_done` per field
+against the closer named at entry; one holding an owned pointer gets
+`@ownrelN`, recursively and worklist-driven since ADR-0333. And
+`ContainsFile` already makes such a record affine. What a record cannot run is
+an action *ordered before* the release, and the corpus has exactly one site
+wanting one.
+
+So the row stays open for a better reason than the one it gave: **one site is
+below ADR-0116's own threshold for a design.** Should a second appear, the
+cheapest shape is ADR-0290's — no spelling at all: a procedure declared in the
+record's own scope taking the record as its sole `var` parameter, run by that
+record branch before the field loop. It would add no affineness, such records
+being affine already.
 
 ### The object model (proposed)
 
@@ -572,14 +598,19 @@ all records with routines over them. What asked is the *second* clause of
 ADR-0109's test — **can a program get it pleasantly** — measured on this tree's
 own library:
 
-- **139 exported names repeat their own module's noun**:
-  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. Out of 486 when the
-  scan was taken on 2026-09-03 and 484 today (`python3
-  tests/checks/export_unique.py`); the **numerator is a hand scan with no
-  command**, which by this page's own rule makes it an estimate and not a
-  report — retaking it is part of increment A's evidence rather than a
-  maintenance task, since what it counts is exactly what the increment
-  retires. That is forced rather than chosen. §6.11.2 puts every imported name into one scope, so two modules
+- **179 exported names repeat their own module's noun, and increment A would
+  retire 118 of them** — `JsonMember`, `StreamOpenWrite`, `NetListen`,
+  `MapPut`. Out of **484** (`python3 tests/checks/export_unique.py`).
+  **Retaken mechanically on 2026-09-05**, this page's own rule having called
+  the previous `139` an estimate: the sweep reuses `export_unique.py`'s reader
+  and asks two questions of each name — does it repeat the module's noun, and
+  is it a routine whose *first formal's type* is a type the module exports,
+  which is the only set a method can touch. The second is the number that
+  matters, and it is **118 of 484, 24%**. The gap between the two is the
+  finding: **59 of the repeats are types and constants** — `JsonPtr`,
+  `JsonChars`, `ListItemMax`, `TlsHostMax` — which no method can ever remove,
+  so they stay exported, stay prefixed, and the export surface a reader meets
+  on `import` does not change at all. That is forced rather than chosen. §6.11.2 puts every imported name into one scope, so two modules
   may not export one spelling, and ADR-0298's `export-unique` gate refuses a
   collision outright. **The prefix is a receiver, spelled by hand, at every
   declaration and every call site**, and ADR-0306 renamed four examples' worth
@@ -600,14 +631,36 @@ base class, no virtual by default, and no `is`/`as`. A method is an ordinary
 routine whose first parameter is written out with its type — value,
 `protected var` and `var` being what Rust spells `self`, `&self` and
 `&mut self` — declared in an `impl T; … end;` block, and `x.M(a)` means
-`M(x, a)`. Three increments, and **only the first has to be built for the
-other two to be judged**:
+`M(x, a)`. Three increments:
 
 | Increment | What it adds | What it retires |
 | --- | --- | --- |
 | **A. Methods** | the impl block, the receiver rule, `x.M(a)`, the type's own scope | the 139 prefixes. No new representation, no compatibility rule, no vtable, and CodeGen untouched — a method is an ordinary routine |
 | **B. Traits, static** | the trait-type, `impl … for`, `Self`, and `T: Trait` bounds | the 14 routine parameters and 30 call sites. Resolved at instantiation, so still no vtable |
 | **C. `dyn T`** | dynamic dispatch, permitted only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first thing here that emits a vtable |
+
+**A is not a prerequisite for B, and the record said it was** (2026-09-05).
+ADR-0315's *Staging* table asserts "A is the prerequisite for B and B for C" in
+one sentence with no argument under it, and the mechanism contradicts it.
+`T: ordered` **compiles today**: AP 6.7.3.10.5 gives the type-parameter slot
+four categories, recognised by `CatOfName` in `selfhost/apfront.pas` and
+checked at the activation inside `InstantiateGeneric`. A trait bound is a
+*fifth category in the identical slot, checked at the identical place*,
+differing only in that the answer comes from a table of impls rather than from
+a closed list of spellings. Increment A's three distinctive features are the
+dot-call `x.M(a)`, the inherent `impl T;` block and method names living in the
+type's scope, and **B uses none of them** — inside a bounded generic the call
+is `Compare(a, b)`, resolved through the bound. What A and B genuinely share is
+the `impl` keyword's position and its block grammar. B→C is real, a trait
+object needing traits; A→B is not, and the record's own *Consequences* agree
+without noticing, explaining the ordering as cheapest-evidence-first rather
+than as a dependency.
+
+**What that changes.** The measurement that passes ADR-0109's test is B's — 30
+call sites and 14 routine parameters, a program's own text — and A's is 118
+call-site spellings that block no program. With the toll booth gone, the two
+are judged separately: B is the one to build, and A stands or falls on its
+own.
 
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
@@ -700,10 +753,37 @@ memory-safety question, and ADR-0109 names memory safety as a property of the
 language rather than a convention. The dialect's `owned ^T` sidesteps rather
 than closes it: storage declared that way can have no second pointer, so
 there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
-ADR-0181 withdraws nothing. What would close it is a decision about the
-ordinary pointer — kept as it is, retired in favour of the owned one, or
-given a check — and it has not been asked with a caller. *The one entry here
-that is a limitation in ADR-0109's sense.* [Memory model and memory
+ADR-0181 withdraws nothing.
+
+**Decided 2026-09-05: kept, and written down as the unchecked form** (ADR-0336).
+The two ways out were measured rather than weighed. *Retire* fails on the
+numbers: 41 ordinary-pointer type-definitions outside `tests/`, and **0 of 41**
+convertible to `owned ^T` plus a borrow — three `lib/` containers are the
+conforming layer ADR-0120 keeps portable, `JsonPtr` is refused by AP 6.4.14.2's
+variant part, `DocMap` by AP 6.4.14.3, an owned field making `Document` affine
+and killing the whole-record assignment the map is built on. The compiler's own
+34 decide it: its node graph has back-edges and shared singletons rather than a
+tree, its three pointer types stand in a value-parameter or result position 695
+times, and it calls `dispose` **not once** — every textual hit in the three
+components is a comment, a diagnostic string, the identifier `disposeValue` or
+emitted `@pas_dispose` IR. It is arena-until-exit, so there is no lifetime for
+an owner to model. And retiring would break containment outright:
+`new(p); q := p; dispose(p)` is conforming Extended Pascal and ADR-0117 obliges
+this dialect to accept it and mean the same. *Check* is admissible where it was
+assumed not to be — no `^T` crosses AP 6.7.7.3 and no `@cstruct` record may
+have a pointer field, so `foreign-layout` and ADR-0328 are untouched — and dies
+instead on cost: ADR-0325 admits i386, so there are no spare address bits and a
+generation must be a fat pointer re-baselining every offset `target-layout`
+watches, or a side table costing a call per dereference; and soundness requires
+`dispose` stop returning storage, so the checked pointer becomes the one that
+leaks by design. With no caller asking, that is not a trade worth making.
+
+What is written down instead is the inversion, stated rather than glossed: the
+safe subset is `owned ^T` with the non-escaping borrow, and §6.4.4's pointer is
+the unchecked form containment requires be kept. Unlike Rust's `unsafe`, here
+the unchecked form is the *unmarked default* and safety is opt-in and spelled —
+a fact about containment rather than a lapse, and saying so is what keeps
+ADR-0109's goal from reading as a claim the compiler does not meet. [Memory model and memory
 safety](#memory-model-and-memory-safety) is where it stands beside the rest of
 the model, and where the other half of the same question — an *owned* pointer
 released while a borrow of it is live — is written down.

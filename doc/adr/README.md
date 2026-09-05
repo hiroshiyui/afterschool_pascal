@@ -344,3 +344,5 @@ the alternatives that were rejected and why.
 | [0333](0333-a-tree-costs-one-frame-too.md) | A tree costs one frame too | Accepted |
 | [0334](0334-a-gate-with-two-axes.md) | A gate with two axes | Accepted |
 | [0335](0335-a-variable-a-harness-did-not-read.md) | A variable a harness did not read | Accepted |
+| [0336](0336-the-pointer-that-is-kept-unchecked.md) | The pointer that is kept, unchecked | Accepted |
+| [0337](0337-a-container-owns-its-storage-only-when-one-block-can-keep-it.md) | A container owns its storage only when one block can keep it | Accepted |
