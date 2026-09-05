@@ -349,3 +349,4 @@ the alternatives that were rejected and why.
 | [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
 | [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
 | [0339](0339-a-trait-heading-names-one-type-and-one-scope.md) | A trait heading names one type, and one scope | Accepted |
+| [0340](0340-four-things-a-trait-heading-cannot-do.md) | Four things a trait heading cannot do | Accepted |

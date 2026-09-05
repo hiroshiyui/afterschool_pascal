@@ -709,6 +709,29 @@ strongest argument yet for **increment A**, and not the one A is justified by:
 form of what `qualified` here answers by hand. A is still not a prerequisite
 for B; it is now something better, a reason of its own.
 
+**And then building it found four more**
+([ADR-0340](adr/0340-four-things-a-trait-heading-cannot-do.md), 2026-09-05),
+which is the third turn of one wheel: ADR-0338 was written because probing beat
+reading, ADR-0339 because a probe beat that record's own claims, and this
+because **building beat probing**. A trait, an implementation and a dispatching
+call now compile and run on the `traits-b` branch, which does not pass its
+gates and is not for merging. All four findings are limits on what a trait
+heading can say. It cannot name its receiver `self` -- 6.1.2 case-folds, so the
+parameter name and the type name `Self` are one identifier, and every record
+before this used `self: Self` as its example. Its routines cannot live in the
+block's scope, two implementations of one trait each defining one spelling, so
+they are declared in the implementation's own scope and reached by a
+**trait-keyed** selection on the first actual's type -- which is not increment
+A's per-type scope and is what keeps A out of B's way. It cannot be resolved
+once, resolution annotating shared nodes so that the second impl reads the
+first's types; it is re-parsed per implementation from its token position, as
+AP 6.7.3.5 already re-reads a generic's body and for that clause's own reason.
+And it cannot take a `protected var` receiver and serve a subrange: selection
+does follow `Base()`, and then 6.6.3.3 refuses the call, a var parameter
+requiring an actual of the same type. ADR-0315 asserts both halves of that last
+one. The advice that falls out is that **a trait meant to serve subranges takes
+its receiver by value**, which `Ord` and `Hash` both should.
+
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
 rather than a marker on each routine; the receiver is **written out with its
