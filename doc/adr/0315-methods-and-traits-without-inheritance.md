@@ -23,6 +23,18 @@ form beside it:
 What is **not** settled is whether to build it, and one technical question named
 at the end of *Consequences* should be answered before increment B.
 
+**Increment B's design is corrected by
+[ADR-0338](0338-a-bound-belongs-where-the-type-is-written-down.md)** (2026-09-05),
+and this record's §6 *Static* paragraph, its §5 orphan rule and its *Staging*
+table should be read through it. Three things here did not survive being
+probed: the bound cannot sit on a routine's type parameter for the container
+that motivates it, a pointer determining nothing; the orphan rule contradicts
+*What this does not do* and leaves `string(n)` implementable by no component;
+and the spelling `T: Ord` is ambiguous with a value parameter, the real slot
+being `T: Ord type`. **A is also not a prerequisite for B**, which *Staging*
+asserts in one sentence with no argument under it. Increments A and C are
+untouched and this record stays `Proposed` for them.
+
 Where it is agreed, it lands as three increments with a record apiece (see
 *Staging*), and this record's status becomes *Superseded* by the first of them.
 

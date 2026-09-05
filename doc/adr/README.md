@@ -346,3 +346,5 @@ the alternatives that were rejected and why.
 | [0335](0335-a-variable-a-harness-did-not-read.md) | A variable a harness did not read | Accepted |
 | [0336](0336-the-pointer-that-is-kept-unchecked.md) | The pointer that is kept, unchecked | Accepted |
 | [0337](0337-a-container-owns-its-storage-only-when-one-block-can-keep-it.md) | A container owns its storage only when one block can keep it | Accepted |
+| [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
+| [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |

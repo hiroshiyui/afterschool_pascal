@@ -662,6 +662,31 @@ call-site spellings that block no program. With the toll booth gone, the two
 are judged separately: B is the one to build, and A stands or falls on its
 own.
 
+**And B's own design did not survive being probed** (2026-09-05,
+[ADR-0338](adr/0338-a-bound-belongs-where-the-type-is-written-down.md)).
+ADR-0315 puts the bound on a routine's type parameter, and that cannot reach
+PasContainer, where 30 of the call sites are: `Determine` has three arms --
+`nkNamed`, `nkSchema` and `nkArray` -- and no pointer arm, 6.7.3.1's
+parameter-form admitting no denoter to read a tuple out of, while the
+container's routines must take the pointer because `MapPut` grows the map with
+`new(m, bigger)`. Determined from the key instead, a string literal binds a type
+per literal *length*, which is the failure `pascontainer.pas` already records.
+**The bound belongs on the schema's discriminant** -- `Map(K: Hash + Eq;
+V: type; cap: integer)` -- where the client writes the type down and it is
+checked once, leaving all 30 call sites unchanged.
+
+Two more findings came with it. The orphan rule contradicts the record's own
+*What this does not do*, and taking either reading leaves `string(n)`
+implementable by no component, since a type-name denotes an existing type object
+and no component declared it -- so `impl` must be able to name a **schema**, or
+increment B misses what a map is keyed by most of the time. And `T: Ord` is
+ambiguous with an ordinary value parameter; the real slot is `T: Ord type`, the
+parser already committing on that juxtaposition and merely refusing the name.
+
+**Nothing is built, and the record landing alone is the point.** Each of the
+three was a contradiction of a design written without probes, against a compiler
+that was there to be asked.
+
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
 rather than a marker on each routine; the receiver is **written out with its
