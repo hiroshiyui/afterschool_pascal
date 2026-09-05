@@ -272,6 +272,19 @@ var
     It is deliberately not `-o`: a formatter that could overwrite its input
     is one bad exit away from an empty source file, and a shell redirection
     says what is being replaced where a reader can see it. }
+  { The tuple a walk's dynamic bounds are read from, or empty (ADR-0329).
+
+    One variable for the whole walk and not a parameter threaded through it,
+    because ADR-0045 makes that correct rather than convenient: a record holds
+    exactly one discriminant-bounded array and only as its last field, and the
+    discriminants are the *variable's*, so every dynamic bound reached below
+    one address belongs to one header.
+
+    Empty is the ordinary case: a declared variable of a produced type has
+    constant bounds and asks for no tuple, which is why this was missing for
+    as long as it was. Only a heap variable has one in front of it, and only
+    `new` and `dispose` set this. }
+  walkHdr: str;
   formatOpt: boolean;
   rangeLo, rangeHi: integer;
   { Which target the emitted module states is `targetIx`, and it is ApTypes'
@@ -2438,6 +2451,23 @@ end;
   `binding` and `arg` describe the *whole* variable and so apply only when it
   is itself a file: a program parameter is an entire variable (6.10), so a file
   reached through a subscript or a field is always an internal one. }
+{ Point `walkHdr` at the tuple in front of a heap variable, or leave it empty
+  where the domain has none (ADR-0329). `HeaderSize` is the same number `new`
+  allocated and `dispose` steps back over, asked here for the third time and
+  from the one function that answers it. }
+procedure SetWalkHeader(block: str; dom: typePtr);
+var head: integer;
+begin
+  StrClear(walkHdr);
+  head := HeaderSize(dom);
+  if head <> 0 then begin
+    Def(walkHdr);
+    write(ircode, 'getelementptr i8, ptr ');
+    PutOp(block);
+    writeln(ircode, ', i32 ', -head:1)
+  end
+end;
+
 procedure WalkFiles(addr: str; t: typePtr; init: boolean;
                     binding, arg, name, line, col: integer);
 var istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
@@ -2593,8 +2623,13 @@ begin
       { A loop rather than an unrolled run: the length may be a discriminant's
         (ADR-0040), and an array of files is otherwise as long as the program
         says. It is emitted in the prologue, where an alloca belongs anyway. }
-      StrClear(nohdr);
-      DynLength(t, nohdr, count);
+      { ADR-0329: the walk's own header, which is empty for every declared
+        variable and is the tuple in front of the block for a heap one. It
+        was `nohdr` unconditionally, so a schema whose dynamically-bounded
+        array holds something affine emitted a `getelementptr` on no operand
+        at all -- IR clang refuses, for `^Vec(owned ^Node)` and for nothing
+        else in this corpus. }
+      DynLength(t, walkHdr, count);
       Def(iv);
       writeln(ircode, 'alloca i32');
       OpInt(0, zero);
@@ -8654,7 +8689,14 @@ begin
         MsgStart;
         MsgText('heap                                    ');
         msg := MsgEnd;
-        WalkFiles(block, domain, true, 0, 0, msg, s^.line, s^.col)
+        { ADR-0329. Inside `new` BoundValue answers a dynamic bound from
+          `newTuple` before it reads any header, so this is belt and braces
+          here and load-bearing in `dispose` -- but the two are set the same
+          way on purpose, a walk that needed the header in one and not the
+          other being a difference nothing states. }
+        SetWalkHeader(block, domain);
+        WalkFiles(block, domain, true, 0, 0, msg, s^.line, s^.col);
+        StrClear(walkHdr)
       end
       end
     end;
@@ -8684,8 +8726,13 @@ begin
       MsgText('dispose of nil                          ');
       msg := MsgEnd;
       EmitTrapIf(raw, msg, s^.pcArgs^.line, s^.pcArgs^.col);
-      if HoldsFile(domain) then
+      if HoldsFile(domain) then begin
+        { ADR-0329: the tuple is in front of the block, and this is the walk
+          that could not find it. }
+        SetWalkHeader(block, domain);
         WalkFiles(block, domain, false, 0, 0, 0, 0, 0);
+        StrClear(walkHdr)
+      end;
       { What was allocated is the header and the variable together, so what is
         given back has to be the block rather than the variable. }
       head := HeaderSize(s^.pcArgs^.ntype^.elem);

@@ -627,6 +627,19 @@ checks they agree, which is the same arrangement the version number has. A
   per iteration and put the defect back. A **tree** still costs a frame per
   level, whichever self-referential field is chosen leaving the others to
   recurse, and that half of the row stands.
+- **And the release walk could not find a heap variable's tuple** (ADR-0329).
+  `WalkFiles`'s array arm asks `DynLength` for the length, because it may be a
+  discriminant's (ADR-0040), and passed an **empty** header — right for every
+  declared variable, whose produced type has constant bounds so `BoundValue`
+  never reads a tuple, and wrong for a heap one, whose tuple is in front of the
+  block. It emitted `getelementptr i32, ptr , i32 0` with no operand, which
+  clang refuses, so `^Vec(owned ^Node)` did not build at all. `walkHdr` is the
+  fix and is **one variable for the whole walk rather than a parameter**:
+  ADR-0045 puts exactly one discriminant-bounded array in a record and only
+  last, and its discriminants are the variable's, so every dynamic bound below
+  one address belongs to one header. Found by probing a wart the review list
+  had recorded as harmless — the container of owned pointers that was
+  *declarable and inert*. It was inert because it could not be built.
 - **And a generic body's `take` moves where the type moves** (ADR-0323, AP
   6.4.14.6 amended). `take` is the only operation here whose *applicability* is
   a property of the type it is applied to, so 6.4.14's ownership and 6.7.3.10's

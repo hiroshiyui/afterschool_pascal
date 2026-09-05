@@ -337,3 +337,4 @@ the alternatives that were rejected and why.
 | [0326](0326-the-third-way-a-block-reaches-an-owner.md) | The third way a block reaches an owner | Accepted |
 | [0327](0327-the-checker-the-construct-rests-on.md) | The checker the construct rests on | Accepted |
 | [0328](0328-a-c-integer-is-the-target-s-width.md) | A C integer is the target's width | Accepted |
+| [0329](0329-a-walk-that-could-not-find-the-tuple.md) | A walk that could not find the tuple | Accepted |
