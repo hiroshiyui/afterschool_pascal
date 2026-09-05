@@ -186,7 +186,24 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
       objs+=("$work/c$cn.o")
     done <"$dir/$name.components"
   fi
-  opt=-O1
+  # The level the *corpus* is compiled at, most specific first, which is
+  # `run_test.sh`'s own order one harness over:
+  #
+  #   name.opt                  this case pins one
+  #   AFTERSCHOOL_PASCAL_OPT    the whole run wants one (ADR-0335)
+  #   neither                   -O1, which is what a sanitizer build wants:
+  #                             -O0 buries a report in noise and -O2 optimises
+  #                             away the undefined behaviour UBSan is looking
+  #                             for. It is the level this gate has always
+  #                             answered at and the default does not move.
+  #
+  # It read the variable **not at all** until ADR-0335, so
+  # `AFTERSCHOOL_PASCAL_OPT=-O0 ctest` reported the whole suite green at -O0
+  # with two of its cases quietly at -O1 -- and CI's `unoptimised` job made
+  # that claim on every push. The `-O1` two hundred lines up is a different
+  # number and stays pinned: it is the level the runtime's own C is built at,
+  # which is the sanitizer's business and not the corpus's.
+  opt=${AFTERSCHOOL_PASCAL_OPT:--O1}
   [[ -f $dir/$name.opt ]] && opt=$(<"$dir/$name.opt")
 
   if [[ -n $compfail ]] ||

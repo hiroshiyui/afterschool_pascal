@@ -337,6 +337,12 @@ jobs:
     # the *other* cannot see what it is testing, and a sweep must not undo
     # that.
     #
+    # **`the same suite` was not true until ADR-0335.** `sanitize.sh` compiled
+    # its 383 programs at a level it chose itself and read the variable not at
+    # all, so this job made the claim above on every push with two of its cases
+    # -- `sanitizers` and `thread-sanitizer` -- quietly at -O1. It honours it
+    # now, and all three levels are clean.
+    #
     # It is a job rather than a second local ctest run because it doubles the
     # time and finds nothing on most changes. Run it by hand before touching
     # CodeGen: AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build
