@@ -206,6 +206,49 @@ declaring block releases in one go. A module that keeps its handle private — `
 with its `Pipe` — shows nothing of this and answers the result record as
 before.
 
+## The fourth rule: a container owns its storage only when one block can keep it
+
+A container in `lib/` is an ordinary `^T` with a `Free`, and that is **not a
+choice** — `lib/` is the conforming layer a reader can port to another Pascal
+(ADR-0120), and `owned` is the dialect's. Inside `lib/dialect/` the question is
+real, and it was open until ADR-0337: `PasList` owns its chain and has no
+`Free`, `PasStrVec` is an indexed pointer with one, and nothing said which a
+new module should be.
+
+**Prefer to write the container generic over its pointer type and let the
+client answer**, as `PasContainer` does (ADR-0323): the module is written once,
+the client writes `^Vec(T)` or `owned ^Vec(T)` at its own `type` line, and the
+module has no opinion. Where you cannot, own it only if every variable of it
+can be one a block declares and never lets out of its hands. **Ask four
+questions, and one *no* settles it as `^T` with a `Free`:** is it ever a value
+parameter; is it ever a function result; is it ever a field of a record that is
+itself assigned, copied, or stored as a map's value; does it ever hold a file,
+a handle or another owned pointer.
+
+The third is the one that catches people. `lsp/pasls.pas` keeps a `PathVec` in
+a `Document` and copies a whole `Document` out of a map — AP 6.4.14.3 makes the
+record affine the moment the field is owned, and the copy stops compiling. The
+fourth is AP 6.4.14.2 and is not liftable for a growable container: its storage
+is a schema, and a schema domain admits nothing that must itself be released.
+Where all four are *no*, own it — `PasList` does, and therefore has no `Free`
+and cannot be made to leak.
+
+**Two things a generic container must not do, both learned by trying.**
+
+`VecFree` and `MapFree` are named here rather than discovered: they end by
+assigning nil, which AP 6.4.14.6 refuses for an owned pointer, so they exist
+for the ordinary clients alone and an owned one calls nothing.
+`tests/dialect/owned_container_free.pas` pins the refusal.
+
+And **the read-only routines may not take `protected var`**, which is the
+tempting fix and does not compile. `Protectable` refuses an ordinary pointer
+and admits an owned one (AP 6.4.14.8 being what gives the word its meaning
+there), so protecting `var v: Ptr` in a module generic over `Ptr` compiles for
+an owned client and refuses every ordinary one — 19 cases, measured. An owned
+client therefore does hand its readers a parameter it could release through,
+and that is a real cost of writing one container for both kinds rather than
+two. It is the price of ADR-0323 and not an oversight.
+
 ## What the rules do not cover, and you should know before relying on them
 
 **A failure the boundary cannot report.** `PasEnv.Lookup` binds C's `getenv`,

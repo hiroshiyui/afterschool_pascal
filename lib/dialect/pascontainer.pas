@@ -127,7 +127,17 @@ type
   body serve every element type. }
 procedure VecInit(Ptr: type; var v: Ptr; cap: integer);
 
-{ Release the storage and leave `v` nil. A nil `v` is harmless. }
+{ Release the storage and leave `v` nil. A nil `v` is harmless.
+
+  **This routine and `MapFree` are the two that an owned `Ptr` cannot
+  activate**, and they are the module's only asymmetry between the two kinds of
+  pointer it is written for (ADR-0337). Leaving `v` nil is an assignment, and
+  AP 6.4.14.6 refuses it for an owned pointer because `dispose` is that
+  spelling. Nothing is lost: an owned vector is released where its block ends,
+  so a client that wrote the word calls nothing here.
+  tests/dialect/owned_container_free.pas is the case that pins the refusal, and
+  it pins the *second* line too -- the assignment is in this component and the
+  activation is in the program, so a reader must be told whose call it was. }
 procedure VecFree(Ptr: type; var v: Ptr);
 
 { Append, growing when full. }
@@ -208,6 +218,8 @@ procedure VecReserve(Ptr: type; var v: Ptr; want: integer);
 
   `StrHash` and `StrEq` below are the ready-made pair for the commonest key. }
 procedure MapInit(Ptr: type; var m: Ptr; want: integer);
+{ `VecFree`'s note applies here unchanged: an owned `Ptr` cannot activate this,
+  and does not need to. }
 procedure MapFree(Ptr: type; var m: Ptr);
 procedure MapPut(Ptr: type; var m: Ptr;
                  key: type of m^.slots[1].key;
