@@ -335,3 +335,4 @@ the alternatives that were rejected and why.
 | [0324](0324-a-discriminated-schema-where-a-name-is-required.md) | A discriminated schema where a name is required | Accepted |
 | [0325](0325-a-pointer-is-not-always-eight-bytes.md) | A pointer is not always eight bytes | Accepted |
 | [0326](0326-the-third-way-a-block-reaches-an-owner.md) | The third way a block reaches an owner | Accepted |
+| [0327](0327-the-checker-the-construct-rests-on.md) | The checker the construct rests on | Accepted |

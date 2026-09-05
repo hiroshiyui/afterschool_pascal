@@ -723,6 +723,22 @@ set_tests_properties(sanitizers PROPERTIES
                      TIMEOUT 2400
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# ...and the same harness under ThreadSanitizer, over the programs with two
+# threads of control in them (ADR-0327). It was `doc/sop.md` §7's longest-lived
+# row and CLAUDE.md's one instruction to run something by hand: AP 6.9.3.12's
+# task rests on this checker and nothing ran it. ASan and TSan cannot be
+# combined -- clang refuses the pair -- so it is a second invocation and not a
+# longer flag list, and the corpus it sweeps is chosen by what each source
+# writes rather than from a list, so a concurrent program added later is
+# covered without this file being edited.
+add_test(NAME thread-sanitizer
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(thread-sanitizer PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 1800
+                     ENVIRONMENT "${APASCAL_TEST_ENV};SANITIZE_MODE=thread")
+
 # runtime/pasrt_unicode.c against Unicode's own conformance files -- 20 034
 # normalisation cases, 766 segmentation cases and a sweep of every code point
 # the first does not list. This is the one oracle in this repository, beside the

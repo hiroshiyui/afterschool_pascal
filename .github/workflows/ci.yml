@@ -289,7 +289,7 @@ jobs:
   # `SANITIZE_REQUIRE` is that refusal. A green run of this job means the
   # sanitizers actually ran, not that they were absent.
   sanitizers:
-    name: the corpus under ASan, UBSan and LeakSanitizer
+    name: the corpus under ASan, UBSan and LeakSanitizer, and the tasks under TSan
     runs-on: ubuntu-latest
     container: 'debian:trixie'
     steps:
@@ -312,6 +312,25 @@ jobs:
           if grep -q 'sanitize: no ' sanitize.log; then
             echo "the sanitizer sweep skipped, and this job exists to refuse" \
                  "a skip" >&2
+            exit 1
+          fi
+          exit $status
+
+      - name: Run the thread sweep, and refuse to pass by skipping
+        run: |
+          set -o pipefail
+          SANITIZE_MODE=thread tests/checks/sanitize.sh tools/pascalcc \
+            build/bin/pascalc 2>&1 | tee tsan.log
+          status=$?
+          # ADR-0327 landed this gate with no job requiring it, which is the
+          # shape `doc/sop.md` §7 already records twice -- a `*_REQUIRE` nobody
+          # sets answers on the machine its author had. This step is that row
+          # refused rather than written down: the harness exits 77 where clang
+          # cannot link -fsanitize=thread, ctest reads 77 as a skip, and a
+          # skipped run prints the same tally as a clean one.
+          if grep -qE 'sanitize: (no |clang here cannot link)' tsan.log; then
+            echo "ThreadSanitizer was not available, so this step proved" \
+                 "nothing" >&2
             exit 1
           fi
           exit $status
