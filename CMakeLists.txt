@@ -844,6 +844,18 @@ if(Python3_FOUND)
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
 
+# Does every gate that can skip have a job that refuses to let it? (ADR-0330)
+# It reads no Pascal and needs nothing installed -- the cheapest gate here after
+# `markdown-tables`, and like that one it watches what no other oracle can see:
+# every other check in that directory asks about the compiler, and this asks
+# about the checks. The convention had shipped broken three times, and the third
+# -- `TLS_REQUIRE`, unset since ADR-0264 -- was found by writing this.
+if(Python3_FOUND)
+  add_test(NAME require-consistency
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/require_consistency.py)
+endif()
+
 # ...and whether a program built with those numbers behaves (ADR-0325). The
 # row above asks about arithmetic; both defects the i386 port found were in
 # neither a layout rule nor a frame, so it passed with a segfaulting select.

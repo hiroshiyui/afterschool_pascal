@@ -38,8 +38,24 @@ pascalcc=${1:?usage: sanitize.sh <pascalcc> [<pascalc>]}
 pascalc=${2:-${PASCALC:-pascalc}}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 
+# `SANITIZE_REQUIRE` turns every skip below into a failure, which is what a CI
+# job that installed the checker wants (ADR-0330). The `sanitizers` job named
+# this variable in a comment for as long as it existed and **nothing read it**:
+# the job refused a skip by grepping its own log instead, so the mechanism
+# worked and the sentence describing it was false. `require-consistency` is the
+# gate that now refuses that pair.
+sanreq=${SANITIZE_REQUIRE:-}
+sanskip() {
+  if [[ -n $sanreq ]]; then
+    echo "sanitize: $1 -- and SANITIZE_REQUIRE is set" >&2
+    exit 1
+  fi
+  echo "sanitize: $1" >&2
+  exit 77
+}
+
 for tool in clang ar; do
-  command -v "$tool" >/dev/null || { echo "sanitize: no $tool" >&2; exit 77; }
+  command -v "$tool" >/dev/null || sanskip "no $tool"
 done
 
 work=$(mktemp -d)
@@ -80,9 +96,8 @@ esac
 printf 'int main(void){return 0;}\n' >"$work/probe.c"
 # shellcheck disable=SC2086
 if ! clang $san -o "$work/probe" "$work/probe.c" >"$work/probe.txt" 2>&1; then
-  echo "sanitize: clang here cannot link $san -- skipping" >&2
   head -3 "$work/probe.txt" >&2
-  exit 77
+  sanskip "clang here cannot link $san"
 fi
 mkdir -p "$work/lib"
 for u in pasrt pasrt_posix pasrt_unicode pasrt_task; do

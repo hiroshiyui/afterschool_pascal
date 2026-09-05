@@ -304,36 +304,25 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
       - name: Run the sanitizer sweep
-        run: |
-          set -o pipefail
-          tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc \
-            2>&1 | tee sanitize.log
-          status=$?
-          if grep -q 'sanitize: no ' sanitize.log; then
-            echo "the sanitizer sweep skipped, and this job exists to refuse" \
-                 "a skip" >&2
-            exit 1
-          fi
-          exit $status
+        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        env:
+          # The comment above this job named this variable for as long as the
+          # job existed and nothing read it -- the step refused a skip by
+          # grepping its own log instead, so the mechanism worked and the
+          # sentence describing it was false (ADR-0330). The script reads it
+          # now, the way every other gate here reads its own, and
+          # `require-consistency` is what keeps the two in step.
+          SANITIZE_REQUIRE: '1'
 
       - name: Run the thread sweep, and refuse to pass by skipping
-        run: |
-          set -o pipefail
-          SANITIZE_MODE=thread tests/checks/sanitize.sh tools/pascalcc \
-            build/bin/pascalc 2>&1 | tee tsan.log
-          status=$?
+        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        env:
           # ADR-0327 landed this gate with no job requiring it, which is the
-          # shape `doc/sop.md` §7 already records twice -- a `*_REQUIRE` nobody
-          # sets answers on the machine its author had. This step is that row
-          # refused rather than written down: the harness exits 77 where clang
-          # cannot link -fsanitize=thread, ctest reads 77 as a skip, and a
-          # skipped run prints the same tally as a clean one.
-          if grep -qE 'sanitize: (no |clang here cannot link)' tsan.log; then
-            echo "ThreadSanitizer was not available, so this step proved" \
-                 "nothing" >&2
-            exit 1
-          fi
-          exit $status
+          # shape `doc/sop.md` §7 already records for `fpc-differential` and
+          # for `target32` -- a `*_REQUIRE` nobody sets answers on the machine
+          # its author had.
+          SANITIZE_MODE: thread
+          SANITIZE_REQUIRE: '1'
 
   unoptimised:
     # The corpus compiles at -O2, which is pascalcc's default and what a user
@@ -540,6 +529,46 @@ jobs:
             echo "llc was not found, so this job proved nothing" >&2
             exit 1
           fi
+
+  tls:
+    # `lib/dialect/pastls.pas` transcribes numbers out of OpenSSL's headers --
+    # some are macros no `external` declaration can reach -- and a wrong one
+    # fails **quietly**: `SSL_VERIFY_PEER` written as 0 turns verification off
+    # and every behavioural case stays green (ADR-0264).
+    #
+    # `TLS_REQUIRE` is that refusal, and it has existed since ADR-0264 with
+    # **no job setting it** -- the fourth instance of the shape `doc/sop.md` §7
+    # records, and the one nobody had noticed, found by writing the gate that
+    # compares the two lists (ADR-0330). Until now this check answered on a
+    # machine that happened to have libssl and on no other.
+    #
+    # A job of its own for `second-backend`'s reason: libssl and the `openssl`
+    # program are not documented dependencies of this compiler, and adding them
+    # to the container every other job shares would make the documented list a
+    # lie.
+    name: the numbers copied out of OpenSSL are still OpenSSL's
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies, and OpenSSL on top
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang libclang-rt-dev git python3
+          apt-get install -y --no-install-recommends libssl-dev openssl
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Run it, and refuse to pass by skipping
+        run: ctest --test-dir build -R tls --output-on-failure
+        env:
+          TLS_REQUIRE: '1'
 
   thirty-two-bit:
     # Does the corpus still run when a pointer is four bytes? (ADR-0325)
