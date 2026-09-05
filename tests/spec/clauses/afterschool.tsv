@@ -57,6 +57,7 @@
 6.4.4	Pointer-types
 6.4.4.1	A domain that binds type discriminants
 6.4.4.2	Type identity
+6.4.4.3	The pointer-type is the unchecked form [note]
 6.4.5	Compatible types
 6.4.6	Assignment-compatibility
 6.4.7	Schemata

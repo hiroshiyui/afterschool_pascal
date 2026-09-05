@@ -293,6 +293,7 @@ afterschool	6.4.3.4.7	testable
 afterschool	6.4.4	structural	introduces the extended pointer-type; the requirements are in its subclauses
 afterschool	6.4.4.1	testable	
 afterschool	6.4.4.2	testable	
+afterschool	6.4.4.3	structural	records a decision and adds no requirement; the nil store it describes is 6.6.5.3's and is exercised there
 extended	6.4.3.5	testable	Set-types
 extended	6.4.3.6	testable	File-types
 extended	6.4.4	testable	Pointer-Types

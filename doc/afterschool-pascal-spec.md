@@ -707,6 +707,34 @@ not a type-name denotes its own type, so two variables declared
 `^Vec(integer)` separately have two types, exactly as two declared `^integer`
 separately do.
 
+**6.4.4.3 The pointer-type is the unchecked form [note].** This subclause adds
+no requirement. It records, where a reader looks the pointer up, a decision
+about what ISO/IEC 10206:1991 6.4.4's pointer-type is *for* in this dialect
+(ADR-0336).
+
+NOTE 1 — An identifying-value continues to identify a variable after 6.6.5.3's
+`dispose` has removed it, and 6.5.4 makes accessing the variable an error the
+processor is not required to detect (Annex D). This processor stores **nil**
+into the pointer-variable `dispose` was given, so the commonest spelling of the
+mistake reaches the nil trap; a *second* pointer to the same variable is
+unaffected and this processor does not detect its use.
+
+NOTE 2 — **The safe subset is 6.4.14's**, and it is opt-in and spelled. An
+owned-pointer-type (6.4.14.1) admits no second identifying-value at all, so
+there is nothing to dangle; the one second name the dialect forms is a borrow
+bound for the duration of an activation (6.4.14.8), which 6.4.14.9 refuses
+where it could outlive what it borrows. A program that writes `owned` where it
+means ownership has the property; a program that writes `^` has 6.4.4's
+pointer, unchanged from the standard this document amends.
+
+NOTE 3 — **The default is the unchecked one, and that is stated rather than
+implied.** Where another language marks its unchecked form and leaves the
+checked one bare, this dialect does the reverse, because 6.0.1 requires that no
+conforming program change meaning: `new(p); q := p; dispose(p)` is a conforming
+Extended Pascal fragment, and refusing it or altering what it does would end
+containment. The pointer-type is therefore kept as the standard defines it, and
+the guarantee is attached to the construct a program opts into.
+
 ##### 6.4.11 Optional-types [added]
 
 **6.4.11.1 The denoter.**
