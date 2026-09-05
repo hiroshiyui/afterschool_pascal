@@ -94,6 +94,22 @@ own exception and compare by length instead.
   does. The C++ compiler asked a TargetMachine; there is no TargetMachine now,
   which is why the line is written out — see `CLAUDE.md`'s CodeGen bullets, where
   ADR-0028 records the segfault that came of leaving it unstated.
+- **And a C integer is the target's width** (ADR-0328, AP 6.4.2.7). A foreign
+  declaration must name a type whose representation is the C type's, and this
+  language's two integer types are of fixed widths — so `function strlen(s:
+  string): int64` is right on an LP64 target and four bytes too wide on i386,
+  where it answered 21474836485. `clong` and `csize` are required identifiers
+  denoting `int64` or `integer` by target, `int64`'s route exactly (ADR-0128),
+  and they **introduce no type**: no predicate gains a case and CodeGen never
+  hears of them. **Two and not one**, measured rather than reasoned — they
+  agree on every admitted target and differ on Windows x64, which is LLP64.
+  `csize` covers `size_t`, `ssize_t`, `ptrdiff_t` and `intptr_t`, one width on
+  every admitted target; `time_t` and `off_t` ride on `clong` and are not
+  required to, which the clause says rather than leaving to be found. The
+  narrowing is **two lines** — widen to `int64`, then `trunc` — because
+  admitting `trunc` of an `integer` would have withdrawn the conformance fix
+  `tests/trunc_integer.pas` pins from the validation suite's DEV158, in a
+  commit about something else.
 - **And a pointer is not always eight bytes** (ADR-0325). The layout rules were
   constants for two targets and stopped being so when i386 was admitted:
   `PtrSize` and `WordAlign` are two functions in ApTypes and the seven arms that

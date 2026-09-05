@@ -3295,7 +3295,16 @@ void pas_gettimestamp(void) {
     if (*end == '\0') {
       named = 1;
       now = (time_t)v;
-      t = gmtime(&now);
+      /* **The round trip, and not the cast alone.** `time_t` is 64 bits here
+       * and 32 on an ILP32 target, so a count outside its range is truncated
+       * rather than refused -- and a truncation lands on a date the calendar
+       * accepts. LLONG_MAX became 1969-12-31, so a program asking for an
+       * instant no representation can hold was told the date was valid.
+       * Found by running the corpus for i386 (ADR-0325, ADR-0328); on a
+       * 64-bit target the comparison is true by construction and costs
+       * nothing. */
+      if ((long long)now == v)
+        t = gmtime(&now);
     }
   }
   /* The clock is consulted only when no instant was named. A named one that

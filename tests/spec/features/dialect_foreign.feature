@@ -384,3 +384,58 @@ Feature: Foreign functions
       """
       cannot be a procedure or a function
       """
+
+  # AP 6.4.2.7 (ADR-0328). C's `long` and `size_t` are the target's width where
+  # this language's two integer types are fixed, so a foreign declaration had
+  # no way to name them: `strlen` declared `int64` answered 21474836485 on a
+  # 32-bit target, whose low half is the length and whose high half is whatever
+  # a register held.
+  @afterschool:6.4.2.7.1
+  Scenario: a C size_t crosses as csize
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function strlen(s: string): csize; external 'strlen';
+      var n: int64;
+      begin n := strlen('hello'); writeln(trunc(n):1) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      5
+      """
+
+  # They are required identifiers in the region enclosing the program, so
+  # §6.1.3 lets any program take either spelling for its own -- `int64`'s route
+  # exactly (ADR-0128).
+  @afterschool:6.4.2.7.1
+  Scenario: a program may declare its own clong
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type clong = 1..10;
+      var v: clong;
+      begin v := 7; writeln(v:1) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      7
+      """
+
+  # AP 6.4.2.7.2. The narrowing is two steps because `trunc` of an `integer` is
+  # refused -- §6.7.6.3 requires a real, and tests/trunc_integer.pas pins that
+  # from the validation suite's DEV158. Widening first is what makes one
+  # spelling serve both targets.
+  @afterschool:6.4.2.7.2
+  Scenario: trunc of a csize directly is refused where csize is integer
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var i: integer;
+      begin i := 3; writeln(trunc(i):1) end.
+      """
+    When it is compiled
+    Then it is rejected

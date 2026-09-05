@@ -52,8 +52,8 @@ type
     wherever there is one. }
   { @cstruct: TimeSpec = struct timespec, <time.h> }
   TimeSpec = record
-    sec: int64;                      { @cfield: tv_sec }
-    nsec: int64                      { @cfield: tv_nsec }
+    sec: clong;                      { @cfield: tv_sec }
+    nsec: clong                      { @cfield: tv_nsec }
   end;
 
 function RecordProbe(var p: Probe): int64; external 'pasx_record_probe';

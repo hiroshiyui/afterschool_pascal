@@ -47,7 +47,7 @@ export ApTypes = (
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, targetIx, PtrSize,
-  WordAlign, jumpSize, handleSize, deferSize,
+  WordAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
   lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
@@ -3098,6 +3098,15 @@ function FileIndexOf(n: pathStr): integer;
 function PtrSize: integer;
 function WordAlign: integer;
 
+{ What a C `long` costs on the target the module is being emitted for
+  (ADR-0328). A *third* number and not `PtrSize` under another name: the two
+  agree on every target admitted here and differ on Windows x64, which is
+  LLP64 -- a `long` of four bytes beside a pointer of eight. Writing them as
+  one function would be correct today and silently wrong on the first target
+  the cross-platform chapter names, which is the kind of claim this tree keeps
+  finding beside a correct measurement. }
+function CLongSize: integer;
+
 { ------------------------------------------------------------- type names }
 procedure WriteTypeName(t: typePtr);
 
@@ -4293,6 +4302,11 @@ end;
 function WordAlign;
 begin
   if targetIx = tgtI386 then WordAlign := 4 else WordAlign := 8
+end;
+
+function CLongSize;
+begin
+  if targetIx = tgtI386 then CLongSize := 4 else CLongSize := 8
 end;
 
 function FileIndexOf;

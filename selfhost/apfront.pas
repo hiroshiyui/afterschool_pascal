@@ -23255,6 +23255,27 @@ begin
     still decided by position and not by this name. }
   RequiredType('task     ', taskType);
 
+  { AP 6.4.2.7 (ADR-0328): the two C integer types whose width is the target's.
+    Required identifiers by `int64`'s route exactly (ADR-0128), so a program
+    that declares its own `clong` keeps it and
+    tests/dialect/inherits_extended.pas witnesses that.
+
+    **Two and not one.** `csize` is pointer-sized -- `size_t`, `ssize_t`,
+    `ptrdiff_t`, `intptr_t` -- and `clong` is C's `long`. They agree on every
+    target admitted here and differ on Windows x64, which is LLP64: a `long`
+    of four bytes beside a pointer of eight. One name would have been right
+    for the three and wrong for the first target the cross-platform chapter
+    names.
+
+    They denote an existing type rather than a new kind, so nothing else in
+    the compiler learns a case: on a 64-bit target each is `int64` and on
+    i386 each is `integer`, and every rule stated over those two answers here
+    unchanged. }
+  if PtrSize = 8 then RequiredType('csize    ', int64Type)
+  else RequiredType('csize    ', intType);
+  if CLongSize = 8 then RequiredType('clong    ', int64Type)
+  else RequiredType('clong    ', intType);
+
   { AP 6.4.15.1: "`utf8` shall be a required identifier denoting a schema of
     one discriminant, whose identifier shall be `capacity`."
 

@@ -233,7 +233,7 @@ function ExtTempName(dir, prefix: string; cap: integer;
 
 function ExtGetcwd(var b: array of char): OptPathName; external 'getcwd';
 function ExtReadlink(path: string;
-                     var b: array of char): int64; external 'readlink';
+                     var b: array of char): csize; external 'readlink';
 
 { Every one of the five reports the same way: 0 or -1, with the reason in an
   errno this cannot read. }

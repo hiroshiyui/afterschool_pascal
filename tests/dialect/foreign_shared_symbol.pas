@@ -27,13 +27,20 @@ import SharedForeign;
 
 { The same linker symbol the imported module binds, under a name of this
   program's own choosing. }
-function MyLength(s: string): int64; external 'strlen';
+function MyLength(s: string): csize; external 'strlen';
+
+{ AP 6.4.2.7's narrowing, written the way the module beside this one writes
+  it: `csize` is whichever of the two integer types the target's `size_t` is,
+  so it is widened to `int64` before `trunc`. }
+var n: int64;
 
 begin
   { The generic, whose body calls the module's own binding of the symbol --
     translated here, so this module declares `strlen` for it. }
   writeln('generic : ', Doubled(1):1);
   { And this program's own binding of the same symbol. }
-  writeln('direct  : ', trunc(MyLength('abcde')):1);
-  writeln('both    : ', trunc(MyLength('')) = 0)
+  n := MyLength('abcde');
+  writeln('direct  : ', trunc(n):1);
+  n := MyLength('');
+  writeln('both    : ', trunc(n) = 0)
 end.

@@ -959,7 +959,10 @@ part of what it says.
   i386 aligns to 4 as well — the three a reader would not have caught, a wrong
   alignment costing no diagnostic anywhere. `PtrSize` and `WordAlign` are the
   two functions every one of the seven now asks, `--target=i386-pc-linux-gnu`
-  is admitted, and **564 of the 570 corpus sources build and run there**.
+  is admitted, and **570 of the 571 corpus sources build and run there** —
+  564 of 570 on the day the port landed, and the six became one when
+  ADR-0328 gave a foreign declaration a way to name a C integer of the
+  target's width.
 
   **Running it found two defects no arithmetic check here could see**, neither
   in a layout rule and neither in a frame: `pas_select` indexed its arm array
@@ -976,13 +979,24 @@ part of what it says.
   wide on i386, and `strlen('hello')` answers 21474836485. The sixth is
   `tests/index_span.pas`, which allocates 2 GB on purpose.
 
-- **How a foreign declaration should name a C `long`** (ADR-0129, and now
-  measured). It is a decision and not a lowering: the language has `integer`
-  at 32 bits and `int64` at 64, and C's `long` is one on i386 and the other on
-  x86-64. What is wanted is a spelling that means *the C `long` of whichever
-  target this is*, and `lib/` writes `int64` in every such declaration today.
-  Nothing is blocked on measurement: `tests/checks/target32_known.txt` lists
-  exactly which cases it costs.
+- ~~**How a foreign declaration should name a C `long`**~~ (ADR-0129) —
+  **decided** the same day it was measured (ADR-0328, AP 6.4.2.7). `clong` and
+  `csize` are required identifiers denoting `int64` or `integer` by target, and
+  **two rather than one** because the two widths are not the same question:
+  they agree on all three admitted targets and differ on Windows x64, which is
+  LLP64 and is the next target this chapter names. All five catalogued cases
+  pass and `tests/checks/target32_known.txt` is down to one row — the program
+  that allocates 2 GB on purpose.
+
+  Two things came out of it that a decision alone would not have. One of the
+  five was **not a declaration**: `pas_gettimestamp` wrote `now = (time_t)v`
+  and a truncated `LLONG_MAX` lands on 1969-12-31, a date the calendar accepts,
+  so a program asking for an unrepresentable instant was told it was valid. And
+  the portable narrowing is **two lines and not one** — admitting `trunc` of an
+  integer would have made it one, and would have withdrawn a conformance fix
+  taken deliberately from the validation suite's DEV158, in a commit about a
+  foreign boundary where nobody would look for it. `tests/trunc_integer.pas`
+  caught it in the same run.
 
 **The rest is small and specific.** s390x's `tySet` alignment (13 offsets;
 `target-layout`'s second claim is what would catch it now — i386 does not have

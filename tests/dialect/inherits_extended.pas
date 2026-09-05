@@ -68,6 +68,20 @@ begin
   Shadowed := n * n
 end;
 
+{ AP 6.4.2.7 adds two more, for the same reason ADR-0128 added one: a foreign
+  declaration must name a C integer of the target's width, and this language's
+  own two are of fixed widths. `clong` and `csize` take two more spellings out
+  of 6.2.2.10's region, and 6.1.3 gives them back to any program that wants
+  them -- shadowed here as a *variable*, which is the harder half, the parser
+  having to go on reading the name as an ordinary identifier. }
+var clong: integer;
+
+function AlsoAlsoShadowed(n: integer): integer;
+begin
+  clong := n + n;
+  AlsoAlsoShadowed := clong
+end;
+
 { AP 6.4.15.1 adds a required *schema* identifier, and 6.1.3 covers it the same
   way. This is the sharper case of the two: `utf8` is not merely a name a
   program may reuse, it is one a program may reuse **as a variable**, and the
@@ -189,6 +203,7 @@ begin
     waited for, and why it still has to be written now that ADR-0232 has
     retired the sweep. }
   writeln('utf8 of this program=', AlsoShadowed(41):1);
+  writeln('clong of this program=', AlsoAlsoShadowed(21):1);
   argument := 21;
   writeln('argcount of this program=', argcount:1);
   external := 3;

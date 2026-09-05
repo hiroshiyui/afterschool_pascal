@@ -42,6 +42,9 @@
 6.4.2.6.4	Narrowing
 6.4.2.6.5	Denotation, and it is not a constant
 6.4.2.6.6	Input and output
+6.4.2.7	The types clong and csize
+6.4.2.7.1	What they denote
+6.4.2.7.2	Narrowing
 6.4.3	Structured-types
 6.4.3.4	Record-types
 6.4.3.4.1	Activation

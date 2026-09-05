@@ -521,6 +521,69 @@ later and for the same sentence.
 `int64`, taking for `read` the longest prefix that is a number, as
 ISO/IEC 10206:1991 §6.10.1 requires for `integer`.
 
+##### 6.4.2.7 The types clong and csize [added]
+
+**6.4.2.7.1 What they denote.** `clong` and `csize` shall be required
+identifiers, each denoting one of the integer types this language already has,
+chosen by the target for which the module is being translated: `clong` shall
+denote the type whose values a C `long` of that target can hold, and `csize`
+the type whose values a C `size_t` of that target can hold. Where that width is
+64 bits each denotes `int64` (6.4.2.6); where it is 32 bits each denotes
+`integer`.
+
+They shall introduce no type. Every requirement stated over `integer` and
+`int64` applies to a value of either without restatement.
+
+NOTE 1 — They exist because a foreign declaration (6.7.7) must name a type
+whose representation is the C type's, and C's `long` and `size_t` are of the
+target's width where this language's two integer types are of a fixed width.
+Without them a declaration of `strlen` is correct on one target and wrong on
+another with no diagnostic anywhere: read as 64 bits on a 32-bit target it
+answers a number whose upper half is whatever a register held, and
+`strlen('hello')` was measured at 21474836485 (ADR-0328).
+
+NOTE 2 — **Two identifiers and not one**, because the two widths are not the
+same question. They agree on every target this processor admits and differ on
+an LLP64 target, where a `long` is 32 bits beside a 64-bit pointer. One
+identifier would have been correct for the admitted targets and silently wrong
+for the first one named in this project's own cross-platform plan.
+
+NOTE 3 — `size_t`, `ssize_t`, `ptrdiff_t` and `intptr_t` are one width on every
+target this processor admits, and `csize` is the name for all four. Where a
+future target distinguishes them, that is a measurement to be taken before the
+target is admitted (5.1), and this clause is where the answer would be
+recorded.
+
+NOTE 4 — `time_t` and `off_t` are `clong`'s width on every target this
+processor admits, and neither is required to be. A target whose C library
+represents a time in 64 bits beside a 32-bit `long` is expressible only by a
+declaration naming `int64`, and the identifier a program should write there is
+not decided here.
+
+NOTE 5 — Each is a required identifier in the region enclosing the program
+(§6.2.2.10) and is therefore shadowable (§6.1.3), which is `int64`'s route
+exactly (ADR-0128). A program that declares its own `clong` keeps it.
+
+**6.4.2.7.2 Narrowing.** A value of `clong` or `csize` shall be narrowed to
+`integer` by widening it to `int64` and applying 6.4.2.6.4's `trunc`:
+
+    var n: int64;
+    n := ExtReadlink(path, buf);      { csize, whichever type that is }
+    r := t[1..trunc(n)]
+
+Where the identifier denotes `integer` the widening is §6.4.6 c)'s and the
+`trunc` is 6.4.2.6.4's applied to a value that cannot exceed the range; where
+it denotes `int64` the widening is the identity and the `trunc` may report
+6.4.2.6.4's error. The two lines are therefore one meaning on every target.
+
+NOTE — `trunc` of a value of `integer` is **not** admitted, and the intermediate
+is what that costs. ISO/IEC 10206:1991 §6.7.6.3 requires a real, and this
+processor once accepted an integer and widened it — a permissive deviation
+`tests/trunc_integer.pas` was written to refuse, from the validation suite's
+DEV158. Admitting it again would have made a portable narrowing one line
+instead of two by withdrawing a conformance fix taken deliberately, which is a
+trade this document declines to make silently (ADR-0328).
+
 #### 6.4.3 Structured-types
 
 ##### 6.4.3.4 Record-types [extended]
@@ -4343,3 +4406,4 @@ nothing but a requirement no processor here could meet.
 | 6.4.14.6 (amended) | ADR-0323 |
 | 6.7.2.1, 6.7.3.1.1 | ADR-0324 |
 | 6.4.14.9 (amended) | ADR-0326 |
+| 6.4.2.7, 6.4.2.7.2 | ADR-0328 |

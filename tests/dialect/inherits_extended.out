@@ -10,6 +10,7 @@ record x=1.5 y=2.5
 const char=a
 shadowed=9
 utf8 of this program=42
+clong of this program=42
 argcount of this program=42
 handle of this program=3
 defer of this program

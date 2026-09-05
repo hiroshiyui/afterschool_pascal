@@ -1,13 +1,13 @@
 { Calling C functions from the C library, with no wrapper and no build step.
 
   `external 'name'` after a heading binds the C symbol (ADR-0121). Only
-  exact types cross: `integer` is C's int, `int64` is a size_t, `real` is a
+  exact types cross: `integer` is C's int, `csize` is a size_t, `real` is a
   double, and a `string` parameter arrives as a NUL-terminated `const
   char *`. libc and libm are already linked. Nothing checks the signature
   against the header, so the declaration is a claim you are making. }
 program c_function(output);
 
-function strlen(s: string): int64; external 'strlen';
+function strlen(s: string): csize; external 'strlen';
 function atoi(s: string): integer; external 'atoi';
 function toupper(c: integer): integer; external 'toupper';
 function cbrt(x: real): real; external 'cbrt';

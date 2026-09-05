@@ -348,10 +348,9 @@ offset the compiler emits, and against LLVM's own answer for six record shapes.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). 564 of the 570 programs in this repository's
-corpus build and run for it; the six that do not are catalogued, one of them a
-program that allocates 2 GB on purpose and five of them foreign declarations
-naming a C `long` as `int64`, which is a decision this dialect has not taken.
+a file and a handle (ADR-0325). **570 of the 571 programs in this repository's
+corpus build and run for it**; the one that does not allocates 2 GB on purpose
+and has nowhere to put it in a 32-bit address space.
 
 Set `AFTERSCHOOL_PASCAL_TARGET` instead to point a whole run of `pascalcc` at
 one machine without writing the flag each time; an explicit `--target=` wins.
@@ -538,6 +537,26 @@ two address rows:
 function atoi(s: string): integer; external 'atoi';
 function modf(x: real; var ip: real): real; external 'modf';
 ```
+
+**And two of those types are the target's width, not a fixed one** (ADR-0328).
+C's `long` and `size_t` are 8 bytes on x86-64 and 4 on i386, where this
+language's `integer` is always 32 bits and `int64` always 64 — so a declaration
+naming either was right on one machine and silently wrong on the other, and
+`strlen('hello')` answered 21474836485. `clong` and `csize` denote whichever of
+the two fits:
+
+```pascal
+function strlen(s: string): csize; external 'strlen';
+type TimeSpec = record sec, nsec: clong end;   { a time_t beside a long }
+```
+
+They are required identifiers a program may shadow, like `int64`, and they add
+no type — each *is* `integer` or `int64` on any given target. **Two names and
+not one**: they agree on every target this compiler emits for and differ on
+Windows x64, where a `long` is 4 bytes beside an 8-byte pointer. `csize` is
+also `ssize_t`, `ptrdiff_t` and `intptr_t`. To get an `integer` out of one,
+widen and then narrow — `n: int64; n := strlen(s); ... trunc(n)` — which is one
+spelling on every target.
 
 `string` there means `const char *` — a NUL-terminated copy of the value, made
 for the statement — and it is **not** a schematic formal: the actual has only

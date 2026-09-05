@@ -17,11 +17,18 @@ end;
   ADR-0263 a client could not bind `strlen` at all, because this heading had
   already claimed it for the whole compilation and the diagnostic named
   `extstrlen`, a routine the client cannot see and did not write. }
-function ExtStrlen(s: string): int64; external 'strlen';
+function ExtStrlen(s: string): csize; external 'strlen';
 
 function Doubled;
+{ `csize` is `int64` on an LP64 target and `integer` on i386 (AP 6.4.2.7), so
+  the narrowing is written in two steps: widen to `int64`, which is the
+  identity on the first and §6.4.6 c)'s widening on the second, then narrow
+  with `trunc`. Writing `trunc` on the result directly is one line and is
+  refused wherever `csize` is already `integer` (ADR-0328). }
+var n: int64;
 begin
-  Doubled := trunc(ExtStrlen('ab')) * 2
+  n := ExtStrlen('ab');
+  Doubled := trunc(n) * 2
 end;
 
 end.
