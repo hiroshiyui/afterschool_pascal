@@ -56,7 +56,16 @@ build=${1:-$root/build}
 pascalc=$build/bin/pascalc
 runtime=$build/lib/libpasrt.a
 
+# `LLC_REQUIRE` turns the skip below into a failure, which is what a job that
+# installed llvm wants (ADR-0330's convention, ADR-0331's second host). The
+# x86-64 job used to refuse a skip by grepping its own log; reading the
+# variable here means the gate refuses it the same way whoever runs it, and
+# `require-consistency` is what keeps the variable and the workflow in step.
 if ! command -v llc >/dev/null 2>&1; then
+  if [[ -n ${LLC_REQUIRE:-} ]]; then
+    echo "llc-second-backend: llc is not installed, and LLC_REQUIRE is set" >&2
+    exit 1
+  fi
   echo "llc-second-backend: llc is not installed -- skipping"
   echo "  (Debian/Ubuntu: apt-get install llvm)"
   exit 77

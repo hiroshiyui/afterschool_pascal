@@ -32,6 +32,7 @@ nobody has decided yet.
 | [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model nobody has committed to building, and the limitations a program meets |
 | [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
+| [Deferred](#deferred-insufficient-resources) | the two rows whose blocker is a resource this project does not have, at the lowest priority there is — with the admission test they had to pass, and the candidate that failed it |
 | [How this page is written](#how-this-page-is-written) | [the goal](#the-goal-adr-0109) and the test it sets, the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
 
 **The three parts are new, and the chapters inside them are not.** This page
@@ -52,7 +53,8 @@ a status line.
 **Read the parts in order the first time and by name after that.** They are
 not equally full, and the shape of that is the state of the project: the
 language has a proposal and three shapes, the library has nothing, and the
-utilities have most of what is left.
+utilities have most of what is left. [Deferred](#deferred-insufficient-resources)
+is last because nothing in it is available to do.
 
 ---
 
@@ -1028,6 +1030,70 @@ A miscompilation only an aarch64 backend produces has nothing looking for it
 
 **The layout gate sees frames and nothing else.** A global's alignment, a string
 constant's, and the ABI arguments travel by are outside it.
+
+---
+
+## Deferred: insufficient resources
+
+**Lowest priority, and not a queue.** Everything else on this page is open
+because nobody has decided it or nobody has done it. These two are open because
+what they need is not a decision and not an afternoon: it is a resource this
+project does not have, and no amount of prioritising conjures one. They are
+here so that a reader can stop weighing them against work that is actually
+available.
+
+**The admission test, and it is strict on purpose.** A row belongs here only
+when somebody has *shown* the blocker is a resource — not when it looks
+expensive. That is the same rule the rest of this page is under: a row is a
+report and not an estimate. It matters more here than anywhere, because
+"insufficient resources" is the most comfortable reason there is to write
+beside something, and the least likely to be re-examined.
+
+**It has already caught one.** *A miscompilation only an aarch64 backend
+produces has nothing looking for it* was written into this chapter and taken
+straight out again: checking it found `llc-second-backend` skipping on arm64
+for want of an `apt-get install llvm`, and the objection recorded against that
+— `llvm` must stay out of the container the documented build is checked in
+(ADR-0085) — turned out to be an objection to a step of the *test* job and not
+to a job of its own. GitHub's arm64 runner was already in use by the job beside
+it. It cost about thirty lines of CI (ADR-0331) and had been filed as a machine
+nobody has.
+
+### 1. The front end has no second implementation
+
+`difftest` compared `src/`'s tokens, AST and Sema against the Pascal
+compiler's over every source in the tree, and ADR-0232 retired it with the
+conformance surface it compared. So the whole front end is now guarded by
+goldens that agree with whoever wrote them, plus `tests/spec/` for a
+clause-shaped requirement. `doc/sop.md` §7 calls it **the largest blind spot on
+that page**, and it is.
+
+**What it needs is a second implementation, and that is a team-year.** But the
+reason it is deferred rather than merely expensive is the second half, which
+ADR-0232 already wrote down: *a second implementation of a language with no
+external specification would be two readings by one author*, which is exactly
+what `difftest` could never contradict either. What it did catch was drift
+between two ports of one reading — real, and narrower than the gap it looks
+like it closes.
+
+So the cost is a team and the value is disputed, and both would have to change
+before this is worth starting. `.claude/skills/langspec-audit/` is the
+substitute already in use: independent readers given the behaviour and not the
+reasoning, told to prove the compiler wrong from the standards text (ADR-0101).
+
+### 2. There is no third-party corpus
+
+BSI's 812 programs were the only artefact here that nobody in this project
+wrote, and they are ISO 7185: 25 of them use a word-symbol §6.1.2 reserves, so
+this compiler cannot compile the suite at all (ADR-0232). Nothing replaces it,
+and **nothing exists to acquire** — which is what puts this row here rather
+than in a budget.
+
+Two things narrow it and neither closes it. `unicode-conformance` is an oracle
+nobody here wrote and covers one clause. `fpc-differential` (ADR-0234) is a
+second *processor* rather than a corpus: it answers 103 of the 244 cases that
+have a golden, reaches nothing in `tests/dialect/`, and shrinks with every
+release as the dialect grows.
 
 ---
 
