@@ -732,6 +732,36 @@ requiring an actual of the same type. ADR-0315 asserts both halves of that last
 one. The advice that falls out is that **a trait meant to serve subranges takes
 its receiver by value**, which `Ord` and `Hash` both should.
 
+**And separate translation was the question none of the three had asked**
+([ADR-0341](adr/0341-a-trait-crosses-a-component-and-an-implementation-need-not.md),
+2026-09-06). 6.13 has a client translate against the interface alone, so an
+implementation written in a module-block is invisible to every importer -- and
+the obvious reading, that this makes the feature useless in a library, is
+wrong. A module may declare a trait in its interface, bind a schema's
+discriminant with it there, and have its own routines dispatch to an
+implementation **the client** wrote: probed at 93, the library's body reaching
+the client's `Hash`. It works because such a routine is generic over its
+pointer, and AP 6.7.3.5 re-reads a generic's body in the translation that
+activates it -- the client's. That is the shape `PasContainer`'s routines
+already have, so **the payoff needs no implementation to cross a boundary**.
+
+One case remains and is **deferred rather than built**: a module shipping its
+own implementation for its clients. The argument is ADR-0116's, not cost -- a
+client writing one `impl Key for MapKey` block still removes `StrHash, StrEq`
+from all 30 call sites, so the whole measured payoff survives without it. Of
+the two ways to build it, one does not exist: `NameForLinkage` derives a
+cross-component name from the export-part, and separate translations share no
+symbol table, so the per-impl-scope option collapses into the derived-name
+option plus extra machinery. Reopening it has one candidate, not two.
+
+Building it also found three defects reading had not. An implementation nested
+in a procedure gave **a wrong answer with a zero exit status** -- 14 where the
+answer was 106, the table being one unscoped list and the call passing whatever
+frame it had. A module-heading did not interleave its declarations by written
+position, so a trait was invisible to a schema declared above it in its own
+interface. And a call that selected two implementations took the one declared
+last, silently. All three are refused or fixed.
+
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
 rather than a marker on each routine; the receiver is **written out with its
