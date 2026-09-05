@@ -228,8 +228,9 @@ own exception and compare by length instead.
   qualifier paid once in the library. The rule is the library's rather than
   the language's, held by `export-unique`, which reads the export-parts from
   `--dump-tokens` — `=>` honoured, a range counted as its ends — and refuses
-  to pass by reading nothing: 486 exports across 31 modules, and no
-  spelling twice. Sixty-nine spellings moved, the less general side each
+  to pass by reading nothing, having a floor of modules and of exports. The
+  gate prints its own denominators and they move with the library, so no
+  document here carries them. Sixty-nine spellings moved, the less general side each
   time; both `only`s and both `qualified`s are gone.
 
 **And since ADR-0293 the message says where.** `runtime error: array index

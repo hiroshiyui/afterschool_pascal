@@ -348,7 +348,7 @@ offset the compiler emits, and against LLVM's own answer for six record shapes.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **570 of the 571 programs in this repository's
+a file and a handle (ADR-0325). **573 of the 574 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 

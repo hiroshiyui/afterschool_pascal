@@ -25,10 +25,35 @@ page where the answered outnumber the open teaches a reader to skim, and the
 things worth not skimming here are the six or seven sentences saying what
 nobody has decided yet.
 
+## Where development stands — 2026-09-05
+
+**Released: v3.4.0**, with `CHANGELOG.md`'s `Unreleased` holding what has
+landed since. The compiler builds itself, stage 2 equals stage 3 in every
+program-component, and the suite is green at `-O2` and at `-O0`.
+
+| | |
+| --- | --- |
+| **Open and ready to do** | the platforms, and only the platforms. **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
+| **Open and awaiting a decision** | the object model (ADR-0315, `Proposed` — three increments, four factors settled, *whether to build it* not); a record's `Drop`, which nothing has asked for; and what becomes of the ordinary `^T`, the one entry under [Known limitations](#known-limitations) that is a limitation in ADR-0109's sense |
+| **Open and awaiting a program** | [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for), whose inventory is **empty** and whose lesson is what it keeps in its place. A row here is evidence from somebody writing a program, not an item from a list |
+| **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
+| **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
+
+**What moved most recently** is the memory model, struck as closed on
+2026-09-04 and corrected three times the day after — a use-after-free the
+enumeration missed (ADR-0326), a cost cell that priced that fix at nothing when
+it had taken away every callback (ADR-0332), and a release depth that turned
+out to depend on which of two identically typed fields was declared first
+(ADR-0333). **Three corrections in one day to a chapter that said it was
+finished**, each found by probing a sentence rather than re-reading it, is the
+status worth reading; [the chapter](#memory-model-and-memory-safety) says what
+each of them cost.
+
 ## How to read this
 
 | Part | What it holds |
 | --- | --- |
+| [Where development stands](#where-development-stands--2026-09-05) | the one-screen answer, dated: what is released, what is open and awaiting a decision, what is awaiting a program, and what is unavailable |
 | [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model nobody has committed to building, and the limitations a program meets |
 | [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
@@ -149,13 +174,16 @@ without inheritance.** It is the first record in this tree that is *Proposed*
 rather than *Accepted*. It is named here because it is what this feature's
 residue turned into, and set out in full three sections down, in [The object
 model (proposed)](#the-object-model-proposed). The evidence for it is this
-project's own library: **139 of 486 exported names repeat their module's
+project's own library: **139 of the exported names repeat their module's
 noun** — `JsonMember`, `StreamOpenWrite`, `NetListen` — because §6.11.2 puts
 every imported name into one scope and `export-unique` (ADR-0298) refuses a
 collision, so the prefix is a receiver spelled by hand; and where a property
 belongs to a *type*, the caller carries it instead, `MapPut(m, 'k', 1,
 StrHash, StrEq)` being the shape, with **14 routine-valued parameters** across
-two modules and **30 call sites** threading one pair through.
+two modules and **30 call sites** threading one pair through. The denominator
+is the gate's and moves: **484 exports across 31 modules** on 2026-09-05,
+`python3 tests/checks/export_unique.py`; it read 486 when the numerator was
+taken.
 
 The record proposes Rust's model and argues against Object Pascal's on four
 grounds that are each about a decision already taken here, stages it in three,
@@ -544,9 +572,14 @@ all records with routines over them. What asked is the *second* clause of
 ADR-0109's test — **can a program get it pleasantly** — measured on this tree's
 own library:
 
-- **139 of 486 exported names repeat their own module's noun**:
-  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. That is forced rather
-  than chosen. §6.11.2 puts every imported name into one scope, so two modules
+- **139 exported names repeat their own module's noun**:
+  `JsonMember`, `StreamOpenWrite`, `NetListen`, `MapPut`. Out of 486 when the
+  scan was taken on 2026-09-03 and 484 today (`python3
+  tests/checks/export_unique.py`); the **numerator is a hand scan with no
+  command**, which by this page's own rule makes it an estimate and not a
+  report — retaking it is part of increment A's evidence rather than a
+  maintenance task, since what it counts is exactly what the increment
+  retires. That is forced rather than chosen. §6.11.2 puts every imported name into one scope, so two modules
   may not export one spelling, and ADR-0298's `export-unique` gate refuses a
   collision outright. **The prefix is a receiver, spelled by hand, at every
   declaration and every call site**, and ADR-0306 renamed four examples' worth
@@ -959,8 +992,9 @@ and this sentence does not**, that number having been quoted here and gone
 stale in two days: it said 4999 and the gate then said 8955. **And this
 sentence went stale in its turn**, which is the argument rather than an
 embarrassment -- 8955 stood here while `CLAUDE.md` said 9320 and the gate, run
-on 2026-09-01, says **10 346**. Two documents answered differently about one
-gate and neither was right. Run it.
+on 2026-09-01, said **10 346**, and on 2026-09-05 it says **10 898**. Two
+documents answered differently about one gate, neither was right, and the
+number has moved twice since. Run it: `python3 tests/checks/target_layout.py`.
 
 **The split is why, and not by adding a declaration.** A module emits the
 frame *type* of every frame it can index, which includes the frames of the
@@ -992,10 +1026,11 @@ part of what it says.
   i386 aligns to 4 as well — the three a reader would not have caught, a wrong
   alignment costing no diagnostic anywhere. `PtrSize` and `WordAlign` are the
   two functions every one of the seven now asks, `--target=i386-pc-linux-gnu`
-  is admitted, and **570 of the 571 corpus sources build and run there** —
+  is admitted, and **573 of the 574 corpus sources build and run there** —
   564 of 570 on the day the port landed, and the six became one when
   ADR-0328 gave a foreign declaration a way to name a C integer of the
-  target's width.
+  target's width. The gate prints its own denominator and it moves with the
+  corpus: `bash tests/checks/target32.sh`, 2026-09-05.
 
   **Running it found two defects no arithmetic check here could see**, neither
   in a layout rule and neither in a frame: `pas_select` indexed its arm array
@@ -1005,12 +1040,14 @@ part of what it says.
   both in place and `tests/dialect/select.pas` segfaulted, which is why
   `target32` exists.
 
-  **ADR-0129's `i64` at the foreign boundary is the second, independent
-  question and is still open** — the one row below that is a decision rather
-  than work. Five of the six catalogued failures are it: a declaration naming a
-  C `long`, `size_t` or `time_t` as `int64` is right on LP64 and four bytes too
-  wide on i386, and `strlen('hello')` answers 21474836485. The sixth is
-  `tests/index_span.pas`, which allocates 2 GB on purpose.
+  **ADR-0129's `i64` at the foreign boundary was the second, independent
+  question**, and it read as still open here for as long as it took to write
+  the row below, which decides it the same day. Five of the six failures the
+  port catalogued were it: a declaration naming a C `long`, `size_t` or
+  `time_t` as `int64` is right on LP64 and four bytes too wide on i386, and
+  `strlen('hello')` answered 21474836485. The sixth was
+  `tests/index_span.pas`, which allocates 2 GB on purpose and is the one row
+  left.
 
 - ~~**How a foreign declaration should name a C `long`**~~ (ADR-0129) —
   **decided** the same day it was measured (ADR-0328, AP 6.4.2.7). `clong` and
@@ -1030,6 +1067,19 @@ part of what it says.
   taken deliberately from the validation suite's DEV158, in a commit about a
   foreign boundary where nobody would look for it. `tests/trunc_integer.pas`
   caught it in the same run.
+
+  **And a sixth was still there, invisible at the level the gate ran at**
+  (ADR-0334, 2026-09-05). `tests/dialect/int64_foreign.pas` declared C's `labs`
+  as taking an `int64` — the wrong ABI on every ILP32 target, and it had been
+  wrong since the file was written on 2026-08-19. `target32` swept it 570
+  sources at a time and passed, because at `-O2` the optimiser folds `labs` of
+  a constant away before the ABI matters; at `-O0` it answers
+  `-3028092405585415680`. **No job ran the combination** — `thirty-two-bit`
+  took the default `-O2`, and the `unoptimised` job has no 32-bit libc, so
+  `target32` skips inside it and ctest reads a skip as success. Two jobs, two
+  axes, and the cell where they cross was empty. The job runs the gate at both
+  levels now, and the general form of it is `doc/sop.md` §7's rather than this
+  page's.
 
 **The rest is small and specific.** s390x's `tySet` alignment (13 offsets;
 `target-layout`'s second claim is what would catch it now — i386 does not have
