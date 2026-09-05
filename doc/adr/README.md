@@ -342,3 +342,4 @@ the alternatives that were rejected and why.
 | [0331](0331-the-second-backend-on-the-second-machine.md) | The second backend, on the second machine | Accepted |
 | [0332](0332-a-formal-is-bound-before-its-activation-exists.md) | A formal is bound before its activation exists | Accepted |
 | [0333](0333-a-tree-costs-one-frame-too.md) | A tree costs one frame too | Accepted |
+| [0334](0334-a-gate-with-two-axes.md) | A gate with two axes | Accepted |

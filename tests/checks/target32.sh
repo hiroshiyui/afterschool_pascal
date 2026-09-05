@@ -43,6 +43,14 @@
 # a 32-bit libc to link against, which is a separate package on most
 # distributions. `TARGET32_REQUIRE=1` refuses to pass by skipping, which is how
 # CI asks for the real answer.
+#
+# **It has a second axis and honours it** (ADR-0334): `AFTERSCHOOL_PASCAL_OPT`
+# reaches `run_test.sh` from the environment, and the answer is not the same at
+# both levels. `tests/dialect/int64_foreign.pas` declared C's `labs` as taking
+# an `int64` -- a wrong ABI on every ILP32 target -- and passed here for two
+# weeks because at -O2 the optimiser folded the call away. The `thirty-two-bit`
+# job now runs this gate twice, because the combination that showed it was run
+# by no job at all: the `unoptimised` job has no 32-bit libc and skips.
 
 set -u
 

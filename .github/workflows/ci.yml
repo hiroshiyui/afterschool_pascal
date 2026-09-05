@@ -688,6 +688,18 @@ jobs:
           # `second-backend` and `unicode-conformance`.
           TARGET32_REQUIRE: '1'
 
+      - name: And again at -O0, which is where a wrong ABI shows
+        run: ctest --test-dir build -R target32 --output-on-failure
+        env:
+          TARGET32_REQUIRE: '1'
+          AFTERSCHOOL_PASCAL_OPT: '-O0'
+        # ADR-0334. `-O0` and i386 was a combination no job here ran: the
+        # `unoptimised` job has no 32-bit libc, so `target32` skips in it, and
+        # this job took the default -O2. `tests/dialect/int64_foreign.pas`
+        # declared C's `labs` as taking an `int64`, which is a wrong ABI on
+        # every ILP32 target, and at -O2 the optimiser folded the call away.
+        # The gate is the same gate; what was missing was one of its two axes.
+
   model-drift:
     # doc/sop.md gate A1, made mechanical: verify/lowering.py is a model of the
     # code generator, and the rules prove that model against a statement of the

@@ -17,20 +17,31 @@
   `llabs` and `imaxabs` are the two libc takes and answers in the type, so they
   are what a case can call without a file descriptor. The buffer itself does
   not cross yet -- that is the next increment, and it is unblocked rather than
-  done. }
+  done.
+
+  `labs` is the third and is **not** one of them: C's `long` is the target's
+  width, sixty-four bits here and thirty-two on i386, so declaring it `int64`
+  was a wrong ABI that this file carried from the day it was written. It went
+  unseen because it is only wrong where a pointer is four bytes, and `target32`
+  is run at -O2, where the optimiser folded the call away; at -O0 it answered
+  -3028092405585415680. `clong` (ADR-0328) is the name for exactly this, and
+  the actual is now a value a thirty-two-bit `long` can hold, because the
+  declaration says the target's width and means it. }
 program Int64Foreign(output);
 
 function llabs(x: int64): int64; external 'llabs';
 function imaxabs(x: int64): int64; external 'imaxabs';
-function labs(x: int64): int64; external 'labs';
+function labs(x: clong): clong; external 'labs';
 
 var a: int64;
+    b: clong;
     n: integer;
 begin
   a := -5000000000;
   writeln(llabs(a));
   writeln(imaxabs(a));
-  writeln(labs(a));
+  b := -2000000000;
+  writeln(labs(b));
   { an integer actual widens into an int64 formal, as it does anywhere else }
   n := -7;
   writeln(llabs(n));
