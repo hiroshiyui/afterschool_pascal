@@ -961,9 +961,16 @@ source is the head's own field, so releasing what `head` held disposes that one
 node — its successor already emptied out of it — and the successor lands in
 `head`.
 
-The release is recursive, so a list or a tree is released by leaving the block
-that owns its root, and anything owned *inside* the variable — a file, a handle
-— goes with it. A second `new` over the same variable releases the first, and
+A list or a tree is released by leaving the block that owns its root, and
+anything owned *inside* the variable — a file, a handle — goes with it. **The
+release costs one frame** however deep the structure (ADR-0322, ADR-0333): the
+first field whose type is an owned pointer to the same record is the walk's
+link, and every other one is emptied and pushed onto a work list threaded
+through the link fields of the nodes waiting on it. That is not a detail of the
+implementation — it is the difference between a million-node list releasing in
+35 ms and the program dying with a signal at the end of its block, which is
+what it did until 2026-09-04, and between two identically shaped trees where
+one released and the other did not, which is what happened until the day after. A second `new` over the same variable releases the first, and
 `dispose` is still the early release. What an owned pointer has is the file
 variable's rules again: no copy, no value parameter, no function result, and no
 comparison but with `nil`. So it travels as a `var` parameter, and a list is
@@ -1073,6 +1080,22 @@ cannot be copied, so the only names a variable of one has are itself, a `var`
 parameter bound to it, and a component of what contains it; and a block obtains
 a routine by scope or by being handed one. The first two are the rules above,
 and the third is this one.
+
+**What the routine handed over may be is a formal, and then it reaches
+nothing** (ADR-0332). A procedural parameter of the block that declares the
+owner was bound at a call of that block, in a block whose activation is a
+proper ancestor of this one — a formal is bound before its activation exists —
+so the ordinary callback is admitted:
+
+```pascal
+procedure Holder(procedure k);
+var p: Own;
+begin new(p); p^.v := 7; Runner(p^, k) end     { admitted: k cannot name p }
+```
+
+A procedural parameter of a block nested one *deeper* than the owner's is a
+different question and is still refused, because there the routine handed in is
+denoted where the owner is in scope.
 
 **And a generic body's `take` moves where the type moves** (ADR-0323, AP
 6.4.14.6). `take` is the only operation here whose *applicability* is a fact
