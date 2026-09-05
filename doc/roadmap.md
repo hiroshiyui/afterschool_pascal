@@ -687,6 +687,28 @@ parser already committing on that juxtaposition and merely refusing the name.
 three was a contradiction of a design written without probes, against a compiler
 that was there to be asked.
 
+**Two of ADR-0338's own claims then failed the same way**
+([ADR-0339](adr/0339-a-trait-heading-names-one-type-and-one-scope.md),
+2026-09-05), which is the lesson holding for the record that stated it.
+`Congruous` compares by type *identity*, so reusing it after substituting `Self`
+works for a bare `self: Self` and not for `array of Self` -- 6.4.1 giving each
+denoter that is not a type-name its own type object, so the trait's and the
+impl's are two. `Self` is therefore admitted only as a whole parameter-form or
+result-type, refused **at the trait-declaration**, because left to the impl the
+message arrives once per implementation, in the wrong file, describing
+procedural parameters to a reader who wrote none. `^Self` needs no rule at all:
+6.7.3.1's parameter-form admits no pointer denoter, so it is unformable.
+
+And a trait's routine names do collide, outright rather than as a catalogue
+entry: 6.11.2 puts every imported name in one scope, and two modules exporting
+`Compare` refuse the program with *'compare' is already declared in this
+block*. The names a trait wants are the contested ones. The answer needed
+nothing invented -- 6.11's `qualified` keeps both, probed -- but it is the
+strongest argument yet for **increment A**, and not the one A is justified by:
+`x.Compare(y)` resolves in the receiver's type scope and is the collision-free
+form of what `qualified` here answers by hand. A is still not a prerequisite
+for B; it is now something better, a reason of its own.
+
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
 rather than a marker on each routine; the receiver is **written out with its
