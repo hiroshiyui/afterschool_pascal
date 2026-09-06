@@ -571,6 +571,16 @@ jobs:
           uname -m
           llc --version | head -3
           clang --version | head -1
+          echo "target: $AFTERSCHOOL_PASCAL_TARGET"
+        # The target is here as well as in the gate's own output, because
+        # `ctest --output-on-failure` shows a case's output only when it fails
+        # -- so on the green run that matters the line the gate prints is
+        # captured and never seen. This job spent every run of its life
+        # proving x86-64 while saying it proved aarch64 (ADR-0345), and the
+        # whole of what is in place against that happening again is a reader
+        # of this log.
+        env:
+          AFTERSCHOOL_PASCAL_TARGET: aarch64-linux-gnu
 
       - name: Build
         run: |
