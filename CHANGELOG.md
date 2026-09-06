@@ -13,7 +13,81 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-09-06
+
+The release that finished the memory model and then found out what it had left
+open. `owned ^T` went into the library, which is what ADR-0181 was built for,
+and adopting it turned up four ways a borrow could outlive what it borrows that
+the rule as written did not see — three of them found by a langspec audit whose
+whole purpose is that no oracle here can contradict a *reading*, and every gate
+was green over all three.
+
+**Two threads of control became something a program can steer.** A task is a
+value now, with a name and a type; `wait` joins one; and the select-statement
+waits on several channels at once, takes the first arm that can proceed, and
+gives up after a timeout. ThreadSanitizer is the oracle underneath that, and it
+is a gate rather than a thing run by hand.
+
+**A pointer is not always eight bytes.** i386 is admitted, which took seven
+layout rules rather than the 3858 offsets that looked like the work, and it
+brought `clong` and `csize` — the first required identifiers whose *type*
+depends on the target. It also decided something this release states outright:
+an i386 this compiler emits for has SSE2, because on an x87 an error condition
+this language says it detects goes undetected.
+
+**And traits.** A trait bounds a schema's type-valued discriminant and a
+routine's type parameter, an implementation is written by whoever names the
+type, and `lib/dialect/passortx.pas` is the first client that is not a test —
+`impl Sortable for Point;` once, and `Sort(ps)` thereafter. Four records
+preceded one working feature and each says why the previous was wrong; the
+first client found the fifth thing in under an hour, which is now a rule in
+`doc/sop.md`.
+
 ### Added
+
+- **Waiting for a task, and for whichever of several things comes first**
+  (ADR-0312, ADR-0313, AP 6.4.17, AP 6.9.3.15). `task` is a required
+  type-identifier — shadowable, like `int64`, and not a word-symbol — and its
+  values are handles, so a task is released by the block that declared it,
+  moved by `take`, and refused as an assignment source like every other handle.
+  `wait(t)` blocks until that one task has finished. The **select-statement**
+  waits on several channels at once and takes the first arm whose operation can
+  proceed, with the case-statement's own punctuation:
+
+  ```pascal
+  select
+    receive(x, got): send(out, got);
+    receive(y, got): send(out, got);
+    after 2000: writeln('gave up waiting')
+  end
+  ```
+
+  A `send` arm waits for room as a `receive` arm waits for a value, an `after`
+  arm gives up after that many milliseconds, and an `otherwise` declines to wait
+  at all.
+
+- **A third target: `--target=i386-pc-linux-gnu`** (ADR-0325). Every layout rule
+  that wrote 8 now asks `PtrSize` or `WordAlign`, so a pointer is four bytes
+  where the target says so. The corpus runs against a 32-bit runtime under the
+  `target32` gate; the one program that cannot is a deliberate 2 GB allocation.
+
+- **`clong` and `csize`** (ADR-0328), two required identifiers denoting whichever
+  integer type a C `long` and a C `size_t` fit on the target — `int64` on x86-64
+  and aarch64, `integer` on i386. An `external` declaration naming a C routine
+  that takes a `long` is now writable once rather than per target.
+
+- **A protected parameter may be of an owned-pointer-type** (ADR-0318,
+  AP 6.4.14.8), which is the read-only borrow: a name for what a variable owns,
+  read through, and through which nothing may be released. §6.4.1's exclusion of
+  a pointer-type does not reach an owned pointer.
+
+- **A discriminated schema may be written wherever a type-name is required**
+  (ADR-0324, AP 6.7.3.1.1, AP 6.7.2.1) — a parameter-form and a result-type both
+  take `Vec(integer)` where they took only a name.
+
+- **An array determines a slice parameter's component type** (ADR-0316), as a
+  slice-type already did, so `array of T` accepts an actual of an array-type
+  without the caller writing the slice.
 
 - **`PasSortX`, a sort over the element type itself** (ADR-0344): the trait
   `Sortable` with `Sort`, `SortWith`, `IsSorted` and `LowerBoundOf` over an
@@ -83,6 +157,28 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Disposing a long owned chain or a deep owned tree costs one frame**
+  (ADR-0322, ADR-0333, AP 6.4.14.3). The release routine walked the structure
+  recursively, so a list or a tree deeper than the stack ended the program in a
+  segmentation fault rather than freeing it. Every self-owned field is emptied
+  onto a work list threaded through the nodes themselves, so the depth costs no
+  stack and no allocation.
+
+- **A block could reach an owner through a procedural parameter** (ADR-0326),
+  and through a formal bound before its own activation existed (ADR-0332). Both
+  were ways for a borrow to outlive what it borrowed that the rule as written
+  did not see; both are refused, and the second is one conjunct rather than a
+  second rule.
+
+- **`dispose` of a variable whose domain is a schema found no tuple**
+  (ADR-0329) where the walk reached one below the outermost, so a discriminated
+  component was released against the wrong bounds.
+
+- **`PasJson` reads a number by rounding once** (ADR-0314). The reader
+  normalised and then computed, accumulating error before the value existed; it
+  now writes what it scanned as a Pascal real-literal and converts once, so a
+  decimal that reads back exactly does.
+
 - **`PasJson` writes the shortest number that reads back as the same value**
   (ADR-0309). `0.75` came out as `7.500000000000E-01` — valid JSON, and
   §6.9.3.4.1's default real output arriving unchanged — and now comes out as
@@ -114,6 +210,24 @@ appears below in the release where it still existed.
   and — for a text — normalised where it crosses.
 
 ### Changed
+
+- **`take` inside a generic means *move where the type moves*** (ADR-0323). A
+  generic body may write `take(v)` for a type parameter that turns out not to be
+  affine; there the variable is unchanged and not threatened, and the operation
+  denotes its value. Outside a generic it is refused as before, so one body
+  serves an element type that moves and one that copies.
+
+- **A borrow is refused where it is formed** (ADR-0319, AP 6.4.14.9). A
+  variable-access reached through a dereference of an owned pointer may not be
+  passed to a `var` parameter of a call whose callee can name the entire
+  variable that owns it, and where such an access is a `with`-element, no call
+  in the body may activate a block that can name it. The earlier rule refused
+  the *release* and let the dangling name be formed.
+
+- **A schema domain is admitted only where what it produces holds nothing
+  affine** (ADR-0320, AP 6.4.14.2). `owned ^Vec(integer)` is accepted where the
+  produced type contains no file, handle or owned pointer, and refused where it
+  does — which is what let the owned pointer into the library at all.
 
 - **An i386 this compiler emits for has SSE2** (ADR-0346,
   `doc/implementation-defined.md` §2.2). `tools/pascalcc` names
@@ -3326,6 +3440,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.0
 [3.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.4.0
 [3.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.3.0
 [3.2.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.2.0

@@ -27,7 +27,7 @@ nobody has decided yet.
 
 ## Where development stands — 2026-09-05
 
-**Released: v3.4.0**, with `CHANGELOG.md`'s `Unreleased` holding what has
+**Released: v3.5.0**, with `CHANGELOG.md`'s `Unreleased` holding what has
 landed since. The compiler builds itself, stage 2 equals stage 3 in every
 program-component, and the suite is green at `-O2` and at `-O0`.
 
