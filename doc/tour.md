@@ -444,13 +444,25 @@ leave the rest to be inferred (ADR-0304), which is why the pointer type is
 absent from `VecGet(integer, v, k)`. When a generic call looks wordy, a type
 standing only in a result is almost always why.
 
-The map's key is a **type parameter like the element**, and there is no
-constraint saying it can be hashed and compared, because none is needed: you
-pass the two routines instead, `MapPut(m, w, n, StrHash, StrEq)`. `StrHash`
-and `StrEq` are the module's ready-made pair for a string key and they are
-*schematic*, so they serve a key of any capacity — `PasContainer.MapKey`
-(`string(63)`) is a ready-made key type for a program that wants one and is
-not a bound on the map.
+The map's key is a **type parameter like the element**, and it has to
+implement `Key` — a hash and an equality — which you say once, at your own key
+type, rather than at every call:
+
+```pascal
+impl Key for WordText;
+  function Hash;
+  begin Hash := StrHash(k) end;
+  function Same;
+  begin Same := StrEq(a, b) end;
+end;
+```
+
+Then `MapPut(m, w, n)` is the call. `StrHash` and `StrEq` are the module's
+ready-made pair for a string key and they are *schematic*, so they serve a key
+of any capacity — which is why the implementation is two lines and not a hash.
+`PasContainer.MapKey` (`string(63)`) is a ready-made key *type* for a program
+that wants one; it is not a bound on the map, and the module cannot implement
+`Key` for it on your behalf, so even that type gets the two lines above.
 
 What you do have to decide is **how wide your own key type is**, because a
 string type traps on a value longer than its capacity. The rule, which

@@ -194,10 +194,14 @@ project's own library: **139 of the exported names repeat their module's
 noun** — `JsonMember`, `StreamOpenWrite`, `NetListen` — because §6.11.2 puts
 every imported name into one scope and `export-unique` (ADR-0298) refuses a
 collision, so the prefix is a receiver spelled by hand; and where a property
-belongs to a *type*, the caller carries it instead, `MapPut(m, 'k', 1,
-StrHash, StrEq)` being the shape, with **14 routine-valued parameters** across
-two modules and **30 call sites** threading one pair through. The denominator
-is the gate's and moves: **489 exports across 32 modules** on 2026-09-06,
+belongs to a *type*, the caller carried it instead — `MapPut(m, 'k', 1,
+StrHash, StrEq)` was the shape, with **14 routine-valued parameters** across
+two modules and **30 call sites** threading one pair through. **That half of
+the evidence is collected**: since ADR-0355 the map's key implements `Key`, the
+thirty sites name no pair, and what is left is `PasSort`'s two procedural
+parameters and `PasFile`'s one, each taking a *routine* rather than standing
+in for a property of a type. The prefix half stands. The denominator is the
+gate's and moves: **489 exports across 32 modules** on 2026-09-06,
 `python3 tests/checks/export_unique.py`; it read 486 when the numerator was
 taken and 484 the day after.
 
@@ -644,9 +648,11 @@ own library:
   collision outright. **The prefix is a receiver, spelled by hand, at every
   declaration and every call site**, and ADR-0306 renamed four examples' worth
   of them before anyone counted the rest.
-- **14 routine-valued parameters and 30 call sites** thread `StrHash, StrEq`
-  through `lib/passort.pas` and `lib/dialect/pascontainer.pas`, because where a
-  property belongs to a type the caller has to carry it instead.
+- ~~**14 routine-valued parameters and 30 call sites** thread `StrHash, StrEq`
+  through `lib/passort.pas` and `lib/dialect/pascontainer.pas`~~ — **the thirty
+  are gone** (ADR-0355): the map's key implements `Key` and no call names the
+  pair. Three routine-valued parameters remain, in `PasSort` and `PasFile`, and
+  each takes a genuine routine rather than a property of a type.
 - `lib/passort.pas` **never sees an element** — it sorts by `less(i, j)` and
   `swap(i, j)` — which is the *Traits / protocols* row of
   [Where the ideas come from](#where-the-ideas-come-from) said from the
@@ -700,9 +706,11 @@ parameter-form admitting no denoter to read a tuple out of, while the
 container's routines must take the pointer because `MapPut` grows the map with
 `new(m, bigger)`. Determined from the key instead, a string literal binds a type
 per literal *length*, which is the failure `pascontainer.pas` already records.
-**The bound belongs on the schema's discriminant** -- `Map(K: Hash + Eq;
-V: type; cap: integer)` -- where the client writes the type down and it is
-checked once, leaving all 30 call sites unchanged.
+**The bound belongs on the schema's discriminant** -- written `Map(K: Key;
+V: type; cap: integer)` when it landed, one trait rather than `Hash + Eq`,
+the language admitting one bound -- where the client writes the type down and
+it is checked once. The 30 call sites did *not* stay unchanged, as this
+paragraph predicted; each lost two arguments, which was the point (ADR-0355).
 
 Two more findings came with it. The orphan rule contradicts the record's own
 *What this does not do*, and taking either reading leaves `string(n)`
@@ -777,7 +785,9 @@ already have, so **the payoff needs no implementation to cross a boundary**.
 One case remains and is **deferred rather than built**: a module shipping its
 own implementation for its clients. The argument is ADR-0116's, not cost -- a
 client writing one `impl Key for MapKey` block still removes `StrHash, StrEq`
-from all 30 call sites, so the whole measured payoff survives without it. Of
+from all 30 call sites, so the whole measured payoff survives without it --
+and on 2026-09-07 it did (ADR-0355), every client of the map writing its own
+block and every golden unchanged. Of
 the two ways to build it, one does not exist: `NameForLinkage` derives a
 cross-component name from the export-part, and separate translations share no
 symbol table, so the per-impl-scope option collapses into the derived-name

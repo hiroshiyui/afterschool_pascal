@@ -4948,7 +4948,10 @@ clamped *key* are different decisions, which is where `Claimed`'s policy stops.
 
 `tests/dialect/lib_container_key.pas` keys three maps at three capacities, none
 of them 63, and `0310-the-ready-made-pair-is-the-bound` puts `StrHash`'s
-`MapKey` parameter back.
+`MapKey` parameter back. Since ADR-0355 that case writes three `impl Key`
+blocks, one per capacity, each two lines calling the pair — a type having at
+most one implementation of a trait per program-component (AP 6.7.10), and
+`string(200)`, `string(8)` and `string(63)` being three types.
 
 ### A trait names routines a program gives (ADR-0338 to ADR-0341, AP 6.7.9)
 
@@ -5043,4 +5046,13 @@ cross-component shape, and five error cases carry the refusals;
 `selfhost/badsema/traits.pas` and five `badparse/` files carry the messages.
 `lib/dialect/passortx.pas` is the first client that is not a test — the trait
 declared in a module and every implementation written by the importer — and
-`tests/dialect/lib_sortx.pas` drives it (ADR-0344).
+`tests/dialect/lib_sortx.pas` drives it (ADR-0344). **`PasContainer`'s map is
+the second and the one the feature was measured against** (ADR-0355): `Map(K:
+Key; V: type; cap: integer)` binds the key discriminant with a trait declared in
+the same module heading — the shape ADR-0341 probed and no component had — and
+the thirty call sites that threaded `StrHash, StrEq` through lost both
+arguments, every golden unchanged. The module cannot implement `Key` for its
+own `MapKey`, so every client writes the two lines, including the language
+server for its URI. Building it found no compiler defect, which is the first
+trait client of which that is true; what it found instead is a cascade after
+the bound's own diagnostic, recorded in that ADR.

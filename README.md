@@ -1409,22 +1409,29 @@ need not know what is in it. The types decide the layout, which a pointer type
 must know; the capacity decides the extent, which `new` may vary.
 
 **And a helper written for such a container needs no capacity either**
-(ADR-0290). A container that takes its hash and its equality as procedural
-parameters is generic over its key, but §6.7.3.6's congruity is exact, so a
-ready-made pair written for one capacity was refused by a map keyed at any
-other and every client wrote its own. A schematic `string` value formal may now
-stand where a produced string type is written:
+(ADR-0290). A map is generic over its key, and its key implements `Key` — a
+hash and an equality — but §6.7.3.6's congruity is exact, so a ready-made hash
+written for one capacity was refused by a key of any other and every client
+wrote its own. A schematic `string` value formal may now stand where a produced
+string type is written, which is what makes the implementation two lines:
 
 ```pascal
 function StrHash(key: string): integer;      { no capacity, and it serves all }
 
 type uri = string(200);
-     UriMap = ^Map(uri, integer);
+
+impl Key for uri;                            { said once, at the key type }
+  function Hash;
+  begin Hash := StrHash(k) end;              { PasContainer's own pair, at 200 }
+  function Same;
+  begin Same := StrEq(a, b) end;
+end;
+
+type UriMap = ^Map(uri, integer);
 var m: UriMap;
 begin
   MapInit(UriMap, m, 8);
-  MapPut(m, 'file:///home/someone/afterschool_pascal/selfhost/apfront.pas',
-         7, StrHash, StrEq)        { PasContainer's own pair, at 200 }
+  MapPut(m, 'file:///home/someone/afterschool_pascal/selfhost/apfront.pas', 7)
 end;
 ```
 
@@ -1775,7 +1782,7 @@ records is which modules a reader can port to another Pascal.
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds`, `CpuSeconds` and `ProcessId`. `Run` flushes the program's own output first, so what was written before the command comes out before it. `ProcessId` is `getpid`: a number no other **live** program has, which is what a program building a temporary file name has to build it from |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `StreamOpenRead`, `StreamOpenWrite`, `StreamOpenAppend`, `StreamClose`, `StreamWriteText`, `StreamWriteLine`, `StreamReadLine`, `StreamFlush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
-| `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a program that avoids the dialect layer must still have a vector and a map |
+| `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. **The map's key implements the trait `Key`** — a `Hash` and a `Same`, written once per key type by the client, which is what took two procedural parameters off every map call (ADR-0355); `StrHash`/`StrEq` are exported as what a string key's implementation calls. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a program that avoids the dialect layer must still have a vector and a map |
 | `lib/dialect/pasjson.pas` | A **JSON document** read, navigated, built and written back — `JsonParse` and `JsonParseChars` answering a `JsonResult`; `JsonKindOf`, `JsonCount`, `JsonAt`, `JsonMember`, `JsonNameAt`; `JsonNumberOr`, `JsonIntegerOr`, `JsonBooleanOr`, `JsonIsNull`, `JsonTextInto`; the seven `JsonNew*` constructors with `JsonAppend` and `JsonPut`; and `JsonRender`. A string value is **bytes and unbounded** — a growable `JsonChars`, so a whole file fits in one — while a member name is a `string(255)`. It does not normalise: AP 6.4.15's `utf8` would establish normal form C on assignment, and a program that round-trips somebody's source file through this must not edit it |
 | `lib/dialect/paslsp.pas` | The **Language Server Protocol's framing** — `LspOpen`, `LspRead`, `LspWrite` over a descriptor. A message is `Content-Length: N` and then exactly N bytes, so the header is line-oriented and the body is not, and a reader that has just finished a header is usually holding the first bytes of the body: `PasStream` reads lines and cannot hand those back, `PasIO` reads bytes, and an `LspReader` is the buffer between them. It reads the body and does not read the *message* — `PasJson` makes a document of it — because framing and content are two failures with two causes. Lenient about a bare `<LF>`, strict about writing `<CR><LF>`. It carries a **second framing** beside it — `JsonlRead`/`JsonlWrite`, one JSON message to a line, which is what MCP's stdio transport delimits by — over the same reader; the two framings are 40 and 58 lines against a buffer neither could be written without |
 | `lib/dialect/paslspdiag.pas` | A **compiler diagnostic in the protocol's shape** — `DiagParse` reads `file:line:col: error: message` into a `Diagnostic ! ErrorCode`, `DiagJson` makes the protocol's object of one, and `DiagPublish` the `textDocument/publishDiagnostics` notification. LSP counts lines and characters from zero where the compiler counts from one, and the conversion happens here |
