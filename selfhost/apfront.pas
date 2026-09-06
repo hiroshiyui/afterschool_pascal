@@ -9544,7 +9544,14 @@ begin
       if d^.ptArgs <> nil then begin
         s := BoundSchema(s, d^.ptArgs, d)
       end;
-      if s = nil then t^.elem := intType
+      if s = nil then begin
+        { The binding was refused and SatisfiesBound said so at the type. The
+          domain is the placeholder every error path leaves, and the flag is
+          what keeps InstantiateGeneric from checking a body against it
+          (ADR-0356). }
+        t^.elem := intType;
+        t^.isErrType := true
+      end
       else begin
       { 6.4.4: a domain-type may be a schema-name. It is resolved here rather
         than deferred, because a pointer written in the *variable* part is past
@@ -15320,7 +15327,7 @@ end;
 
 procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last: nodePtr; t: typePtr;
-    n, at2, len2: integer; stepped, ambig: boolean;
+    n, at2, len2: integer; stepped, ambig, refused: boolean;
 begin
   { 6.11.3's qualified name. A required function is never one of the answers,
     so this returns whatever the interface holds or nothing at all. }
@@ -15362,10 +15369,25 @@ begin
   { AP 6.7.3.5, as for a procedure-statement: the instantiation is the callee
     from here on. Asked before ResultTypeOf, because a generic function has no
     result type until a call says what its types are. }
+  refused := false;
   if sym <> nil then
-    if sym^.isGeneric then
+    if sym^.isGeneric then begin
       sym := InstantiateGeneric(sym, c^.clArgs, c^.line, c^.col);
-  if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
+      refused := sym = nil
+    end;
+  { InstantiateGeneric answers nil only after reporting -- a bound, a category,
+    a type nothing determined, or a type that failed to bind (ADR-0356) -- so
+    the name was found and the call is not unknown. Falling through to the
+    trait-keyed scope and then to the required identifiers reported 'unknown
+    function' after every one of those refusals: a second message about a name
+    the first had just spelled. The procedure-statement never had this, its
+    path reading nil as done. The node takes the placeholder every refusal
+    below leaves. }
+  if refused then begin
+    c^.ntype := intType;
+    c^.nErrType := true
+  end
+  else if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
     CheckHandleBirth(c^.ntype, c^.line, c^.col, c^.clAt, c^.clLen);
@@ -22923,6 +22945,12 @@ begin
         writeln('type determines it');
         ok := false
       end
+      { A type that failed to bind (ADR-0356): refused, and nothing said. The
+        message was written at the type, and a category or a bound asked of
+        `^integer` here would be a second one about a program nobody wrote;
+        the body, checked against it, produced a hundred. CheckCall reads the
+        nil this leaves as "reported". }
+      else if given^.isErrType then ok := false
       else if not SatisfiesCat(given, g^.grCat) then begin
         ReportCat(gen, n, g, given, bs.b[k].line, bs.b[k].col, bs.b[k].argn);
         ok := false

@@ -3,6 +3,4 @@
 <source>:34:17: error: line cannot be the type argument for 'k', which is declared 'sortable': it has no implementation of 'sortable'
 <source>:39:12: error: line cannot be the type argument for 'k', which is declared 'sortable': it has no implementation of 'sortable'
 <source>:43:16: error: line cannot be the type argument for 't' of 'bigger', which is declared 'sortable type': it has no implementation of 'sortable'
-<source>:43:9: error: unknown function 'bigger'
 <source>:44:16: error: line cannot be the type argument for 't' of 'bigger', which is declared 'sortable type': it has no implementation of 'sortable'; argument 1 of this call is what determined it
-<source>:44:9: error: unknown function 'bigger'

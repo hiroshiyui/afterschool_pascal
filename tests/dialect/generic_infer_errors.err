@@ -1,9 +1,6 @@
 <source>:84:11: error: nothing in this call says what 't' of 'pick' is: write the type arguments, or pass an argument whose type determines it
-<source>:84:11: error: unknown function 'pick'
 <source>:88:11: error: var parameter 'b' is integer, but the argument is char
 <source>:92:19: error: this argument of 'valueor' must name a type, because the parameter it matches is declared 'type'
-<source>:92:11: error: unknown function 'valueor'
 <source>:96:29: error: argument 2 of 'whenbadfirst' is fallible(char), but the value is fallible(integer)
 <source>:100:11: error: nothing in this call says what 'u' of 'pair' is: write the type arguments, or pass an argument whose type determines it
-<source>:100:11: error: unknown function 'pair'
 <source>:103:17: error: a slice can be taken only of an array indexed by integers, and array ['a'..'c'] of integer is not

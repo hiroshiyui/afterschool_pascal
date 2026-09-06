@@ -5054,5 +5054,4 @@ the thirty call sites that threaded `StrHash, StrEq` through lost both
 arguments, every golden unchanged. The module cannot implement `Key` for its
 own `MapKey`, so every client writes the two lines, including the language
 server for its URI. Building it found no compiler defect, which is the first
-trait client of which that is true; what it found instead is a cascade after
-the bound's own diagnostic, recorded in that ADR.
+trait client of which that is true; what it found instead is a cascade after the bound's own diagnostic, closed the same day by ADR-0356: the pointer type a failed binding produces carries `isErrType`, `InstantiateGeneric` refuses a tuple holding one without a word, and `CheckCall` reads that nil as reported rather than as an unknown function.

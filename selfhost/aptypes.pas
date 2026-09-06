@@ -1069,6 +1069,14 @@ type
       eoln and reading a number all belong to a text file and to nothing
       else. Nothing but this flag distinguishes the two. }
     isText: boolean;
+    { The type a failed schema binding leaves (ADR-0356). The refusal was
+      reported where the type was written, so nothing that reads this type
+      reports again: InstantiateGeneric refuses a tuple holding one without a
+      word, where before it checked the generic's body against `^integer` and
+      reported a fault of the library's on every line of it. nErrType's twin
+      for a type -- an expression node could say its type was the placeholder
+      an error path left (ADR-0306), and a type could not. }
+    isErrType: boolean;
     lo, hi: integer;
     enumNames, enumTail: namePtr;
     fields, fieldTail: fieldPtr;
@@ -3749,6 +3757,7 @@ begin
   t^.isPacked := false;
   t^.setCanonical := false;
   t^.isText := false;
+  t^.isErrType := false;
   t^.lo := 0;
   t^.hi := -1;
   t^.enumNames := nil;

@@ -3,11 +3,11 @@
   the first MapPut: the bound is on the schema's discriminant, so the client
   writes the type down once and the check happens once.
 
-  What follows the first line of the golden is not a claim but a record: the
-  domain a failed binding leaves is the placeholder every error path here
-  leaves, and each generic body instantiated against it then reports a fault
-  of its own, located in the library. doc/sop.md section 7 carries the row;
-  a fix that silences the cascade changes this golden and should. }
+  And it is refused in one line. The domain a failed binding leaves is the
+  placeholder every error path here leaves, and until ADR-0356 each generic
+  body instantiated against it reported a fault of its own, located in the
+  library -- seven lines for this one MapInit. The type now carries the
+  refusal and no body is checked against it; the golden claims one line. }
 program LibContainerBadKey(output);
 import PasContainer;
 type

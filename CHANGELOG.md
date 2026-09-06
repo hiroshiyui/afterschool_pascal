@@ -28,6 +28,18 @@ appears below in the release where it still existed.
   module cannot supply an implementation for its own `MapKey` (ADR-0341), so
   even the ready-made key type takes two lines in each client.
 
+### Fixed
+
+- **A refused generic instantiation is reported once** (ADR-0356). A schema
+  whose type-valued discriminant failed its bound used to produce `^integer`,
+  and every generic body instantiated against it then reported faults located
+  in the library — seven lines for one `MapInit`, a hundred for a client that
+  also put and got — after the one line that was the diagnostic; and a call
+  whose instantiation was refused for a category, a bound or an undetermined
+  type was followed by `unknown function` naming the function just refused.
+  The type now carries the refusal, no body is checked against it, and the
+  second message is gone. Five goldens lost fifteen lines and gained none.
+
 ### Added
 
 - **A project: `pascalcc new-project <name>`** (ADR-0348), alias `new`, with

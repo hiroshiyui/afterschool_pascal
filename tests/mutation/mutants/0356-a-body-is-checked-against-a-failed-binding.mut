@@ -1,0 +1,8 @@
+adr: 0356
+file: selfhost/apfront.pas
+kills: lib_container_bad_key
+why: InstantiateGeneric no longer refuses a tuple holding a type that failed to bind, so MapInit's body is re-read against ^integer and reports seven faults located in pascontainer.pas after the one line that was the diagnostic. The golden is one line, and this puts the cascade back.
+--- old
+      else if given^.isErrType then ok := false
+--- new
+      else if given^.isErrType then ok := true

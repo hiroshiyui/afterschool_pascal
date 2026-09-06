@@ -1,0 +1,8 @@
+adr: 0356
+file: selfhost/apfront.pas
+kills: traits_bad_bound
+why: CheckCall forgets that InstantiateGeneric answered nil after reporting, falls through to the trait-keyed scope and the required identifiers, finds nothing named bigger, and writes "unknown function 'bigger'" under the bound refusal that has just spelled it. The golden lost exactly those two lines.
+--- old
+      refused := sym = nil
+--- new
+      refused := false

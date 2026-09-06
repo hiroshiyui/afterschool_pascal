@@ -1,13 +1,7 @@
 <source>:62:12: error: point cannot be the type argument for 'elem' of 'sum', which is declared 'numeric type': that admits integer, int64, real, complex, or a subrange of one
-<source>:62:8: error: unknown function 'sum'
 <source>:67:12: error: point cannot be the type argument for 'elem' of 'sum', which is declared 'numeric type': that admits integer, int64, real, complex, or a subrange of one; argument 1 of this call is what determined it
-<source>:67:8: error: unknown function 'sum'
 <source>:72:13: error: real cannot be the type argument for 'elem' of 'span', which is declared 'ordinal type': that admits integer, char, boolean, an enumerated type, or a subrange of one; argument 1 of this call is what determined it
-<source>:72:8: error: unknown function 'span'
 <source>:77:15: error: point cannot be the type argument for 'elem' of 'larger', which is declared 'ordered type': that admits any ordinal type, and int64, real, a string-type and utf8; argument 1 of this call is what determined it
-<source>:77:8: error: unknown function 'larger'
 <source>:81:15: error: pair cannot be the type argument for 'elem' of 'alike', which is declared 'equatable type': that admits any ordinal type, and int64, real, complex, a set, a pointer that is not owned, a string-type and utf8
-<source>:81:9: error: unknown function 'alike'
 <source>:93:15: error: text cannot be the type argument for 'elem' of 'alike', which is declared 'equatable type': that admits any ordinal type, and int64, real, complex, a set, a pointer that is not owned, a string-type and utf8; argument 1 of this call is what determined it
-<source>:93:9: error: unknown function 'alike'
 <source>:98:17: error: point cannot be the type argument for 'elem' of 'ignore', which is declared 'numeric type': that admits integer, int64, real, complex, or a subrange of one
