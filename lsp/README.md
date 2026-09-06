@@ -329,6 +329,26 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"outline","
 `run.sh` builds the server and replays every recorded conversation against it.
 It is one `ctest` case, `lsp-server`.
 
+**One of them is the language itself, and it is the one to extend.**
+`sessions/workspace/dialect.pas` carries a trait, two implementations, a task,
+a channel, a select-statement, an owned pointer, an optional, a schema, a slice
+parameter and a trait-bounded generic; `mcp_dialect` asks both MCP tools about
+it and `dialect_lsp` asks `documentSymbol` about a compact version inline.
+
+They exist because the server had no such source and it cost a crash reaching a
+user (ADR-0349). Every other session names something the language had in
+version 2, so `--dump-symbols` — which is what `outline` and `documentSymbol`
+both answer from — was never asked about a construct added since, and it
+**stopped the compiler** on any source containing a `trait`. The tool answered
+with the line printed before it died, which reads like a file that declares one
+thing. 888 cases were green.
+
+So: **a feature added to the language belongs in that fixture**, and those two
+goldens are what say whether the server still knows about it. The mechanical
+half is the `tool-dumps` gate, which puts every tracked source through every
+dump a tool asks for and requires the compiler to survive — a crash sweep and
+not a golden, because what a dump *says* is `tests/dumps/`'s business.
+
 ```sh
 lsp/run.sh tools/pascalcc build/bin/pascalc
 ```

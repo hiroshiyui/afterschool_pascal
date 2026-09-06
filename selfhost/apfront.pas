@@ -28114,12 +28114,23 @@ begin
       end;
       p := b^.blProcs;
       while p <> nil do begin
-        { A heading in a module-heading (6.11.1) and a forward declaration
+        { The list holds every declaration this part of the block owns, and
+          since ADR-0338 that is not only procedures: a trait-declaration and
+          an implementation-declaration stand here too, and neither has a
+          `pdInHeading` to read -- 6.5.3.3 makes reading one an error and
+          ADR-0118's guard is what reported it. Passed over rather than
+          offered: a trait declares routines that are not names of this block
+          (AP 6.7.9.2), and an implementation's are reached only through it.
+          `--dump-symbols` answers what an editor draws in an outline, and
+          neither is a line in one.
+
+          A heading in a module-heading (6.11.1) and a forward declaration
           (6.6.1) are each the *same* routine as the block that completes it,
           and the completion is where its body is. Reporting both would put
           one name in an outline twice -- 66 times over, in this compiler. }
-        if not (p^.pdInHeading or p^.pdIsForward) then
-          Offer(p, nil, p^.line, p^.col);
+        if not ((p^.kind = nkTrait) or (p^.kind = nkImpl)) then
+          if not (p^.pdInHeading or p^.pdIsForward) then
+            Offer(p, nil, p^.line, p^.col);
         p := p^.next
       end;
       if best = nil then more := false

@@ -1,0 +1,34 @@
+# The two MCP tools asked about the *dialect*, which is the gap this session
+# exists to close (ADR-0349).
+#
+# `mcp.jsonl` beside this file pins the protocol thoroughly -- the lifecycle,
+# the descriptors, both error kinds -- and names `pasjson.pas`,
+# `symbols_module.pas` and `hello.pas`, none of which carries anything the
+# language gained after its text model. So an agent's `outline` was never asked
+# about a trait, a task, a channel, an owned pointer, an optional or a slice.
+#
+# It cost a crash reaching a user. ADR-0338's traits put two node kinds into a
+# block's declaration list, `DumpSymBlock` read them through the procedure arm,
+# and `--dump-symbols` stopped the compiler on any source with a `trait` in it
+# -- so `outline` answered with the one line printed before it died, which
+# reads exactly like a file that declares one thing. 888 cases were green.
+#
+# What this pins is therefore not the framing, which the session beside it
+# already does: it is that the two tools **answer** about every construct this
+# language has. A feature added later belongs in workspace/dialect.pas, and
+# this golden is what says whether the server still knows about it.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+
+# The outline of a source declaring the dialect's surface. A trait and an
+# implementation are declarations of the block and are deliberately *not*
+# lines in an outline: a trait's routine names have no defining-point in the
+# block containing it (AP 6.7.9.2), and an implementation's are reached only
+# through the trait -- so what an editor draws is the type, and the routines
+# under it are not names a reader can jump to here.
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"outline","arguments":{"path":"%ROOT%/lsp/sessions/workspace/dialect.pas"}}}
+
+# And what the compiler says about it, which is nothing: the fixture compiles
+# and runs, so a diagnostics answer that is not empty means the dialect moved
+# under the server rather than that the fixture is wrong.
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"diagnostics","arguments":{"path":"%ROOT%/lsp/sessions/workspace/dialect.pas"}}}

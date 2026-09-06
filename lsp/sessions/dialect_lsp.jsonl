@@ -1,0 +1,26 @@
+# The dialect, through LSP (ADR-0349).
+#
+# `symbols.jsonl` beside this file asks documentSymbol about a source the
+# language had in version 2. This one asks about a trait, an implementation, a
+# task, a channel, a select-statement and a generic bounded by a trait -- the
+# constructs an editor's outline never saw, and the reason it never saw them is
+# that `--dump-symbols` **stopped the compiler** on any source carrying a trait
+# and no session or case had ever passed one.
+#
+# The source is inline, as every LSP session's is; the whole surface on disk is
+# workspace/dialect.pas, which the MCP session opens.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/dialect_lsp.pas","languageId":"pascal","version":1,"text":"program dialect_lsp(output);\n\ntype Point = record x, y: integer end;\n     IntChan = channel [2] of integer;\n\ntrait Sortable;\n  function Before(p: Self; q: Self): boolean;\nend;\n\nimpl Sortable for Point;\n  function Before;\n  begin Before := p.x < q.x end;\nend;\n\nvar c: IntChan; t: task;\n\ntask Worker(ch: IntChan);\nvar got: integer;\nbegin\n  select\n    receive(ch, got): ;\n    after 50: ;\n  end\nend;\n\nfunction Bigger(T: Sortable type; a, b: T): T;\nbegin\n  if Before(a, b) then Bigger := b else Bigger := a\nend;\n\nvar p, q: Point;\nbegin\n  p.x := 1; q.x := 2;\n  spawn t := Worker(c);\n  send(c, 1);\n  wait(t);\n  writeln(Bigger(p, q).x:1)\nend.\n"}}}
+
+# The outline of the dialect. A trait and an implementation are declarations
+# of the block and are deliberately not entries: a trait's routine names have
+# no defining-point in the block containing it (AP 6.7.9.2). What must be here
+# is everything else -- the task, the channel variable, the generic function.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/dialect_lsp.pas"}}}
+
+# And that it compiles: a diagnostic here means the dialect moved under the
+# server, not that this source is wrong.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/dialect_lsp.pas"}}}
+
+{"jsonrpc":"2.0","id":4,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

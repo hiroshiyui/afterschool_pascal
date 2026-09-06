@@ -1,0 +1,10 @@
+symbol 0 program 17 9 14 40 4 symbols_traits
+symbol 1 record 19 6 5 19 11 point
+symbol 2 field 19 21 1 19 22 x
+symbol 2 field 19 24 1 19 25 y
+symbol 1 function 30 10 6 33 4 bigger
+symbol 2 parameter 30 17 1 30 18 t
+symbol 2 parameter 30 35 1 30 36 a
+symbol 2 parameter 30 38 1 30 39 b
+symbol 1 var 35 5 1 35 6 u
+symbol 1 var 35 8 1 35 9 v

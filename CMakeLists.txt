@@ -323,6 +323,19 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
                    ${CMAKE_SOURCE_DIR})
 
+  # ADR-0349: does the compiler survive every tool dump over every source?
+  # The dumps a *tool* asks for -- an editor's outline, its go-to-definition,
+  # the word lists a completion offers -- had one case each over one small
+  # source, so a language feature added afterwards was swept by nothing.
+  # Traits put two node kinds into a block's declaration list and
+  # `--dump-symbols` read them through the procedure arm, stopping the
+  # compiler on any source with a `trait` in it while 888 cases stayed green.
+  # A crash sweep and not a golden: what a dump *says* is tests/dumps/'s
+  # business and this asks only that the compiler is still running.
+  add_test(NAME tool-dumps
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/tool_dumps.sh
+                   ${CMAKE_BINARY_DIR}/bin/pascalc)
+
   # ADR-0348: does a generated project build, run and test itself? No test case
   # can ask -- every case in the corpus is one `.pas` compiled where it sits,
   # and what this asserts is a directory the driver wrote, a config it read
