@@ -23,6 +23,19 @@
 # and is not swept here, for lib_coverage.txt's reason: a number
 # that moves with whether a machine has libssl is not a ratchet.
 #
+# **Two units are reported and not gated, and the number that
+# says why is 28 against 25.** runtime/pasrt_task.c's select
+# waits with a deadline, and the arm that runs when the deadline
+# wins is reached only when a receive loses a race -- so on this
+# machine three of its lines never run, on CI they do, and on one
+# core under a busy loop they do here as well (ADR-0354). A line
+# whose coverage is a property of how loaded the machine is
+# cannot be held by a ratchet in either direction without lying
+# on some machine, so pasrt_task.c and pasrt_posix.c -- the two
+# units holding a wait with a deadline -- are printed and not
+# compared, and pasrt.c and pasrt_unicode.c, which hold none,
+# fail in both directions like lib_coverage.txt does.
+#
 # Regenerate with:
 #   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet
 # Doing so is a decision to argue for in the commit message.

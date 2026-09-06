@@ -66,6 +66,7 @@ breakdown, so a regression names the file that moved.
 Usage:  tests/checks/runtime_coverage.py <pascalcc> [<pascalc>] [--write-ratchet]
 """
 import argparse
+import re
 import glob
 import json
 import os
@@ -234,6 +235,19 @@ def main():
             "# and is not swept here, for lib_coverage.txt's reason: a number",
             "# that moves with whether a machine has libssl is not a ratchet.",
             "#",
+            "# **Two units are reported and not gated, and the number that",
+            "# says why is 28 against 25.** runtime/pasrt_task.c's select",
+            "# waits with a deadline, and the arm that runs when the deadline",
+            "# wins is reached only when a receive loses a race -- so on this",
+            "# machine three of its lines never run, on CI they do, and on one",
+            "# core under a busy loop they do here as well (ADR-0354). A line",
+            "# whose coverage is a property of how loaded the machine is",
+            "# cannot be held by a ratchet in either direction without lying",
+            "# on some machine, so pasrt_task.c and pasrt_posix.c -- the two",
+            "# units holding a wait with a deadline -- are printed and not",
+            "# compared, and pasrt.c and pasrt_unicode.c, which hold none,",
+            "# fail in both directions like lib_coverage.txt does.",
+            "#",
             "# Regenerate with:",
             "#   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet",
             "# Doing so is a decision to argue for in the commit message.",
@@ -269,28 +283,79 @@ def main():
         sys.stderr.write("runtime-coverage: the ratchet names no total\n")
         return 1
 
-    if total_unc > prev_unc:
-        sys.stderr.write(
-            "runtime-coverage: %d lines of the runtime never run, was %d -- "
-            "%d lost\n" % (total_unc, prev_unc, total_unc - prev_unc))
-        for name, unc, ins in rows:
-            if unc > was.get(name, 0):
-                sys.stderr.write("  %s: %d -> %d of %d\n"
-                                 % (name, was.get(name, 0), unc, ins))
-        return 1
+    # **Gated per unit, and two of the four are only reported** (ADR-0354).
+    #
+    # The total was gated in both directions for one push and CI failed at
+    # once: 433 lines never run where the file said 436, nothing in the tree
+    # different, and four measurements here all saying 436 -- until the sweep
+    # was pinned to one core under a busy loop, which gave 433 and named the
+    # unit: pasrt_task.c, 28 -> 25. The three lines are the `ETIMEDOUT` arm of
+    # `select`, which runs only when the deadline beats the receive, and
+    # whether it does is a property of how loaded the machine is. A faster
+    # machine than the one that wrote the ratchet reports a *loss* there. No
+    # ratchet can hold such a line in either direction without lying on some
+    # machine, so the two units that contain a wait with a deadline are
+    # printed and not compared, and the two that contain none are held both
+    # ways, as lib_coverage.txt is.
+    #
+    # The set is written down rather than derived, so a stray match in a
+    # comment cannot quietly ungate a unit -- and the *deterministic* claim is
+    # checked against the source in the one direction that matters: a unit
+    # held both ways must contain no such wait, or someone added one and this
+    # file has to be told.
+    TIMED = {"runtime/pasrt_posix.c", "runtime/pasrt_task.c"}
+    DEADLINE = re.compile(
+        r"pthread_cond_timedwait|\bpoll\(|\bselect\(|SO_RCVTIMEO|nanosleep")
+    for name, unc, ins in rows:
+        if name in TIMED:
+            continue
+        src = (root / name).read_text(errors="replace")
+        if DEADLINE.search(src):
+            sys.stderr.write(
+                "runtime-coverage: %s holds a wait with a deadline and is "
+                "gated in both directions -- its coverage can no longer be "
+                "held by a ratchet; move it to the reported set (ADR-0354)\n"
+                % name)
+            return 1
 
-    # Both directions, for ADR-0350's reason: an improvement left unrecorded
-    # keeps the old floor, so a later regression back to it passes and the
-    # slack accumulates until the gate admits whatever nobody chose. This is
-    # `verify/`'s KNOWN_GAP rule (ADR-0013) said about a number.
-    if total_unc < prev_unc:
+    lost, fewer, moved = [], [], []
+    for name, unc, ins in rows:
+        old = was.get(name)
+        if name in TIMED:
+            if old is not None and unc != old:
+                moved.append((name, old, unc, ins))
+            continue
+        if old is None:
+            fewer.append((name, None, unc, ins))
+        elif unc > old:
+            lost.append((name, old, unc, ins))
+        elif unc < old:
+            fewer.append((name, old, unc, ins))
+
+    for name, old, unc, ins in moved:
+        # Information and not a verdict: see TIMED above.
         sys.stderr.write(
-            "runtime-coverage: %d lines never run, was %d -- %d FEWER, which "
-            "is good and must be recorded: the ratchet still admits %d, so a "
-            "regression back to it would pass.\n"
+            "runtime-coverage: %s: %s -> %d of %d, which is reported and "
+            "not gated -- this unit waits with a deadline, so which of its "
+            "lines run depends on how loaded the machine is\n"
+            % (name, old, unc, ins))
+    if lost:
+        sys.stderr.write("runtime-coverage: lines of the runtime that ran "
+                         "before and do not now:\n")
+        for name, old, unc, ins in lost:
+            sys.stderr.write("  %s: %d -> %d of %d\n" % (name, old, unc, ins))
+        return 1
+    if fewer:
+        sys.stderr.write(
+            "runtime-coverage: coverage rose in a unit held both ways, which "
+            "is good and must be recorded -- the ratchet still admits the "
+            "old number, so a regression back to it would pass:\n")
+        for name, old, unc, ins in fewer:
+            sys.stderr.write("  %s: %s -> %d of %d\n"
+                             % (name, "(new)" if old is None else old, unc, ins))
+        sys.stderr.write(
             "  python3 tests/checks/runtime_coverage.py --write-ratchet\n"
-            "and say in the commit message what covered them.\n"
-            % (total_unc, prev_unc, prev_unc - total_unc, prev_unc))
+            "and say in the commit message what covered them.\n")
         return 1
 
     note = ""
