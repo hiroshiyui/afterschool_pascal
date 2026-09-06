@@ -871,11 +871,12 @@ There shall be exactly three forms of assignment to a variable of a
 handle-type; the third is 6.4.12.7's and is stated there.
 
 The first is an assignment-statement whose expression is a
-function-designator of an external-declaration (6.7.7) whose result type is
-the same type. The variable shall first release the value it holds, if any,
-and then hold the value the function answered; a null answer leaves it empty.
-A function-designator whose result type is a handle-type shall appear in no
-other position.
+function-designator whose result type is the same type — of an
+external-declaration (6.7.7), or of a function-declaration 6.4.12.6 admits.
+The variable shall first release the value it holds, if any, and then hold the
+value the function answered; a null answer leaves it empty. A
+function-designator whose result type is a handle-type shall appear in no other
+position.
 
 The second is an assignment-statement whose expression is `nil`. The variable
 shall release the value it holds, if any, and shall be empty.
@@ -887,6 +888,13 @@ variable's own lifetime ends. Without it a library closing a stream early had
 to assign the answer of a call it knew would fail — `fopen` of the empty path —
 for a refused system call, a stale `errno` and a diagnostic naming the wrong
 path. `PasStream.Close` and `PasDir.Close` each did that.
+
+NOTE 3 — The three are three *shapes* and not three routines. This clause was
+written when a handle could be answered only by an external-declaration, so the
+first form named one; 6.4.12.6 then admitted a function-declaration answering a
+handle, and its callers assign in this same first form. Reading the earlier
+wording strictly refused every factory call in `lib/`, which is a sentence
+disagreeing with a later clause rather than with a program.
 
 NOTE 2 — "Function-designator" is the whole construct and not one spelling of
 it: §6.8.5 makes the actual-parameter-list optional, so a parameterless
@@ -980,6 +988,16 @@ integer may be written.
 NOTE 3 — The variable being empty afterwards is what keeps 6.4.12.3's "at most
 once" without anyone counting: the block's own release finds nothing to do.
 
+NOTE 4 — Before this clause a program wanting a closer's result had to call the
+closer itself through 6.4.12.4's lend, which leaves the variable owning an
+address already released and the block closing it a second time.
+
+NOTE 5 — Yielding zero for an empty variable is the assignment of `nil`
+(6.4.12.2) rather than `dispose` of nil (ISO/IEC 10206:1991 §6.7.5.3): a
+program that released nothing has nothing to be told about. A caller that must
+distinguish "closed, and the closer said zero" from "there was nothing to
+close" has the variable itself to ask, before.
+
 **6.4.12.6 The factory [added].** A handle-type shall be the result type of a
 function-declaration that is not an external-declaration.
 
@@ -1016,15 +1034,6 @@ regression. A producer that could not report a failure would be worse than the
 already the empty state written as a value. Where a reason for the failure is
 wanted as well, 6.4.13's fallible-type is the shape — and 6.4.13.1 does not
 admit a handle as its value-type, so that remains unavailable.
-Before this clause a program wanting a closer's result had to call the closer
-itself through 6.4.12.4's lend, which leaves the variable owning an address
-already released and the block closing it a second time.
-
-NOTE 4 — Yielding zero for an empty variable is the assignment of `nil`
-(6.4.12.2) rather than `dispose` of nil (ISO/IEC 10206:1991 §6.7.5.3): a
-program that released nothing has nothing to be told about. A caller that must
-distinguish "closed, and the closer said zero" from "there was nothing to
-close" has the variable itself to ask, before.
 
 **6.4.12.7 The move [added].** An assignment-statement whose expression is
 `take` (6.4.14.6) applied to a variable-access of the same handle-type shall be
@@ -1999,8 +2008,17 @@ the same type twice. `lib/dialect/pascontainer.pas` is the caller.
 #### 6.4.16 Channel-types [added]
 
 A channel-type denotes a bounded queue of values that two activations running
-concurrently may both name, and it is the **only** such thing in this language
-(ADR-0201, ADR-0268).
+concurrently may both name. It is the only type in this language whose values
+are *meant* to be so named, and 6.7.8.2 is where every other kind of storage is
+refused a second name (ADR-0201, ADR-0268).
+
+NOTE — That refusal is exact for what a task's own block writes and is **not**
+transitive: a task may call a procedure declared outside it, and that procedure
+may name a variable of an enclosing block (6.7.8.2 NOTE 3). So a program can
+still put two activations on one variable, and this clause claims no more than
+6.7.8.2 enforces. An earlier wording here said a channel was the only thing two
+activations could name at all, which the clause it rests on had already
+recorded as untrue.
 
 **6.4.16.1 The denoter.**
 
