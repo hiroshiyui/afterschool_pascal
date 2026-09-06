@@ -347,8 +347,8 @@ the alternatives that were rejected and why.
 | [0336](0336-the-pointer-that-is-kept-unchecked.md) | The pointer that is kept, unchecked | Accepted |
 | [0337](0337-a-container-owns-its-storage-only-when-one-block-can-keep-it.md) | A container owns its storage only when one block can keep it | Accepted |
 | [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
-| [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
 | [0339](0339-a-trait-heading-names-one-type-and-one-scope.md) | A trait heading names one type, and one scope | Accepted |
 | [0340](0340-four-things-a-trait-heading-cannot-do.md) | Four things a trait heading cannot do | Accepted |
 | [0341](0341-a-trait-crosses-a-component-and-an-implementation-need-not.md) | A trait crosses a component, and an implementation need not | Accepted |
 | [0342](0342-what-an-audit-found-that-every-oracle-was-green-over.md) | What an audit found that every oracle was green over | Accepted |
+| [0343](0343-the-client-comes-before-the-design.md) | The client comes before the design | Accepted |

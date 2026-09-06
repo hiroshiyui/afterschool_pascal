@@ -262,10 +262,80 @@ to be told which kind the new one resembles, which is a fact about why the kind
 was added rather than anything the compiler knows. It is a sharper instrument
 of the same kind, not a different kind of instrument.
 
-The corollary is about **order**. The library increment of a feature is not a
-tidying-up afterwards — it is the cheapest enumerator of the feature's surface,
-so it belongs inside the feature's own work rather than after it. ADR-0189
-staged the text model that way by accident and it found two defects.
+The corollary is about **order**, and it is the strongest sentence in this
+section. The library increment of a feature is not a tidying-up afterwards
+— it is the cheapest enumerator of the feature's surface, so it belongs inside
+the feature's own work rather than after it. ADR-0189 staged the text model
+that way by accident and it found two defects.
+
+**Traits turned that corollary into a rule** (ADR-0343). The feature produced
+four records before it produced a working compiler, and each says in its own
+words why the one before it was wrong: ADR-0338 because probing beat reading,
+ADR-0339 because a probe beat that record's own claims, ADR-0340 because
+building beat probing, ADR-0341 because separate translation was the question
+none of the three had asked. Four rungs of one ladder, each rung the
+next-most-real thing contradicting the last. **So start at the top rung.** For
+a feature with a surface the *first* artefact is a client program, written the
+way a user would write it, against a compiler that does not accept it yet. It
+does not compile, and every diagnostic it produces is a design question with
+the answer already attached.
+
+The first client of traits — a generic sort, the construct the feature was
+justified by — found in twenty minutes that a trait named `Ordered` is
+declarable, implementable, and silently unusable as a bound, because
+AP 6.7.3.10.5 identifies that spelling as a type-parameter-category wherever a
+bound is written, and the category wins with no diagnostic. No further reading
+of that clause would have produced it. Writing the first program a user would
+write did.
+
+## 4b. A hypothesis is not a record
+
+Section 4a is about *when* the client is written. This is about what may be
+written down before it exists, and it is the other half of one lesson.
+
+**Ask the compiler; do not predict it.** Section 6's rule for completeness
+— never claim it without compiling a probe — generalises to every sentence of
+the form *this compiler does X*. The compiler is in the tree, the build is
+minutes, and `tools/pascalcc` answers in seconds, so predicting its behaviour
+from two standards is strictly worse than asking it. A record's Context may
+reason from a clause; a claim about this processor carries a probe or is not
+written. Three of the four traits records exist because that rule was not in
+force.
+
+**One feature, one record.** ADR-0001's immutability is right and stays: a
+record that could be edited to match new reality would destroy the reasoning it
+exists to preserve. But immutability is exactly what makes a falsified
+hypothesis expensive — it cannot be corrected, so a second record is written,
+and four accumulate for one decision. The fix is not to relax ADR-0001; it is
+to stop using records as the place a design is *worked out*. Hypotheses belong
+in a working note that is freely rewritten while the design is live, and
+**one** record is written when the feature builds, carrying the alternatives
+that were genuinely rejected. ADR-0001's *write it while the alternatives are
+still live* asks for the alternatives to be captured — not for every
+conclusion on the way to the answer to be published.
+
+**The ratio is the metric.** Records per landed feature, counted afterwards.
+One is the process working; more than one means it leaked, and the count says
+how far. Traits scored four.
+
+**And ask every axis at design time, because the axes recur.** ADR-0341's
+finding was that separate translation was the question none of the three had
+asked. ADR-0334's was that no job ran `-O0` crossed with a 32-bit target — in
+its own words, *two jobs, two axes, and the cell where they cross was empty*.
+That is one shape twice. The axes are enumerable, so enumerate them once rather
+than meeting them one per round:
+
+| Axis | The question to ask of the feature |
+| --- | --- |
+| Component | does it work inside one program, and across §6.13's separate translations? |
+| Declaration site | a program-block, a module-block, a module-heading, a procedure? |
+| Optimisation | `-O2` and `-O0` — a defect in *storage* is invisible at the first (ADR-0102) |
+| Word size | LP64 and ILP32, which `target-layout` and `target32` ask separately (ADR-0325) |
+| Threads | one thread of control, and two (ADR-0268) |
+| Parameter form | by value, by `var`, `protected var`, schematic, procedural |
+| Spelling | does the name collide with a word-symbol, a required identifier, or a category? |
+
+Walking the seven costs an hour. Meeting one per round costs what traits cost.
 
 ## 5. Counting, not assuming
 

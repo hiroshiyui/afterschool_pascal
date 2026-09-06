@@ -27,7 +27,25 @@ When landing a change, always follow these steps:
    and D, and both sets of gates apply.
 
 2. **Before writing code, answer the class's *design* questions.** These are the
-   ones that are expensive to discover after the fact:
+   ones that are expensive to discover after the fact.
+
+   **If the change has a surface, write step 3a's client before answering
+   them** — the diagnostics it produces *are* the answers, and they are the
+   ones a user would have found. Traits were designed by reading and cost four
+   records, each falsified by the next-more-real thing (`doc/sop.md` §4a,
+   ADR-0343). And **do not write down a claim about this compiler that a probe
+   has not tested**: it is in the tree, `tools/pascalcc` answers in seconds,
+   and predicting its behaviour from two standards is strictly worse than
+   asking it (`doc/sop.md` §4b).
+
+   Ask every axis while the design is cheap, because these recur: one
+   component or across §6.13's separate translations; declared in a
+   program-block, a module-block, a module-heading or a procedure; `-O2` and
+   `-O0`; LP64 and ILP32; one thread of control and two; by value, by `var`,
+   `protected var`, schematic and procedural; and whether the spelling
+   collides with a word-symbol, a required identifier or a category.
+
+   Then the per-class questions:
 
    - **A:** does `verify/` have a rule for this operation? If yes, `lowering.py`
      changes in this commit. If no, say so in the commit message.
@@ -56,7 +74,9 @@ When landing a change, always follow these steps:
    parser stops at its first error) or `selfhost/badsema/` (shared files — Sema
    accumulates).
 
-3a. **If the change has a *surface* rather than a point, write a client.**
+3a. **If the change has a *surface* rather than a point, write a client — and
+   write it first, before step 2's design questions.** The number is kept
+   because ADR-0283 cites it; the order is the one step 2 states.
    A new type kind, a new parameter form, a new directive — every position a
    program can put one in is a place it can be wrong, and a case pins one
    behaviour. Write a program that uses the construct where a program would:
@@ -132,6 +152,13 @@ When landing a change, always follow these steps:
    the alternatives are still live — a record written afterwards justifies
    rather than explains. Include what the change does *not* do; that section
    has been the most useful one in this repository.
+
+   **One feature, one record** (`doc/sop.md` §4b, ADR-0343). ADR-0001's
+   immutability stays, which is exactly why a hypothesis must not be filed as
+   a record: it cannot be corrected, so a second one gets written and four
+   accumulate for one decision. Keep hypotheses in a working note while the
+   design is live and write the record when the feature builds. Records per
+   landed feature is the metric; more than one means the process leaked.
 
 9. **Commit** via the `commit-and-push` skill. The message says *why*, cites the
    clause or the ADR, and names the mutation and the test that killed it. If a
