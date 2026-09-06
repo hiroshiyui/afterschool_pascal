@@ -7307,3 +7307,66 @@ the channel, so the close a select arm reports is always another activation's;
 and **no timeout on `wait`**, which is a decision and not an omission, a wait
 that gave up leaving a program holding a task-variable whose activation is
 still running with no clause saying what that is.
+
+## The release that checked itself
+
+**v3.5.0, cut 2026-09-06**, and what is worth recording is not the release but
+that four separate things were found by the act of cutting it — three by the
+procedure's own steps and one by the only job that runs at a tag. Every one of
+them had been true for days and no gate could see any of it.
+
+**Step 2 says the build must be warning-free, and it was not.** Four
+`-Wcomment` warnings had entered `runtime/pasrt.c` with ADR-0293's trap
+positions: a comment naming `seed/*.ll` inside a `/* */` block, where the
+path's own `/*` opens a comment inside a comment. `tests/checks/runtime_isoc.sh`
+compiles that file five ways and **four of them carry `-Werror`**; pass 2 —
+*and nothing else is non-standard* — had `-Wall -Wextra` and nothing else, so
+it printed all four on every run and passed. `warning-free` (ADR-0286) is about
+what the *Pascal* compiler has to say about this tree's Pascal and was never
+going to see a C warning. The pass carries `-Werror` now.
+
+**Step 3 says to read `-h` by hand**, because the `ctest` case for it asks
+whether every flag is *listed* and cannot read the prose. Two lines were wrong.
+`-o` carried a description of something else — *(the dialect: Extended Pascal
+and what is added to it)* is what `--std` said, and ADR-0232 removed the flag
+and left its second half attached to the option above it, so a reader was told
+that `-o` names a dialect. And `--target=` named two machines where ADR-0325
+admits three.
+
+**Step 6 found the changelog was missing sixteen user-facing changes** —
+everything from ADR-0312 onward, including the task type, `wait`, the
+select-statement, i386, `clong`/`csize`, the protected owned parameter and all
+four borrow fixes. The per-feature `docs:` commit moves a feature into README's
+accepted block and had stopped keeping `CHANGELOG.md` beside it. Writing them
+from the records is also where the value of checking against the corpus showed:
+the select example written from ADR-0313's grammar had the wrong arm syntax,
+and `tests/dialect/select_contended.pas` has the right one.
+
+**And then the tag failed, correctly** (ADR-0347). `seed_current.sh` said the
+committed seed is not what this source produces, and the difference was the
+*directory*: ADR-0293 puts a trap's own source path into the emitted module, so
+handing the compiler an absolute path put `/home/<user>/…` into all three seed
+modules and made the check answer about where it ran. It had been true of every
+seed since positions landed, eight releases earlier, because that check runs
+only at a tag — and it cannot be a `ctest` case, the seed being legitimately
+stale between releases. `seed-portable` now asks the cheap half on every push.
+
+**The shape two of these share is the finding.** In one day, two harnesses
+answered about the wrong machine: `llc_check.sh` compared x86-64 modules on an
+ARM host and had **never passed** since ADR-0331 added it, because
+`AFTERSCHOOL_PASCAL_TARGET` is read by `tools/pascalcc` and not by the compiler
+the script drives directly (ADR-0345); and `seed_current.sh` compared a
+directory. `doc/sop.md` §7's row for a harness ignoring an environment variable
+now states it wider than that — a harness passing a path, a target or a flag
+that is right where it was written and wrong where it runs.
+
+**One of them decided a language question on the way out.** With the aarch64
+job fixed, `target32` began disagreeing with itself: two cases failed on CI's
+clang 19 and passed on clang 21, because the two compile `i386-pc-linux-gnu`
+for `i686` and `pentium4` respectively, and an x87 register is eighty bits
+wide. §6.7.6.3's `round` contradicts the clause defining it there, and D.32's
+`sqr` error goes **undetected** — `sqr(-1e200)` being an ordinary finite number
+in a register with a fifteen-bit exponent. An i386 this compiler emits for has
+SSE2 (ADR-0346); what is given up is a Pentium III and earlier, and a missed
+error condition on one target is not something a dialect aiming at modern
+computing gets to have.

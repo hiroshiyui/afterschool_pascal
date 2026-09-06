@@ -40,26 +40,15 @@ stage 3 in every program-component, and the suite is green at `-O2` and at
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
 
-**What moved most recently is v3.5.0 itself, and what cutting it found.**
-Three defects surfaced in the release procedure's own steps rather than in any
-gate: four `-Wcomment` warnings the one `runtime-isoc` pass without `-Werror`
-had been printing and passing over; two stale lines in `-h`, one of them
-describing `-o` as naming a dialect, which is what `--std` said before
-ADR-0232 removed it; and `CHANGELOG.md`'s `Unreleased` missing **sixteen**
-user-facing changes, everything from ADR-0312 onward. Then the tag failed:
-the committed seed held the **absolute path of the machine that made it**,
-because ADR-0293 puts a trap's own source path into the emitted module and
-`seed/refresh.sh` handed the compiler an absolute one (ADR-0347). The check
-that says so runs only at a tag and cannot be a `ctest` case — the seed is
-legitimately stale between releases — so eight releases of positions went by
-before a seed was compared anywhere but where it was made.
+**What moved most recently is v3.5.0 itself, and what cutting it found** —
+set out in [`doc/history.md`](history.md#the-release-that-checked-itself),
+because it is settled and this page is for what is not.
 
-**The shape those share is worth more than any of them.** Two harnesses in one
-day answered about the wrong machine: `llc_check.sh` compared x86-64 modules
-on an ARM host and had never passed since it was added (ADR-0345), and
-`seed_current.sh` compared a directory. `doc/sop.md` §7 now states it wider
-than the environment-variable row it started in — a harness passing a path, a
-target or a flag that is right where it was written and wrong where it runs.
+**In short**: three defects the procedure's own steps found and no gate could,
+then a tag that failed because the committed seed held the absolute path of the
+machine that made it — and the shape two of those share, which is a harness
+passing a path, a target or a flag that is right where it was written and wrong
+where it runs. `doc/sop.md` §7's row for it now has three instances.
 
 **Before that**, the memory model was struck as closed on 2026-09-04 and
 corrected three times the day after — a use-after-free the enumeration missed
