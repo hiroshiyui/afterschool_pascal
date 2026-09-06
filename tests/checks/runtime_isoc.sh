@@ -185,7 +185,19 @@ fi
 [[ $status -eq 0 ]] || exit 1
 
 # --- pass 2: and nothing else is non-standard ------------------------------
-if ! "$cc" "${std[@]}" -Wall -Wextra \
+#
+# `-Werror` here as in every other pass, and it was the one pass without it.
+# What that cost: four `-Wcomment` warnings entered this file with ADR-0293 and
+# shipped unnoticed until a release rehearsal read the build log by hand -- a
+# comment naming `seed/*.ll` inside a `/* */` block. Nothing else could have
+# seen them. `warning-free` (ADR-0286) asks what the *Pascal* compiler has to
+# say about this tree's Pascal, and the four other compiles in this file each
+# had `-Werror` already, so the gate closest to the C was the only one that
+# would print a warning and pass.
+#
+# The two `-Wno-` flags below are what stripping the includes makes necessary
+# and are unrelated: without the declarations, every call is implicit.
+if ! "$cc" "${std[@]}" -Wall -Wextra -Werror \
      -Wno-implicit-function-declaration -Wno-int-conversion \
      -c "$stripped" -o "$work/b.o" >"$work/p2.txt" 2>&1; then
   echo "runtime-isoc: with those names excused, runtime/pasrt.c is still not" \

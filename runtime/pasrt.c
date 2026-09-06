@@ -294,9 +294,11 @@ void pas_index_error_at(int lo, int hi, const char *file, int line, int col) {
   pas_error_end(file, line, col);
 }
 
-/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
- * go on linking until the next reseed: a position it does not pass is no
- * position, never a guessed one. */
+// The seed compiler (seed/*.ll) still calls this two-word form, and it must
+// go on linking until the next reseed: a position it does not pass is no
+// position, never a guessed one. Written with // because the path holds a
+// `/*` and a block comment cannot: -Wcomment is a warning and this file's
+// build has to stay clean.
 void pas_index_error(int lo, int hi) {
   pas_index_error_at(lo, hi, NULL, 0, 0);
 }
@@ -316,9 +318,11 @@ void pas_range_error_at(int lo, int hi, const char *file, int line, int col) {
   pas_error_end(file, line, col);
 }
 
-/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
- * go on linking until the next reseed: a position it does not pass is no
- * position, never a guessed one. */
+// The seed compiler (seed/*.ll) still calls this two-word form, and it must
+// go on linking until the next reseed: a position it does not pass is no
+// position, never a guessed one. Written with // because the path holds a
+// `/*` and a block comment cannot: -Wcomment is a warning and this file's
+// build has to stay clean.
 void pas_range_error(int lo, int hi) {
   pas_range_error_at(lo, hi, NULL, 0, 0);
 }
@@ -338,9 +342,11 @@ void pas_disc_error_at(const char *schema, const char *disc, int left, int right
   pas_error_end(file, line, col);
 }
 
-/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
- * go on linking until the next reseed: a position it does not pass is no
- * position, never a guessed one. */
+// The seed compiler (seed/*.ll) still calls this two-word form, and it must
+// go on linking until the next reseed: a position it does not pass is no
+// position, never a guessed one. Written with // because the path holds a
+// `/*` and a block comment cannot: -Wcomment is a warning and this file's
+// build has to stay clean.
 void pas_disc_error(const char *schema, const char *disc, int left, int right) {
   pas_disc_error_at(schema, disc, left, right, NULL, 0, 0);
 }
@@ -358,9 +364,11 @@ void pas_length_error_at(int left, int right, const char *file, int line,
   pas_error_end(file, line, col);
 }
 
-/* The seed compiler (seed/*.ll) still calls this two-word form, and it must
- * go on linking until the next reseed: a position it does not pass is no
- * position, never a guessed one. */
+// The seed compiler (seed/*.ll) still calls this two-word form, and it must
+// go on linking until the next reseed: a position it does not pass is no
+// position, never a guessed one. Written with // because the path holds a
+// `/*` and a block comment cannot: -Wcomment is a warning and this file's
+// build has to stay clean.
 void pas_length_error(int left, int right) {
   pas_length_error_at(left, right, NULL, 0, 0);
 }
