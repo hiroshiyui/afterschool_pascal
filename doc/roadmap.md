@@ -25,47 +25,52 @@ page where the answered outnumber the open teaches a reader to skim, and the
 things worth not skimming here are the six or seven sentences saying what
 nobody has decided yet.
 
-## Where development stands — 2026-09-06
+## Where development stands — 2026-09-07
 
-**Released: v3.5.1**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
-below the release line is in it. 3.5.1 changed nothing about the language: it
-is 3.5.0's documentation pass and four dead runtime symbols. The compiler builds itself, stage 2 equals
-stage 3 in every program-component, and the suite is green at `-O2` and at
-`-O0`.
+**Released: v3.6.0**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
+below the release line is in it. It is the first release whose headline is a
+**library** change that breaks existing programs: `PasContainer`'s map keys
+itself with a trait, so every map call loses two arguments (ADR-0355). The
+compiler builds itself, stage 2 equals stage 3 in every program-component, and
+the suite is 896 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
 | **Open and ready to do** | the platforms, and only the platforms — **and 32-bit is no longer among them** (ADR-0325, ADR-0346). **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
-| **Open and awaiting a decision** | the object model, and only it — ADR-0315 is `Proposed`, and what a retaken count changed about it is below. **Three rows left this cell on 2026-09-05, none by being built**: the ordinary `^T` is *kept* and written down as the unchecked form (ADR-0336); a record's `Drop` stays a row for a corrected reason, one asker being below the threshold for a design and wanting an ordering hook rather than a release; and whether a container owns its storage is answered *both, per container*, with the rule written down (ADR-0337) |
+| **Open and awaiting a decision** | the object model, and only it — ADR-0315 is `Proposed`, its increment B is built, and A and C are judged separately. **B now has a client that is not a test** (ADR-0355), which is the evidence the proposal asked for and the one thing it had been short of |
 | **Open and awaiting a program** | [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for), whose inventory is **empty** and whose lesson is what it keeps in its place. A row here is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
 
-**What moved most recently is v3.5.0 itself, and what cutting it found** —
-set out in [`doc/history.md`](history.md#the-release-that-checked-itself),
-because it is settled and this page is for what is not.
+**What moved most recently is the oracles and not the language** — set out in
+[`doc/history.md`](history.md#the-oracles-that-were-not-looking), because it is
+settled and this page is for what is not.
 
-**In short**: three defects the procedure's own steps found and no gate could,
-then a tag that failed because the committed seed held the absolute path of the
-machine that made it — and the shape two of those share, which is a harness
-passing a path, a target or a flag that is right where it was written and wrong
-where it runs. `doc/sop.md` §7's row for it now has three instances.
+**In short**: a coverage review asked what is measured and the answer was
+46 718 lines of 67 931, so `lib/`, `runtime/*.c` and `lsp/pasls.pas` gained
+gates of their own; the dumps a tool asks for turned out to have no corpus, and
+`--dump-symbols` to crash on any source containing a trait; Valgrind went in
+and reported **377 programs, 0 flagged**, which is a statement this project had
+not been able to make before; and then the attribute ADR-0342 measured and
+declined was taken, so **the sanitizers see compiled Pascal for the first
+time**. Each of those had been true for as long as the thing it watches has
+existed, and every one of them was found by asking what an oracle covers rather
+than by an oracle failing.
 
 **Before that**, the memory model was struck as closed on 2026-09-04 and
-corrected three times the day after — a use-after-free the enumeration missed
-(ADR-0326), a cost cell that priced that fix at nothing when it had taken away
-every callback (ADR-0332), and a release depth that turned out to depend on
-which of two identically typed fields was declared first (ADR-0333). **Three
-corrections in one day to a chapter that said it was finished**, each found by
-probing a sentence rather than re-reading it;
-[the chapter](#memory-model-and-memory-safety) says what each of them cost.
+corrected three times the day after. Three of its four rows are settled and
+[the chapter](history.md#the-memory-model-read-against-the-goal) has the
+working; what stands is [below](#memory-model-and-memory-safety). The lesson
+that outlived it is about its own cost cells — three were wrong within two days,
+each in the same shape, a count taken by machine with the reason beside it
+written by hand. **A cost cell is a report and not an estimate.**
 
 ## How to read this
 
 | Part | What it holds |
 | --- | --- |
-| [Where development stands](#where-development-stands--2026-09-05) | the one-screen answer, dated: what is released, what is open and awaiting a decision, what is awaiting a program, and what is unavailable |
-| [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model nobody has committed to building, and the limitations a program meets |
+| [Where development stands](#where-development-stands--2026-09-07) | the one-screen answer, dated: what is released, what is open and awaiting a decision, what is awaiting a program, and what is unavailable |
+| [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model whose middle increment is built and whose other two nobody has committed to, and the limitations a program meets |
 | [The standard library](#the-standard-library) | the thirty-two modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
 | [Deferred](#deferred-insufficient-resources) | the two rows whose blocker is a resource this project does not have, at the lowest priority there is — with the admission test they had to pass, and the candidate that failed it |
@@ -88,9 +93,12 @@ a status line.
 
 **Read the parts in order the first time and by name after that.** They are
 not equally full, and the shape of that is the state of the project: the
-language has a proposal and three shapes, the library has nothing, and the
-utilities have most of what is left. [Deferred](#deferred-insufficient-resources)
-is last because nothing in it is available to do.
+language has half a proposal and four shapes, the library has nothing, and the
+utilities are down to the platforms — every other row in them was struck within
+four days of being written, which is what moved most of this file into
+[`doc/history.md`](history.md).
+[Deferred](#deferred-insufficient-resources) is last because nothing in it is
+available to do.
 
 ---
 
@@ -123,14 +131,16 @@ library](#the-standard-library) because that is where a program meets it:
   bounds, scope-based release, `owned ^T` for a variable `new` created, and
   the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181,
   ADR-0182, ADR-0267) — and **most of Rust's model, arrived at without
-  reading Rust**, which is also how the four things it is short of went
-  unnoticed until they were probed for.
+  reading Rust**, which is also how the four things it was short of went
+  unnoticed until they were probed for. Three of the four closed within two
+  days of being written down; what is left of them is a sentence each.
 
 Neither is finished in the sense that matters, and what each left behind it is
 the first two sections below.
 
-**Nothing in this part is scheduled.** The one proposal in it is `Proposed`
-and has no commitment behind it, and that is said again where it stands.
+**Nothing in this part is scheduled.** The one proposal in it is still
+`Proposed`: its middle increment is built and has shipped, and the other two
+have no commitment behind them — which is said again where it stands.
 
 **And nothing here is where a decision lives.** Every row in this part that is
 decided or implemented is written up in `doc/afterschool-pascal-spec.md`, in
@@ -149,20 +159,17 @@ more than any of the rows was.
 **The chapter as it stood, with how each of its rows closed, is in
 [`doc/history.md`](history.md#what-each-landed-feature-left-open).**
 
-**What two threads of control left open** (ADR-0268, AP 6.7.8). The record
-names these itself rather than letting the feature imply them, which is the
-shape to expect from here on — **and every row of it is now closed**, the last
-four on 2026-09-03. What the table is kept for is the same thing the two
-chapters above it are kept for: a feature that names its own residue is a
-report, and four rows that closed in a day say the residue was named honestly.
-Three shapes outlive the rows and are named under it:
-
-| A daily program wants | Why it waits |
-| --- | --- |
-| ~~**to give a task a handle**~~ | **Done** (ADR-0303), and the whole of what was missing was a *position*: `take` stood on the right of an assignment and nowhere else. A task formal may be a handle-type and the actual is `take(v)` — moved, where a channel is lent. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
-| ~~**to wait for one task**~~ | **Done** (ADR-0312), and it cost a type and one statement because a handle already had every rule a name for an activation needs: `task` is a handle-type, `spawn t := P(x)` makes a variable name the activation, and `wait(t)` returns when it is complete. AP 6.9.3.12.1 is untouched — a block still joins everything it commenced, and `wait` only completes one of them earlier. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
-| ~~**to wait for whichever comes first**~~ | **Done** (ADR-0313), and the shape it took was a *statement* rather than an argument: `select` waits until one of several channels can proceed, `after N` gives up, `otherwise` does not wait at all, and `ok := receive(c, v)` carries the close of a drained channel into an arm. One thing it named is deliberately still open — there is no timeout on `wait`, ADR-0312's reason being that a wait which gave up leaves a task-variable naming a running activation and no clause says what that is. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
-| ~~**to send a string**~~ | **Done** (ADR-0302), and writing the case is what showed the reading was wrong twice over: `send` chose its path with `IsStructured`, which a variable-string is not, so the module did not assemble; and a string *value* is shorter than the element it goes into, so copying `esize` bytes read past it. Moved to [`doc/history.md`](history.md#the-concurrency-residue) |
+**What two threads of control left open** (ADR-0268, AP 6.7.8) is closed in
+full, and the table is in
+[`doc/history.md`](history.md#the-concurrency-residue) with what closing each
+row found. Its four rows — to give a task a handle (ADR-0303), to wait for one
+task (ADR-0312), to wait for whichever comes first (ADR-0313), and to send a
+string (ADR-0302) — all closed on 2026-09-03, three of them named by ADR-0268
+itself and the fourth by ADR-0295. **What the chapter is kept
+for is what the closing rate says about the naming**: the record wrote its own
+residue down rather than letting the feature imply it, and four rows that
+closed in a day say the residue was named honestly. That is the shape to
+expect from a feature record from here on.
 
 **Three shapes stand behind the closed rows**, and none of them is a row
 because none is a thing a program is waiting to be able to write — each is a
@@ -201,9 +208,9 @@ the evidence is collected**: since ADR-0355 the map's key implements `Key`, the
 thirty sites name no pair, and what is left is `PasSort`'s two procedural
 parameters and `PasFile`'s one, each taking a *routine* rather than standing
 in for a property of a type. The prefix half stands. The denominator is the
-gate's and moves: **489 exports across 32 modules** on 2026-09-06,
+gate's and moves: **490 exports across 32 modules** on 2026-09-07,
 `python3 tests/checks/export_unique.py`; it read 486 when the numerator was
-taken and 484 the day after.
+taken, 484 the day after and 489 the day after that.
 
 The record proposes Rust's model and argues against Object Pascal's on four
 grounds that are each about a decision already taken here, stages it in three,
@@ -249,12 +256,15 @@ the answer is no, expect the ownership rule the five easy ones did not need.
 **ADR-0109 names memory safety as a property of the language, and the bullet at
 the head of this part calls it answered.** It is answered in the sense every
 row here demands: each mechanism has a record, a clause and a case. This
-section is what a review on **2026-09-04** found when the model was read
-against the goal stated as *a Rust-flavoured Pascal* and **probed rather than
-read**. The finding is not that the design is missing a piece. It is that
-**the pieces missing are not the ones the records say are missing** — ADR-0201
-withdrew the aliasing fork as a question this language does not have, and
-three of the four items below are aliasing.
+section is what is left of a review on **2026-09-04** that read the model
+against the goal stated as *a Rust-flavoured Pascal* and **probed it rather
+than reading it**. The finding was not that the design is missing a piece. It
+was that **the pieces missing are not the ones the records say are missing** —
+ADR-0201 withdrew the aliasing fork as a question this language does not have,
+and three of the review's four rows were aliasing. Those three closed within
+two days; the working is in
+[`doc/history.md`](history.md#the-memory-model-read-against-the-goal) and what
+stands here is what they left.
 
 **What is already Rust's, and by what route.** The routes are the interesting
 column: not one of these was taken from Rust, and two were here before anybody
@@ -272,308 +282,47 @@ looked.
 | `&[T]` | `array of T` (AP 6.7.3.9) | ADR-0125 |
 | `Send`, channels | `task`, `channel [n] of T` (AP 6.4.16, AP 6.4.17) | ADR-0268 |
 | traits | `trait` / `impl … for`, as a **bound** (AP 6.7.9, AP 6.7.10) | ADR-0338 to ADR-0341 |
-| lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the four rows below |
+| lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the rows below, and the three that closed |
 
-#### 1. The borrow rule was enforced in one direction — closed 2026-09-04, reopened and closed again 2026-09-05
+**Three of the four rows are closed**, and the working is in
+[`doc/history.md`](history.md#the-memory-model-read-against-the-goal): the
+borrow rule enforced in one direction (closed 2026-09-04, reopened and closed
+again the next day — ADR-0317, ADR-0318, ADR-0319, ADR-0326, ADR-0332), the
+unsafe subset being the unmarked default (measured and retired — ADR-0320,
+ADR-0323, ADR-0336), and the release walk that ended in a signal (ADR-0322,
+ADR-0333). **What each left standing is a sentence and not a row**, and the
+three sentences are what this section is now for:
 
-Rust's aliasing rule has two halves: a borrow may not outlive what it borrows,
-**and** the owner may not be released while a borrow of it is live. ADR-0201
-established the first — a `var` parameter bound to `o^` cannot escape, because
-Pascal has no address-of and `new` is the only producer of a pointer — and
-treated it as the whole rule. The second is unenforced, and AP 6.4.14.3 lists
-three release points a callee can reach: `dispose`, `new`, and an assignment.
+- **The escape half of the borrow rule is held by construction and watched by
+  nothing.** ADR-0201's *unformability is what protects against escape and is
+  exactly what makes invalidation invisible* is strength in one direction only.
+  The invalidation half is refused now, at the point a borrow is **formed**
+  (ADR-0319) — but the escape half rests on there being no way to form the
+  value at all, so a feature that ever gives the language one takes the
+  property away silently. `doc/sop.md` §7 carries it.
 
-```pascal
-procedure P(var o: op; var n: node);
-begin dispose(o); n.v := 42; writeln('n.v = ', n.v) end;
-...
-new(q); q^.v := 1; P(q, q^)          { prints 42, exits 0 }
-```
+- **A fifth warning — a `new` of an ordinary `^T` where `owned` would have
+  compiled — is not built, and the reason has changed three times.** It is no
+  longer that nothing *could* take the word, nor that a rewrite is needed, but
+  that taking it is sometimes the wrong answer and a warning cannot know which:
+  an owned container cannot be aliased, cannot be returned by a function and
+  must travel as a variable parameter, which is right for a tree one block owns
+  and a real loss for a container callers pass around (ADR-0337). The ordinary
+  pointer itself is *kept* and written down as the unchecked form (ADR-0336);
+  [Known limitations](#known-limitations) is where that stands.
 
-That is ADR-0201's own probe — `P(o, o)`, two `var` parameters bound to one
-variable, pronounced safe — with `dispose` where the record wrote `take`.
-Every oracle here agreed with it: `heap-balance` read 1/1 because the count is
-honest, and a build under `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address`
-reported nothing. Made observable, the write through the stale borrow lands in
-an unrelated live variable — `dispose(g)`, then `new(h); h^.v := 111`, then
-`n.v := 999`, and `h^.v` reads **999**. A third borrow form needs no call at
-all: a with-statement's binding is a frame slot holding an address, so
-`with q^ do begin dispose(q); v := 999 end` is the same defect inside one
-block.
+- **A chain of a million owned nodes no longer ends in a signal, and a shape
+  that is neither a chain nor a tree still can.** The release threads a work
+  list through the link fields of the nodes waiting on it (ADR-0322,
+  ADR-0333), so a list and a tree each cost one frame; a self-owned pointer the
+  domain does not hold **directly** — inside an array or a sub-record component
+  — has no link to thread, and a cycle of two domains is two routines calling
+  one another. Neither is reachable by writing a list or a tree. Reference
+  counting is the way out that is unbuilt, and nothing has asked for it: the
+  arena-and-index shape needs no language change and is written down as
+  `examples/arena_graph.pas`.
 
-**Both forms are now refused** (ADR-0317, AP 6.4.14.7): the two
-actual-parameters of one call, and a release under an open with-binding. What
-the clause does *not* reach is the release the callee performs indirectly, and
-that is Annex C.12 and a row of `doc/sop.md` §7 rather than an assumption.
-
-**The cheap refusal does not close it, and shipped saying so.** Three
-candidates were designed against this shape and the first was taken:
-
-| Candidate | What it costs | Why it is not enough |
-| --- | --- | --- |
-| **taken**: refuse the call-site shape and the with-binding — the two forms one activation can be asked about | nothing; no program in this tree is refused, and the corpus carries five that must go on compiling | it is a narrowing and not a closure: the callee can reach the owner indirectly, `Bump(g^)` → `Clear` → `ClearIt(g)` → `dispose` of its own `var` parameter, and no local rule sees that |
-| **also taken**, a day later: let the program say the callee will not release, by protecting the owner's formal parameter (ADR-0318) | nothing again, `protected` being a word §6.7.3.1 already had in that position | it is a *guarantee on request* and not a closure either — but where it is asked for it is complete, since a protected owned pointer refuses every release point and refuses being handed to anything unprotected |
-| **release only in the block that declares the pointer** | sound under one thread — a declaring block is suspended for the whole life of any borrow | unaffordable, and measured: all **ten** of `PasList`'s exported routines take `var l: List` and **five** release through it, so the module could not be written |
-| a **dynamic borrow flag**, Rust's `RefCell` and not its borrow checker | a word beside every owned-pointer variable and a check at three sites; the pair travels as two arguments, which is precedented (ADR-0030, ADR-0040, ADR-0051) | nothing — it is sound and complete, and it is a class A and C increment rather than a Sema patch |
-| **also taken**, and it is what closed the row: refuse the borrow where it is *formed*, wherever the called block can **name** the owner (ADR-0319) | an owned structure held in a variable of the outermost block cannot be lent at all — 12 sites in this tree, every one of them a test written for the construct | nothing. 6.4.14.3 forbids copying the value, so an owned variable's only names are itself, a variable parameter bound to it, and a component of what contains it; the second is 6.4.14.7's activation-point and the first is scope, and there is no third |
-| **and a third there was** (ADR-0326), found by probing the sentence to the left rather than reading it | `Runner(p^, Killer)` no longer compiles: a routine handed alongside a borrow may not name the owner | nothing known, and the residue is now an *argument* rather than an assertion — see below |
-| **and the cost was larger than it read** (ADR-0332): the routine handed over may be a **formal**, whose defining-point is inside the block that declares the owner | none — it gives programs back. A block owning a variable could lend a borrow of it to nothing at all, the ordinary callback included | the argument is unchanged and one implementation of it was wrong; a formal is bound before its activation exists |
-
-Real lifetimes are the fourth candidate and are unavailable: **a borrow here
-is a parameter binding and not a value**, so there is nothing for a lifetime
-to be written on.
-
-**The sentence to carry out of this row** was *unformability is what protects
-against escape and is exactly what makes invalidation invisible* — ADR-0201
-reads the borrow's absence from the type system as strength, and it is strength
-in one direction only. That still stands, for the escape half, which nothing
-checks.
-
-**The row was struck on 2026-09-04 and the strike was wrong**, which is the
-part of this row worth reading. The claim in the last cell above — *and there
-is no third* — was an enumeration of the **names** an owned pointer has,
-offered as an enumeration of the ways it can be **released**. A block does not
-have to name an owned variable to release it. It releases it by activating a
-§6.7.3.4 procedural parameter that can, and a procedural parameter has been in
-this language since ADR-0030:
-
-```pascal
-procedure Runner(var m: N; procedure k);      { names nothing of Holder's }
-begin k; writeln(m.v:1) end;                  { m is disposed storage }
-...
-new(p); p^.v := 7; Runner(p^, Killer)         { printed garbage, exited 0 }
-```
-
-Both halves of AP 6.4.14.9 had it, and the only diagnostic was the fourth
-warning suggesting `protected` — which does not help, protection stopping a
-write where this is a read. ADR-0326 adds the paragraph and rewrites the NOTE,
-and what stands in its place is an **argument** and not an assertion: a block
-obtains a routine by scope or by being handed one, both are asked, and the two
-meet at a single activation-point because that is where a borrow is formed. It
-can be wrong the way its predecessor was, and the way to find out is to probe
-it again.
-
-**And the cost of closing it was mispriced in the same cell.** ADR-0326's row
-said *nothing known*, and what it had taken away was every callback: `CanName`
-answers from a defining-point, a formal's is inside the block that declares it,
-and so a block that owns a variable could hand a borrow of it to no routine at
-all — five sites, both paragraphs, and no case in the tree had the shape because
-the rule was written and reviewed against programs whose procedural actual was a
-*declared* routine. ADR-0332 is the fourth paragraph: a formal is bound before
-its activation exists, so what is bound to it was denoted in a block whose
-activation is a proper ancestor and cannot name this one's variables. The
-lesson is the row above's, one column over — **a cost cell is a report and not
-an estimate**, and this one was written from the programs that motivated the
-rule rather than from the programs it reached.
-
-**The invalidation half is closed**, and what it leaves is a different sentence.
-Two records costed mechanisms for the residue — a call-graph summary and a
-dynamic flag — and both were answering *may this release happen*. The
-requirement is symmetric, so it can be enforced at either end, and the other end
-is a question about **scope**: it costs nothing at run time and crosses a
-program-component boundary in both directions. **A gap can be an artefact of
-where the question is asked.** Annex C.12 is withdrawn, `doc/sop.md` §7's row is
-struck, and what is left of this row is ADR-0201's original property — held by
-construction, watched by nothing.
-
-#### 2. The unsafe subset is the unmarked default
-
-Rust marks its unsafe operations and makes them opt in. Here it is the other
-way round:
-
-```pascal
-new(a); b := a; dispose(a); b^ := 5; writeln(b^)   { compiles clean, prints 5, exits 0 }
-```
-
-`^T` is the ordinary pointer — what every ISO program writes, what this
-compiler is written with, and the unchecked one (ADR-0019, and the *one gap*
-of [Known limitations](#known-limitations)). `owned ^T` is the safe form and
-costs a word to say. ADR-0117's containment fixes what `^T` **means** and
-settles nothing about what the compiler may **say**, so this row proposed a
-fifth warning in ADR-0272's frame: a `new` of an ordinary `^T` whose variable
-is never copied, where `owned` would have compiled.
-
-**It was measured before it was written, and the measurement retired it —
-and found something better than the warning would have.** Every ordinary
-pointer type-definition outside the compiler was counted on 2026-09-04. There
-were **nine**, and not one of them could take the word.
-
-**That count was right and its table of reasons was wrong**, which probing it
-later the same day found (ADR-0320). The table said five were refused for a
-schema domain and four for value parameters. In fact `StrMap`, `IntVec` and
-`StrVec` are themselves schemas, so `SMapPtr`, `IVecPtr` and `StrVecPtr`
-belonged in the first row; and `JsonPtr`, put in the second, is refused before
-any parameter is reached, because `JsonNode` has a **variant part**. Ten of
-eleven — the count is eleven since `examples/arena_graph.pas` — were refused by
-AP 6.4.14.2 and one by 6.4.14.3. The lesson is the one this page keeps
-learning: a count taken by machine and a table of reasons written by hand are
-two different measurements, and only the first was made.
-
-**The table as it stands now**, after ADR-0320 narrowed 6.4.14.2 and each type
-was compiled with the word to find out rather than reasoned about:
-
-| Status | Which | Why |
-| --- | --- | --- |
-| **converted** | the two arenas in `examples/arena_graph.pas` | the block owns them; the `defer dispose` pair is gone and the example says so |
-| legal, and **must not** be | `IVecPtr`, `SMapPtr`, `StrVecPtr` | `owned` is a dialect feature and these are in `lib/`, the conforming layer a reader can port to another Pascal (ADR-0120). Converting them would move three containers into `lib/dialect/` and out of reach of a conforming program |
-| **converted** | `CountMap`, `WordVec` in `examples/word_freq.pas` | the module was unblocked by ADR-0323 and these two took the word; the two `Free` calls at the foot of that program are gone and the heap balance is the number it was |
-| still refused, and **not** for the reason this row gave | `PathVec`, `DocMap` in `lsp/pasls.pas` | `PathVec` is a *field* of `Document` and `DocMap` holds `Document` values, so an owned `PathVec` makes the record affine and takes away the whole-record assignment the map is built on. AP 6.4.14.3 doing its job, and nothing to lift |
-| still refused | `JsonPtr`, `JsonChars` | AP 6.4.14.2's other half: `JsonNode` is a tagged union, so its child pointers are fields of a variant part |
-
-**That was the table's third error in two days**, and the shape of all three
-is one: a count taken by machine, and the reason beside it written by hand.
-This row said the four waited on `PasContainer`, that the module's routines
-assign to the pointer, and that converting it was "a mechanical change,
-`v := take(fresh)`, at about 22 sites". The count is **two** sites. The change
-is not mechanical and was not about the sites at all: making them `take`
-converts the module and *unconverts* every other client, because `take` is the
-only operation in this language whose applicability is a property of the type
-it is applied to, and `PasContainer` has both kinds of client in this tree.
-That is ADR-0323, and it is a language amendment rather than a library edit —
-AP 6.4.14 and AP 6.7.3.10 did not compose, and the module is the only thing
-here written over both.
-
-The compiler's own 34 are the second row again and harder: `nodePtr`,
-`symPtr` and `typePtr` stand as a value parameter or a result 341, 156 and 198
-times. A warning firing nowhere is what ADR-0116 rejects and what ADR-0272's
-four already-shipped warnings each avoided by finding something on their first
-run, so **it is not built**.
-
-**What the count actually says is about the type and not about the warning.**
-`owned ^T` has no client here not because nothing wants ownership, but
-because **the only borrow this language had was an unprotected `var`
-parameter**, and every container in `lib/` hands its handle to a *value*
-parameter — `JsonKindOf(v: JsonPtr)`, `SMapGet(m: SMapPtr, …)`, `IVecLen(v:
-IVecPtr)`. AP 6.4.14.3 forbids exactly that, so adopting the safe pointer means
-rewriting every accessor to take `var` — and a plain `var` grants the caller's
-ownership away, which collides with the rule of
-[the row above](#1-the-borrow-rule-was-enforced-in-one-direction--closed-2026-09-04).
-
-**That is settled, and it took two amendments rather than one** — and neither
-was sufficient alone, which is why the row credited the first with the whole
-job and was wrong.
-
-**The borrow form was not missing** (ADR-0318, AP 6.4.14.8). §6.7.3.1's
-`protected` is exactly a lend that may be read and not written, and an owned
-pointer was excluded from it by §6.4.1 — whose stated reason, that a pointer
-value can be copied out and disposed of through the copy, AP 6.4.14.3 had
-already made false for this type. A handle-type had been protectable all along
-on identical facts. `PasList`'s four read-only routines now take
-`protected var l: List`, and the fourth warning found five more places for the
-word in code written before there was one.
-
-**And the schema domain was refused for a reason that reached further than it
-does** (ADR-0320, AP 6.4.14.2). Releasing an owned variable means walking it,
-and a schema's extents are read from a descriptor a frame holds and the heap has
-not got — true, and true only where the variable holds something whose release
-is more than giving the storage back. Where it holds nothing affine the release
-*is* the deallocation, which `dispose` already performed. The condition is the
-one the emitter was already asking to decide whether to walk.
-
-**What is left of this row is a choice and not a blockage**, which is the third
-thing this row has been wrong about. Nine of the eleven are legal as `owned ^T`
-today. Two are converted. Three *must not* be, because they are the conforming
-layer. Four wait on one module, and that module is where the question actually
-lives: **should a general-purpose container own its storage?** An owned one
-cannot be aliased, cannot be returned by a function, and must travel as a
-variable parameter — which is right for a tree one block owns, and is a real
-loss for a container callers pass around. `PasList` was written owned and has no
-`Free`; `PasStrVec` was written indexed and has one. That the second kind exists
-is not a gap.
-
-So the facility is complete and its adoption is now a design question per
-container rather than a restriction to lift — and it is a question a caller can
-actually answer, which it was not until ADR-0323: `PasContainer` is now written
-once for an owned type argument and an ordinary one, at two lines, and each
-client chooses. The warning is still not built, and
-the reason has changed twice: it is no longer that nothing *could* take the word,
-nor that a rewrite is needed, but that taking it is sometimes the wrong answer —
-and a warning cannot know which.
-
-#### 3. There is no shared ownership; the release walk ended in a signal and no longer does — 2026-09-05
-
-The dialect's answer to aliasing is refusal, given three times (ADR-0201), so
-there is no `Rc` and no language-level arena, and an owned pointer admits no
-back-pointer and no cursor. `PasList` states the consequence plainly — no
-index, no tail pointer, every traversal recursive. What was not written down is
-the failure mode. AP 6.4.14's NOTE 2 predicts it and this is the measurement,
-taken again on 2026-09-04 with an 8 MB stack and narrowed:
-
-| An owned chain of | On release, before ADR-0322 | after |
-| --- | --- | --- |
-| 200 000 nodes | clean, balance 0 | clean |
-| 500 000 nodes | clean | clean |
-| 1 000 000 nodes | `built 1000000` prints, **then exit 139** | clean, 35 ms, balance 0 |
-| 8 000 000 nodes | the same | clean |
-
-The boundary was between half a million and a million, and the message printing
-first is what says it was the *release* and not the build: both were recursive,
-and the build survives what the release did not, having no owned value to
-release per frame.
-
-It was the one capacity in this language that ended in a signal instead of a
-diagnostic. ADR-0012's claim is that a full buffer is survivable **as a
-diagnostic**, and the per-domain release routine was outside that claim: the
-safe container's release path was the crash.
-
-**It is a loop now, for a chain.** Where the domain has a field whose type is an
-owned pointer to that same domain, the release empties that field, releases the
-rest, disposes the variable and goes round again at what it took out — 6.4.14.6's
-move written by the release rather than by a program, and the emptying is what
-keeps the walk from releasing it twice. One frame, however long the chain.
-
-**And a tree costs one frame as well** (ADR-0333, 2026-09-05). ADR-0322 left
-*a tree still costs a frame per level* and priced it as the shape that does not
-occur. Two programs written side by side say what the sentence hides:
-
-| `Node = record v: integer; l, r: Own end`, 400 000 nodes | On release |
-| --- | --- |
-| `fresh^.l := take(head)` | clean, exit 0 |
-| `fresh^.r := take(head)` | `built` prints, **then exit 139** |
-
-The same program, differing in which of two identically typed fields it uses,
-and nothing in either source says which one the release will walk. **A capacity
-that moves when a declaration is reordered is worse than a bound**, and 400 000
-is not a large tree. Every self-owned field is now emptied and pushed onto a
-work list *threaded through the link fields of the nodes waiting on it* — no
-allocation, and the one-field case emits exactly the code it did before.
-
-What is left is stated rather than measured, which is the difference: a
-self-owned pointer the domain does not hold **directly**, inside an array or a
-sub-record component, has no link to thread; and a cycle of two domains is two
-routines calling one another. Neither is reachable by writing a list or a tree.
-The alternative — a depth counter and a diagnostic — is priced in ADR-0322: a
-call per node released, on every program, to report a case that is now much
-harder to reach. Two ways out, both Rust's —
-reference counting, which then owes an answer about cycles; or the
-arena-and-index shape, which is what a Rust programmer reaches for when the
-data is not a tree and which **needs no language change at all**.
-
-**The second is now written down**: `examples/arena_graph.pas`. One block holds
-every node and the links are *indices* into it, which is precisely the thing an
-owned pointer refuses — an index may be copied, compared and stored twice, and
-it cannot dangle, because nothing it names is separately freed. The example
-holds a graph with a cycle and with two arcs into one node, neither of which an
-owner per node admits, and then a path of a million nodes: **18.8 MB peak RSS,
-13 ms, walked by a loop and released by two calls to free**, where the owned
-chain of that length dies at the end of its block.
-
-Two costs came out of writing it, and both are in the file. **The arena cannot
-itself be `owned`** — its type is a schema and AP 6.4.14.2 refuses that domain —
-so it is an ordinary pointer whose release is written, which `defer` (ADR-0175)
-is where. And **an index is unchecked in the way a pointer is not**: a subscript
-is bounds-checked (ADR-0017), so an index outside the arena traps, but an index
-into the *wrong* arena is an integer like any other and nothing here can see it.
-That is the trade the shape makes, and it is the one Rust's arena crates make
-too.
-
-What is still open in this row is the first way out. Reference counting is
-unbuilt, and nothing has asked for it: the arena covers the non-tree data, and
-the release-depth crash has a documented shape to move to. **The crash itself
-is unfixed** — a program that wants a chain of a million owned nodes still has
-no diagnostic, only a signal.
-
-#### 4. A record has no `Drop`
+#### A record has no `Drop`
 
 A handle names its closer in its own type — `handle external 'fclose'` — and
 that is the only user code this language runs when a value dies. A record
@@ -720,9 +469,9 @@ increment B misses what a map is keyed by most of the time. And `T: Ord` is
 ambiguous with an ordinary value parameter; the real slot is `T: Ord type`, the
 parser already committing on that juxtaposition and merely refusing the name.
 
-**Nothing is built, and the record landing alone is the point.** Each of the
-three was a contradiction of a design written without probes, against a compiler
-that was there to be asked.
+**Nothing was built at that point, and the record landing alone was the
+point.** Each of the three was a contradiction of a design written without
+probes, against a compiler that was there to be asked.
 
 **Two of ADR-0338's own claims then failed the same way**
 ([ADR-0339](adr/0339-a-trait-heading-names-one-type-and-one-scope.md),
@@ -853,8 +602,12 @@ subrange from its host, which makes a trait bound the first constraint that
 could; the record decides the impl lookup **follows `Base()`**, so a subrange
 takes its host's implementation and cannot carry one of its own.
 
-**Not settled.** Whether to build any of it. What increment A's one rewritten
-module reads like, which is the evidence the rest waits on. And what to do
+**Not settled.** Whether to build **A or C** — B is built, and since
+ADR-0355 it has a client that is not a test, which is the evidence the record
+asked for and got a release out of. What increment A's one rewritten module
+reads like is the evidence A waits on, and it is a different kind: B's payoff
+was 30 call sites and 14 routine parameters, a program's own text, and A's is
+118 call-site spellings that block no program. And what to do
 about the one cost no gate will see: `x.M(a)` resolving in the type's scope
 means a reader can no longer find a routine by grepping its name — `Put` will
 be declared in a dozen impls. `--dump-uses` already answers *where is this name
@@ -911,28 +664,16 @@ than closes it: storage declared that way can have no second pointer, so
 there is nothing to dangle, and §6.4.4's ordinary pointer is untouched —
 ADR-0181 withdraws nothing.
 
-**Decided 2026-09-05: kept, and written down as the unchecked form** (ADR-0336).
-The two ways out were measured rather than weighed. *Retire* fails on the
-numbers: 41 ordinary-pointer type-definitions outside `tests/`, and **0 of 41**
-convertible to `owned ^T` plus a borrow — three `lib/` containers are the
-conforming layer ADR-0120 keeps portable, `JsonPtr` is refused by AP 6.4.14.2's
-variant part, `DocMap` by AP 6.4.14.3, an owned field making `Document` affine
-and killing the whole-record assignment the map is built on. The compiler's own
-34 decide it: its node graph has back-edges and shared singletons rather than a
-tree, its three pointer types stand in a value-parameter or result position 695
-times, and it calls `dispose` **not once** — every textual hit in the three
-components is a comment, a diagnostic string, the identifier `disposeValue` or
-emitted `@pas_dispose` IR. It is arena-until-exit, so there is no lifetime for
-an owner to model. And retiring would break containment outright:
-`new(p); q := p; dispose(p)` is conforming Extended Pascal and ADR-0117 obliges
-this dialect to accept it and mean the same. *Check* is admissible where it was
-assumed not to be — no `^T` crosses AP 6.7.7.3 and no `@cstruct` record may
-have a pointer field, so `foreign-layout` and ADR-0328 are untouched — and dies
-instead on cost: ADR-0325 admits i386, so there are no spare address bits and a
-generation must be a fat pointer re-baselining every offset `target-layout`
-watches, or a side table costing a call per dereference; and soundness requires
-`dispose` stop returning storage, so the checked pointer becomes the one that
-leaks by design. With no caller asking, that is not a trade worth making.
+**Decided 2026-09-05: kept, and written down as the unchecked form**
+(ADR-0336). The two ways out were measured rather than weighed, and both fail:
+*retire* on the numbers — 41 ordinary-pointer type-definitions outside `tests/`
+and **0 of 41** convertible to `owned ^T` plus a borrow, the compiler's own 34
+deciding it — and on containment, `new(p); q := p; dispose(p)` being conforming
+Extended Pascal that ADR-0117 obliges this dialect to accept and mean the same;
+*check* on cost, ADR-0325's i386 leaving no spare address bits and soundness
+requiring `dispose` stop returning storage, so the checked pointer would be the
+one that leaks by design. The measurement is in
+[`doc/history.md`](history.md#the-memory-model-read-against-the-goal).
 
 What is written down instead is the inversion, stated rather than glossed: the
 safe subset is `owned ^T` with the non-escaping borrow, and §6.4.4's pointer is
@@ -975,7 +716,7 @@ instrument, and that entry says when the next is worth running.
 
 ## The standard library
 
-**Thirty-one modules, and nothing open.** That is the shortest part of this
+**Thirty-two modules, and nothing open.** That is the shortest part of this
 page and it is a finding rather than an omission: the chapter that listed
 library gaps struck the last of them at v3.2.0, and what replaced it is the
 lesson about how those rows got there.
@@ -998,6 +739,16 @@ the split as tidy:
   ADR-0196, ADR-0199). **So the four areas do not partition by these three
   parts**, and pretending they did would be the kind of tidiness this page's
   own lessons warn about.
+
+**The library has now asked the language for something, which is the direction
+this part had never run in.** `PasContainer`'s map was keyed by a caller
+threading `StrHash, StrEq` through thirty call sites; it declares `trait Key`
+and binds the key discriminant with it now, and every client writes the `impl`
+block (ADR-0355). That is the object model's increment B earning its keep in a
+module a program imports rather than in a test, and it is the only evidence
+[the proposal](#the-object-model-proposed) had been short of. It is not a row
+here, because nothing about the library is open as a result — but it is what a
+row here would look like if one appeared.
 
 **A row will appear here the way every good one did** — somebody writing a
 program and finding it hard, not somebody reading a list. Two of that
@@ -1027,96 +778,34 @@ listed by name in `README.md`'s module table.
 
 ### Writing a daily program
 
-- ~~**What a program reads can be cut without a word.**~~ — **done**
-  (ADR-0305), and moved to
-  [`doc/history.md`](history.md#the-capacity-is-the-callers). `ReadLine` and
-  `ForEachLine` take the caller's own string, and the language half needed
-  nothing built: `read(f, s)` stops at the capacity *or* at the line's end, so
-  `eoln(f)` immediately afterwards is false exactly when something was left
-  over. The row said that half had not been probed; probing it took four
-  lines.
+**Every row closed**, and the chapter is in
+[`doc/history.md`](history.md#the-last-of-the-daily-program-rows) with a
+pointer to where each of them went. What a program reads can be cut without a
+word (ADR-0305); concurrency was one row short and is not (ADR-0302, ADR-0303,
+ADR-0312, ADR-0313); four of twelve examples collided with a library name on
+their first draft, and the compiler defect under that was a placeholder type an
+error path left behind (ADR-0306); `PasJson` rendered `0.75` as
+`7.500000000000E-01` and its reader was not correctly rounded (ADR-0309,
+ADR-0314); a `MapKey`'s 63 characters were never the map's bound (ADR-0310); an
+owned pointer refusing `p := nil` has a reason and now names it (ADR-0307); and
+inference could not read a type parameter through a whole array, which turned
+out to be `Determine` and not the clause (ADR-0316).
 
-- ~~**Concurrency is one row short**~~ — **done**, and the row it named is
-  the last of four that closed on 2026-09-03. A task can be waited on singly
-  (ADR-0312), a program can wait for whichever of several channels comes first
-  and can give up waiting (ADR-0313), a task can be handed a socket
-  (ADR-0303), and a stage can close the channel downstream of it (ADR-0302).
-  What is left is in [What each landed feature left
-  open](#what-each-landed-feature-left-open) as three *shapes* rather than
-  rows — a **channel of handles**, closing a channel without releasing it, and
-  a timeout on `wait` — and the reason none of them is a row is that no
-  program here has wanted one. The prediction under this bullet was right
-  about the order: a single task's completion was the next thing wanted, and
-  waiting for whichever came first was the one after it.
-
-- ~~**Four of twelve example programs collided with a library name on their
-  first draft**~~ — **done** (ADR-0306), and moved to
-  [`doc/history.md`](history.md#the-capacity-is-the-callers). The compiler
-  defect was a placeholder type an error path left behind and a later rule
-  spelled out; the naming half is a paragraph in `README.md` and not a rename,
-  because every rename moves the collision rather than removing it.
-
-- **Two smaller reports from the same pass** (ADR-0295, findings 5 and 6):
-  ~~`PasJson` renders `0.75` as `7.500000000000E-01`~~ — **done** (ADR-0309),
-  and moved to [`doc/history.md`](history.md#the-fifth-of-the-seven-closed-adr-0309);
-  the writer renders and reads its own output back and keeps the first
-  spelling that returns the value it started from, and
-  `examples/json_pretty.out` moved with it, which is what that golden was for.
-  What it uncovered is the *reader*, and ~~`JsonParse` scales a decade at a
-  time and is not correctly rounded~~ — **done** (ADR-0314), in
-  [`doc/history.md`](history.md#a-decimal-is-the-languages-to-round): the
-  reader stops computing and hands the significand and exponent to §6.9.5's
-  `readstr`, which reaches the same correctly rounded conversion the writer's
-  own round-trip search had been consulting all along, so the case that
-  measured two converters disagreeing now has no FALSE in it. And
-  ~~a `MapKey` is 63 characters, so a map keyed by text from outside needs a
-  guard the example has to explain~~ — that one was **half wrong** and is
-  **done** too (ADR-0310), in
-  [`doc/history.md`](history.md#the-capacity-is-the-callers): the map has been
-  generic over its key since ADR-0254, so 63 was `MapKey`'s capacity and never
-  the map's; what was real is that a program keyed by text from outside must
-  choose a capacity, and the rule for choosing it is now written where the
-  library is. ~~The third — an owned pointer refusing
-  `p := nil`~~ — is **answered** (ADR-0307): the asymmetry with a handle has a
-  reason, which is that an owned pointer already has `dispose` and a handle has
-  nothing else, and the message names it now.
-
-- ~~**Inference cannot read a type parameter through a whole array**, only
-  through a slice-designator.~~ — **done** (ADR-0316), the day after it was
-  written down, and **the row had the direction wrong**: it said AP 6.7.3.10.4
-  c) was narrower than the parameter it describes, and the clause was right
-  all along. It defers to 6.7.3.9.3 for what is admitted, and 6.7.3.9.3
-  admits a whole array; it was `Determine` that asked `IsSlice(t)` and so
-  read only what was already a slice. The clause is widened in the one place
-  it needed to be — an array indexed by something other than an integer now
-  determines and is then refused for its index-type, so the reader gets that
-  message rather than being told to write a type argument first — and the
-  fix reached two shapes nobody had asked for either, a schema-produced array
-  and an array whose component is structured. The original row, for the
-  record: `Determine`'s slice arm asks whether the
-  *actual's* type is a slice, and an ordinary array's is not — the conversion
-  happens at the call — so `Total(r)` against `function Total(T: type;
-  protected var xs: array of T)` is refused with *nothing in this call says
-  what 't' of 'total' is*, while `Total(r[1..3])`, `Total(digit, r)` and the
-  non-generic `Plain(r)` over `protected var a: array of digit` all compile and
-  run. The whole array **is** admitted where `array of T` stands; it is only
-  AP 6.7.3.10.4 c) that is narrower than the parameter it describes, so
-  ADR-0266's own example `procedure Sort(Elem: ordered type; var a: array of
-  Elem)` cannot be activated by inference from an array. Found by probe while
-  settling ADR-0315's open question, and **nothing in this tree had ever
-  written that call** — `generic_infer`'s one slice activation passes a
-  slice-designator — so no oracle here could have said so. That is ADR-0304's
-  own lesson a third time: the row that says a feature is unavailable is worth
-  less than the four lines that ask the compiler.
+**The prediction the chapter made about its own order was right**, which is
+worth more than any single row: a single task's completion was the next thing
+wanted and waiting for whichever came first was the one after it. What is not
+worth carrying forward is any of the *reasons* it wrote beside a row — three of
+them were wrong, and each was found by compiling four lines.
 
 ---
 
 ## First-party utilities
 
-**Everything outside the compiler**, and it is where most of what is left
-lives. None of it is a language feature and none needs a spelling: how the
-compiler is obtained, how it is learned, what an editor may ask of it, how it
-is packaged, and which machines it runs on.
+**Everything outside the compiler**, and it is down to one thing: which
+machines it runs on. None of it is a language feature and none needs a
+spelling — how the compiler is obtained, how it is learned, what an editor may
+ask of it, how it is packaged — and every row but the platforms was struck
+within four days of being written down.
 
 The two parts above are for someone working *on* the compiler and on what it
 compiles. **This one is for someone working with it**, and it was written on
@@ -1131,105 +820,44 @@ part](#what-each-landed-feature-left-open) has three rows that were wrong
 about exactly that.
 
 ADR-0109's four areas are answered and both standards are complete, so what is
-missing here is not what the compiler accepts but what surrounds it. What it
-said when a program stopped was the first row to close, the day after the
-chapter was written (ADR-0293), and `doc/history.md` has what doing it
-found.
+missing here is not what the compiler accepts but what surrounds it. The
+struck rows are below as one table, each pointing at where its narrative went;
+[`doc/history.md`](history.md) has what doing each of them found.
 
-### Getting it and learning it
+### Getting it, learning it, and the editor's questions
 
-- ~~**No release carries a binary.**~~ — **done** (ADR-0296), and moved to
-  [`doc/history.md`](history.md#the-first-archive). A `v*` tag now attaches
-  an `x86_64-linux` and an `aarch64-linux` archive to its release, each
-  checked the way `install-layout` checks a prefix before it is uploaded.
-  The guess was an afternoon, most of it the CI job; the CI job was the
-  cheap half, and the afternoon went on making the script fail on every push
-  rather than at the tag.
+**Every row of these three sections is struck**, and they are kept as one
+because what is left of them is a single sentence: the things separating a
+compiler from a language a person picks up on a Tuesday were cheap, and every
+one was taken within four days of being written down.
 
-- ~~**No program to read that is not a test.**~~ **Built** (ADR-0295):
-  `examples/` holds twelve programs of a page each, every one a case, and
-  writing them found seven things, all in *Writing a daily program* below.
-  The row as it stood is in
-  [`doc/history.md`](history.md#the-examples-and-what-writing-them-found).
+| What was missing | Where it went |
+| --- | --- |
+| no release carried a binary | ADR-0296 — a `v*` tag attaches an `x86_64-linux` and an `aarch64-linux` archive, each checked the way `install-layout` checks a prefix before it is uploaded. [`doc/history.md`](history.md#the-first-archive) |
+| no program to read that is not a test | ADR-0295 — `examples/` holds twelve programs of a page each, every one a case, and writing them found seven things. [`doc/history.md`](history.md#the-examples-and-what-writing-them-found) |
+| no tour | [`doc/tour.md`](tour.md), eleven sections of prose with short programs in it, linked from the top of `README.md`. [`doc/history.md`](history.md#the-tour-and-what-writing-it-found) |
+| a runtime error named no position | ADR-0293 — `… at file:line:col` after every trap message. [`doc/history.md`](history.md#a-runtime-error-names-no-position--closed-adr-0293) |
+| a source named with no directory found no sibling module | ADR-0308, the day the tour that found it landed: `SourceDir` answered the empty string where the answer is `./`, and `AddPath` drops an empty directory on purpose. `bare-source-name` is the gate, and it has to be one because no test case can choose how it is named |
+| no way to start a project except by hand | ADR-0348 — `pascalcc new-project <name>` writes `src/`, `test/`, a `.gitignore`, a README and `afterschool-pascal.toml`; `build`, `run` and `test` read it. [`doc/history.md`](history.md#a-project-is-a-convenience-over-a-file) |
+| the server answered thirteen methods and none of them completed a name | ADR-0300, ADR-0301 — fifteen now. [`doc/history.md`](history.md#tooling--closed-adr-0300-adr-0301) |
+| a user's own multi-module program already built itself and nothing said so | [`doc/tour.md`](tour.md#there-is-no-manifest-and-no-build-order-to-maintain), under a heading of its own — resolution is transitive, `--dump-imports` tells `pascalcc` what to translate, and there is no manifest and no order to maintain (ADR-0244) |
 
-- ~~**No tour.**~~ **Written**: [`doc/tour.md`](tour.md), eleven sections of
-  prose with short programs in it, linked from the top of `README.md`. The row
-  as it stood and what writing it found are in
-  [`doc/history.md`](history.md#the-tour-and-what-writing-it-found).
+**Windows and macOS are the exception, and are in the [cross-platform
+chapter](#what-is-left)** rather than repeated here. The one sentence worth
+adding from this side: macOS is the cheapest unknown in the tree — the
+runtime's five non-ISO names are all there — and a language nobody has run on a
+laptop is not yet practical whatever else is true of it.
 
-- ~~**A source named with no directory finds no sibling module.**~~ — **done**
-  (ADR-0308), the day the tour that found it landed. `SourceDir` answered the
-  empty string where the answer is `./`, and `AddPath` drops an empty
-  directory on purpose, so ADR-0244's first rule held for every spelling but
-  `pascalc prog.pas`. Two right answers to two different questions, wrong
-  together; `bare-source-name` is the gate, and it has to be one because no
-  test case can choose how it is named.
+**What the chapter got right and what it got wrong** is the part worth keeping.
+It asked for one row from each section to be taken first — a binary, a line in
+every trap, `references`, and the examples — and all four went within a day,
+which says the ranking was sound. What it got wrong is what [the language
+part](#what-each-landed-feature-left-open) got wrong three times over: the
+*reasons* written beside the rows. Every row that said why it was blocked was
+cheaper than it claimed, and the row about a source named with no directory was
+not a missing feature at all but two right answers to two different questions,
+wrong together.
 
-- ~~**There is no way to start a project except by hand.**~~ — **built** the
-  day it was asked (ADR-0348). `pascalcc new-project <name>`, alias `new`,
-  writes `src/`, `test/`, `build/`, a `.gitignore`, a README and
-  `afterschool-pascal.toml`; `build`, `run` and `test` read it. The row named
-  three things to decide first and each was decided rather than skipped.
-
-  **Whether a skeleton is a tree at all**, given that the import search makes a
-  flat directory work: it is, and `src/` is *why* — the generated module is
-  imported by name with no path, so the layout teaches ADR-0244's property
-  instead of contradicting it. **Whether it writes anything a build needs**,
-  given no manifest: it writes what the compiler cannot infer and no source
-  list, which is the distinction the objection turned on — the import graph
-  stays inferred and the **link flags** stop being something a person carries
-  in their head. **And where it belongs**: the driver, because `build` must
-  live where the compiling happens and splitting the four across two programs
-  would put the config reader in both.
-
-  What it cost beyond the code was two checks. `producttest` derives its
-  documented-flag list from the *argument loop*, and a subcommand is a separate
-  dispatch, so a new one would have been undocumented and unasked; and no test
-  case can assert a directory the driver wrote, so `new-project` is a harness.
-  The generated module was wrong on the first attempt — `end.` where a module's
-  routine ends `end;` — which reading it did not catch and running it did.
-
-### Tooling
-
-- ~~**The server answers thirteen methods and none of them completes a
-  name.**~~ — **done** (ADR-0300, ADR-0301), and moved to
-  [`doc/history.md`](history.md#tooling--closed-adr-0300-adr-0301). It answers
-  fifteen now, and this section is empty. Both rows found something the row
-  itself could not have: `codeAction` carries an edit for **two** of the four
-  warnings and not three — deleting an unused local's declaration can delete an
-  enumerated constant declared in its own type-denoter — and building it found
-  ADR-0283's warning advising a word that does not compile, `protected`
-  belonging to a formal-parameter-section and not to a parameter.
-  `completion` refuses member completion for the reason its own row named, and
-  needed `--dump-symbols` to start reporting formal parameters, which it never
-  had.
-
-### Platforms and packaging
-
-- **Windows and macOS are in the [cross-platform chapter](#what-is-left)**,
-  and are not repeated. The one sentence worth adding from this side: macOS
-  is the cheapest unknown in the tree — the runtime's five non-ISO names are
-  all there — and a language nobody has run on a laptop is not yet practical
-  whatever else is true of it.
-
-- ~~**A user's own multi-module program already builds itself**, and nothing
-  tells them so.~~ **Told**: it is
-  [`doc/tour.md`](tour.md#there-is-no-manifest-and-no-build-order-to-maintain),
-  under a heading of its own — resolution is transitive, `--dump-imports`
-  tells `pascalcc` what to translate, `AFTERSCHOOL_PASCAL_PATH` reaches an
-  installed library, and there is no manifest and no order to maintain
-  (ADR-0244). Writing that section is what found the row above it in *Getting
-  it and learning it*: the claim is true of every spelling of the command but
-  the one a person types.
-
-**If one row from each section were taken first**: a binary, a line in every
-trap, `references`, and the examples. Three of the four were taken the next
-day — the binary (ADR-0296), `references` (ADR-0294) and the examples
-(ADR-0295), which paid twice as the sentence said: twelve cases, and seven
-findings in *Writing a daily program* above. The fourth went the same day
-(ADR-0293), so all four are struck — and the Tooling section closed the day
-after (ADR-0300, ADR-0301). What is left in this chapter is the tour and the
-findings the examples produced.
 
 ### Cross-platform support
 
@@ -1801,6 +1429,9 @@ the record.
 | Should the compiler be one source file? | No, and it had not needed to be since ADR-0053. Three program-components, cut where the file order already was a topological order — 66 `forward` declarations, all inside one stage. The reason is the linking blind spot and not the buffers | ADR-0024, ADR-0233 |
 | Conformant array parameters, and level 1 | Done, and the 51 BSI level-1 programs found nine defects in the first implementation | ADR-0153 |
 | Can anything measure what the corpus reaches? | Three coverage gates and a clause-cited suite | ADR-0103 – ADR-0106 |
+| Is what the corpus reaches what this project is *made* of? | No: 46 718 lines of 67 931 had an instrument. `lib/`, `runtime/*.c` and `lsp/pasls.pas` are measured now, the dumps have a corpus, and the sanitizers see compiled Pascal for the first time — [the chapter](history.md#the-oracles-that-were-not-looking) is what four gates in two days found | ADR-0342, ADR-0349 – ADR-0354, ADR-0358 |
+| Is the memory model the one its records describe? | No, and not in the direction expected: three of a review's four rows closed within two days — the borrow rule's invalidation half is refused where a borrow is *formed*, the fifth warning was measured and retired, and the release walk that ended in a signal is a work list. The fourth, a record's `Drop`, is still open with exactly one asker. [The chapter](history.md#the-memory-model-read-against-the-goal) | ADR-0317 – ADR-0337 |
+| What separates this from a language a person picks up on a Tuesday? | Eight rows, every one struck within four days of being written: an archive, a tour, twelve examples, a position in every trap message, a project skeleton, two more server methods, and two claims that were true of every spelling of the command but the one a person types | ADR-0293 – ADR-0308, ADR-0348 |
 | Mutation testing, committed to the tree | One file per recorded mutation and a harness that runs them; not a `ctest` case, because it edits the tree. A register of demonstrations and not a measurement | ADR-0207 |
 | Is the platform lock scoped? | Three things, two done; 32-bit is what remains | ADR-0155 – ADR-0159 |
 | Can a conforming program learn that a file is missing? | `binding(f).bound` says whether it is there | ADR-0172 |
