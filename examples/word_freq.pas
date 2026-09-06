@@ -3,11 +3,13 @@
   `Map(K, V)` in PasContainer is one module written once over whatever key and
   value types the program names -- a schema with a type parameter (ADR-0209).
   A container is a pointer and grows by reallocating, so every routine that
-  may grow takes it as `var`. The map asks for a hash and an equality of its
-  key as procedural parameters; `StrHash`/`StrEq` are the module's own pair
-  for strings, and they are schematic, so they serve a key of any capacity
-  (ADR-0290). Where the arguments already say what the types are they are left
-  out of the call (ADR-0254, ADR-0304), and here that is every one of them.
+  may grow takes it as `var`. The map's key type must implement `Key` -- a
+  hash and an equality -- and this program says how its own does, once, in
+  the `impl` below (ADR-0355); `StrHash`/`StrEq` are the module's own pair for
+  strings, schematic so they serve a key of any capacity (ADR-0290), and the
+  implementation is two lines calling them. Where the arguments already say
+  what the types are they are left out of the call (ADR-0254, ADR-0304), and
+  here that is every one of them.
 
   **The key type is this program's own, and it is the line buffer's**
   (ADR-0310). A word is a piece of a line, so a word cannot be longer than
@@ -34,6 +36,18 @@ const
 
 type
   WordText = string(LineMax);
+
+{ What the map needs of a key, said once for this program's key type. It
+  stands before the map type below because AP 6.4.7.2 checks the bound where
+  the type is produced. }
+impl Key for WordText;
+  function Hash;
+  begin Hash := StrHash(k) end;
+  function Same;
+  begin Same := StrEq(a, b) end;
+end;
+
+type
   { `owned` (AP 6.4.14), so the program block owns both and neither is freed
     by hand: leaving the block releases them, and there is no spelling for a
     second name to dangle from. The word costs nothing here and the two calls
@@ -55,9 +69,9 @@ var
 procedure Count(w: WordText);
 var n: integer;
 begin
-  n := MapGet(counts, w, 0, StrHash, StrEq);
+  n := MapGet(counts, w, 0);
   if n = 0 then VecPush(words, w);        { first sighting }
-  MapPut(counts, w, n + 1, StrHash, StrEq)
+  MapPut(counts, w, n + 1)
 end;
 
 function Earlier(i, j: integer): boolean;
@@ -90,7 +104,7 @@ begin
   SortIndexed(VecLen(words), Earlier, Exchange);
   for k := 1 to VecLen(words) do begin
     word := VecGet(WordText, words, k);
-    writeln(MapGet(counts, word, 0, StrHash, StrEq):4, ' ', word)
+    writeln(MapGet(counts, word, 0):4, ' ', word)
   end;
   writeln(MapCount(counts):1, ' distinct words')
 end.

@@ -1,0 +1,8 @@
+adr: 0355
+file: lib/dialect/pascontainer.pas
+kills: lib_container
+why: FindSlot answers with the first occupied slot on the probe path whatever key it holds, so a lookup after a collision returns another key's value and a delete removes it. It is the equality half of the Key trait doing nothing -- the call to Same is what selects the client's implementation by the key's type (AP 6.7.10.2), and this is the mutation that shows the golden watches that selection: lib_container reads k3=4 where the golden says -1.
+--- old
+      if (m^.slots[i].state = 1) and Same(m^.slots[i].key, key) then found := i
+--- new
+      if (m^.slots[i].state = 1) and true then found := i

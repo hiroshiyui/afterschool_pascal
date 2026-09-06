@@ -1,0 +1,8 @@
+<source>:15:18: error: wordtext cannot be the type argument for 'k', which is declared 'key': it has no implementation of 'key'
+<dir>/../../lib/dialect/pascontainer.pas:518:10: error: tag values are only for a pointer to a record with a variant part
+<dir>/../../lib/dialect/pascontainer.pas:519:5: error: cannot select a field of a value of type integer
+<dir>/../../lib/dialect/pascontainer.pas:524:19: error: cannot select a field of a value of type integer
+<dir>/../../lib/dialect/pascontainer.pas:525:7: error: cannot select a field of a value of type integer
+<dir>/../../lib/dialect/pascontainer.pas:525:14: error: cannot subscript a value of type integer
+<dir>/../../lib/dialect/pascontainer.pas:525:16: error: cannot select a field of a value of type integer
+<source>:19:3: error: this activation is what asked for that instantiation of 'mapinit'

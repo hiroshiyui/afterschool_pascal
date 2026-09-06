@@ -1,2 +1,2 @@
-<dir>/../../lib/dialect/pascontainer.pas:351:5: error: 'dispose' is what releases an owned pointer: assigning nil would leave what it identifies with no owner
+<dir>/../../lib/dialect/pascontainer.pas:367:5: error: 'dispose' is what releases an owned pointer: assigning nil would leave what it identifies with no owner
 <source>:24:3: error: this activation is what asked for that instantiation of 'vecfree'

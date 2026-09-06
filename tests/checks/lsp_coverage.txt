@@ -25,9 +25,9 @@
 # Regenerate with:  python3 tests/checks/lsp_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 93
-instrumented 1396
-ambiguous 30
+uncovered 94
+instrumented 1394
+ambiguous 32
 sessions 32
 
 (program level) 5/52
@@ -47,7 +47,7 @@ compilercommand 2/9
 completion 1/53
 completionkindof 1/12
 container 0/1
-copyid 2/4
+copyid 3/5
 corner 0/5
 covers 0/1
 definition 0/19
@@ -56,9 +56,9 @@ diagnosticsin 0/13
 didchange 0/9
 didclose 0/6
 didopen 0/5
-dirof 0/2
+dirof 1/1
 dispatch 0/25
-docof 0/4
+docof 0/3
 dropdecl 0/6
 encodingname 0/2
 endswithtext 0/2
@@ -73,7 +73,7 @@ forget 1/6
 formatcommand 2/10
 formatting 2/34
 gather 1/21
-hexvalue 1/1
+hexvalue 1/4
 hover 0/25
 identin 0/7
 importsfor 1/15
@@ -85,8 +85,8 @@ mcpdispatch 2/21
 mcpinitialize 2/19
 namerange 0/10
 negotiate 0/6
-newresponse 0/3
-nodocument 0/1
+newresponse 0/2
+nodocument 0/2
 note 0/1
 offeritem 0/5
 offervocabulary 0/10
@@ -95,7 +95,7 @@ outlinetext 0/20
 patharg 0/4
 pathtool 0/17
 pathtouri 0/9
-popsegment 0/3
+popsegment 0/1
 preparerename 1/17
 quickfix 0/23
 rangeformatting 0/10
@@ -111,7 +111,7 @@ references 3/34
 refuse 0/7
 renamesymbol 9/58
 renametarget 0/14
-resolve 1/12
+resolve 0/10
 selection 2/46
 send 0/6
 shutdown 0/4

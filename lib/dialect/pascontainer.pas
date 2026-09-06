@@ -56,7 +56,7 @@
   `StrHash` below (ADR-0310). }
 module PasContainer;
 
-export PasContainer = (Vec, Map, MapKey, KeyMax, CapMax,
+export PasContainer = (Key, Vec, Map, MapKey, KeyMax, CapMax,
                        VecInit, VecFree, VecPush, VecPop, VecGet, VecSet,
                        VecLen, VecCap, VecClear, VecReserve, VecFull,
                        MapInit, MapFree, MapPut, MapGet, MapHas, MapDelete,
@@ -101,6 +101,30 @@ type
     a: array [1..cap] of T
   end;
 
+{ What the map needs of a key, and nothing more: a hash and an equality. It is
+  a trait (AP 6.7.9) and the map's key discriminant is bound by it below
+  (AP 6.4.7.2), so the client says once, at its own key type, what used to be
+  said at every call (ADR-0355).
+
+  **Declared here and implemented by the client**, which is the only direction
+  6.13 admits (ADR-0341): a client translates against this interface alone, so
+  an implementation written in this module's block would be invisible to every
+  importer -- and that includes one for `MapKey`. What crosses is the trait;
+  the routines below reach the client's implementation because AP 6.7.3.5
+  re-reads a generic's body in the translation that activates it, which is the
+  client's. `StrHash` and `StrEq` stay exported as what a string key's
+  implementation calls, two lines each.
+
+  The receivers are *value* parameters on purpose: an implementation is looked
+  up through Base(), so one for `integer` serves every subrange of it, and
+  6.6.3.3 would refuse a `1..9` actual to a `var` parameter of type integer
+  (ADR-0340). A trait meant to serve subranges takes its receiver by value. }
+trait Key;
+  function Hash(k: Self): integer;
+  function Same(a: Self; b: Self): boolean;
+end;
+
+type
   { Open addressing with linear probing, and the storage is one array of slots
     rather than three parallel ones -- ADR-0045 lets a record hold exactly one
     discriminant-bounded array and only as its last field, since a field after
@@ -111,7 +135,7 @@ type
     `state` is 0 empty, 1 live, 2 deleted. A deleted slot must be walked
     *through* when probing and may be written *into* when inserting, which is
     the whole reason it is three values and not a boolean. }
-  Map(K: type; V: type; cap: integer) = record
+  Map(K: Key; V: type; cap: integer) = record
     count: integer;
     slots: array [1..cap] of record
       key: K;
@@ -181,27 +205,25 @@ procedure VecReserve(Ptr: type; var v: Ptr; want: integer);
 
 { --- the map ------------------------------------------------------------- }
 
-{ **The key is the program's own type**, and the hash and the equality travel
-  with each operation as procedural parameters.
+{ **The key is the program's own type, and it implements `Key`.** The hash and
+  the equality used to travel with each operation as two procedural
+  parameters, and the paragraph that stood here said a constraint was not
+  needed for that: §6.7.3.4 admits a procedural parameter, `PasSort` takes two,
+  and what a constraint would buy "is not the capability but the two
+  arguments". That was true, and it was the whole payoff: thirty call sites
+  threaded `StrHash, StrEq` through, and the roadmap counted them as the
+  evidence for the object model (ADR-0315). The trait is what makes the two
+  arguments go away (ADR-0355) -- the client writes `impl Key for` its key type
+  once, and `MapPut(m, 'k', 1)` is the call.
 
-  `doc/roadmap.md` carried "a hash of anything but a string" as waiting on a
-  *constraint* -- "a way to say that a key can be hashed and compared, and the
-  dialect has none". It does not need one. §6.7.3.4 and §6.7.3.5 have admitted
-  a procedural parameter since ISO 7185, `PasSort` has used exactly this shape
-  since it was written to avoid ever seeing an element, and a formal
-  procedural parameter may be handed on to another generic routine -- which is
-  the whole of what a hash table's internals need. What a constraint would buy
-  is not the capability but the two arguments, and that is an ergonomic
-  question rather than an expressive one.
-
-  It costs less than it reads, and two features that landed for other reasons
-  are why. The key's type is written `type of m^.slots[1].key` (AP 6.4.9 as
-  ADR-0215 widened it), so it is read off the map the caller handed over
-  rather than named again -- which also makes the *hash's* own parameter type
-  follow the map, so a hash for the wrong key type is refused by §6.7.3.6's
-  congruence rather than accepted and misused. And AP 6.7.3.10.4 infers `Ptr`
-  from `m` (ADR-0254), so `MapPut(m, 'k', 1, StrHash, StrEq)` names no type at
-  all. `MapGet` names none either, its `whenAbsent` being an `Elem` the caller
+  The rest of the shape is unchanged and two features that landed for other
+  reasons are why. The key's type is written `type of m^.slots[1].key`
+  (AP 6.4.9 as ADR-0215 widened it), so it is read off the map the caller
+  handed over rather than named again -- and inside these bodies `Hash(key)`
+  and `Same(a, b)` select the client's implementation by that type, which is
+  AP 6.7.10.2's rule and the reason a hash for the wrong key type cannot be
+  handed in at all. And AP 6.7.3.10.4 infers `Ptr` from `m` (ADR-0254), so the
+  call names no type. `MapGet` names none either, its `whenAbsent` being an `Elem` the caller
   hands over -- this module said for four days that it had to name one, and
   nobody had written the call. The one type argument left in the map is
   `MapKeyAt`'s key type, which stands only in a result: §6.7.1 makes a
@@ -223,23 +245,14 @@ procedure MapInit(Ptr: type; var m: Ptr; want: integer);
 procedure MapFree(Ptr: type; var m: Ptr);
 procedure MapPut(Ptr: type; var m: Ptr;
                  key: type of m^.slots[1].key;
-                 val: type of m^.slots[1].val;
-                 function hash(k: type of m^.slots[1].key): integer;
-                 function eq(a, b: type of m^.slots[1].key): boolean);
+                 val: type of m^.slots[1].val);
 function MapGet(Ptr: type; Elem: type; var m: Ptr;
                 key: type of m^.slots[1].key;
-                whenAbsent: Elem;
-                function hash(k: type of m^.slots[1].key): integer;
-                function eq(a, b: type of m^.slots[1].key): boolean): Elem;
+                whenAbsent: Elem): Elem;
 function MapHas(Ptr: type; var m: Ptr;
-                key: type of m^.slots[1].key;
-                function hash(k: type of m^.slots[1].key): integer;
-                function eq(a, b: type of m^.slots[1].key): boolean): boolean;
+                key: type of m^.slots[1].key): boolean;
 function MapDelete(Ptr: type; var m: Ptr;
-                   key: type of m^.slots[1].key;
-                   function hash(k: type of m^.slots[1].key): integer;
-                   function eq(a, b: type of m^.slots[1].key): boolean):
-                   boolean;
+                   key: type of m^.slots[1].key): boolean;
 function MapCount(Ptr: type; var m: Ptr): integer;
 
 { The slot walk, for a program that wants every pair. `MapSlots` is the
@@ -258,8 +271,11 @@ function MapLiveAt(Ptr: type; var m: Ptr; i: integer): boolean;
 function MapKeyAt(K: type; Ptr: type; var m: Ptr; i: integer): K;
 
 { The hash and the equality for a string key, which is what a map is keyed by
-  most of the time. Exported so that the commonest case is `MapPut(m, name, 1,
-  StrHash, StrEq)` and not a pair of routines every client writes again.
+  most of the time. Exported so that an implementation for a string key is two
+  lines -- `Hash := StrHash(k)` and `Same := StrEq(a, b)` -- and not a hash
+  every client writes again. The module cannot write that implementation
+  itself, even for `MapKey` (ADR-0341), so every client does; what no client
+  does is write the hash.
 
   **The parameters are schematic, so the pair serves a map keyed at any
   capacity** (AP 6.7.3.6, ADR-0290). They were `MapKey` -- `string(63)` -- and
@@ -466,10 +482,7 @@ end;
 { The slot this key occupies, or the first free one on its probe sequence.
   Zero when the table is full, which MapPut turns into a rehash. }
 function FindSlot(Ptr: type; var m: Ptr;
-                  key: type of m^.slots[1].key;
-                  function hash(k: type of m^.slots[1].key): integer;
-                  function eq(a, b: type of m^.slots[1].key): boolean):
-                  integer;
+                  key: type of m^.slots[1].key): integer;
 var i, seen, found, freeAt: integer;
 begin
   found := 0;
@@ -478,11 +491,11 @@ begin
     churned from filling up with tombstones. }
   freeAt := 0;
   seen := 0;
-  i := Slot(hash(key), m^.cap);
+  i := Slot(Hash(key), m^.cap);
   while (found = 0) and (seen < m^.cap) do begin
     if m^.slots[i].state = 0 then found := i
     else begin
-      if (m^.slots[i].state = 1) and eq(m^.slots[i].key, key) then found := i
+      if (m^.slots[i].state = 1) and Same(m^.slots[i].key, key) then found := i
       else if (m^.slots[i].state = 2) and (freeAt = 0) then freeAt := i;
       if found = 0 then begin
         i := i + 1;
@@ -533,13 +546,12 @@ begin
       fresh^.slots[i].state := 0;
     { A rehash drops the tombstones: only live slots are carried over, which
       is the other reason a table is grown rather than merely made larger.
-      The caller's own hash and equality are handed on -- a formal procedural
-      parameter may be another routine's actual (§6.7.3.4), which is what lets
-      the whole of this table be generic over its key without the module ever
-      seeing one. }
+      Each probe selects the client's implementation of `Key` by the key's
+      type (AP 6.7.10.2), in the fresh table exactly as in the old one --
+      which is the whole of what a hash table's internals need of a key. }
     for i := 1 to m^.cap do
       if m^.slots[i].state = 1 then begin
-        slot := FindSlot(Ptr, fresh, m^.slots[i].key, hash, eq);
+        slot := FindSlot(Ptr, fresh, m^.slots[i].key);
         fresh^.slots[slot].state := 1;
         fresh^.slots[slot].key := m^.slots[i].key;
         fresh^.slots[slot].val := m^.slots[i].val;
@@ -548,7 +560,7 @@ begin
     dispose(m);
     m := take(fresh)
   end;
-  slot := FindSlot(Ptr, m, key, hash, eq);
+  slot := FindSlot(Ptr, m, key);
   if slot <> 0 then begin
     if m^.slots[slot].state <> 1 then m^.count := m^.count + 1;
     m^.slots[slot].state := 1;
@@ -560,7 +572,7 @@ end;
 function MapGet;
 var slot: integer;
 begin
-  slot := FindSlot(Ptr, m, key, hash, eq);
+  slot := FindSlot(Ptr, m, key);
   if slot = 0 then MapGet := whenAbsent
   else if m^.slots[slot].state <> 1 then MapGet := whenAbsent
   else MapGet := m^.slots[slot].val
@@ -569,7 +581,7 @@ end;
 function MapHas;
 var slot: integer;
 begin
-  slot := FindSlot(Ptr, m, key, hash, eq);
+  slot := FindSlot(Ptr, m, key);
   if slot = 0 then MapHas := false
   else MapHas := m^.slots[slot].state = 1
 end;
@@ -577,7 +589,7 @@ end;
 function MapDelete;
 var slot: integer;
 begin
-  slot := FindSlot(Ptr, m, key, hash, eq);
+  slot := FindSlot(Ptr, m, key);
   if slot = 0 then MapDelete := false
   else if m^.slots[slot].state <> 1 then MapDelete := false
   else begin

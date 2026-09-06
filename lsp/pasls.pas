@@ -45,7 +45,8 @@
   What did was the ready-made `StrHash`/`StrEq`, declared over `string(63)`
   where 6.7.3.6's congruity is exact -- so the pair, not the map, is what a
   255-character key could not reach. AP 6.7.3.6 made the pair schematic
-  (ADR-0290) and the key is now the URI itself.
+  (ADR-0290) and the key is now the URI itself; since ADR-0355 the pair is
+  named once, in `impl Key for DocUri`, rather than at every call.
 
   The conversion is not for speed. A handful of open documents is what an
   editor has and the linear search cost nothing measurable; it is that the
@@ -263,6 +264,20 @@ type
     files: PathVec
   end;
 
+
+{ What the map needs of its key, said once for the URI (ADR-0355). It stands
+  between the key type and the map type because AP 6.4.7.2 checks the bound
+  where the type is produced, and 6.2.2.9 makes written order the only order;
+  the two lines are the module's own schematic pair, which is what used to
+  travel through every call below. }
+impl Key for DocUri;
+  function Hash;
+  begin Hash := StrHash(k) end;
+  function Same;
+  begin Same := StrEq(a, b) end;
+end;
+
+type
   DocMap = ^Map(DocUri, Document);
 
   CaptureText = string(CaptureMax);
@@ -377,8 +392,8 @@ function DocOf(uri: DocUri; var d: Document): boolean;
 var here: boolean;
 begin
   NoDocument(d);
-  here := MapHas(docs, uri, StrHash, StrEq);
-  if here then d := MapGet(DocMap, Document, docs, uri, d, StrHash, StrEq);
+  here := MapHas(docs, uri);
+  if here then d := MapGet(DocMap, Document, docs, uri, d);
   DocOf := here
 end;
 
@@ -439,7 +454,7 @@ begin
   d.uses_ := nil;
   d.files := nil;
   CharsOf(text, d.text);
-  MapPut(docs, uri, d, StrHash, StrEq)
+  MapPut(docs, uri, d)
 end;
 
 { Forget it, releasing its text. }
@@ -450,7 +465,7 @@ begin
   JsonCharsFree(d.text);
   if d.uses_ <> nil then SVecFree(d.uses_);
   if d.files <> nil then VecFree(PathVec, d.files);
-  if not MapDelete(docs, uri, StrHash, StrEq) then
+  if not MapDelete(docs, uri) then
     Note('a document vanished from the store while it was being removed')
 end;
 
@@ -1662,7 +1677,7 @@ begin
     end;
     d.uses_ := lines;
     d.files := files;
-    MapPut(docs, uri, d, StrHash, StrEq)
+    MapPut(docs, uri, d)
   end;
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);

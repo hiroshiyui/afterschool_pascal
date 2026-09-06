@@ -13,6 +13,21 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **`PasContainer`'s map key implements a trait, and every map call loses two
+  arguments** (ADR-0355). `Map(K: Key; V: type; cap: integer)` binds the key
+  discriminant with `trait Key` — `Hash(k: Self): integer` and `Same(a: Self;
+  b: Self): boolean` — declared in the module's interface. `MapPut`, `MapGet`,
+  `MapHas` and `MapDelete` no longer take a hash and an equality; the client
+  writes one `impl Key for` its key type, before the map type is produced, and
+  `StrHash`/`StrEq` stay exported as what a string key's implementation calls.
+  **This breaks every existing map client**: the four in this tree lost 34
+  argument pairs and gained one implementation block each (three for
+  `lib_container_key`, one per key capacity), with every golden unchanged. The
+  module cannot supply an implementation for its own `MapKey` (ADR-0341), so
+  even the ready-made key type takes two lines in each client.
+
 ### Added
 
 - **A project: `pascalcc new-project <name>`** (ADR-0348), alias `new`, with
