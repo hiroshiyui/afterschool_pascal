@@ -4410,7 +4410,11 @@ nothing else. What it would lose, mechanism by mechanism:
   completion, `p.`'s answer being a question about the type at the position
   and so Sema's, which the outline deliberately stops before. Two compiler
   changes came with it: `--dump-symbols` reports **formal parameters**, which
-  it never had though its own sentence is *every name a source declares*; and
+  it never had though its own sentence is *every name a source declares* —
+  and, since ADR-0357, a **task** as `task` rather than as the `procedure` it
+  had been drawn as, a task being started by `spawn` and callable by nothing,
+  so the old word sent a reader to the wrong construct; the server maps the
+  new word beside `function`, the protocol having no nearer kind; and
   `--dump-words` writes the word-symbols and the required identifiers out of
   the compiler's own tables, so the server holds no copy — ADR-0294's refusal
   of a word-symbol table met a second time.

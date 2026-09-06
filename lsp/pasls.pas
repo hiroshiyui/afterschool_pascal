@@ -138,8 +138,8 @@ const
     is a question the `diagnostics` tool can be asked. }
   PaslsVersion = '1.0.0';
 
-  { LSP's SymbolKind, from the specification's table, for the ten words
-    --dump-symbols answers in (ADR-0239). The compiler answers about *Pascal*
+  { LSP's SymbolKind, from the specification's table, for the eleven words
+    --dump-symbols answers in (ADR-0239; `task` since ADR-0357). The compiler answers about *Pascal*
     and this is where the protocol's numbering lives, which is the whole
     reason it does not answer in numbers: a table owned by a third party
     changing under a Pascal compiler would be a version of this protocol
@@ -1283,7 +1283,9 @@ begin
   else if word = 'field' then SymbolKindOf := SkField
   else if word = 'value' then SymbolKindOf := SkEnumMember
   else if word = 'var' then SymbolKindOf := SkVariable
-  else if (word = 'procedure') or (word = 'function') then
+  { The protocol has no kind for a task; a function is the nearest, and the
+    word itself reaches the `outline` tool's text untranslated (ADR-0357). }
+  else if (word = 'procedure') or (word = 'function') or (word = 'task') then
     SymbolKindOf := SkFunction
   else begin
     Note('a symbol kind this server does not know was reported as a '
@@ -3240,7 +3242,7 @@ begin
   else if word = 'value' then CompletionKindOf := CkEnumMember
   else if (word = 'var') or (word = 'parameter') then
     CompletionKindOf := CkVariable
-  else if (word = 'procedure') or (word = 'function')
+  else if (word = 'procedure') or (word = 'function') or (word = 'task')
           or (word = 'required') then CompletionKindOf := CkFunction
   else CompletionKindOf := CkVariable
 end;

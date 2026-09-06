@@ -365,3 +365,4 @@ the alternatives that were rejected and why.
 | [0354](0354-a-line-that-runs-when-a-thread-loses-a-race.md) | A line that runs when a thread loses a race | Accepted |
 | [0355](0355-a-maps-key-implements-key.md) | A map's key implements Key | Accepted |
 | [0356](0356-a-refusal-is-said-once.md) | A refusal is said once | Accepted |
+| [0357](0357-a-task-is-its-own-word.md) | A task is its own word | Accepted |

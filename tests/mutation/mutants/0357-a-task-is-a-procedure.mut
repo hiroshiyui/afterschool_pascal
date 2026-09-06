@@ -1,0 +1,8 @@
+adr: 0357
+file: selfhost/apfront.pas
+kills: dump-symbols_task
+why: The outline writes `procedure` for a task again, which is the word it wrote for every nkProcDecl that was not a function until this record. A task is started by spawn and cannot be called, so the word sends a reader to the wrong construct; the dumps case pins the row.
+--- old
+    else if d^.pdIsTask then write('task')
+--- new
+    else if d^.pdIsTask then write('procedure')

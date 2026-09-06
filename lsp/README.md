@@ -92,9 +92,11 @@ out of nothing else ([ADR-0239](../doc/adr/0239-the-compiler-answers-a-tools-que
 That flag stops after the *parse*, which is why an outline is still drawn for a
 file full of errors and why no `--import` is passed for one — a name is a name
 whether or not the module it came from was found. The compiler answers in
-Pascal's words (`procedure`, `record`, `value`) and this server maps them to
-LSP's `SymbolKind` numbers, so the protocol's table lives here and not in a
-Pascal compiler.
+Pascal's words (`procedure`, `record`, `value`, and `task` for a task, which
+`spawn` starts and nothing calls) and this server maps them to LSP's
+`SymbolKind` numbers, so the protocol's table lives here and not in a Pascal
+compiler; a task takes a function's number, the protocol having no nearer one,
+and the `outline` tool below writes the word itself.
 
 Two things it does that are worth knowing. The names come back with the case
 the **programmer** wrote: the compiler's string pool holds only the folded

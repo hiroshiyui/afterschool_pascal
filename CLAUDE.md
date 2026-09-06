@@ -793,7 +793,8 @@ each is in `doc/design-digest.md`.
   **Pascal's** words and not any protocol's numbers and stops after the *parse*,
   an outline being what an editor draws while a file is wrong, and reports a
   formal `parameter` since ADR-0301, a completion list inside a body being
-  nothing else; **`--dump-words` is the one dump not about the source at all**
+  nothing else, and a `task` since ADR-0357, `spawn` starting one and no
+  statement calling it; **`--dump-words` is the one dump not about the source at all**
   (ADR-0301), the word-symbols and required identifiers walked out of the
   lexer's table and the outermost scope, so a caller offering names to a person
   typing one holds no copy of either list; `--dump-uses`

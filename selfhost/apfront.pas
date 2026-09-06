@@ -28075,7 +28075,12 @@ begin
     arm, and reporting nothing about it is the better wrong answer. }
   else if d^.kind = nkProcDecl then begin
     SymHead(depth);
-    if d^.pdIsFunction then write('function') else write('procedure');
+    { A task is its own word (ADR-0357): it is started by `spawn` and cannot
+      be called, so an outline naming it `procedure` sends a reader to the
+      wrong construct. ADR-0349 pinned the old word and left this open. }
+    if d^.pdIsFunction then write('function')
+    else if d^.pdIsTask then write('task')
+    else write('procedure');
     { the parameters are written below, after the row this opens }
     if d^.pdBody <> nil then
       SymTailTo(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen,

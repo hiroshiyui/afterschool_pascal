@@ -15,6 +15,13 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **`--dump-symbols` reports a task as `task`** (ADR-0357), where it reported
+  `procedure` — a task is started by `spawn` and cannot be called, so an outline
+  naming it a procedure sent a reader to the wrong construct. The language
+  server maps the new word beside `function`, the protocol having no nearer
+  kind, and the MCP `outline` tool writes the word itself. A client written
+  against the previous list reports a task as a variable until it learns the
+  word.
 - **`PasContainer`'s map key implements a trait, and every map call loses two
   arguments** (ADR-0355). `Map(K: Key; V: type; cap: integer)` binds the key
   discriminant with `trait Key` — `Hash(k: Self): integer` and `Same(a: Self;
