@@ -25,29 +25,50 @@ page where the answered outnumber the open teaches a reader to skim, and the
 things worth not skimming here are the six or seven sentences saying what
 nobody has decided yet.
 
-## Where development stands — 2026-09-05
+## Where development stands — 2026-09-06
 
-**Released: v3.5.0**, with `CHANGELOG.md`'s `Unreleased` holding what has
-landed since. The compiler builds itself, stage 2 equals stage 3 in every
-program-component, and the suite is green at `-O2` and at `-O0`.
+**Released: v3.5.0**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
+below the release line is in it. The compiler builds itself, stage 2 equals
+stage 3 in every program-component, and the suite is green at `-O2` and at
+`-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms. **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
+| **Open and ready to do** | the platforms, and only the platforms — **and 32-bit is no longer among them** (ADR-0325, ADR-0346). **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
 | **Open and awaiting a decision** | the object model, and only it — ADR-0315 is `Proposed`, and what a retaken count changed about it is below. **Three rows left this cell on 2026-09-05, none by being built**: the ordinary `^T` is *kept* and written down as the unchecked form (ADR-0336); a record's `Drop` stays a row for a corrected reason, one asker being below the threshold for a design and wanting an ordering hook rather than a release; and whether a container owns its storage is answered *both, per container*, with the rule written down (ADR-0337) |
 | **Open and awaiting a program** | [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for), whose inventory is **empty** and whose lesson is what it keeps in its place. A row here is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
 
-**What moved most recently** is the memory model, struck as closed on
-2026-09-04 and corrected three times the day after — a use-after-free the
-enumeration missed (ADR-0326), a cost cell that priced that fix at nothing when
-it had taken away every callback (ADR-0332), and a release depth that turned
-out to depend on which of two identically typed fields was declared first
-(ADR-0333). **Three corrections in one day to a chapter that said it was
-finished**, each found by probing a sentence rather than re-reading it, is the
-status worth reading; [the chapter](#memory-model-and-memory-safety) says what
-each of them cost.
+**What moved most recently is v3.5.0 itself, and what cutting it found.**
+Three defects surfaced in the release procedure's own steps rather than in any
+gate: four `-Wcomment` warnings the one `runtime-isoc` pass without `-Werror`
+had been printing and passing over; two stale lines in `-h`, one of them
+describing `-o` as naming a dialect, which is what `--std` said before
+ADR-0232 removed it; and `CHANGELOG.md`'s `Unreleased` missing **sixteen**
+user-facing changes, everything from ADR-0312 onward. Then the tag failed:
+the committed seed held the **absolute path of the machine that made it**,
+because ADR-0293 puts a trap's own source path into the emitted module and
+`seed/refresh.sh` handed the compiler an absolute one (ADR-0347). The check
+that says so runs only at a tag and cannot be a `ctest` case — the seed is
+legitimately stale between releases — so eight releases of positions went by
+before a seed was compared anywhere but where it was made.
+
+**The shape those share is worth more than any of them.** Two harnesses in one
+day answered about the wrong machine: `llc_check.sh` compared x86-64 modules
+on an ARM host and had never passed since it was added (ADR-0345), and
+`seed_current.sh` compared a directory. `doc/sop.md` §7 now states it wider
+than the environment-variable row it started in — a harness passing a path, a
+target or a flag that is right where it was written and wrong where it runs.
+
+**Before that**, the memory model was struck as closed on 2026-09-04 and
+corrected three times the day after — a use-after-free the enumeration missed
+(ADR-0326), a cost cell that priced that fix at nothing when it had taken away
+every callback (ADR-0332), and a release depth that turned out to depend on
+which of two identically typed fields was declared first (ADR-0333). **Three
+corrections in one day to a chapter that said it was finished**, each found by
+probing a sentence rather than re-reading it;
+[the chapter](#memory-model-and-memory-safety) says what each of them cost.
 
 ## How to read this
 
@@ -100,9 +121,14 @@ is a clause of the language too and is listed under [the standard
 library](#the-standard-library) because that is where a program meets it:
 
 - **concurrent execution** — `task`, `spawn`, `channel [n] of T`, `send` and
-  `receive`, reserving no word-symbol: share-nothing, only transferable values
-  and channels cross, and every task a block spawned is joined before that
-  block releases anything (ADR-0268).
+  `receive`, reserving no word-symbol: share-nothing, only transferable values,
+  channels and a **moved handle** cross (ADR-0303), and every task a block
+  spawned is joined before that block releases anything (ADR-0268). Since
+  2026-09-03 a program can also *steer* it: an activation has a name and a
+  type — `task` is a handle-type and `spawn t := P(x)` binds one — `wait(t)`
+  joins that one early (ADR-0312), and the **select-statement** waits until one
+  of several channels can proceed, with `after N` to give up and `otherwise`
+  not to wait at all (ADR-0313).
 - **memory safety** — optionals and no bare null, slices carrying their
   bounds, scope-based release, `owned ^T` for a variable `new` created, and
   the move both affine kinds need (ADR-0123, ADR-0125, ADR-0151, ADR-0181,
@@ -181,9 +207,9 @@ collision, so the prefix is a receiver spelled by hand; and where a property
 belongs to a *type*, the caller carries it instead, `MapPut(m, 'k', 1,
 StrHash, StrEq)` being the shape, with **14 routine-valued parameters** across
 two modules and **30 call sites** threading one pair through. The denominator
-is the gate's and moves: **484 exports across 31 modules** on 2026-09-05,
+is the gate's and moves: **489 exports across 32 modules** on 2026-09-06,
 `python3 tests/checks/export_unique.py`; it read 486 when the numerator was
-taken.
+taken and 484 the day after.
 
 The record proposes Rust's model and argues against Object Pascal's on four
 grounds that are each about a decision already taken here, stages it in three,
@@ -940,8 +966,8 @@ being refused in both positions. The count moved a third time in taking it —
 result-type, a scan that had not separated a parameter from a result never
 having been asked to.
 
-The adversarial audits that filled the old lists — four of them, ADR-0162,
-ADR-0167, ADR-0168 and ADR-0171 — are [open question
+The adversarial audits that filled the old lists — five now, ADR-0162,
+ADR-0167, ADR-0168, ADR-0171 and ADR-0342 — are [open question
 §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
 instrument, and that entry says when the next is worth running.
 
@@ -1249,6 +1275,18 @@ part of what it says.
   field at a literal 16, where i386 puts it at 12. `target-layout` passed with
   both in place and `tests/dialect/select.pas` segfaulted, which is why
   `target32` exists.
+
+  **And it left one question that only a release found: *which* i386.**
+  Nothing in the triple names a processor, and clang's default for it moved —
+  clang 19 compiles `i386-pc-linux-gnu` for `i686` and clang 21 for
+  `pentium4`. On the x87 an eighty-bit register makes §6.7.6.3's `round`
+  contradict the clause defining it, and — the one that decided it — D.32's
+  `sqr` error goes **undetected**, `sqr(-1e200)` being an ordinary finite
+  number in a register with a fifteen-bit exponent. **An i386 this compiler
+  emits for has SSE2** (ADR-0346): `tools/pascalcc` names `-march=pentium4`
+  for that triple and no other, and `doc/implementation-defined.md` §2.2 says
+  so where it answers what the real-type is. What is given up is a Pentium III
+  and earlier, which is the trade ADR-0109's own test settles.
 
   **ADR-0129's `i64` at the foreign boundary was the second, independent
   question**, and it read as still open here for as long as it took to write
@@ -1695,11 +1733,17 @@ where there is no reading to get wrong.
 
 **The instrument for the risk is the adversarial audit** — independent readers
 given the behaviour and not the reasoning, told to prove the compiler wrong
-from the standards' text. Four have run (ADR-0162, ADR-0167, ADR-0168,
-ADR-0171) and the last findings of the fourth closed on 2026-08-23; the
-*Known limitations* chapter used to close with the note that the next is
-worth running whenever that chapter has not moved for a while, and the note
-belongs here, since a claim no test names is a claim nothing checks.
+from the standards' text. **Five have run** (ADR-0162, ADR-0167, ADR-0168,
+ADR-0171, ADR-0342); the fifth was scoped to the memory model on 2026-09-06
+and found **three real holes every gate here was green over**, which is what
+the instrument exists for. It also found the largest thing in that record and
+the one no reading was needed for: **AddressSanitizer has never instrumented
+compiled Pascal**, the emitted IR carrying no `sanitize_address` attribute, so
+every argument of the form *ASan reports nothing* made about a program's
+behaviour was empty. The *Known limitations* chapter used to close with the
+note that the next audit is worth running whenever that chapter has not moved
+for a while, and the note belongs here, since a claim no test names is a claim
+nothing checks.
 
 #### 2, 3 and 4 — answered
 
