@@ -21,6 +21,7 @@ type
     question a task's parameter is. }
   BadChan = channel [4] of Ptr;
   Zero = channel [0] of integer;
+  Vec(len: integer) = array [1..len] of integer;
 
 const
   one = 1;
@@ -54,6 +55,22 @@ task BadOwned(o: Owner);
 begin end;
 
 task BadFile(f: text);
+begin end;
+
+{ AP 6.7.8.1 (ADR-0342): a parameter whose size arrives with the actual. A
+  schematic formal and a conformant array parameter are the two shapes, and
+  neither has a value of its own to copy -- the caller brings an address and
+  a tuple, and a task's entry has no caller's frame to read the tuple from.
+  Until a langspec audit wrote `task T(x: string)`, all three emitted a
+  getelementptr through an undefined `%frame`, so what the programmer saw was
+  LLVM complaining about a file nobody wrote. }
+task BadOpenString(x: string);
+begin end;
+
+task BadConformant(a: array [lo..hi: integer] of integer);
+begin end;
+
+task BadSchematic(w: Vec);
 begin end;
 
 { A handle that is not a channel is admitted and **moved** in (AP 6.7.8.1,

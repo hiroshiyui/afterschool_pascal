@@ -6,4 +6,5 @@
 <source>:92:13: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage
 <source>:93:9: error: 'new' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage
 <source>:94:5: error: this assignment would release what an enclosing 'with' is bound to, leaving the binding naming disposed storage
-<source>:100:13: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage
+<source>:101:17: error: 'take' cannot empty this here: an enclosing 'with' is bound to what it owns, and moving it leaves the binding naming storage another variable will release
+<source>:107:13: error: 'dispose' cannot release this here: an enclosing 'with' is bound to what it owns, and the binding would name disposed storage

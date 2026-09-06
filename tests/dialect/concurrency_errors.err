@@ -1,36 +1,39 @@
 <source>:22:13: error: a channel cannot carry ptr: what crosses between two tasks is a value, and this holds a reference to something the other task does not own
 <source>:23:19: error: a channel's capacity must be at least 1, and this is 0
-<source>:39:1: error: a task's parameter 'n' cannot be a variable parameter: it would be a second name for a variable of the activation that spawned the task
-<source>:44:1: error: a task's parameter 'p' cannot be ptr: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
-<source>:47:1: error: a task's parameter 'h' cannot be holder: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
-<source>:53:15: error: an owned pointer must be a var parameter: a value parameter is a copy, and two names for one owned variable would dispose it twice
-<source>:53:1: error: a task's parameter 'o' cannot be owner: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
-<source>:56:14: error: a file parameter must be a var parameter
-<source>:56:1: error: a task's parameter 'f' cannot be text: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
-<source>:68:1: error: a task's parameter 'f' cannot be a procedure or a function: what would cross is the activation it runs under, which is another task's
-<source>:72:1: error: a task has a block of this program: it cannot be 'external'
-<source>:79:7: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
-<source>:79:12: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
-<source>:79:27: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
-<source>:92:9: error: 'pw' is a protected parameter, so a spawn-statement cannot name it
-<source>:97:3: error: 'notatask' is not a task, and only a task may be spawned
-<source>:100:3: error: 'good' is a task: it is started by 'spawn' and not by being called
-<source>:103:11: error: cannot send ptr on a channel of integer
-<source>:106:8: error: 'send' takes a channel and this is integer
-<source>:107:14: error: 'receive' takes a channel and this is text
-<source>:111:17: error: 'receive' writes the value it received, so its second argument must be a variable
-<source>:112:17: error: 'receive' writes integer and this is text
-<source>:116:7: error: 'n' is threatened by a statement at line 79, so it cannot be the control variable of a for statement
-<source>:117:19: error: 'n' is the control variable of a for statement, so it cannot be written by 'receive'
-<source>:117:27: error: 'n' is the control variable of a for statement, so it cannot be assigned to
-<source>:122:20: error: argument 1 of 'goodhandle' gives a task the handle stream, so it must be written 'take' of a variable of that type: a handle has no copy, and the task owns what it is given
-<source>:123:25: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
-<source>:123:20: error: argument 1 of 'goodhandle' gives a task the handle stream, so it must be written 'take' of a variable of that type: a handle has no copy, and the task owns what it is given
-<source>:128:9: error: a deferred statement may not spawn a task
-<source>:133:8: error: 'wait' takes a task and this is integer
-<source>:134:8: error: 'wait' takes a task and this is ints
-<source>:135:3: error: 'wait' takes one task
-<source>:136:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
-<source>:136:8: error: 'wait' takes a task variable, so its argument must be one
-<source>:142:9: error: a spawn-statement names a task variable, and this is integer
-<source>:143:9: error: a spawn-statement names a task variable, so what stands before ':=' must be one
+<source>:40:1: error: a task's parameter 'n' cannot be a variable parameter: it would be a second name for a variable of the activation that spawned the task
+<source>:45:1: error: a task's parameter 'p' cannot be ptr: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
+<source>:48:1: error: a task's parameter 'h' cannot be holder: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
+<source>:54:15: error: an owned pointer must be a var parameter: a value parameter is a copy, and two names for one owned variable would dispose it twice
+<source>:54:1: error: a task's parameter 'o' cannot be owner: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
+<source>:57:14: error: a file parameter must be a var parameter
+<source>:57:1: error: a task's parameter 'f' cannot be text: what crosses into a task is a copy, and this holds a reference to something the spawning activation owns
+<source>:67:1: error: a task's parameter 'x' cannot take its size from the actual: what crosses into a task is a copy, and the discriminants of this one would be read from the activation that spawned it
+<source>:70:1: error: a task's parameter 'a' cannot take its size from the actual: what crosses into a task is a copy, and the discriminants of this one would be read from the activation that spawned it
+<source>:73:1: error: a task's parameter 'w' cannot take its size from the actual: what crosses into a task is a copy, and the discriminants of this one would be read from the activation that spawned it
+<source>:85:1: error: a task's parameter 'f' cannot be a procedure or a function: what would cross is the activation it runs under, which is another task's
+<source>:89:1: error: a task has a block of this program: it cannot be 'external'
+<source>:96:7: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
+<source>:96:12: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
+<source>:96:27: error: 'n' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
+<source>:109:9: error: 'pw' is a protected parameter, so a spawn-statement cannot name it
+<source>:114:3: error: 'notatask' is not a task, and only a task may be spawned
+<source>:117:3: error: 'good' is a task: it is started by 'spawn' and not by being called
+<source>:120:11: error: cannot send ptr on a channel of integer
+<source>:123:8: error: 'send' takes a channel and this is integer
+<source>:124:14: error: 'receive' takes a channel and this is text
+<source>:128:17: error: 'receive' writes the value it received, so its second argument must be a variable
+<source>:129:17: error: 'receive' writes integer and this is text
+<source>:133:7: error: 'n' is threatened by a statement at line 96, so it cannot be the control variable of a for statement
+<source>:134:19: error: 'n' is the control variable of a for statement, so it cannot be written by 'receive'
+<source>:134:27: error: 'n' is the control variable of a for statement, so it cannot be assigned to
+<source>:139:20: error: argument 1 of 'goodhandle' gives a task the handle stream, so it must be written 'take' of a variable of that type: a handle has no copy, and the task owns what it is given
+<source>:140:25: error: 'take' empties an owned pointer or a handle and this is integer: nothing else has a value one variable can stop holding
+<source>:140:20: error: argument 1 of 'goodhandle' gives a task the handle stream, so it must be written 'take' of a variable of that type: a handle has no copy, and the task owns what it is given
+<source>:145:9: error: a deferred statement may not spawn a task
+<source>:150:8: error: 'wait' takes a task and this is integer
+<source>:151:8: error: 'wait' takes a task and this is ints
+<source>:152:3: error: 'wait' takes one task
+<source>:153:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:153:8: error: 'wait' takes a task variable, so its argument must be one
+<source>:159:9: error: a spawn-statement names a task variable, and this is integer
+<source>:160:9: error: a spawn-statement names a task variable, so what stands before ':=' must be one

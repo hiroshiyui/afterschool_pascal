@@ -91,7 +91,14 @@ begin
   with o^ do begin
     dispose(o);
     new(o);
-    o := take(r.p)
+    o := take(r.p);
+    { And the fourth: `take` moves what the binding names to a variable this
+      statement does not bind, which releases it at the end of its own block.
+      The three above ask about the *target* of a release, and this one is a
+      release of nothing -- the storage survives the move and dies under its
+      new owner, with the binding still naming it. A langspec audit found it
+      by writing the shape the other three do not cover (ADR-0342). }
+    r.p := take(o)
   end;
 
   { and reached through a chain, where the with-element is deeper than the

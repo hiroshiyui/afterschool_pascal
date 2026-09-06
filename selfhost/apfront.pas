@@ -14740,6 +14740,7 @@ end;
   position this refuses, so an unwritten arm is a compiler that stops rather
   than one that emits a move nobody can see. }
 procedure CheckTake(c: nodePtr; n: integer);
+var thruOwned: boolean;
 begin
   c^.ntype := intType;
   if n <> 1 then begin
@@ -14789,7 +14790,32 @@ begin
         instantiated at an owned pointer may not. }
       if IsOwnedPointer(c^.clArgs^.ntype) or IsHandle(c^.clArgs^.ntype) then
         if Threatened(c^.clArgs) then
-          writeln('it cannot be emptied by ''take''');
+          writeln('it cannot be emptied by ''take''')
+        { AP 6.4.14.7, the fourth way an enclosing `with`'s binding can come
+          to name storage nothing here owns -- and the one the clause's three
+          release points do not reach, because a move releases nothing. The
+          other three are asked of what a statement *releases*: `new` and
+          `dispose` in CheckStdProc, and an assignment's target. This one is
+          asked of what a statement **empties**: the storage survives the
+          move and dies at the end of the new owner's block, with the binding
+          still bound to it.
+
+          Asked here rather than at either position, because `take` stands in
+          two -- the right side of an assignment and the actual of a spawn --
+          and this routine is the only place that sees its argument in both.
+          A handle cannot reach it: a with-element is a record (6.9.3.10) and
+          withOwnedTop carries the owned pointer it was reached through.
+
+          Found by a langspec audit, which wrote the shape the corpus did not
+          have: `with o^ do s := take(o)`, then `dispose(s)` outside, printed
+          42 through the binding and exited 0 (ADR-0342). }
+        else if IsOwnedPointer(c^.clArgs^.ntype) and
+                ActiveOwnedBorrow(OwnedRoot(c^.clArgs, thruOwned)) then begin
+          ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+          write('''take'' cannot empty this here: an enclosing ''with'' is ');
+          write('bound to what it owns, and moving it leaves the binding ');
+          writeln('naming storage another variable will release')
+        end;
       if not takeOk then begin
         ErrorAt(c^.line, c^.col);
         write('''take'' may stand only as the whole right side of an ');
@@ -19729,6 +19755,24 @@ begin
           ps^.secCol := g^.col;
           ps^.isProtected := g^.grIsProtected;
           ps^.stype := SchematicFormal(schema, ps, g^.grType);
+          { 6.4.6 a) and AP 6.4.14.3, said again on this path for the reason
+            the value conformant array above says it: the type is *produced*
+            here and never reaches the ordinary parameter check below, so a
+            schema whose body holds a file, a handle or an owned pointer
+            passed the affinity rule by being written without its
+            discriminants. `q(x: Sch(3))` was refused and `q(x: Sch)` was
+            not, and the callee then saw a nil where the caller had a value,
+            because a whole-variable copy of an affine field copies nothing.
+            A langspec audit wrote the pair that tells them apart (ADR-0342).
+
+            The variable form is unrestricted here as it is there: nothing is
+            copied, so there is nothing an affine type cannot do. }
+          if ContainsFile(ps^.stype) and not g^.grByRef then begin
+            ErrorAt(n^.line, n^.col);
+            write('a value parameter cannot be ');
+            WriteTypeName(ps^.stype);
+            WriteNoCopyReason(ps^.stype)
+          end;
           { 6.7.3.1 asks the question of "every type possessed by" the name,
             and a schematic formal possesses one per tuple -- but they all come
             from one body, so the produced type answers for every one of
@@ -20604,6 +20648,28 @@ begin
       for a handle-variable and needs nothing said here. }
     else if IsHandle(f^.stype) then
       { admitted: moved in, and the actual is checked at the spawn }
+    { AP 6.7.8.1 again, for the parameter whose type is not written down at
+      all. A schematic formal (6.7.3.2) and a conformant array parameter
+      (ISO 7185 6.6.3.7) are the two, and neither has a value of its own to
+      copy: what the caller brings is an address and a tuple, and the tuple
+      lives in the parameter's frame slot after that address. So the actual
+      is a *reference* to the spawning activation's storage exactly as a
+      variable parameter would be, and the sentence above is the same one.
+
+      It is refused rather than lowered because the lowering has nowhere to
+      go: a task's entry has no caller's frame to read the tuple from, and
+      until this was written `task T(x: string)` emitted a getelementptr
+      through an undefined `%frame` -- an error from LLVM about a file the
+      programmer never wrote, which is the shape ADR-0144 exists to keep out
+      of a user's terminal. Found by a langspec audit (ADR-0342). }
+    else if f^.descSchema <> nil then begin
+      ErrorAt(d^.line, d^.col);
+      write('a task''s parameter ''');
+      WritePool(f^.at, f^.len);
+      write(''' cannot take its size from the actual: what crosses into a ');
+      write('task is a copy, and the discriminants of this one would be ');
+      writeln('read from the activation that spawned it')
+    end
     else if not Transferable(f^.stype) then begin
       ErrorAt(d^.line, d^.col);
       write('a task''s parameter ''');

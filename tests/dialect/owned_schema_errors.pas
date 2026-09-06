@@ -26,6 +26,29 @@ type
 procedure ByValue(v: OV);
 begin end;
 
+{ And a schema written *without* its discriminants is one too. This is the
+  pair a langspec audit wrote to tell them apart (ADR-0342): the second was
+  refused and the first was not, because the type on this path is produced
+  where the formal is declared and never reached the check the second takes.
+  What a caller saw was worse than an acceptance -- a whole-variable copy of
+  an affine field copies nothing, so the callee read nil where the caller
+  held a value, and the program stopped at a dereference in a routine that
+  had done nothing wrong. The `var` forms below must go on compiling: nothing
+  is copied, so there is nothing an owned pointer cannot do there. }
+type Holder(cap: integer) = record p: Own2; a: array [1..cap] of integer end;
+
+procedure OpenByValue(h: Holder);
+begin end;
+
+procedure ClosedByValue(h: Holder(3));
+begin end;
+
+procedure OpenByRef(var h: Holder);
+begin h.a[1] := 1 end;
+
+procedure OpenProtected(protected var h: Holder);
+begin end;
+
 { and a result still has no variable to release it }
 function Make(cap: integer): OV;
 begin end;

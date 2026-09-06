@@ -2,6 +2,8 @@
 <source>:18:9: error: the domain of an owned pointer cannot be the schema 'kids': it holds a file, a handle or an owned pointer, and releasing the variable would have to walk it -- the lengths a schema's tuple fixes are read from a frame the heap has not got
 <source>:23:8: error: the domain of an owned pointer cannot be the schema 'handles': it holds a file, a handle or an owned pointer, and releasing the variable would have to walk it -- the lengths a schema's tuple fixes are read from a frame the heap has not got
 <source>:26:19: error: an owned pointer must be a var parameter: a value parameter is a copy, and two names for one owned variable would dispose it twice
-<source>:30:1: error: a function cannot return ov: a result may not be, or contain, an owned pointer -- there is no variable to release it, so it would be owned by no one
-<source>:37:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:38:13: error: an owned pointer can only be compared with 'nil': no two of them hold one variable, so any other equality could only ever say that both are empty
+<source>:40:23: error: a value parameter cannot be holder: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:43:25: error: a value parameter cannot be holder(3): it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:53:1: error: a function cannot return ov: a result may not be, or contain, an owned pointer -- there is no variable to release it, so it would be owned by no one
+<source>:60:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:61:13: error: an owned pointer can only be compared with 'nil': no two of them hold one variable, so any other equality could only ever say that both are empty
