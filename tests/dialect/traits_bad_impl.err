@@ -1,0 +1,8 @@
+<source>:23:1: error: 'point' already implements 'sortable'
+<source>:30:19: error: a subrange takes its host's implementation, so it cannot carry one of its own
+<source>:39:12: error: 'sortable' declares no routine 'missing'
+<source>:45:1: error: unknown trait 'nosuchtrait'
+<source>:50:1: error: 'point' is not a trait, so nothing can be implemented for it
+<source>:55:19: error: unknown type 'nosuchtype'
+<source>:60:19: error: 'notatype' is not a type, so a trait cannot be implemented for it
+<source>:67:19: error: 'string' is not a type, so a trait cannot be implemented for it

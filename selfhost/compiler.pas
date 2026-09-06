@@ -10109,7 +10109,7 @@ begin
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
-      nkImportSpec, nkImportItem: ;
+      nkImportSpec, nkImportItem, nkTrait, nkImpl: ;
     end;
     { The release goes *after* the statement, which is where the emitter can
       still write: it cannot go back to put a mark in front of one, and every

@@ -1,0 +1,321 @@
+=== tokens
+11 1 kw program
+11 9 ident traits
+11 15 op (
+11 16 ident output
+11 22 op )
+11 23 op ;
+13 1 kw type
+13 6 ident point
+13 12 op =
+13 14 kw record
+13 21 ident x
+13 22 op :
+13 24 ident integer
+13 32 kw end
+13 35 op ;
+15 1 ident trait
+15 7 ident ranked
+15 13 op ;
+16 3 kw function
+16 12 ident rank
+16 16 op (
+16 17 ident p
+16 18 op :
+16 20 ident self
+16 24 op ;
+16 26 ident q
+16 27 op :
+16 29 ident self
+16 33 op )
+16 34 op :
+16 36 ident integer
+16 43 op ;
+17 1 kw end
+17 4 op ;
+19 1 kw function
+19 10 ident plain
+19 15 op (
+19 16 ident n
+19 17 op :
+19 19 ident integer
+19 26 op )
+19 27 op :
+19 29 ident integer
+19 36 op ;
+20 1 kw begin
+20 7 ident plain
+20 13 op :=
+20 16 ident n
+20 18 kw end
+20 21 op ;
+22 1 ident impl
+22 6 ident ranked
+22 13 kw for
+22 17 ident point
+22 22 op ;
+23 3 kw function
+23 12 ident rank
+23 16 op ;
+24 3 kw begin
+24 9 ident rank
+24 14 op :=
+24 17 ident p
+24 18 op .
+24 19 ident x
+24 21 op -
+24 23 ident q
+24 24 op .
+24 25 ident x
+24 27 kw end
+24 30 op ;
+25 1 kw end
+25 4 op ;
+27 1 kw var
+27 5 ident a
+27 6 op ,
+27 8 ident b
+27 9 op :
+27 11 ident point
+27 16 op ;
+28 1 kw begin
+29 3 ident a
+29 4 op .
+29 5 ident x
+29 7 op :=
+29 10 int 3
+29 11 op ;
+29 13 ident b
+29 14 op .
+29 15 ident x
+29 17 op :=
+29 20 int 1
+29 21 op ;
+30 3 ident writeln
+30 10 op (
+30 11 ident plain
+30 16 op (
+30 17 ident rank
+30 21 op (
+30 22 ident a
+30 23 op ,
+30 25 ident b
+30 26 op )
+30 27 op )
+30 28 op :
+30 29 int 1
+30 30 op )
+31 1 kw end
+31 4 op .
+32 1 eof
+=== ast
+program traits
+  params
+    name output @11:16
+  block
+    imports
+    labels
+    consts
+    types
+      type point @13:6
+        record @13:14
+          fields
+            group
+              names
+                name x @13:21
+              type
+                named integer @13:24
+    vars
+      var
+        names
+          name a @27:5
+          name b @27:8
+        type
+          named point @27:11
+    procs
+      trait ranked @15:1
+        func rank @16:3
+          params
+            group
+              names
+                name p @16:17
+              type
+                named self @16:20
+            group
+              names
+                name q @16:26
+              type
+                named self @16:29
+          result
+            named integer @16:36
+          heading
+      func plain @19:1
+        params
+          group
+            names
+              name n @19:16
+            type
+              named integer @19:19
+        result
+          named integer @19:29
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @20:1
+              assign @20:7
+                var plain @20:7
+                var n @20:16
+      impl ranked for point @22:1
+        func rank @23:3
+          params
+          block
+            imports
+            labels
+            consts
+            types
+            vars
+            procs
+            body
+              compound @24:3
+                assign @24:9
+                  var rank @24:9
+                  binary sub @24:21
+                    field x @24:18
+                      var p @24:17
+                    field x @24:24
+                      var q @24:23
+    body
+      compound @28:1
+        assign @29:3
+          field x @29:4
+            var a @29:3
+          int 3 @29:10
+        assign @29:13
+          field x @29:14
+            var b @29:13
+          int 1 @29:20
+        writeln @30:3
+          arg w -
+            call plain @30:11
+              args
+                call rank @30:17
+                  args
+                    var a @30:22
+                    var b @30:25
+            int 1 @30:29
+=== sema
+program traits
+  params
+    name output @11:16
+  frames
+    frame traits level 0
+      var output #0 : text (stdout 0)
+      var a #1 : point
+      var b #2 : point
+    frame plain level 1
+      param n #0 : integer
+      var plain$result #1 : integer
+    frame rank level 1
+      param p #0 : point
+      param q #1 : point
+      var rank$result #2 : integer
+  block
+    imports
+    labels
+    consts
+    types
+      type point @13:6
+        record @13:14 = point
+          layout
+            field x #0/- : integer
+          fields
+            group
+              names
+                name x @13:21
+              type
+                named integer @13:24 = integer
+    vars
+      var
+        names
+          name a @27:5
+          name b @27:8
+        type
+          named point @27:11 = point
+    procs
+      func plain @19:1
+        params
+          group
+            names
+              name n @19:16
+            type
+              named integer @19:19 = integer
+        result
+          named integer @19:29 = integer
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @20:1
+              assign @20:7
+                var plain @20:7 -> plain/1 : integer
+                var n @20:16 -> plain/0 : integer
+      func rank @23:3
+        params
+          group
+            names
+              name p @16:17
+            type
+              named self @16:20 = point
+          group
+            names
+              name q @16:26
+            type
+              named self @16:29 = point
+        result
+          named integer @16:36 = integer
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @24:3
+              assign @24:9
+                var rank @24:9 -> rank/2 : integer
+                binary sub @24:21 : integer
+                  field x @24:18 -> #0/- : integer
+                    var p @24:17 -> rank/0 : point
+                  field x @24:24 -> #0/- : integer
+                    var q @24:23 -> rank/1 : point
+    body
+      compound @28:1
+        assign @29:3
+          field x @29:4 -> #0/- : integer
+            var a @29:3 -> traits/1 : point
+          int 3 @29:10 : integer
+        assign @29:13
+          field x @29:14 -> #0/- : integer
+            var b @29:13 -> traits/2 : point
+          int 1 @29:20 : integer
+        writeln @30:3
+          file
+            var output @30:3 -> traits/0 : text
+          arg w -
+            call plain @30:11 -> func plain : integer
+              args
+                call rank @30:17 -> func rank : integer
+                  args
+                    var a @30:22 -> traits/1 : point
+                    var b @30:25 -> traits/2 : point
+            int 1 @30:29 : integer

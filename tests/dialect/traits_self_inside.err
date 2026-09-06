@@ -1,0 +1,4 @@
+<source>:9:21: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:10:21: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:10:40: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:15:30: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one

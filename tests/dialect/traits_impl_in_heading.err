@@ -1,0 +1,2 @@
+<dir>/components/traitheadmod.pas:16:1: error: an implementation has routine bodies and belongs to the module's block, not to its interface
+pascalcc: component '<dir>/components/traitheadmod.pas' did not translate

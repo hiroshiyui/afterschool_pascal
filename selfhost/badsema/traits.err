@@ -1,0 +1,15 @@
+<source>:42:36: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:46:1: error: 'point' is not a trait, so nothing can be implemented for it
+<source>:52:1: error: unknown trait 'sortable'
+<source>:58:14: error: unknown type 'missing'
+<source>:65:14: error: a subrange takes its host's implementation, so it cannot carry one of its own
+<source>:71:1: error: 'point' already implements 'ord'
+<source>:80:12: error: 'ord' declares no routine 'nearest'
+<source>:93:17: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:94:24: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:95:24: error: 'self' may stand as a parameter's whole type or as a result type, and not inside one
+<source>:102:12: error: the heading of 'compare' was already given by trait 'ord': write the name alone
+<source>:114:1: error: this implementation of 'two' for 'point' does not define 'g'
+<source>:124:3: error: an implementation belongs to the whole program or module and cannot be written inside a procedure or a function
+<source>:134:14: error: 'hashable' is not a type-parameter category or a trait: write 'numeric', 'ordinal', 'ordered' or 'equatable', the name of a trait, or 'type' on its own
+<source>:152:11: error: 'show' is a procedure and returns no value

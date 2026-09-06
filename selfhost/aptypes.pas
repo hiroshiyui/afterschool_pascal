@@ -55,6 +55,7 @@ export ApTypes = (
   nodeKind, symKind, fileBinding, typeKind, builtinKind, stdProcKind,
   typePtr, symPtr, constitPtr, ifacePtr, modRecPtr, producedPtr, instPtr,
   boundPtr, entryPtr, nodePtr, fieldPtr, variantPtr, numPtr, rangePtr,
+  implPtr, implRec,
   namePtr, symListPtr, nodeListPtr, numRec, rangeRec, nameRec, symListRec,
   nodeListRec, fieldRec, variantRec, typeRec, symbol, producedRec,
   instRec, boundRec, entryRec, constitRec, ifaceRec, modRec, discValPtr,
@@ -76,6 +77,7 @@ export ApTypes = (
   tkExport, tkImport, tkOnly, tkQualified, tkStarStar, tkGtLt, tkArrow,
   tkAndThen, tkOrElse, ctxNone, ctxProgramStart, ctxProgramParams,
   ctxProgramHeader, ctxFinalEnd, ctxAfterFile, ctxAfterSet, ctxChannel, ctxSetMembers,
+  ctxTraitEnd, ctxImplEnd, ctxImplFor,
   ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray, ctxSchemaArgs,
   ctxFormalDisc, ctxTypeInquiry, ctxDirectIndex, ctxArrayIndex,
   ctxRecordEnd, ctxFieldList, ctxVariantTag, ctxVariantLabels,
@@ -103,9 +105,11 @@ export ApTypes = (
   nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray,
   nkRecord, nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible,
   nkConfArray, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
-  nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+  nkProcDecl, nkLabelDecl, nkBlock, nkTrait, nkImpl,
+  nkModule, nkExportPart, nkExportItem,
   nkImportSpec, nkImportItem, skConst, skType, skVar, skParam, skVarParam,
   skProcParam, skDisc, skProc, skFunc, skSchema, skInterface, skRequired,
+  skTrait,
   fbInternal, fbStdInput, fbStdOutput, fbArgument, tyVoid, tyInteger,
   tyReal, tyBoolean, tyChar, tyEnum, tySubrange, tyArray, tyRecord,
   tyPointer, tyFile, tySet, tyProc, tyComplex, tyRestricted, tySlice,
@@ -508,6 +512,9 @@ type
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
     ctxAfterFile, ctxAfterSet, ctxChannel, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
+    { AP 6.4's trait-declaration and AP 6.7's implementation-declaration
+      (ADR-0338). }
+    ctxTraitEnd, ctxImplEnd, ctxImplFor,
     ctxSchemaArgs, ctxFormalDisc, ctxTypeInquiry, ctxDirectIndex,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
@@ -641,6 +648,20 @@ type
     nkInquiry, nkRestricted,
     { declarations }
     nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
+    { AP 6.4's trait-declaration and AP 6.7's implementation-declaration
+      (ADR-0338). Both are spelled by *position*, which is ADR-0140's rule and
+      the task-declaration's route exactly: a declaration-part admits only
+      `label`, `const`, `type`, `var`, `procedure`, `function` and `begin`,
+      every one a word-symbol, so an identifier there is already a syntax
+      error in both standards. `trait` and `impl` each require an identifier
+      after them, so a program that declared either as a variable goes on
+      meaning what it meant.
+
+      A trait holds routine *headings* and an impl holds routine
+      *declarations*, and both are nkProcDecl chains -- a heading being what
+      nkProcDecl already is with pdInHeading set, so neither construct needed
+      a node shape invented for it. }
+    nkTrait, nkImpl,
     { ISO/IEC 10206:1991 6.11's module and the two lists that surround it. An
       export-part names an *interface*, which 6.2.2.2 makes a region that
       "shall not be a part of the program text" -- so nothing here is a scope
@@ -680,8 +701,16 @@ type
   { Appended rather than placed where it reads best: the sema dump prints a
     symbol kind as an ordinal, so where a name sits in this list is an
     interface (ADR-0059). }
+  { skTrait is AP 6.4's trait (ADR-0338): a name for a set of routine headings
+    that a type may be said to implement. It is a *symbol* kind and not a type
+    kind, and that was measured rather than preferred -- a trait names no
+    values, so a `tyTrait` would be a zero-size type object reaching EmitAssign
+    and IsMemory, which is the pair of defects doc/sop.md 4a records from the
+    last two times a type kind was added, and it would move 83 catalogue rows
+    where this moves 11. skSchema is the exact precedent: a name that is not a
+    type until it is applied, with its payload on this record. }
   symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam, skDisc,
-             skProc, skFunc, skSchema, skInterface, skRequired);
+             skProc, skFunc, skSchema, skInterface, skRequired, skTrait);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
     makes only a *program parameter* external; every other file variable is a
@@ -911,6 +940,7 @@ type
   modRecPtr = ^modRec;
   producedPtr = ^producedRec;
   instPtr = ^instRec;
+  implPtr = ^implRec;
   boundPtr = ^boundRec;
   entryPtr = ^entryRec;
   { Forward, because a schema's symbol holds the *syntax* of its body: a
@@ -1318,6 +1348,26 @@ type
     genInsts: instPtr;
     genOf: symPtr;
     discs, discTail: symListPtr;
+    { AP 6.7.3.10.5's fifth alternative on a *discriminant* (ADR-0338): the
+      trait a schema's type-valued discriminant must be implemented for, or
+      nil. Carried on the discriminant's own symbol because that is what a
+      production walks -- a schema keeps its body's syntax but its
+      discriminants as symbols, so there is no node to hang it on.
+
+      This is where the bound belongs for the case the feature exists for. A
+      routine's type parameter cannot reach it: the container's routines take
+      the *pointer*, and a pointer determines nothing. Written on the schema,
+      the client's own `type IntMap = ^Map(MapKey, integer)` is where it is
+      checked, once. }
+    discBound: symPtr;
+    { AP 6.4 (ADR-0338): a trait keeps the *syntax* of its headings and not
+      their translation, which is the schema's shape one field above and for
+      the schema's reason. A heading names `Self`, and `Self` is a different
+      type in every implementation -- so the heading is resolved once per
+      impl with `Self` bound, exactly as 6.4.7's body is resolved once per
+      discriminant tuple. Resolving it here would need a type that stands for
+      every type, and there is none. }
+    traitHeads: nodePtr;
     { 6.7.3.2 and 6.7.3.3: the schema a formal parameter was written as the
       bare name of. Its type is then produced *generically* -- the
       discriminants become skDisc symbols reading this parameter's descriptor
@@ -1519,6 +1569,24 @@ type
     tuple: numPtr;
     sym: symPtr;
     next: instPtr
+  end;
+
+  { AP 6.7 (ADR-0338): one implementation-declaration -- a trait, the type or
+    schema it was written for, and the routines that satisfy it, in the
+    trait's own heading order so that a caller may index them.
+
+    `forType` and `forSchema` are alternatives and exactly one is set. A
+    *schema* is admitted because `string(n)` is denoted by no component's own
+    declaration -- a type-name denotes an existing type object (6.4.1), so
+    `string(20)` and `string(200)` are two objects neither of which anybody
+    declared -- and without it the commonest key a map has could satisfy no
+    trait. That is the gap ADR-0338 found in ADR-0315's orphan rule. }
+  implRec = record
+    trait: symPtr;
+    forType: typePtr;
+    forSchema: symPtr;
+    routines, routineTail: symListPtr;
+    next: implPtr
   end;
 
   { AP 6.4.4.1: one derived schema per (schema, tuple of type-ids), so
@@ -2108,6 +2176,25 @@ type
       nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProtected,
                      grIsProc, grIsFunction, grIsTypeDisc: boolean;
                      grCat: typeCat;
+                     { AP 6.7.3.10.5's fifth alternative (ADR-0338): a trait
+                       bound, where grCat holds one of the four categories.
+                       They are alternatives and at most one is set.
+
+                       Two fields and not one, because the parser cannot tell
+                       a trait from a misspelling: only a lookup can, and the
+                       parser has no scope. So it records the *spelling* and
+                       Sema resolves it -- which is ADR-0044's recurring
+                       answer once more, and it is why the "not a
+                       type-parameter category" diagnostic moves from the
+                       parser to Sema with this change.
+
+                       A category is a name for a group of operators this
+                       language already gives; a trait names routines a
+                       program gives. AP 6.7.3.10.5 NOTE 11 keeps the category
+                       set closed for exactly that reason, so this is a
+                       separate field rather than a fifth typeCat. }
+                     grBoundAt, grBoundLen: integer;
+                     grBound: symPtr;
                      grParams, grResult: nodePtr);
       { nmQualAt/nmQualLen is 6.11.3's qualified name in a type-denoter. There
         is nothing else `a.b` could be there -- a type has no fields to select
@@ -2218,6 +2305,28 @@ type
                        so it needs the identifier's own (ADR-0239). }
                      pdNameLine, pdNameCol: integer;
                      pdSym: symPtr);
+      { AP 6.4's trait-declaration (ADR-0338). `trHeads` is a chain of
+        nkProcDecl in heading form -- the routines a type must supply to
+        implement this trait. `trSym` is the skTrait symbol the name was
+        given a defining-point as. }
+      nkTrait:      (trAt, trLen: integer;
+                     trNameLine, trNameCol: integer;
+                     trHeads: nodePtr;
+                     trSym: symPtr);
+      { AP 6.7's implementation-declaration (ADR-0338), `impl T for X`.
+        `imAt`/`imLen` spell the trait and `imForAt`/`imForLen` the type or
+        schema it is implemented for -- a *schema* as well as a type, because
+        `string(n)` is denoted by no component's own declaration and is what a
+        map is keyed by most of the time. `imRoutines` is a chain of
+        nkProcDecl with bodies; a heading that repeats only its name adopts
+        the trait's, which is 6.7's own parameterless definition and the shape
+        this compiler writes 248 times after a `forward`. }
+      nkImpl:       (imAt, imLen: integer;
+                     imForAt, imForLen: integer;
+                     imForLine, imForCol: integer;
+                     imRoutines: nodePtr;
+                     imTrait, imForSym: symPtr;
+                     imForType: typePtr);
       { 6.2.1 puts an import-part at the head of a block, before the label,
         constant, type, variable and procedure parts -- in every block, and
         not only a module's. There is at most one. }

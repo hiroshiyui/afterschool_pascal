@@ -1,0 +1,12 @@
+<source>:14:11: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:15:19: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:16:25: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:18:18: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:18:11: error: a set base type must lie within 0..255, but integer spans -2147483647..2147483647
+<source>:19:22: error: unknown type 'self'
+<source>:17:12: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and a pointer has a type for its domain
+<source>:22:6: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:23:6: error: unknown type 'self'
+<source>:25:22: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:28:21: error: 'sortable' is a trait, so it names no type: a trait stands as a bound, and nothing has one for its type
+<source>:28:34: error: unknown type 'self'

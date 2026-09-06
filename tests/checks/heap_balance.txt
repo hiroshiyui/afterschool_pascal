@@ -73,6 +73,7 @@ take 0
 task_join 0
 task_pool 0
 task_wait 0
+traits 0
 typeinquiry_access 0
 variant_disc 0
 variant_otherwise 0

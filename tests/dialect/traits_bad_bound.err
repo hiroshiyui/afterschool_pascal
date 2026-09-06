@@ -1,0 +1,8 @@
+<source>:22:17: error: 'point' is not a type-parameter category or a trait: write 'numeric', 'ordinal', 'ordered' or 'equatable', the name of a trait, or 'type' on its own
+<source>:25:20: error: 'nosuchtrait' is not a type-parameter category or a trait: write 'numeric', 'ordinal', 'ordered' or 'equatable', the name of a trait, or 'type' on its own
+<source>:34:17: error: line cannot be the type argument for 'k', which is declared 'sortable': it has no implementation of 'sortable'
+<source>:39:12: error: line cannot be the type argument for 'k', which is declared 'sortable': it has no implementation of 'sortable'
+<source>:43:16: error: line cannot be the type argument for 't' of 'bigger', which is declared 'sortable type': it has no implementation of 'sortable'
+<source>:43:9: error: unknown function 'bigger'
+<source>:44:16: error: line cannot be the type argument for 't' of 'bigger', which is declared 'sortable type': it has no implementation of 'sortable'; argument 1 of this call is what determined it
+<source>:44:9: error: unknown function 'bigger'

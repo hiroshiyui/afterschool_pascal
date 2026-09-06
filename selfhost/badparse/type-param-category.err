@@ -1,1 +1,0 @@
-<source>:8:20: error: 'hashable' is not a type-parameter category: write 'numeric', 'ordinal', 'ordered' or 'equatable', or 'type' on its own

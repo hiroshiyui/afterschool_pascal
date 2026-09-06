@@ -319,6 +319,16 @@ var
   { 6.2.2.9's bookkeeping -- see symRec.usedSeq. applySeq counts applied
     occurrences and nothing else; scopeMark is indexed by scopeDepth. }
   applySeq: integer;
+  { AP 6.7 (ADR-0338): every implementation-declaration this translation has
+    read, newest first. A whole-program list rather than a field on the trait
+    or on the type, because an impl is a fact about the *pair* and belongs to
+    neither -- and because AP admits an impl written where either was
+    declared, so a trait's own component cannot hold all of them. }
+  implHead: implPtr;
+  { True while a module-heading's declarations are checked, which is where an
+    implementation-declaration is refused: it has routine bodies, and a
+    module-heading holds none. }
+  inModuleHeading: boolean;
   scopeMark: array [0..maxBlockDepth] of integer;
   pendingHead, pendingTail: pendingPtr;
   { ISO 7185 6.2.2.9's one exception binds a pointer's domain to the
@@ -1496,6 +1506,9 @@ begin
     ctxAfterFile:      write('after ''file''');
     ctxAfterSet:       write('after ''set''');
     ctxChannel:        write('in a channel type');
+    ctxTraitEnd:       write('at the end of a trait declaration');
+    ctxImplEnd:        write('at the end of an implementation declaration');
+    ctxImplFor:        write('in an implementation declaration');
     ctxSetMembers:     write('after the members of a set');
     ctxAfterGoto:      write('after ''goto''');
     ctxLabelStart:     write('at the start of a labelled statement');
@@ -1647,10 +1660,20 @@ begin
       n^.grIsFunction := false;
       n^.grIsTypeDisc := false;
       n^.grCat := tcNone;
+      n^.grBoundAt := 0;
+      n^.grBoundLen := 0;
+      n^.grBound := nil;
       n^.grParams := nil;
       n^.grResult := nil
     end;
     nkProcDecl: n^.pdSym := nil;
+    { AP 6.4 and AP 6.7 (ADR-0338). Cleared here rather than at the
+      construction site because ast_fields.txt is empty and that emptiness is
+      the finding: a variant record gets no member initialisers, so a field of
+      the arm the tag selects holds whatever `new` returned. }
+    nkTrait: begin n^.trHeads := nil; n^.trSym := nil end;
+    nkImpl: begin n^.imRoutines := nil; n^.imTrait := nil;
+                  n^.imForSym := nil; n^.imForType := nil end;
     nkWith: n^.wtBinding := nil;
     nkDefer: n^.dfIndex := 0;
     nkSpawn: begin n^.spSym := nil; n^.spTarget := nil end;
@@ -4121,6 +4144,28 @@ end;
   `var` part and pushes onto the same vector. ISO 7185 6.2.1 permits only one
   of each, but where the two parsers are lenient they have to be lenient in
   the same way. }
+{ Does the current position begin a declaration this dialect spells by
+  *position* rather than with a word-symbol of its own (ADR-0140)? Three do --
+  the task-declaration (AP 6.7.8, ADR-0268), the trait-declaration and the
+  implementation-declaration (AP 6.4 and AP 6.7, ADR-0338) -- and each is a
+  **pair**: the word and then an identifier, which no declaration in either
+  standard begins with. A program that declares a type called `task` writes
+  `task = ...`, whose second token is `=`, and is untouched.
+
+  Every declaration-part loop must stop at one of these or it will read the
+  word as the next constant, type, variable or exported name. Each carried its
+  own copy of the test while there was one construct; at three the copies were
+  five places a fourth would have to be remembered, so the test is here and a
+  fourth construct edits one line. }
+function AtPositionalDecl: boolean;
+begin
+  AtPositionalDecl :=
+    Check(tkIdent) and (PeekKind(1) = tkIdent) and
+    (PoolIs(tok[pos].at, tok[pos].len, 'task     ') or
+     PoolIs(tok[pos].at, tok[pos].len, 'trait    ') or
+     PoolIs(tok[pos].at, tok[pos].len, 'impl     '))
+end;
+
 procedure ParseConstPart(var head, tail: nodePtr);
 var d: nodePtr; more: boolean;
 begin
@@ -4149,9 +4194,7 @@ begin
         identifier, which no declaration in either standard begins with. A
         program that declares a type called `task` writes `task = ...`, whose
         second token is `=`, and is untouched. }
-      more := (not aborted) and Check(tkIdent) and
-              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
-                   (PeekKind(1) = tkIdent))
+      more := (not aborted) and Check(tkIdent) and not AtPositionalDecl
     end
   end
 end;
@@ -4249,9 +4292,7 @@ begin
         identifier, which no declaration in either standard begins with. A
         program that declares a type called `task` writes `task = ...`, whose
         second token is `=`, and is untouched. }
-      more := (not aborted) and Check(tkIdent) and
-              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
-                   (PeekKind(1) = tkIdent))
+      more := (not aborted) and Check(tkIdent) and not AtPositionalDecl
     end
   end
 end;
@@ -4274,9 +4315,7 @@ begin
     Append(head, tail, g);
     { AP 6.7.8: stop at a task-declaration, whose two tokens are `task`
       and an identifier -- see ParseTypePart for why that pair is the test. }
-    more := (not aborted) and Check(tkIdent) and
-            not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
-                 (PeekKind(1) = tkIdent))
+    more := (not aborted) and Check(tkIdent) and not AtPositionalDecl
   end
 end;
 
@@ -4404,14 +4443,20 @@ begin
       isTypeParam := false;
       if Check(tkIdent) and (PeekKind(1) = tkType) then begin
         cat := CatOfName(tok[pos].at, tok[pos].len);
+        { AP 6.7.3.10.5's fifth alternative (ADR-0338). A spelling that is not
+          one of the four categories may be a **trait**, and only a lookup can
+          say which -- so the parser records it and Sema decides.
+
+          That moves the "is not a type-parameter category" diagnostic out of
+          the parser, where ADR-0266 put it and where it could be written
+          because the set was closed. It is Sema's now, and it names a trait
+          among the alternatives. The parser still commits on the shape, which
+          is the half that made the message writable in the first place: an
+          identifier followed by the word-symbol `type` is a juxtaposition no
+          conforming program can contain. }
         if cat = tcNone then begin
-          ErrorAtCur;
-          write('''');
-          WritePool(tok[pos].at, tok[pos].len);
-          write(''' is not a type-parameter category: write ''numeric'', ');
-          writeln('''ordinal'', ''ordered'' or ''equatable'', or ''type'' ',
-                  'on its own');
-          Bail
+          g^.grBoundAt := tok[pos].at;
+          g^.grBoundLen := tok[pos].len
         end;
         pos := pos + 1;
         isTypeParam := true
@@ -4605,6 +4650,121 @@ begin
   ParseProcHeadingOnly := d
 end;
 
+{ trait-declaration = 'trait' identifier ';' routine-heading+ 'end' ';'
+    (AP 6.4, ADR-0338)
+
+  A trait names a set of routine headings that a type may be said to
+  implement. It is spelled by *position* and reserves nothing: a
+  declaration-part admits only word-symbols and `begin`, so an identifier
+  here is already a syntax error in both standards, and the pair required is
+  `trait` followed by an identifier -- so `trait := 3` and `trait = record`
+  go on meaning what they meant.
+
+  The headings are ParseProcHeadingOnly's, which is the module-heading's
+  routine (6.11.1): a heading and a semicolon, no body and no `forward` to
+  say so, because declaring without defining is the whole point in both
+  places. Nothing about a trait heading needed a shape of its own. }
+function ParseTraitDecl: nodePtr;
+var d, h, head, tail: nodePtr; headPos: integer;
+begin
+  d := NewNode(nkTrait, CurLine, CurCol);
+  pos := pos + 1;                        { 'trait' }
+  d^.trNameLine := CurLine;
+  d^.trNameCol := CurCol;
+  d^.trAt := tok[pos].at;
+  d^.trLen := tok[pos].len;
+  pos := pos + 1;                        { the identifier }
+  Expect(tkSemi, ctxTraitEnd);
+  head := nil;
+  tail := nil;
+  while (not aborted) and (Check(tkProcedure) or Check(tkFunction)) do begin
+    { Where this heading begins in the token stream, and which source those
+      tokens came from -- pdBodyPos and pdFileIdx, which a heading has no
+      other use for, having no block.
+
+      A trait heading is **re-parsed once per implementation** (ADR-0338's
+      re-reading, applied one construct over). Sharing the parsed nodes does
+      not work and the reason is the one AP 6.7.3.5 already gives for a
+      generic's body: resolution annotates them, so the second impl of a trait
+      reads the first impl's types and reports a field of the wrong record.
+      Copying the tree would be a second statement of every node's shape and
+      free to drift; re-reading the tokens is parsing, so it cannot disagree
+      with parsing. }
+    headPos := pos;
+    h := ParseProcHeadingOnly(Check(tkFunction));
+    h^.pdBodyPos := headPos;
+    h^.pdFileIdx := curImportIdx;
+    Append(head, tail, h)
+  end;
+  d^.trHeads := head;
+  if not aborted then begin
+    Expect(tkEnd, ctxTraitEnd);
+    Expect(tkSemi, ctxTraitEnd)
+  end;
+  ParseTraitDecl := d
+end;
+
+{ implementation-declaration =
+      'impl' identifier 'for' identifier ';' routine-declaration+ 'end' ';'
+    (AP 6.7, ADR-0338)
+
+  `for` is a word-symbol, and using it here takes nothing away: `impl` has
+  already made the position the dialect's, and a for-statement cannot occur
+  in a declaration-part.
+
+  The name after `for` may denote a type *or a schema*. A schema is admitted
+  because `string(n)` is denoted by no component's own declaration -- a
+  type-name denotes an existing type object (6.4.1) -- so without it the
+  commonest key a map has could satisfy no trait, which is the gap ADR-0338
+  found in ADR-0315's own orphan rule.
+
+  A routine inside may repeat only its name, in which case it adopts the
+  trait's heading: that is 6.7's own parameterless definition, the shape this
+  compiler writes 248 times after a `forward`, and it is why the construct
+  needed no syntax invented for its body. }
+function ParseImplDecl: nodePtr;
+var d, r, head, tail: nodePtr;
+begin
+  d := NewNode(nkImpl, CurLine, CurCol);
+  pos := pos + 1;                        { 'impl' }
+  d^.imAt := tok[pos].at;
+  d^.imLen := tok[pos].len;
+  pos := pos + 1;                        { the trait's identifier }
+  if not Check(tkFor) then begin
+    ErrorAtCur;
+    writeln('expected ''for'' and the type this implements the trait for');
+    Bail
+  end;
+  if not aborted then begin
+    pos := pos + 1;                      { 'for' }
+    if not Check(tkIdent) then begin
+      ErrorAtCur;
+      writeln('expected the name of a type or a schema after ''for''');
+      Bail
+    end
+  end;
+  if not aborted then begin
+    d^.imForLine := CurLine;
+    d^.imForCol := CurCol;
+    d^.imForAt := tok[pos].at;
+    d^.imForLen := tok[pos].len;
+    pos := pos + 1;
+    Expect(tkSemi, ctxImplFor)
+  end;
+  head := nil;
+  tail := nil;
+  while (not aborted) and (Check(tkProcedure) or Check(tkFunction)) do begin
+    r := ParseProcOrFunc(Check(tkFunction));
+    Append(head, tail, r)
+  end;
+  d^.imRoutines := head;
+  if not aborted then begin
+    Expect(tkEnd, ctxImplEnd);
+    Expect(tkSemi, ctxImplEnd)
+  end;
+  ParseImplDecl := d
+end;
+
 { block = const-part? type-part? var-part? (procedure | function)*
           statement-part
 
@@ -4678,6 +4838,17 @@ begin
     else if Check(tkIdent) and
             PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
             (PeekKind(1) = tkIdent) then part := 5
+    { AP 6.4's trait-declaration and AP 6.7's implementation-declaration
+      (ADR-0338), by the same two-token test for the same reason. Both join
+      the *procedure* chain rather than taking lists of their own, because
+      6.2.2.9 makes written order the only correct one and that chain is
+      already walked in it (ADR-0100). }
+    else if Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'trait    ') and
+            (PeekKind(1) = tkIdent) then part := 6
+    else if Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'impl     ') and
+            (PeekKind(1) = tkIdent) then part := 7
     else begin
       part := -1;
       done := true
@@ -4691,6 +4862,8 @@ begin
         parsingTask := true;
         Append(ph, pt, ParseProcOrFunc(false))
       end
+      else if part = 6 then Append(ph, pt, ParseTraitDecl)
+      else if part = 7 then Append(ph, pt, ParseImplDecl)
       else if Check(tkFunction) then Append(ph, pt, ParseProcOrFunc(true))
       else Append(ph, pt, ParseProcOrFunc(false))
     end
@@ -4803,9 +4976,7 @@ begin
         identifier, which no declaration in either standard begins with. A
         program that declares a type called `task` writes `task = ...`, whose
         second token is `=`, and is untouched. }
-      more := (not aborted) and Check(tkIdent) and
-              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
-                   (PeekKind(1) = tkIdent))
+      more := (not aborted) and Check(tkIdent) and not AtPositionalDecl
       end
     end
   end;
@@ -4921,9 +5092,8 @@ begin
         identifier, which no declaration in either standard begins with. A
         program that declares a type called `task` writes `task = ...`, whose
         second token is `=`, and is untouched. }
-      more := (not aborted) and Check(tkIdent) and
-              not (PoolIs(tok[pos].at, tok[pos].len, 'task     ') and
-                   (PeekKind(1) = tkIdent)) and not Check(tkEnd)
+      more := (not aborted) and Check(tkIdent) and not AtPositionalDecl
+              and not Check(tkEnd)
     end
   end
 end;
@@ -4960,6 +5130,27 @@ begin
     else if Check(tkFunction) then
       if headings then Append(ph, pt, ParseProcHeadingOnly(true))
                   else Append(ph, pt, ParseProcOrFunc(true))
+    { AP 6.4's trait-declaration in a module-heading (ADR-0338). A trait is a
+      set of routine headings and nothing else, so it is the *same* text in an
+      interface as in a block -- unlike a routine, which loses its body, and
+      unlike an implementation-declaration, which is refused here and belongs
+      to the module-block.
+
+      Without this a trait could not be exported, and a trait nobody outside
+      the module can name is a trait no client can be bound by -- which is the
+      whole of what this feature is for. }
+    else if AtPositionalDecl and
+            PoolIs(tok[pos].at, tok[pos].len, 'trait    ') then
+      Append(ph, pt, ParseTraitDecl)
+    { AP 6.7's implementation-declaration belongs to the module-*block*: it
+      has routine bodies, and a module-heading holds none. So a module
+      supplies its implementations where it supplies its routines. It is
+      parsed in a heading all the same, so that Sema can say where it belongs
+      -- left to the parser, an impl in an interface was reported as an `end`
+      that had not come, against the first token of the impl. }
+    else if AtPositionalDecl and
+            PoolIs(tok[pos].at, tok[pos].len, 'impl     ') then
+      Append(ph, pt, ParseImplDecl)
     else
       done := true
   end;
@@ -5357,6 +5548,8 @@ begin
   s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
+  s^.traitHeads := nil;
+  s^.discBound := nil;
   s^.boundOf := nil;
   s^.boundTypes := nil;
   s^.boundTypeTail := nil;
@@ -5572,7 +5765,8 @@ begin
     skFunc:      write('function');
     skSchema:    write('schema');
     skInterface: write('interface');
-    skRequired:  write('required')
+    skRequired:  write('required');
+    skTrait:     write('trait')
   end
 end;
 
@@ -7104,6 +7298,15 @@ function LookupQuiet(qAt, qLen, at, len: integer): symPtr; forward;
 { 6.9.3.10 binds a schema's discriminants over a `with` statement, and the
   symbols they bind to were made elsewhere -- which is what BindName is for. }
 procedure BindName(at, len: integer; s: symPtr; line, col: integer); forward;
+{ AP 6.7 (ADR-0338): the trait-keyed scope, consulted where an ordinary lookup
+  has found nothing. Declared forward because the call site is a long way above
+  the implementation-declaration machinery it belongs with. }
+function DispatchTrait(at, len: integer; args: nodePtr;
+                       var ambiguous: boolean): symPtr; forward;
+{ AP 6.7 (ADR-0338): the implementation of a trait for a type, or nil. Forward
+  because a trait bound is checked in InstantiateGeneric, which stands above
+  the implementation-declaration machinery. }
+function FindImpl(tr: symPtr; t: typePtr): implPtr; forward;
 procedure CheckImports(specs: nodePtr; owner: symPtr); forward;
 procedure CheckGoto(s: nodePtr); forward;
 procedure CheckLabeled(s: nodePtr); forward;
@@ -9411,6 +9614,17 @@ begin
           p^.ptype^.elem := intType
         end
     end
+    { AP 6.4 (ADR-0338): the deferred path reaches a trait too, and says so.
+      A pointer's domain is the position a reader is likeliest to try a trait
+      in, having read that a trait is what a type must satisfy. }
+    else if (s <> nil) and (s^.kind = skTrait) then begin
+      ErrorAt(p^.line, p^.col);
+      write('''');
+      WritePool(p^.at, p^.len);
+      write(''' is a trait, so it names no type: a trait stands as a bound, ');
+      writeln('and a pointer has a type for its domain');
+      p^.ptype^.elem := intType
+    end
     else begin
       ErrorAt(p^.line, p^.col);
       write('unknown type ''');
@@ -10756,7 +10970,8 @@ begin
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
       nkPointer, nkHandle, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
-      nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem: ;
+      nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem,
+      nkTrait, nkImpl: ;
     end
   end
 end;
@@ -10933,13 +11148,44 @@ begin
   end
 end;
 
+{ Does `given` satisfy the trait bound on the discriminant `disc`, and report
+  it where the client wrote the type if not (AP 6.7.3.10.5, ADR-0338)?
+
+  Asked at **both** places a type-valued discriminant is bound, which are two
+  and not one: `BoundSchema` for a pointer domain, `^Map(MapKey, integer)`, and
+  `ProduceFromSchema` for a plain application, `var v: Vec(integer, 4)`. The
+  first is the one this feature exists for and is the one a record naming a
+  single site named wrongly.
+
+  It is asked **before the production is interned**, which matters and is not
+  a detail: an erroring production is never interned, so a second client making
+  the same mistake is told about it too. Checking after the intern lookup would
+  report the first client and silently accept the second. }
+function SatisfiesBound(disc: symPtr; given: typePtr; a: nodePtr): boolean;
+begin
+  SatisfiesBound := true;
+  if disc^.discBound <> nil then
+    if FindImpl(disc^.discBound, given) = nil then begin
+      ErrorAt(a^.line, a^.col);
+      WriteTypeName(given);
+      write(' cannot be the type argument for ''');
+      WritePool(disc^.at, disc^.len);
+      write(''', which is declared ''');
+      WritePool(disc^.discBound^.at, disc^.discBound^.len);
+      write(''': it has no implementation of ''');
+      WritePool(disc^.discBound^.at, disc^.discBound^.len);
+      writeln('''');
+      SatisfiesBound := false
+    end
+end;
+
 { 6.4.7's schema-definition. The formal discriminants are given names and
   ordinal types here and values only when a type is produced, so they are
   symbols that live outside every scope -- a discriminant is not in scope in
   the block, only inside the schema's own body and after a '.' on a variable
   that possesses one of the schema's types. }
 procedure DeclareSchema(d: nodePtr);
-var s, disc, seen: symPtr; g, n: nodePtr; t: typePtr;
+var s, disc, seen, bound: symPtr; g, n: nodePtr; t: typePtr;
     p: symListPtr; repeated: boolean;
 begin
   s := Declare(d^.tdAt, d^.tdLen, skSchema, d^.line, d^.col);
@@ -10948,6 +11194,7 @@ begin
     g := d^.tdDiscs;
     while g <> nil do begin
       t := nil;
+      bound := nil;
       if g^.grIsTypeDisc then
         { AP 6.4.7 (ADR-0209): there is no type-name to resolve, and the
           symbol's stype stays nil -- which is what every later reader asks,
@@ -10955,7 +11202,22 @@ begin
       else begin
       seen := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
       if (seen <> nil) and (seen^.kind = skType) then t := seen^.stype;
-      if t = nil then begin
+      { AP 6.7.3.10.5's fifth alternative (ADR-0338). `K: Hash` where `Hash`
+        is a trait is a *type* discriminant carrying a bound, and it is told
+        from `n: integer` by what the name denotes and by nothing else -- the
+        parser cannot know, so this is ADR-0044's recurring answer once more.
+
+        No parser change was needed for it, which is worth saying because the
+        record expected one: the ordinary name branch already parses `K: Hash`,
+        and only the multiple-bound form `Hash + Eq` would have needed syntax.
+        There is no such form -- one trait declares as many routines as a
+        requirement has, and no client here has ever wanted two bounds. }
+      if seen <> nil then
+        if seen^.kind = skTrait then begin
+          bound := seen;
+          t := nil
+        end;
+      if (t = nil) and (bound = nil) then begin
         ErrorAt(g^.line, g^.col);
         write('unknown type ''');
         WritePool(g^.grType^.nmAt, g^.grType^.nmLen);
@@ -10965,7 +11227,7 @@ begin
       { 6.4.7 requires an ordinal-type-name: a discriminant tuple has to be
         something two types can be compared on, which a real or a record is
         not. }
-      else if not IsOrdinal(t) then begin
+      else if (bound = nil) and not IsOrdinal(t) then begin
         ErrorAt(g^.line, g^.col);
         write('the type of a discriminant must be ordinal, found ');
         WriteTypeName(t);
@@ -11003,9 +11265,10 @@ begin
           where a production resolves the body, so its formal is skType and
           stype nil until then. skConst for every other, which is what makes
           `array [1..n]` reach the ordinary subrange code unchanged. }
-        if g^.grIsTypeDisc then disc^.kind := skType
+        if g^.grIsTypeDisc or (bound <> nil) then disc^.kind := skType
         else disc^.kind := skConst;
         disc^.stype := t;
+        disc^.discBound := bound;
         AppendSym(s^.discs, s^.discTail, disc);
         n := n^.next
       end;
@@ -11192,6 +11455,8 @@ begin
           writeln('a type discriminant of a pointer domain must name a type');
           ok := false
         end
+        else if not SatisfiesBound(p^.sym, given, a) then
+          ok := false
         else begin
           a^.ntype := given;
           AppendType(tuple, tupleTail, given)
@@ -11379,6 +11644,8 @@ begin
           writeln(''' of this schema is a type, so a type name belongs here');
           ok := false
         end
+        else if not SatisfiesBound(p^.sym, given, a) then
+          ok := false
         else AppendType(tuple, tupleTail, given)
       end
       else if not EvalOrdinal(a, given, value_) then begin
@@ -12612,7 +12879,7 @@ begin
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
-      nkImportSpec, nkImportItem:
+      nkImportSpec, nkImportItem, nkTrait, nkImpl:
         Nonvarying := false
     end
 end;
@@ -12802,6 +13069,20 @@ begin
           write(''' needs its discriminants here, as ');
           WritePool(d^.nmAt, d^.nmLen);
           writeln('(...)');
+          t := intType
+        end
+        { AP 6.4 (ADR-0338): a trait is a symbol kind and not a type kind, so
+          the name reaches here -- and the schema arm above is the precedent
+          for saying so rather than reporting the name unknown. The compiler
+          holds the symbol and its kind; telling a reader the name does not
+          exist, five lines under the trait-declaration that declared it, is
+          the likeliest first thing a user of this construct would meet. }
+        else if (s <> nil) and (s^.kind = skTrait) then begin
+          ErrorAt(d^.line, d^.col);
+          write('''');
+          WritePool(d^.nmAt, d^.nmLen);
+          write(''' is a trait, so it names no type: a trait stands as a ');
+          writeln('bound, and nothing has one for its type');
           t := intType
         end
         else begin
@@ -15039,7 +15320,7 @@ end;
 
 procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last: nodePtr; t: typePtr;
-    n, at2, len2: integer; stepped: boolean;
+    n, at2, len2: integer; stepped, ambig: boolean;
 begin
   { 6.11.3's qualified name. A required function is never one of the answers,
     so this returns whatever the interface holds or nothing at all. }
@@ -15114,6 +15395,37 @@ begin
     writeln(''' is not a function');
     c^.ntype := intType;
     c^.nErrType := true
+  end
+  { AP 6.7 (ADR-0338): a trait routine is reached through the trait-keyed
+    scope and not through this block's, two implementations of one trait
+    otherwise declaring one spelling here. Asked **after** the ordinary lookup
+    has failed, so a program that declares its own routine of the name goes on
+    meaning what it meant -- 6.2.2.11's rule, and LookupBuiltin's placement
+    just below is the same argument for the required identifiers. }
+  else if DispatchTrait(c^.clAt, c^.clLen, c^.clArgs, ambig) <> nil then begin
+    sym := DispatchTrait(c^.clAt, c^.clLen, c^.clArgs, ambig);
+    if ambig then begin
+      ErrorAt(c^.line, c^.col);
+      write('''');
+      WritePool(c^.clAt, c^.clLen);
+      write(''' is declared by more than one trait implemented for the ');
+      writeln('type of its first argument, so this call selects none of them')
+    end;
+    c^.clSym := sym;
+    c^.ntype := ResultTypeOf(sym);
+    if c^.ntype = nil then begin
+      ErrorAt(c^.line, c^.col);
+      write('''');
+      WritePool(c^.clAt, c^.clLen);
+      writeln(''' is a procedure and returns no value');
+      c^.ntype := intType;
+      c^.nErrType := true
+    end
+    else begin
+      CheckHandleBirth(c^.ntype, c^.line, c^.col, c^.clAt, c^.clLen);
+      GiveResultSlot(c);
+      CheckArguments(sym, c^.clArgs, c^.line, c^.col)
+    end
   end
   else begin
     c^.clBuiltin := LookupBuiltin(c^.clAt, c^.clLen);
@@ -18385,7 +18697,7 @@ begin
       nkSchema,
       nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
-      nkImportSpec, nkImportItem: ;
+      nkImportSpec, nkImportItem, nkTrait, nkImpl: ;
     end
   end
 end;
@@ -20684,8 +20996,36 @@ begin
 end;
 
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
-var existing, sym: symPtr;
+var existing, sym, tb: symPtr; g: nodePtr;
 begin
+  { AP 6.7.3.10.5's fifth alternative (ADR-0338): resolve a trait bound here,
+    in the region the heading was written in, and not at the activation, which
+    stands somewhere else entirely and may not see the trait at all.
+
+    This is also where ADR-0266's "not a type-parameter category" diagnostic
+    now lives. The parser gave it up when a trait became spellable in the
+    position, a lookup being the only thing that can tell a trait from a
+    misspelling; what it kept is the commitment to the *shape*, which is what
+    made a message about a category writable instead of one about a missing
+    semicolon. }
+  g := d^.pdParams;
+  while g <> nil do begin
+    if g^.grIsTypeDisc and (g^.grBoundLen > 0) then begin
+      tb := LookupQuiet(0, 0, g^.grBoundAt, g^.grBoundLen);
+      if tb = nil then tb := nil;
+      if (tb <> nil) and (tb^.kind = skTrait) then
+        g^.grBound := tb
+      else begin
+        ErrorAt(g^.line, g^.col);
+        write('''');
+        WritePool(g^.grBoundAt, g^.grBoundLen);
+        write(''' is not a type-parameter category or a trait: write ');
+        write('''numeric'', ''ordinal'', ''ordered'' or ''equatable'', ');
+        writeln('the name of a trait, or ''type'' on its own')
+      end
+    end;
+    g := g^.next
+  end;
   existing := LookupInScope(d^.pdAt, d^.pdLen);
   if existing <> nil then
     if not ((existing^.kind = skProc) or (existing^.kind = skFunc)) or
@@ -22393,6 +22733,28 @@ begin
   writeln
 end;
 
+{ ReportCat's shape for a trait bound (ADR-0338). It says what was asked for
+  and what the type lacks, and it carries ADR-0304's inferred-activation line
+  so a call that names no type at all still says which argument decided. }
+procedure ReportBound(gen: symPtr; nm, g: nodePtr; given: typePtr;
+                      ln, cl, argn: integer);
+begin
+  ErrorAt(ln, cl);
+  WriteTypeName(given);
+  write(' cannot be the type argument for ''');
+  WritePool(nm^.dnAt, nm^.dnLen);
+  write(''' of ''');
+  WritePool(gen^.at, gen^.len);
+  write(''', which is declared ''');
+  WritePool(g^.grBound^.at, g^.grBound^.len);
+  write(' type'': it has no implementation of ''');
+  WritePool(g^.grBound^.at, g^.grBound^.len);
+  write('''');
+  if argn > 0 then
+    write('; argument ', argn:1, ' of this call is what determined it');
+  writeln
+end;
+
 function InstantiateGeneric;
 var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
     given: typePtr; found, ip: instPtr;
@@ -22565,6 +22927,18 @@ begin
         ReportCat(gen, n, g, given, bs.b[k].line, bs.b[k].col, bs.b[k].argn);
         ok := false
       end
+      { AP 6.7.3.10.5's fifth alternative (ADR-0338), in the position the four
+        categories already occupy and reported where they are reported -- at
+        the **activation**, which is the whole of what a constraint buys.
+        Without one the program is refused inside the generic's own body, in a
+        source the caller may never have opened. }
+      else if g^.grBound <> nil then
+        if FindImpl(g^.grBound, given) = nil then begin
+          ReportBound(gen, n, g, given, bs.b[k].line, bs.b[k].col,
+                      bs.b[k].argn);
+          ok := false
+        end
+        else AppendType(tuple, tupleTail, given)
       else AppendType(tuple, tupleTail, given)
     end;
     NextFormal(g, n)
@@ -22764,6 +23138,516 @@ begin
   end
 end;
 
+{ Does `self` occur anywhere in this type-denoter *below* its root? (AP 6.4,
+  ADR-0339.)
+
+  A trait heading is resolved once per implementation with `Self` bound to that
+  implementation's type, and the impl's own heading is then compared with
+  6.6.3.6's congruity -- which compares type *identity*. That works exactly as
+  far as the substitution yields the **same type object**, which it does for a
+  bare type-name and does not for anything built around one: 6.4.1 makes each
+  type-denoter that is not a type-name denote its own type, so `array of Self`
+  in the trait and `array of Point` in the impl are two objects and congruity
+  refuses every implementation.
+
+  So `Self` is admitted as a whole parameter-form or result-type and refused
+  inside one, and this is the test. `^Self` needs no arm here at all: 6.7.3.1's
+  parameter-form is a type-name, a schema-name or a type-inquiry, so a pointer
+  denoter cannot be written in the position -- unformable rather than checked,
+  which is ADR-0201's shape and carries its caveat, that a construct adding a
+  way to write one takes this property with it silently. }
+function MentionsSelf(t: nodePtr): boolean;
+var a: nodePtr; found: boolean;
+begin
+  found := false;
+  if t <> nil then
+    if t^.kind = nkNamed then
+      found := PoolIs(t^.nmAt, t^.nmLen, 'self     ')
+    { A schema's actual discriminants are *expressions*, so a bare name among
+      them is an nkVar and not an nkNamed -- the parser cannot tell a type
+      argument from an ordinal one, which is what the binding site says in its
+      own words. Looking only for nkNamed let `Box(Self, 3)` through: the
+      trait accepted it, an implementation was generated for it, and the
+      routine was then unreachable by construction, dispatch reading the first
+      actual's type and finding `Box` rather than the implementing type. No
+      diagnostic came from anywhere. }
+    else if t^.kind = nkVar then
+      found := PoolIs(t^.vrAt, t^.vrLen, 'self     ')
+    else if t^.kind = nkArray then
+      found := MentionsSelf(t^.arElem)
+    else if t^.kind = nkConfArray then
+      found := MentionsSelf(t^.caElem)
+    else if t^.kind = nkSchema then begin
+      a := t^.scArgs;
+      while (a <> nil) and not found do begin
+        found := MentionsSelf(a);
+        a := a^.next
+      end
+    end;
+  MentionsSelf := found
+end;
+
+{ One trait heading's use of `Self`, reported where the heading is written
+  rather than where it is implemented (ADR-0339). The placement is the
+  decision: left to the impl, the message arrives once per implementation, in
+  the impl's own source, and describes a procedural parameter's parameter list
+  to a reader who wrote neither. The mistake is in the trait. }
+procedure CheckSelfPositions(h: nodePtr);
+var g: nodePtr;
+begin
+  g := h^.pdParams;
+  while g <> nil do begin
+    if g^.grType <> nil then
+      if (g^.grType^.kind <> nkNamed) and MentionsSelf(g^.grType) then begin
+        ErrorAt(g^.grType^.line, g^.grType^.col);
+        writeln('''self'' may stand as a parameter''s whole type or as a ',
+                'result type, and not inside one');
+      end;
+    g := g^.next
+  end;
+  if h^.pdResult <> nil then
+    if (h^.pdResult^.kind <> nkNamed) and MentionsSelf(h^.pdResult) then begin
+      ErrorAt(h^.pdResult^.line, h^.pdResult^.col);
+      writeln('''self'' may stand as a parameter''s whole type or as a ',
+              'result type, and not inside one');
+    end
+end;
+
+{ AP 6.4's trait-declaration (ADR-0338, ADR-0339).
+
+  A trait keeps the **syntax** of its headings and not their translation,
+  which is 6.4.7's schema shape and is here for the schema's reason: a heading
+  names `Self`, `Self` denotes a different type in every implementation, and
+  resolving it once would need a type standing for every type. What is checked
+  here is only what is a property of the trait itself. }
+procedure CheckTraitDecl(d: nodePtr; owner: symPtr);
+var s: symPtr; h: nodePtr;
+begin
+  s := Declare(d^.trAt, d^.trLen, skTrait, d^.trNameLine, d^.trNameCol);
+  d^.trSym := s;
+  if s^.traitHeads = nil then s^.traitHeads := d^.trHeads;
+  h := d^.trHeads;
+  while h <> nil do begin
+    CheckSelfPositions(h);
+    h := h^.next
+  end
+end;
+
+{ Find the implementation of `tr` for `t`, or nil (AP 6.7, ADR-0338).
+
+  The lookup follows `Base()`, which is ADR-0018's rule -- *a subrange answers
+  for its host* -- said once more, and it is the only reading consistent with
+  the four type-parameter categories, every one of which asks Base(). So
+  `impl Ord for integer` covers every subrange of integer; the cost is that a
+  subrange can carry no implementation of its own, its host's being found
+  first, and that is refused at the impl heading rather than left to be
+  discovered. }
+function FindImpl;
+var im, found: implPtr;
+begin
+  found := nil;
+  im := implHead;
+  while im <> nil do begin
+    if found = nil then
+      if im^.trait = tr then
+        if im^.forType <> nil then
+          if im^.forType = Base(t) then found := im;
+    im := im^.next
+  end;
+  FindImpl := found
+end;
+
+{ The type of an actual-parameter, asked **without checking it** (AP 6.7,
+  ADR-0338).
+
+  A trait routine is selected by the type of its first actual, and that type
+  has to be known before the callee is, which is one step earlier than
+  CheckArguments. Checking the argument here to find out would check it twice
+  and report a bad one twice, so this asks a narrower question and answers nil
+  wherever it cannot: a designator's type is a fact about its declaration and
+  needs no expression checking to read.
+
+  A nil answer is not an error -- it falls through to the ordinary `unknown
+  function`, which is the right message for a call whose first argument is not
+  a designator, because no such call can select an implementation. }
+function QuietTypeOf(e: nodePtr): typePtr;
+var t: typePtr; s: symPtr; f: fieldPtr;
+begin
+  t := nil;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      s := LookupQuiet(0, 0, e^.vrAt, e^.vrLen);
+      if s <> nil then
+        if (s^.kind = skVar) or (s^.kind = skParam) or
+           (s^.kind = skVarParam) then t := s^.stype
+    end
+    else if e^.kind = nkDeref then begin
+      t := QuietTypeOf(e^.drBase);
+      if t <> nil then
+        if t^.kind = tyPointer then t := t^.elem else t := nil
+    end
+    else if e^.kind = nkField then begin
+      t := QuietTypeOf(e^.fdBase);
+      if t <> nil then
+        if IsRecord(t) then begin
+          f := t^.fields;
+          t := nil;
+          while f <> nil do begin
+            if PoolSame(f^.at, f^.len, e^.fdAt, e^.fdLen) then t := f^.ftype;
+            f := f^.next
+          end
+        end
+        else t := nil
+    end
+    else if e^.kind = nkIndex then begin
+      t := QuietTypeOf(e^.ixBase);
+      if t <> nil then
+        if IsArray(t) or IsSlice(t) then t := t^.elem else t := nil
+    end;
+  QuietTypeOf := t
+end;
+
+{ The heading `tr` gives the routine spelled at `at`/`len`, or nil. }
+function FindTraitHead(tr: symPtr; at, len: integer): nodePtr;
+var h, found: nodePtr;
+begin
+  found := nil;
+  h := tr^.traitHeads;
+  while h <> nil do begin
+    if found = nil then
+      if PoolSame(h^.pdAt, h^.pdLen, at, len) then found := h;
+    h := h^.next
+  end;
+  FindTraitHead := found
+end;
+
+{ Select the routine an implementation supplies for the trait routine spelled
+  `at`/`len`, by the type of the first actual (AP 6.7, ADR-0338).
+
+  **This is the trait-keyed scope, and it is why a trait's routine names are
+  not ordinary block names.** Two implementations of one trait each define a
+  routine of the same spelling -- `impl Ord for Point` and `impl Ord for Line`
+  both define `Compare` -- so declaring either in the block they stand in would
+  make the second a redeclaration. They are declared in the implementation's
+  own scope instead, and reached from here.
+
+  The selection follows `Base()`, as FindImpl does and for ADR-0018's reason,
+  so a subrange selects its host's implementation. }
+function DispatchTrait;
+var t: typePtr; im: implPtr; p: symListPtr; found, cand: symPtr;
+    seen: symPtr;
+begin
+  found := nil;
+  seen := nil;
+  ambiguous := false;
+  if args <> nil then begin
+    t := QuietTypeOf(args);
+    if t <> nil then begin
+      im := implHead;
+      while im <> nil do begin
+        if im^.forType = Base(t) then
+          if FindTraitHead(im^.trait, at, len) <> nil then begin
+            cand := nil;
+            p := im^.routines;
+            while p <> nil do begin
+              if cand = nil then
+                if PoolSame(p^.sym^.at, p^.sym^.len, at, len) then
+                  cand := p^.sym;
+              p := p^.next
+            end;
+            { **Every** implementation is examined and not the first that
+              answers, because two traits may each declare a routine of one
+              name and one type may implement both. Stopping at the first made
+              the call take whichever was declared last, silently -- an
+              arbitrary right-looking answer, which is the one kind of wrong
+              this project spends most of its gates refusing. }
+            if cand <> nil then
+              if found = nil then begin
+                found := cand;
+                seen := im^.trait
+              end
+              else if seen <> im^.trait then
+                ambiguous := true
+          end;
+        im := im^.next
+      end
+    end
+  end;
+  DispatchTrait := found
+end;
+
+{ AP 6.7's implementation-declaration (ADR-0338, ADR-0339).
+
+  What is checked here, in order: that the trait is one, that the name after
+  `for` denotes a type this may be written for, that no implementation of the
+  pair already exists, and then each routine against the heading the trait
+  gives it -- with `Self` bound, in a scope of the impl's own, so that two
+  implementations of one trait do not declare one spelling in the block they
+  stand in. }
+procedure CheckImplDecl(d: nodePtr; owner: symPtr);
+var tr, ty, selfSym: symPtr; t: typePtr; r, h, fresh: nodePtr;
+    mark: entryPtr; im: implPtr; ok: boolean; selfAt, selfLen: integer;
+    savePos, saveImport: integer;
+begin
+  ok := true;
+  { An implementation is a fact about the whole translation -- the table it
+    joins is one list, consulted by every call in the program -- so it may be
+    written only where the whole translation can see it. A nested one is
+    refused.
+
+    This was a **wrong answer with a zero exit status**, which is the worst
+    thing this compiler can do. The routines of an impl written inside a
+    procedure are at that procedure's level, so their activation wants that
+    procedure's frame; the table handed them to every later call regardless,
+    and the call passed whatever frame it had. A sibling procedure's call
+    therefore read the impl's locals through its own frame -- a program whose
+    answer should be 106 printed 14 and exited 0, and no diagnostic came from
+    the compiler, the driver or the linker. Called from the program block
+    instead, the same defect wrote IR naming `%frame` where no such value is
+    defined, so clang refused a module this compiler had reported no error
+    about.
+
+    Refusing is the whole fix and it costs nothing anyone wanted: an
+    implementation nested in a procedure could be selected from outside it,
+    where its own scope does not exist. }
+  if inModuleHeading then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('an implementation has routine bodies and belongs to the ',
+            'module''s block, not to its interface');
+    ok := false
+  end
+  else if owner^.level > 0 then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('an implementation belongs to the whole program or module and ',
+            'cannot be written inside a procedure or a function');
+    ok := false
+  end;
+  tr := LookupQuiet(0, 0, d^.imAt, d^.imLen);
+  if not ok then
+    { already reported }
+  else if tr = nil then begin
+    ErrorAt(d^.line, d^.col);
+    write('unknown trait ''');
+    WritePool(d^.imAt, d^.imLen);
+    writeln('''');
+    ok := false
+  end
+  else if tr^.kind <> skTrait then begin
+    ErrorAt(d^.line, d^.col);
+    write('''');
+    WritePool(d^.imAt, d^.imLen);
+    writeln(''' is not a trait, so nothing can be implemented for it');
+    ok := false
+  end;
+
+  t := nil;
+  ty := LookupQuiet(0, 0, d^.imForAt, d^.imForLen);
+  if ty = nil then begin
+    ErrorAt(d^.imForLine, d^.imForCol);
+    write('unknown type ''');
+    WritePool(d^.imForAt, d^.imForLen);
+    writeln('''');
+    ok := false
+  end
+  else if ty^.kind = skType then begin
+    t := ty^.stype;
+    { ADR-0018 and FindImpl above: the lookup asks Base(), so a subrange would
+      never be chosen -- its host's implementation is found first. Refused here
+      rather than accepted and never used, because an implementation that can
+      never be selected is a program saying something the language will not
+      do. }
+    if t^.kind = tySubrange then begin
+      ErrorAt(d^.imForLine, d^.imForCol);
+      writeln('a subrange takes its host''s implementation, so it cannot ',
+              'carry one of its own');
+      ok := false
+    end
+  end
+  else begin
+    ErrorAt(d^.imForLine, d^.imForCol);
+    write('''');
+    WritePool(d^.imForAt, d^.imForLen);
+    writeln(''' is not a type, so a trait cannot be implemented for it');
+    ok := false
+  end;
+
+  if ok then
+    if FindImpl(tr, t) <> nil then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.imForAt, d^.imForLen);
+      write(''' already implements ''');
+      WritePool(d^.imAt, d^.imLen);
+      writeln('''');
+      ok := false
+    end;
+
+  if ok then begin
+    d^.imTrait := tr;
+    d^.imForSym := ty;
+    d^.imForType := t;
+    new(im);
+    im^.trait := tr;
+    im^.forType := Base(t);
+    im^.forSchema := nil;
+    im^.routines := nil;
+    im^.routineTail := nil;
+    im^.next := implHead;
+    implHead := im;
+
+    { A scope of the impl's own. `Self` is declared in it as an ordinary type
+      name, which is the whole of what `Self` is -- ADR-0315's reading, and it
+      is why nothing outside a trait needs a rule about the spelling: a program
+      that declares its own `Self` shadows this one by 6.1.3, and one that
+      writes `Self` where no trait put it gets `unknown type 'self'` from the
+      ordinary lookup.
+
+      The routines are declared here rather than in the block, so that two
+      implementations of one trait do not declare one spelling in it. }
+    mark := scopeTop;
+    scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
+    selfSym := NewSymbol;
+    selfSym^.kind := skType;
+    selfSym^.stype := t;
+    InternWord('self     ', selfAt, selfLen);
+    BindName(selfAt, selfLen, selfSym, d^.imForLine, d^.imForCol);
+
+    r := d^.imRoutines;
+    while r <> nil do begin
+      { 6.7's parameterless definition: a routine that repeats only its name
+        adopts the heading already given for it, which is the shape this
+        compiler writes 248 times after a `forward`. A trait heading plays the
+        part `forward` plays, and that is why the construct needed no syntax
+        invented for its body.
+
+        The *syntax* is shared rather than copied, which is the whole reason a
+        trait keeps its headings unresolved: the same denoter is resolved once
+        per implementation with `Self` bound to a different type each time,
+        exactly as 6.4.7's body is resolved once per discriminant tuple. }
+      h := FindTraitHead(tr, r^.pdAt, r^.pdLen);
+      if h = nil then begin
+        ErrorAt(r^.pdNameLine, r^.pdNameCol);
+        write('''');
+        WritePool(d^.imAt, d^.imLen);
+        write(''' declares no routine ''');
+        WritePool(r^.pdAt, r^.pdLen);
+        writeln('''')
+      end
+      { A routine in an implementation repeats only its name, and writing the
+        heading again is refused.
+
+        This is ISO 7185 6.6.1's rule for the analogous construct, not an
+        invention: the completion of a `forward` declaration "repeats the name
+        only", and repeating the parameters there has always been an error
+        here in the same words. A trait heading plays the part `forward`
+        plays -- it gave the signature -- so a second copy is redundancy that
+        can disagree with the first, and refusing it is what makes congruity a
+        question that cannot arise. }
+      else if (r^.pdParams <> nil) or (r^.pdResult <> nil) then begin
+        ErrorAt(r^.pdNameLine, r^.pdNameCol);
+        write('the heading of ''');
+        WritePool(r^.pdAt, r^.pdLen);
+        write(''' was already given by trait ''');
+        WritePool(d^.imAt, d^.imLen);
+        writeln(''': write the name alone')
+      end
+      else begin
+        { Re-parsed rather than shared. `pos` is a cursor into a token array
+          that is never cleared, so this reads the same text the trait read,
+          into a tree of its own -- and `Self` is bound to *this* impl's type
+          while it is resolved. }
+        savePos := pos;
+        saveImport := curImportIdx;
+        pos := h^.pdBodyPos;
+        curImportIdx := h^.pdFileIdx;
+        fresh := ParseProcHeadingOnly(Check(tkFunction));
+        pos := savePos;
+        curImportIdx := saveImport;
+        r^.pdParams := fresh^.pdParams;
+        r^.pdResult := fresh^.pdResult;
+        r^.pdIsFunction := fresh^.pdIsFunction
+      end;
+      DeclareProcHeading(r, owner);
+      if r^.pdBody <> nil then CheckProcBody(r);
+      if r^.pdSym <> nil then
+        AppendSym(im^.routines, im^.routineTail, r^.pdSym);
+      r := r^.next
+    end;
+
+    { Every heading the trait gives must be supplied. Reported once per
+      missing routine and at the implementation's own heading, which is the
+      only position an *absence* has -- there is no source to point at for
+      something nobody wrote. }
+    h := tr^.traitHeads;
+    while h <> nil do begin
+      r := d^.imRoutines;
+      ok := false;
+      while r <> nil do begin
+        if PoolSame(r^.pdAt, r^.pdLen, h^.pdAt, h^.pdLen) then ok := true;
+        r := r^.next
+      end;
+      if not ok then begin
+        ErrorAt(d^.line, d^.col);
+        write('this implementation of ''');
+        WritePool(d^.imAt, d^.imLen);
+        write(''' for ''');
+        WritePool(d^.imForAt, d^.imForLen);
+        write(''' does not define ''');
+        WritePool(h^.pdAt, h^.pdLen);
+        writeln('''')
+      end;
+      h := h^.next
+    end;
+
+    scopeDepth := scopeDepth - 1;
+    scopeTop := mark
+  end
+end;
+
+{ Replace each trait- and implementation-declaration in a block's routine
+  chain by what the rest of the compiler needs to see there (AP 6.4, AP 6.7,
+  ADR-0338).
+
+  A trait declares no code and drops out. An implementation is replaced by its
+  routines, which are ordinary routine-declarations with bodies and symbols
+  and want emitting like any other.
+
+  Done **once, here**, rather than by teaching each later walk to look through
+  the two node kinds. There are seven such walks -- the forward-completion
+  check, the frame emitter, DeclareProcs, EmitProcs, the frame dump and two
+  more -- and a guard in each is seven places to remember an eighth. Every one
+  of them reads `pdSym`, which for either node is a wrong-arm read, and
+  ADR-0118's guard turns that into a runtime error rather than a silent one:
+  the cost of forgetting is loud, but it is still a cost paid seven times. }
+procedure SpliceImpls(b: nodePtr);
+var d, nxt, r, rn, head, tail: nodePtr;
+begin
+  head := nil;
+  tail := nil;
+  d := b^.blProcs;
+  while d <> nil do begin
+    nxt := d^.next;
+    if d^.kind = nkTrait then
+      { no code }
+    else if d^.kind = nkImpl then begin
+      r := d^.imRoutines;
+      while r <> nil do begin
+        rn := r^.next;
+        r^.next := nil;
+        Append(head, tail, r);
+        r := rn
+      end
+    end
+    else begin
+      d^.next := nil;
+      Append(head, tail, d)
+    end;
+    d := nxt
+  end;
+  b^.blProcs := head
+end;
+
 procedure CheckDeclarations(b: nodePtr; owner: symPtr; procs: nodePtr);
 var c, t, g, p: nodePtr; which, line, col: integer; inTypes, done: boolean;
     savedInTypePart, bound, bound2: boolean; savedDeclBlock: nodePtr;
@@ -22867,11 +23751,22 @@ begin
         in this list so DeclareProcs and EmitProcs reach it; declaring it a
         second time here would give it the caller's region and a second
         symbol. }
-      bound2 := false;
-      if p^.pdSym <> nil then bound2 := p^.pdSym^.genOf <> nil;
-      if not bound2 then begin
-        DeclareProcHeading(p, owner);
-        if p^.pdBody <> nil then CheckProcBody(p)
+      { AP 6.4 and AP 6.7 (ADR-0338). A trait-declaration and an
+        implementation-declaration share this chain with the routines, because
+        6.2.2.9 makes written order the only correct one -- so they are told
+        apart here by kind. Reading pdSym of either would be a wrong-arm read,
+        which is what ADR-0118's guard reports. }
+      if p^.kind = nkTrait then
+        CheckTraitDecl(p, owner)
+      else if p^.kind = nkImpl then
+        CheckImplDecl(p, owner)
+      else begin
+        bound2 := false;
+        if p^.pdSym <> nil then bound2 := p^.pdSym^.genOf <> nil;
+        if not bound2 then begin
+          DeclareProcHeading(p, owner);
+          if p^.pdBody <> nil then CheckProcBody(p)
+        end
       end;
       p := p^.next
     end
@@ -22879,6 +23774,17 @@ begin
       done := true   { a variable group with no names; the parser makes none }
   end;
   inTypePart := false;
+  { After the chain has been walked in written order, not before: 6.2.2.9
+    makes that order the only correct one, and splicing first would move every
+    impl's routines to the end of the block.
+
+    And only when this call was given the chain to walk. A module-heading
+    passes nil -- it declares its routines itself, afterwards -- so splicing
+    here would empty a chain nobody had read yet, which is exactly what it
+    did: a trait declared in an interface vanished before the loop that would
+    have declared it, and the module then could not export the name it had
+    just written. }
+  if procs <> nil then SpliceImpls(b);
   curDeclBlock := savedDeclBlock;
   { 6.4.4's forward reference is completed where its own type-definition-part
     ends, which is what the run above does. What can still be pending here is
@@ -23623,7 +24529,7 @@ begin
 end;
 
 procedure CheckModuleHeading(m: nodePtr; info: modRecPtr);
-var saveCurrent, saveModule, s: symPtr; p, d: nodePtr; mark: entryPtr;
+var saveCurrent, saveModule, s: symPtr; p: nodePtr; mark: entryPtr;
 begin
   saveCurrent := currentProc;
   saveModule := curModule;
@@ -23647,12 +24553,19 @@ begin
   end;
 
   CheckImports(m^.mdHeading^.blImports, info^.sym);
-  CheckDeclarations(m^.mdHeading, info^.sym, nil);
-  d := m^.mdHeading^.blProcs;
-  while d <> nil do begin
-    DeclareProcHeading(d, info^.sym);
-    d := d^.next
-  end;
+  { AP 6.4 (ADR-0338): the routine chain is handed to CheckDeclarations rather
+    than walked afterwards, so that an interface interleaves its declarations
+    by written position exactly as a block does (6.2.2.9, ADR-0100).
+
+    It was walked afterwards, and that made a trait invisible to anything
+    declared above it in its own interface: a schema whose discriminant
+    carries a bound -- `Box(KeyT: Key; cap: integer)` -- stands in the type
+    part, and the type part was checked before any routine, so a module could
+    declare a trait and not use it. A heading has no bodies to check, so
+    handing over the chain loses nothing. }
+  inModuleHeading := true;
+  CheckDeclarations(m^.mdHeading, info^.sym, m^.mdHeading^.blProcs);
+  inModuleHeading := false;
 
   { 6.11.1: a module-parameter that is neither `input` nor `output` "either
     shall be local to the module or shall be an imported variable-identifier
@@ -24279,7 +25192,10 @@ begin
         node is built (ADR-0053) -- so nothing in a tree points at either. The
         arms exist because a Pascal case with no matching label traps. }
       skRequired: write('required');
-      skInterface: write('interface')
+      skInterface: write('interface');
+      { A trait is declared in the procedure chain and names no variable, so
+        no designator reaches it either (ADR-0339). }
+      skTrait: write('trait')
     end
 end;
 
@@ -24482,10 +25398,11 @@ begin
     skFunc:     write('func');
     skSchema:   write('schema');
     skRequired: write('required');
-    { Neither can be a frame variable, having no storage; the arms are here
-      because a Pascal case with no matching label traps rather than falls
-      through. }
-    skInterface: write('interface')
+    { None of these can be a frame variable, having no storage; the arms are
+      here because a Pascal case with no matching label traps rather than
+      falls through. }
+    skInterface: write('interface');
+    skTrait:    write('trait')
   end
 end;
 
@@ -25726,7 +26643,42 @@ begin
 end;
 
 procedure DumpProc(d: nodePtr);
+var h: nodePtr;
 begin
+  { AP 6.4 and AP 6.7 (ADR-0338). A trait-declaration and an
+    implementation-declaration join the procedure chain, because 6.2.2.9 makes
+    written order the only correct one and that chain is walked in it -- so
+    this walker is where they are met, and naming them is what stops
+    ADR-0118's guard reporting a wrong-arm read. }
+  if d^.kind = nkTrait then begin
+    Pad;
+    write('trait ');
+    WritePool(d^.trAt, d^.trLen);
+    At(d^.line, d^.col);
+    level := level + 1;
+    h := d^.trHeads;
+    while h <> nil do begin
+      DumpProc(h);
+      h := h^.next
+    end;
+    level := level - 1
+  end
+  else if d^.kind = nkImpl then begin
+    Pad;
+    write('impl ');
+    WritePool(d^.imAt, d^.imLen);
+    write(' for ');
+    WritePool(d^.imForAt, d^.imForLen);
+    At(d^.line, d^.col);
+    level := level + 1;
+    h := d^.imRoutines;
+    while h <> nil do begin
+      DumpProc(h);
+      h := h^.next
+    end;
+    level := level - 1
+  end
+  else begin
   Pad;
   if d^.pdIsFunction then
     write('func ')
@@ -25778,6 +26730,7 @@ begin
   else
     DumpBlock(d^.pdBody);
   level := level - 1
+  end
 end;
 
 procedure DumpBlock;
@@ -27555,6 +28508,8 @@ to begin do
     scopeTop := nil;
     scopeDepth := 0;
     applySeq := 0;
+    implHead := nil;
+    inModuleHeading := false;
     scopeMark[0] := 0;
     pendingHead := nil;
     pendingTail := nil;

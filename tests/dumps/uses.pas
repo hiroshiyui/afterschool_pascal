@@ -1,7 +1,7 @@
 { --dump-uses: every applied occurrence in this source and the defining-point
   it resolved to (ADR-0246). It is the compiler's answer to go-to-definition
   and to hover, and this case is the one that reaches every word the `kind`
-  field can hold -- twelve of them, one per symKind, which is what stops a
+  field can hold -- thirteen of them, one per symKind, which is what stops a
   constant added to that enumeration from being reported as nothing.
 
   Read the golden as three columns. The first three numbers locate the *use*
@@ -34,6 +34,17 @@ type
   end;
   vec(cap: integer) = array [1..cap] of integer;
   chooser = ^colour;
+
+{ The thirteenth kind (ADR-0338): a trait, applied by the implementation
+  that names it and by nothing else here -- a bound is the other place. }
+trait ranked;
+  function rank(p: Self; q: Self): integer;
+end;
+
+impl ranked for point;
+  function rank;
+  begin rank := p.x - q.x end;
+end;
 
 var
   total: integer;
@@ -109,5 +120,9 @@ begin
   end;
   total := combine(limit, total, twice);
   show(here, shade);
+  { A trait-keyed call (ADR-0340): the use of `rank` resolves to the routine
+    of the implementation the first actual's type selected, and the use of
+    the trait itself is at the impl that names it. }
+  total := total + rank(here, here);
   writeln(total, three[1]:4, box.span:3)
 end.
