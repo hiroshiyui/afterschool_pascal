@@ -508,6 +508,28 @@ is the one access it must refuse. §6.4.9's object is a variable-*name* and no
 more, so the wider form is the dialect's and not a conformance gap — a
 distinction this project got wrong for a day (ADR-0214, ADR-0215).
 
+**Trait.** A named set of routine headings a type may implement, and it is a
+**bound** rather than a type: its identifier stands where a type-parameter
+category stands and in no type-denoter (AP 6.7.9). It names routines a program
+gives, which is what separates it from a category, which names operators the
+language already has. Not a class and not an interface: there is no
+inheritance, no dispatch on a receiver, and no value of a trait type, because
+there is no such type (ADR-0338, ADR-0340).
+
+**Implementation-declaration (`impl … for`).** The statement that one type
+implements one trait, and where the routine bodies go. Each writes its **name
+alone** — the trait gave the heading — and every routine the trait declares is
+defined exactly once. It belongs to one translation: a program-block or a
+module-block, never inside a procedure and never in a module-heading, because
+its routines read frames only that translation has (AP 6.7.10, ADR-0341).
+
+**`Self`.** Inside a trait heading, the type of the implementation the heading
+is being read for. It stands as a whole parameter type or a result type and
+never inside one, so a trait routine takes and returns whole values. A
+parameter cannot be *named* `self`: §6.1.2 folds case, so it and `Self` are one
+identifier — which every record in this tree wrote before anyone compiled it
+(AP 6.7.9.1, ADR-0339, ADR-0340).
+
 **Task.** A second thread of control, and the one sentence left of the
 aliasing fork ADR-0201 withdrew. `spawn P(a, b)` starts one; it takes only
 **transferable** values and channels (AP 6.7.8.1), may name only its own

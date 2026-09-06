@@ -4949,3 +4949,82 @@ clamped *key* are different decisions, which is where `Claimed`'s policy stops.
 `tests/dialect/lib_container_key.pas` keys three maps at three capacities, none
 of them 63, and `0310-the-ready-made-pair-is-the-bound` puts `StrHash`'s
 `MapKey` parameter back.
+
+### A trait names routines a program gives (ADR-0338 to ADR-0341, AP 6.7.9)
+
+**The bound is written where the type is written down**, which is the whole of
+what distinguishes this from the shape ADR-0315 proposed for it and could not
+reach. A category (AP 6.7.3.10.5) names operators the specification already
+gives; a trait names routines a *program* gives, so it is a separate
+alternative of the type-parameter-bound production rather than a fifth
+category — collapsing the two would be the second type system NOTE 11 refuses.
+
+**The position that matters is the schema's discriminant**, not the routine's
+type parameter. `Map(K: Sortable; V: type; cap: integer)` is checked at the
+type-denoter the client wrote — `^Map(Word, integer)` — once, and every routine
+over the map is untouched. The routine form exists too and is nearly free, but
+alone it could not have served the case the feature was measured against: a
+routine over a growable container takes a **pointer** to the schema, and
+`Determine` has no pointer arm and cannot have one, §6.7.3.1's parameter-form
+being a type-name, a schema-name or a type-inquiry. Determining from the key
+instead binds a string literal's own length-type, which is the failure
+`pascontainer.pas` already recorded.
+
+**A trait is a symbol kind and not a type kind**, with `skSchema` as the exact
+precedent: a name that is not a type until it is applied, its payload on the
+symbol record. Measured before it was built — `skTrait` moves 11 rows of
+`partial_cases.txt`, a `tyTrait` moves 83 across that catalogue and
+`predicate_kinds.txt`, forces a `--like` re-read of every type predicate, and
+puts a zero-size type object in front of `EmitAssign` and `IsMemory`, which is
+the pair of defects `doc/sop.md` §4a records from the last two type kinds. The
+bound rides on `grBound: symPtr` on `nkGroup` rather than a fifth `typeCat`,
+because `aptypes.pas` imports nothing and so cannot look up an impl table.
+
+**A trait's routines are declared in the implementation's own scope**, reached
+by a lookup keyed on the trait and consulted only after the ordinary one, which
+is §6.2.2.11's placement and where `LookupBuiltin` already sits. The reason is
+two implementations of *one* trait: `impl Ord for Point` and `impl Ord for
+Line` each define `Compare`, so declaring either in the block they stand in
+makes the second a redeclaration. This is not increment A's per-type scope and
+involves no receiver syntax — the key is the trait, and the selection is by the
+first actual's type, read from the *designator* one step before
+`CheckArguments` so that a bad argument is not reported twice. A literal, an
+expression or a function result therefore selects nothing and falls to
+`unknown function`, which is the right message for a call that can select
+nothing. **The cost of "only after" is that an ordinary declaration hides the
+trait's routine of that spelling entirely**, and what the program is then told
+is that its argument has the wrong type (AP 6.7.10.2 NOTE 10).
+
+**A trait heading is re-parsed per implementation**, by token position, exactly
+as AP 6.7.3.5 re-reads a generic's body. Sharing the parsed nodes does not
+work: resolution annotates them, so the second implementation of a trait read
+the first's types and reported a field of the wrong record. Re-reading is
+parsing, so it cannot disagree with parsing.
+
+**`Self` stands only as a whole parameter-form or result-type**, and the
+refusal is at the *trait*. That placement is the decision: `array of Self`
+parses, and left to the implementation the message arrives once per
+implementation, in the implementer's own source, describing a procedural
+parameter's parameter list to a reader who wrote neither. The restriction is
+what lets §6.6.3.6's congruity be reused unchanged — it compares type
+*identity*, and §6.4.1 gives each denoter that is not a type-name its own type,
+so `array of Point` in the trait and in the impl would be two objects.
+`^Self` needs no rule at all: §6.7.3.1 gives a pointer denoter no position in a
+parameter list, so it is unformable rather than checked.
+
+**A receiver cannot be named `self`** — §6.1.2 folds case, so the parameter
+name and the type name `Self` are one identifier. Every record in this tree
+wrote `self: Self` before anyone compiled it.
+
+**A trait crosses a program-component and an implementation does not.** A
+module-heading may declare a trait, which is what makes one exportable and so
+bindable by a client; an implementation has routine bodies and a heading holds
+none. The library case works anyway, and probing is what showed it: a module's
+routine that is generic over its pointer has its body re-read in the
+translation that *activates* it, which is the client's, where the client's
+implementations are — probed at 93. What is left undone is a module shipping
+its own implementation, which is a convenience with no caller asking.
+
+`tests/dialect/traits.pas` is the surface, `traits_component.pas` the
+cross-component shape, and five error cases carry the refusals;
+`selfhost/badsema/traits.pas` and five `badparse/` files carry the messages.

@@ -15,6 +15,22 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A type may implement a trait, and a trait may bound a type** (ADR-0338 to
+  ADR-0341, AP 6.4.7.2, AP 6.7.9, AP 6.7.10). `trait Sortable; function
+  Rank(u: Self; v: Self): integer; end;` names routines a program supplies, and
+  `impl Sortable for Point;` supplies them — each routine written as a name
+  alone, the trait having given the heading. A call selects by the type of its
+  first argument, after the ordinary lookup, so two implementations of one
+  trait live in one block and a program declaring its own routine of the name
+  keeps it. A subrange takes its host's implementation. The bound is written
+  where the client writes the type — on a schema's type-valued discriminant,
+  `Map(K: Sortable; V: type; cap: integer)`, checked once at the type-denoter —
+  and also on a routine's type parameter, `T: Sortable type`, where a category
+  would stand. One bound, not two. Neither `trait` nor `impl` is reserved. A
+  trait may be declared in a module's interface and exported; an
+  implementation belongs to one translation, so it may not stand in a
+  procedure or in a module heading.
+
 - **A task may be handed a handle** (ADR-0303, AP 6.7.8.1): a formal parameter
   of a task-declaration may be of a handle-type, and the actual is written
   `take` of a variable of that type — the one position outside an assignment

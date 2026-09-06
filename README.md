@@ -1489,6 +1489,62 @@ A category filters the call and does **not** check the generic's body against
 it: the body is still read once per type it is used with, so a body that
 misuses a type its category admits is caught exactly where it was.
 
+**And what it needs may be routines the program writes** (ADR-0338, AP 6.7.9).
+A category names operators the language already has. A **trait** names routines
+a program supplies, and a type implements one by saying so:
+
+```pascal
+trait Sortable;
+  function Rank(u: Self; v: Self): integer;
+end;
+
+impl Sortable for Point;
+  function Rank;
+  begin Rank := u.x - v.x end;
+end;
+
+impl Sortable for integer;
+  function Rank;
+  begin Rank := u - v end;
+end;
+```
+
+`Self` is the implementing type, and it stands as a whole parameter type or a
+result type. The implementation writes each routine's **name alone** — the
+trait already gave the heading, and a second copy is one that can disagree with
+the first. `Rank(a, b)` then selects by the type of its first argument, so both
+implementations live in one block; the ordinary lookup is tried first, so a
+program that declares its own `Rank` keeps it. A subrange takes its host's
+implementation, which is why a trait meant to serve one takes its receiver by
+value.
+
+Neither `trait` nor `impl` is reserved, by the rule every dialect spelling
+follows: a declaration part admits only word-symbols, so an identifier there
+was already a syntax error, and the same program may declare a type called
+`trait` and a field called `impl`.
+
+**A trait is a bound, and it goes where the type is written down** (AP 6.4.7.2).
+That is the point of the feature, and the position is the part worth reading
+twice:
+
+```pascal
+type Map(K: Sortable; V: type; cap: integer) = record ... end;
+     Index = ^Map(Word, integer);
+```
+
+The bound is checked at the type-denoter the client wrote, once, and every
+routine over the map is unchanged. Writing it on the routine instead cannot
+reach that case: a routine over a growable container takes a **pointer** to
+the schema, and a pointer determines nothing. The routine form exists as well,
+spelled `T: Sortable type` where a category would go, and is what serves a
+sort. One bound, not two — `K: Hash + Eq` is not admitted.
+
+A trait may be declared in a module's interface and exported, so a library can
+be bound by a trait its clients implement. An implementation belongs to one
+translation: a program-block or a module-block, never inside a procedure and
+never in a module heading. A library that wants to ship an implementation for
+its clients cannot yet, and nothing has asked to.
+
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
 

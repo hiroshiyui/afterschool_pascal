@@ -169,8 +169,8 @@ question with an answer nobody has needed yet.
   holding a task-variable whose activation is still running, and no clause
   here says what that is.
 
-**And one proposal awaiting a decision** (ADR-0315): **methods and traits,
-without inheritance.** It is the first record in this tree that is *Proposed*
+**And one proposal, of which the middle increment is now built** (ADR-0315):
+**methods and traits, without inheritance.** It is the first record in this tree that is *Proposed*
 rather than *Accepted*. It is named here because it is what this feature's
 residue turned into, and set out in full three sections down, in [The object
 model (proposed)](#the-object-model-proposed). The evidence for it is this
@@ -190,10 +190,20 @@ grounds that are each about a decision already taken here, stages it in three,
 and names what each stage costs — `dyn` being the only one that adds a
 representation. **Its four open choices are settled**: all three stages, the
 `impl` block, a receiver written out with its type, and one library module
-rewritten as proof rather than a sweep. What is *not* settled is whether to
-build it, and one technical question is named in the record as gating the
-second stage — whether a trait bound narrows what ADR-0304's inference may
-choose, or is checked after inference has chosen. Nothing is implemented.
+rewritten as proof rather than a sweep.
+
+**Increment B is built** — traits, implementations and the bound (ADR-0338 to
+ADR-0341, AP 6.7.9). It is not the design ADR-0315 proposed for it, and the
+correction is the interesting part: the bound belongs on the **schema's
+discriminant**, where the client writes the type, because a routine over a
+growable container takes a *pointer* to the schema and a pointer determines
+nothing. ADR-0315's own payoff was unreachable from ADR-0315's own spelling.
+Three further records exist because each corrected the one before it —
+probing beat reading, building beat probing, and probing again beat the
+obvious reading of how a trait reaches a client. **Increments A and C are not
+built** and are judged separately; the question the record named as gating the
+second stage does not arise, a bound being checked where the type is written
+and not where inference chose one.
 
 **And one shape with no client at all**, which is what is left of the FFI rows:
 a struct **member** that is itself a pointer. A record crosses as a `var`
@@ -241,7 +251,7 @@ looked.
 | `Result<T, E>` and `?` | `T ! E` and `try` (AP 6.4.13, AP 6.8.9) | ADR-0176, ADR-0178 |
 | `&[T]` | `array of T` (AP 6.7.3.9) | ADR-0125 |
 | `Send`, channels | `task`, `channel [n] of T` (AP 6.4.16, AP 6.4.17) | ADR-0268 |
-| traits | [proposed, nothing built](#the-object-model-proposed) | ADR-0315 |
+| traits | `trait` / `impl … for`, as a **bound** (AP 6.7.9, AP 6.7.10) | ADR-0338 to ADR-0341 |
 | lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the four rows below |
 
 #### 1. The borrow rule was enforced in one direction — closed 2026-09-04, reopened and closed again 2026-09-05
@@ -580,7 +590,10 @@ being affine already.
 
 ### The object model (proposed)
 
-**Nothing here is built, and this section exists so that stays legible.**
+**Increment B is built and increments A and C are not**, so what follows is
+the record's own framing kept for the two that are still proposals. Read it
+with ADR-0338 to ADR-0341 beside it: they are what B turned into, and each
+corrects the one before.
 [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is the first
 record in this tree with the status `Proposed`, and it was written that way on
 purpose: the design was asked for on paper before any of it is implemented, so
@@ -1537,7 +1550,7 @@ been settled** — the last of them by ADR-0268.
 | ARC | Swift | aliasing | **Withdrawn as posed** (ADR-0201): ADR-0117's containment fixes what `^T` means and ARC changes it, so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it was already here**: a `var` parameter bound to an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. *Unformable* rather than checked (ADR-0201) |
 | Actors / share-nothing tasks | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Done** (ADR-0268), and it is the row this table was really about — the one sentence left of the aliasing fork, *two threads of control*. `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: a task takes only transferable values and channels, may name only its own variables, and every task a block spawned is joined before that block releases anything — which is what makes *a borrow cannot outlive the call* true again. The lineage read was Pascal's own: Concurrent Pascal had `process` and `monitor` in 1975. **Built without meeting ADR-0116's bar**, which the record says in as many words — nothing in this tree wants it, and the compiler is one thread and must stay so, the seed compiling it. What it left open is [above](#what-each-landed-feature-left-open) |
-| Traits / protocols | Rust, Swift | abstraction | **Half done, and something has now asked for the other half.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason. This row read *nothing has asked for* abstraction over **behaviour** until 2026-09-03, and [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is what asked: [The object model (proposed)](#the-object-model-proposed) |
+| Traits / protocols | Rust, Swift | abstraction | **Half done, and something has now asked for the other half.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason. This row read *nothing has asked for* abstraction over **behaviour** until 2026-09-03, and [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is what asked. **Both halves are now built**: a trait bounds a schema's type-valued discriminant and a routine's type parameter, so `lib/passort.pas`'s successor can be written over an element (ADR-0338 to ADR-0341, AP 6.7.9) |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
 
 **The lesson this table is kept for**, drawn four times over and once against
