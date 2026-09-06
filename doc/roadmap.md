@@ -55,7 +55,7 @@ each of them cost.
 | --- | --- |
 | [Where development stands](#where-development-stands--2026-09-05) | the one-screen answer, dated: what is released, what is open and awaiting a decision, what is awaiting a program, and what is unavailable |
 | [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model nobody has committed to building, and the limitations a program meets |
-| [The standard library](#the-standard-library) | the thirty-one modules — and **nothing open**, which is a finding and not an omission |
+| [The standard library](#the-standard-library) | the thirty-two modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
 | [Deferred](#deferred-insufficient-resources) | the two rows whose blocker is a resource this project does not have, at the lowest priority there is — with the admission test they had to pass, and the candidate that failed it |
 | [How this page is written](#how-this-page-is-written) | [the goal](#the-goal-adr-0109) and the test it sets, the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
@@ -775,6 +775,23 @@ position, so a trait was invisible to a schema declared above it in its own
 interface. And a call that selected two implementations took the one declared
 last, silently. All three are refused or fixed.
 
+**And the first client found two more**
+([ADR-0344](adr/0344-the-first-client-of-a-trait.md), 2026-09-06), which is
+the fifth turn of the same wheel and the first one where the thing being used
+was a library rather than a test. `lib/dialect/passortx.pas` sorts an
+`array of T` by the element's own implementation, the trait declared in the
+module and every implementation written by the client -- ADR-0341's shape,
+exercised by something a program would import instead of by a probe. Writing
+it took under an hour. The trait it wanted to declare was named `Ordered`,
+because that is what the concept is called, and `ordered` is one of
+AP 6.7.3.10.5's four category spellings, identified in a bound position by
+spelling alone; the trait declared, implemented for two types, and reported at
+the *call* that a record was not admitted by a category admitting "int64,
+real, a string-type and utf8". It is refused at the declaration now. The
+second finding is left alone: a local named `t` in a generic whose type
+parameter is `T` **is** that type parameter, 6.1.2 folding case, which is
+ADR-0340's `self`/`Self` collision one scope further in.
+
 **Four factors were settled on 2026-09-03**, each against a real alternative:
 all three increments are in scope including `dyn`; the declaration is a block
 rather than a marker on each routine; the receiver is **written out with its
@@ -979,7 +996,7 @@ the eight rows said why they were blocked and both reasons turned out to be
 wrong, and the two most carefully argued entries each hid something a probe
 found in an afternoon. A row here should be a report, not an estimate.
 
-**Thirty-one modules exist** — eight conforming and twenty-three dialect,
+**Thirty-two modules exist** — eight conforming and twenty-four dialect,
 listed by name in `README.md`'s module table.
 
 ### Writing a daily program
@@ -1550,7 +1567,7 @@ been settled** — the last of them by ADR-0268.
 | ARC | Swift | aliasing | **Withdrawn as posed** (ADR-0201): ADR-0117's containment fixes what `^T` means and ARC changes it, so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it was already here**: a `var` parameter bound to an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. *Unformable* rather than checked (ADR-0201) |
 | Actors / share-nothing tasks | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Done** (ADR-0268), and it is the row this table was really about — the one sentence left of the aliasing fork, *two threads of control*. `task`, `spawn`, `channel [n] of T`, `send` and `receive`, reserving no word-symbol: a task takes only transferable values and channels, may name only its own variables, and every task a block spawned is joined before that block releases anything — which is what makes *a borrow cannot outlive the call* true again. The lineage read was Pascal's own: Concurrent Pascal had `process` and `monitor` in 1975. **Built without meeting ADR-0116's bar**, which the record says in as many words — nothing in this tree wants it, and the compiler is one thread and must stay so, the seed compiling it. What it left open is [above](#what-each-landed-feature-left-open) |
-| Traits / protocols | Rust, Swift | abstraction | **Half done, and something has now asked for the other half.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason. This row read *nothing has asked for* abstraction over **behaviour** until 2026-09-03, and [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is what asked. **Both halves are now built**: a trait bounds a schema's type-valued discriminant and a routine's type parameter, so `lib/passort.pas`'s successor can be written over an element (ADR-0338 to ADR-0341, AP 6.7.9) |
+| Traits / protocols | Rust, Swift | abstraction | **Half done, and something has now asked for the other half.** Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so a container is written once; ADR-0266 lets a type parameter say what it needs. What is absent is a generic *routine* over one — `lib/passort.pas` sorts by `less(i, j)` and `swap(i, j)` and never sees an element for exactly that reason. This row read *nothing has asked for* abstraction over **behaviour** until 2026-09-03, and [ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) is what asked. **Both halves are now built, and the successor is written**: a trait bounds a schema's type-valued discriminant and a routine's type parameter, and `lib/dialect/passortx.pas` sorts an `array of T` by the element type's own `Sortable` (ADR-0338 to ADR-0341, ADR-0344, AP 6.7.9). `PasSort` stays, being conforming Extended Pascal, and its `SortIndexed` still answers for parallel arrays |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
 
 **The lesson this table is kept for**, drawn four times over and once against

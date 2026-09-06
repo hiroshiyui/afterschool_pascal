@@ -15,6 +15,17 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`PasSortX`, a sort over the element type itself** (ADR-0344): the trait
+  `Sortable` with `Sort`, `SortWith`, `IsSorted` and `LowerBoundOf` over an
+  `array of T`. The trait is declared in the module and every implementation
+  is written by the client — `impl Sortable for Point;` once, and `Sort(ps)`
+  thereafter — which is the only shape separate translation admits and is
+  what makes a trait usable from a library at all. `SortWith` takes the order
+  as a procedural parameter instead, for a caller whose order is not the
+  type's or whose element type implements nothing. `PasSort` is unchanged and
+  stays: it is conforming Extended Pascal, and its `SortIndexed` still answers
+  for parallel arrays.
+
 - **A type may implement a trait, and a trait may bound a type** (ADR-0338 to
   ADR-0341, AP 6.4.7.2, AP 6.7.9, AP 6.7.10). `trait Sortable; function
   Rank(u: Self; v: Self): integer; end;` names routines a program supplies, and
@@ -103,6 +114,14 @@ appears below in the release where it still existed.
   and — for a text — normalised where it crosses.
 
 ### Changed
+
+- **A trait may not be named `numeric`, `ordinal`, `ordered` or `equatable`**
+  (ADR-0344, AP 6.7.9). Those four spellings name a type-parameter category
+  wherever a bound is written and nothing is looked up there, and a bound is
+  the only position a trait may stand in — so a trait of one of those names
+  could be declared and implemented and never applied. It is refused at the
+  declaration, where before the program was told at the call that its type was
+  not admitted by a category it had never written.
 
 - **`PasContainer` states how to choose a map's key type** (ADR-0310). Nothing
   in the library changed and nothing new is exported: the map has been generic
