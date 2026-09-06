@@ -1,11 +1,19 @@
 { PasSort -- sorting and searching, without generics.
 
-  Neither standard has a sort, and this compiler has no way to write one over an
+  Neither standard has a sort, and neither has a way to write one over an
   arbitrary element type: schemata parameterise a type by a *value* and not by
-  another type (ADR-0039), so `list of T` cannot be said. What it does have is
+  another type (ADR-0039), so `list of T` cannot be said. What both do have is
   procedural and functional parameters, whose value is a code-and-link pair
   (ADR-0030) -- and that is enough, because a sort does not need to know what it
   is sorting. It needs to compare two positions and exchange them.
+
+  **The dialect can now say it, and this module still cannot.** AP 6.7.3.10's
+  type parameter and AP 6.7.9's trait make `Sort(a)` over the elements
+  themselves writable, and `PasSortX` is that module. This one stays Extended
+  Pascal, which is what makes it portable to any processor of that standard,
+  and `SortIndexed` goes on answering a question the generic one does not: a
+  caller sorting several parallel arrays at once, or a file read into a
+  buffer, has no single element to compare and needs the positions.
 
   So `SortIndexed` takes the *operations* rather than the data: `less(i, j)` and
   `swap(i, j)` over 1..n. The caller's two nested routines close over whatever
