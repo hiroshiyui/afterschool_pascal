@@ -134,6 +134,14 @@ begin end;
 function Sum(Elem: hashable type; a, b: Elem): Elem;
 begin Sum := a end;
 
+{ AP 6.7.3.10.5 identifies the four category spellings by spelling wherever a
+  bound is written, so a trait of one of those names could bound nothing. The
+  declaration is refused rather than the call, where the message would be
+  about a category the program never wrote. }
+trait Equatable;
+  function Same(a: Self; b: Self): boolean;
+end;
+
 { A trait *procedure* is dispatched where a function is called (ADR-0340
   dispatches by the first actual in expression position and nowhere else),
   and is then refused for the same reason any procedure is. }

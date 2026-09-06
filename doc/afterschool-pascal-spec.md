@@ -3449,6 +3449,17 @@ A trait-declaration shall declare a **trait**. A trait is not a type: its
 identifier shall denote no type and shall stand in no type-denoter. It shall
 stand as a bound (6.4.7.2, 6.7.3.10.5) and nowhere else.
 
+The identifier of a trait-declaration shall not be `numeric`, `ordinal`,
+`ordered` or `equatable`; it shall be an error, and the error shall be
+reported at the trait-declaration.
+
+NOTE 1 — Those four spellings are identified in a bound position by their
+spelling alone (6.7.3.10.5), and a bound is the only position a trait may
+stand in. A trait so named could be declared and implemented and never
+applied, and a program would learn of it at an activation, in a message about
+a category it had not written. It is refused where it is written instead
+(ADR-0344).
+
 `trait` shall not be a word-symbol. A declaration-part admits only `label`,
 `const`, `type`, `var`, `procedure`, `function` and `begin`, every one of them
 a word-symbol, so an identifier in this position is already a syntax error in
@@ -3473,13 +3484,13 @@ either, and the error shall be reported at the trait-declaration.
 program-block, so a program may declare its own (ISO/IEC 10206:1991 §6.1.3),
 and within a trait-heading that declaration shall not be in force.
 
-NOTE 1 — A formal parameter named `self` cannot be written, and this is a
+NOTE 2 — A formal parameter named `self` cannot be written, and this is a
 consequence of §6.1.2 rather than a rule of this clause: case is not
 significant, so `self` and `Self` are one identifier and a parameter of that
 name is a redeclaration. The receiver takes a name of the program's choosing,
 which every example in this document does (ADR-0340).
 
-NOTE 2 — The restriction to a whole parameter-form is what lets
+NOTE 3 — The restriction to a whole parameter-form is what lets
 ISO/IEC 10206:1991 §6.6.3.6's congruity be reused unchanged. §6.4.1 gives each
 type-denoter that is not a type-name its own type, so `array of Self` written
 in a trait and `array of Point` written in an implementation would be two type
@@ -3487,14 +3498,14 @@ objects and congruity, which compares identity, would refuse every
 implementation — reporting, at each of them, about a parameter list the
 implementer did not write (ADR-0339).
 
-NOTE 3 — `^Self` is not refused by this clause because it cannot be written:
+NOTE 4 — `^Self` is not refused by this clause because it cannot be written:
 §6.7.3.1's parameter-form is a type-identifier, a schema-name or a
 type-inquiry, so a pointer type-denoter has no position in a formal parameter
 list. It is unformable rather than checked, which is the shape of AP 6.4.14.9's
 own guarantee and carries the same caveat — a later feature that gives such a
 denoter a position takes this property with it silently (ADR-0201).
 
-NOTE 4 — A trait routine therefore takes and returns whole values of the
+NOTE 5 — A trait routine therefore takes and returns whole values of the
 implementing type. That is what the constructs this feature was measured
 against ask for, and a schema-name argument or a type-inquiry over `Self` is
 refused with the same message pending a decision that has no caller
@@ -3504,12 +3515,12 @@ refused with the same message pending a decision that has no caller
 have no defining-point in the block containing the trait-declaration. It shall
 be identified only as 6.7.10.2 identifies it.
 
-NOTE 5 — Two implementations of one trait each define every one of its
+NOTE 6 — Two implementations of one trait each define every one of its
 routines, so declaring those names in the block the implementations stand in
 would make the second a redeclaration of the first (ADR-0340). This is not a
 per-type scope and involves no receiver syntax: the key is the trait.
 
-NOTE 6 — Two *traits* declaring one spelling are a program's problem exactly
+NOTE 7 — Two *traits* declaring one spelling are a program's problem exactly
 as two modules declaring one spelling are, and ISO/IEC 10206:1991 §6.11's
 `qualified` is the language's answer to both (ADR-0339).
 
@@ -3542,13 +3553,13 @@ shall occur in the declaration-part of a program-block or of a module-block. It
 shall not occur in the declaration-part of a procedure or a function, and it
 shall not occur in a module-heading.
 
-NOTE 7 — An implementation is a fact about one translation (ADR-0341). Nested
+NOTE 8 — An implementation is a fact about one translation (ADR-0341). Nested
 in a procedure it would be selected from outside that procedure, where the
 frames its routines read do not exist — which gave a wrong answer with a zero
 exit status before it was refused. In a module-heading it would be a routine
 body where §6.11.1 admits only headings.
 
-NOTE 8 — A *trait* may be declared in a module-heading and is then exported
+NOTE 9 — A *trait* may be declared in a module-heading and is then exported
 like any other name, which is what makes a trait bindable by a client. A
 module's own routines can reach an implementation the **client** wrote, where
 those routines are generic over a pointer: AP 6.7.3.5 re-reads a generic's
@@ -3571,12 +3582,12 @@ traits, it shall be an error, and the error shall be reported.
 Where the first actual-parameter is not a variable-access, no implementation
 shall be selected.
 
-NOTE 9 — This lookup is consulted only after an ordinary one has failed, which
+NOTE 10 — This lookup is consulted only after an ordinary one has failed, which
 is ISO/IEC 10206:1991 §6.2.2.11's own placement, so a program that declares
 its own routine of the name goes on meaning what it meant. A parameter or a
 variable of the name shadows the trait routine for the same reason.
 
-NOTE 10 — What "only after" costs is that a declaration in force **hides** the
+NOTE 11 — What "only after" costs is that a declaration in force **hides** the
 trait's routine of that spelling entirely: the identifier is identified, and
 its actual-parameters are then checked against the routine that was found. A
 program declaring `Rank` over integers cannot reach a trait's `Rank` over a
@@ -3585,20 +3596,20 @@ wrong type. This is the ordinary consequence of one identifier having one
 meaning in a region, and ISO/IEC 10206:1991 §6.11's `qualified` is the
 language's answer where a program needs both.
 
-NOTE 11 — The type is read from the *designator*, whose type is a fact about
+NOTE 12 — The type is read from the *designator*, whose type is a fact about
 its declaration, so it is read without checking the expression: checking it
 here would check every first actual twice and report a bad one twice
 (ADR-0340). A literal, an expression and a function-designator therefore select
 nothing and fall to the ordinary diagnostic for an identifier that denotes no
 routine, which is the right message for a call that can select nothing.
 
-NOTE 12 — Selection by host-type is ISO 7185 §6.4.2.4's rule said once more,
+NOTE 13 — Selection by host-type is ISO 7185 §6.4.2.4's rule said once more,
 and it is why a trait meant to serve subranges takes its receiver **by value**:
 §6.6.3.3 requires an actual variable parameter to have the formal's own type,
 so a `protected var` receiver of type `integer` is not usable at a subrange of
 integer, and the call says so (ADR-0340).
 
-NOTE 13 — Only a function-designator selects an implementation. A trait may
+NOTE 14 — Only a function-designator selects an implementation. A trait may
 declare a procedure and an implementation may define it, and calling it is not
 yet provided.
 
@@ -3607,7 +3618,7 @@ heading of the trait shall be read again, with `Self` denoting the type the
 implementation is for and with the defining-points in force at the
 trait-declaration.
 
-NOTE 14 — Read again rather than copied, and the reason is AP 6.7.3.5's:
+NOTE 15 — Read again rather than copied, and the reason is AP 6.7.3.5's:
 resolution annotates the nodes it reads, so one heading shared between two
 implementations reports the first implementation's types at the second
 (ADR-0340). Re-reading is parsing, so it cannot disagree with parsing.

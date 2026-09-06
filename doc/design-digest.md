@@ -4993,7 +4993,7 @@ expression or a function result therefore selects nothing and falls to
 `unknown function`, which is the right message for a call that can select
 nothing. **The cost of "only after" is that an ordinary declaration hides the
 trait's routine of that spelling entirely**, and what the program is then told
-is that its argument has the wrong type (AP 6.7.10.2 NOTE 10).
+is that its argument has the wrong type (AP 6.7.10.2 NOTE 11).
 
 **A trait heading is re-parsed per implementation**, by token position, exactly
 as AP 6.7.3.5 re-reads a generic's body. Sharing the parsed nodes does not
@@ -5014,7 +5014,20 @@ parameter list, so it is unformable rather than checked.
 
 **A receiver cannot be named `self`** — §6.1.2 folds case, so the parameter
 name and the type name `Self` are one identifier. Every record in this tree
-wrote `self: Self` before anyone compiled it.
+wrote `self: Self` before anyone compiled it. The same sentence bites a second
+time one scope further in, and there it is documented rather than refused: a
+local named `t` in a generic whose type parameter is `T` **is** that type
+parameter, and the next denoter naming `T` is reported as `unknown type 't'`
+(ADR-0344).
+
+**A trait may not be named `numeric`, `ordinal`, `ordered` or `equatable`**
+(ADR-0344). AP 6.7.3.10.5 identifies those four in a bound position by
+spelling and looks nothing up there, and AP 6.7.9 makes a bound the only
+position a trait may stand in — so such a trait could be declared, implemented
+and never applied, the program learning of it at the call in a message about a
+category it never wrote. The check asks `CatOfName`, the parser's own source of
+truth, so a fifth category cannot be admitted in one place and refused in the
+other.
 
 **A trait crosses a program-component and an implementation does not.** A
 module-heading may declare a trait, which is what makes one exportable and so
@@ -5028,3 +5041,6 @@ its own implementation, which is a convenience with no caller asking.
 `tests/dialect/traits.pas` is the surface, `traits_component.pas` the
 cross-component shape, and five error cases carry the refusals;
 `selfhost/badsema/traits.pas` and five `badparse/` files carry the messages.
+`lib/dialect/passortx.pas` is the first client that is not a test — the trait
+declared in a module and every implementation written by the importer — and
+`tests/dialect/lib_sortx.pas` drives it (ADR-0344).

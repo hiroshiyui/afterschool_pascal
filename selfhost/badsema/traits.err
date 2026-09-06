@@ -12,4 +12,5 @@
 <source>:114:1: error: this implementation of 'two' for 'point' does not define 'g'
 <source>:124:3: error: an implementation belongs to the whole program or module and cannot be written inside a procedure or a function
 <source>:134:14: error: 'hashable' is not a type-parameter category or a trait: write 'numeric', 'ordinal', 'ordered' or 'equatable', the name of a trait, or 'type' on its own
-<source>:152:11: error: 'show' is a procedure and returns no value
+<source>:141:7: error: a trait may not be named 'equatable': that spelling names a type-parameter category wherever a bound is written, so nothing could name this trait
+<source>:160:11: error: 'show' is a procedure and returns no value

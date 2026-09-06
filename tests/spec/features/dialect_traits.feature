@@ -377,3 +377,34 @@ Feature: traits and implementations
       6
       6
       """
+
+  # 6.7.9 NOTE 1. The four category spellings are identified in a bound
+  # position by spelling alone (6.7.3.10.5), and a bound is the only position
+  # a trait may stand in -- so a trait of one of those names could never be
+  # applied. Refused where it is written, not at the activation, where the
+  # message would be about a category the program never mentioned (ADR-0344).
+  @afterschool:6.7.9
+  Scenario: a trait named for a type-parameter category is refused
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type point = record x: integer end;
+      trait Ordered;
+        function Before(u: Self; v: Self): boolean;
+      end;
+      impl Ordered for point;
+        function Before;
+        begin Before := u.x < v.x end;
+      end;
+      var s, t: point;
+      begin
+        s.x := 1; t.x := 2;
+        writeln(Before(s, t))
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a trait may not be named 'ordered'
+      """

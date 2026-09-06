@@ -1,0 +1,13 @@
+adr: 0344
+file: selfhost/apfront.pas
+kills: badsema-traits
+why: The refusal removed, so `trait Ordered` is declared and implemented and the program is told at the *call* that its own type is not admitted by a category it never wrote. AP 6.7.3.10.5 identifies the four spellings in a bound position by spelling alone and a bound is the only position a trait may stand in, so such a trait can never be applied.
+--- old
+  if CatOfName(d^.trAt, d^.trLen) <> tcNone then begin
+    ErrorAt(d^.trNameLine, d^.trNameCol);
+    write('a trait may not be named ''');
+    WritePool(d^.trAt, d^.trLen);
+    write(''': that spelling names a type-parameter category wherever a ');
+    writeln('bound is written, so nothing could name this trait')
+  end;
+--- new

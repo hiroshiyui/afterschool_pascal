@@ -23225,6 +23225,26 @@ var s: symPtr; h: nodePtr;
 begin
   s := Declare(d^.trAt, d^.trLen, skTrait, d^.trNameLine, d^.trNameCol);
   d^.trSym := s;
+  { AP 6.7.3.10.5 identifies `numeric`, `ordinal`, `ordered` and `equatable`
+    by their spelling in the bound position and looks nothing up there. A
+    trait may stand as a bound and nowhere else (AP 6.4.7.2, AP 6.7.9), so a
+    trait of one of those four names is a declaration nothing could ever
+    apply -- and the program finds out at the call, in a message about a
+    category it never mentioned. The first client written against this
+    feature declared `trait Ordered`, implemented it for two types, and was
+    told its own record was not admitted by a category admitting `int64,
+    real, a string-type and utf8`.
+
+    `CatOfName` is asked rather than the four spellings written a second
+    time: a fifth category would otherwise be admitted here and refused
+    there. }
+  if CatOfName(d^.trAt, d^.trLen) <> tcNone then begin
+    ErrorAt(d^.trNameLine, d^.trNameCol);
+    write('a trait may not be named ''');
+    WritePool(d^.trAt, d^.trLen);
+    write(''': that spelling names a type-parameter category wherever a ');
+    writeln('bound is written, so nothing could name this trait')
+  end;
   if s^.traitHeads = nil then s^.traitHeads := d^.trHeads;
   h := d^.trHeads;
   while h <> nil do begin
