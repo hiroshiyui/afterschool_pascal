@@ -101,8 +101,19 @@ When performing a language-specification audit, always follow these steps:
    **Launch each reader as its own process, three to five clauses each:**
 
    ```sh
-   cd "$SANDBOX" && claude --safe-mode -p "<the brief>"
+   cd "$SANDBOX" && claude --safe-mode -p --allowedTools "Bash Read Write Edit Glob Grep" "<the brief>"
    ```
+
+   **`--allowedTools` is not optional.** A `-p` run has no one to approve a
+   permission prompt, so without it every Write and every Bash call is refused
+   and the reader can only read: the 2026-09-06 run returned two reports that
+   opened with "no probe could be compiled or run" and rested every verdict on
+   the stripped source, which is exactly the evidence step 3 forbids. Launch
+   readers **one at a time or two at once**, not six: a subscription's session
+   limit refused four of six on that run before any had started, and the
+   refusal is one line in the output file (`You've hit your session limit`)
+   rather than an error, so check the word count of every report before
+   reading any. Redirect stdin from `/dev/null`.
 
    `--safe-mode` disables `CLAUDE.md`, skills, plugins, hooks and custom agents
    while auth and the built-in tools go on working — unlike `--bare`, which
