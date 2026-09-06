@@ -345,6 +345,15 @@ the same reason — this compiler's own integers are 32 bits, so it has no value
 of the type to convert to and back from. `-maxint64..maxint64`, symmetric like
 `integer`'s range and for the same reason (ADR-0128).
 
+**`clong` and `csize`.** Two required identifiers, each denoting whichever
+integer type this language already has that a C `long` and a C `size_t` fit on
+the target — `int64` on x86-64 and aarch64, `integer` on i386 (AP 6.4.2.7,
+ADR-0328). **Two rather than one**, and the measurement is the argument: they
+agree on every admitted target and differ on Windows x64, which is LLP64. They
+exist so that an `external` heading naming a C routine is written once rather
+than per target; before them, `strlen('hello')` declared with `int64` answered
+21474836485 on i386.
+
 **Optional (`?T`).** A type whose values are those of T plus an absent one,
 spelled `nil`. `o^` is the only way to a value and it **traps** when there is
 none — a run-time check localised to where the source writes `^`, not a
@@ -454,12 +463,19 @@ one kind: a **handle** is one word as an owned pointer is, so both move, while
 a file variable is several storage units the processor holds and has no value
 to stop holding (ADR-0182, ADR-0267, AP 6.4.12.7, AP 6.4.14.6).
 
-**Borrow.** The only second name an owned value has: a `var` parameter bound
-to `o^` for the duration of a call. It **cannot escape**, and by construction
+**Borrow.** The only second name an owned value has: a parameter bound to
+`o^` for the duration of a call. It **cannot escape**, and by construction
 rather than by a check — Pascal has no address-of operator and `new` is the
 only producer of a pointer, so no pointer can ever name it. Unformable rather
 than forbidden, which is stronger and free, and *silent* if a future feature
-takes it away (ADR-0201, `doc/sop.md` §7).
+takes it away (ADR-0201, `doc/sop.md` §7). It comes in two: a `var` parameter,
+through which the callee may release what it names, and a **protected** one
+(ADR-0318, AP 6.4.14.8), through which it may not — §6.4.1's exclusion of a
+pointer-type does not reach an owned pointer, so the read-only form is
+writable. What makes either safe is that it is **refused where it is formed**
+and not where a release happens (ADR-0319, AP 6.4.14.9): the actual may not be
+reached through a dereference of an owned pointer whose owner the callee can
+name.
 
 **Fallible type (`T ! E`).** A value or the reason there is none: the result
 record `lib/dialect/` used to write per payload type, now written by the
@@ -532,12 +548,32 @@ identifier — which every record in this tree wrote before anyone compiled it
 
 **Task.** A second thread of control, and the one sentence left of the
 aliasing fork ADR-0201 withdrew. `spawn P(a, b)` starts one; it takes only
-**transferable** values and channels (AP 6.7.8.1), may name only its own
-variables (AP 6.7.8.2), and every task a block spawned is **joined** before
-that block releases anything — which is what makes *a borrow cannot outlive
-the call* true again. Share-nothing, so there is no shared mutable state for a
-memory model to be about. **The compiler is one thread and must stay so**, the
-seed compiling it (ADR-0268).
+**transferable** values, channels and a moved handle (AP 6.7.8.1), may name
+only its own variables (AP 6.7.8.2), and every task a block spawned is
+**joined** before that block releases anything — which is what makes *a borrow
+cannot outlive the call* true again. Share-nothing, so there is no shared
+mutable state for a memory model to be about. **The compiler is one thread and
+must stay so**, the seed compiling it (ADR-0268).
+
+`task` is also a **type** (AP 6.4.17, ADR-0312), and a handle-type like a
+channel: `spawn t := P(x)` binds a variable to the activation, so it is
+released by the block that declared it, moved by `take`, and refused as an
+assignment source. It cost a type and one statement because a handle already
+had every rule a name for an activation needs.
+
+**`wait`.** `wait(t)` returns when that one task is complete (ADR-0312). It
+does not replace the join AP 6.9.3.12.1 requires — a block still joins
+everything it commenced — it only completes one of them earlier. There is
+deliberately **no timeout**: a wait that gave up would leave a program holding
+a task-variable whose activation is still running, and no clause says what
+that is.
+
+**Select-statement.** Waiting for whichever of several things comes first
+(AP 6.9.3.15, ADR-0313), with the case-statement's own punctuation: each arm
+is a channel operation and a statement, `after N` gives up after that many
+milliseconds, and `otherwise` declines to wait at all. A `send` arm waits for
+room as a `receive` arm waits for a value, so a program can feed several
+consumers without choosing which channel to block on.
 
 **Channel.** A bounded queue, `channel [n] of T`, and **it is a handle**: no
 copy, released where a file closes, and the only thing besides a transferable
@@ -548,9 +584,11 @@ reports the close (ADR-0268, AP 6.4.16).
 **Transferable.** What may cross into a task or through a channel: a value
 this language can *copy*, which is every type but the affine ones and the
 schematic ones whose bounds a receiver could not know. It is the predicate
-that keeps a task share-nothing, and it is why a task cannot yet be **given**
-a socket — the move exists (ADR-0267) and the argument block does not use it
-(ADR-0268, AP 6.4.16.3).
+that keeps a task share-nothing (ADR-0268, AP 6.4.16.3). A task's parameter
+list admits two things besides: a **channel**, which is lent, and since
+ADR-0303 a **handle**, which is moved — the actual is `take(v)` and the
+variable is empty from there on. A *channel* still cannot carry a handle, so a
+worker can be given a socket where it starts and not sent one afterwards.
 
 **Warning.** A diagnostic that is not an error: same format, same stream, same
 exit status, and **the only difference is `errorSeen`**. There are four. Three
