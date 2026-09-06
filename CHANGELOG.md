@@ -13,6 +13,28 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A project: `pascalcc new-project <name>`** (ADR-0348), alias `new`, with
+  `build`, `run` and `test` reading what it wrote. The skeleton is `src/`,
+  `test/`, `build/`, a `.gitignore`, a README and `afterschool-pascal.toml`;
+  `pascalcc run` in the new directory prints `Hello, world!` without anything
+  else being done first.
+
+  `afterschool-pascal.toml` carries what the compiler cannot infer — which
+  source is the program, where the executable goes, the optimisation level, the
+  target, extra import paths and the **link flags**, the last being what a
+  program binding `PasTls` otherwise has to know to pass by hand. It is looked
+  for in the current directory and each enclosing one. **It lists no modules and
+  never will**: `import greet;` finds `src/greet.pas` by name, so adding a
+  module is adding a file and there is no build order anywhere. The reader is a
+  strict TOML subset — `[section]`, `key = "string"`, `key = ["a", "b"]`,
+  comments — and refuses an unknown key or section by line number rather than
+  ignoring it.
+
+  A subcommand is recognised as the **first** argument and nowhere else, so
+  `pascalcc build.pas` still compiles a file of that name.
+
 ## [3.5.1] - 2026-09-06
 
 **Nothing about the language changed.** The version number here tracks the

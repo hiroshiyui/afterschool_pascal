@@ -99,6 +99,39 @@ tools/pascalcc -O0 hello.pas           # -O0..-O3, handed to clang
 tools/pascalcc --dump-symbols hello.pas  # any --dump- flag, passed through
 ```
 
+**Or start a project** (ADR-0348). The four subcommands are recognised as the
+*first* argument and nowhere else, so a file called `build.pas` still compiles:
+
+```sh
+pascalcc new-project hello    # or `new`; writes hello/
+cd hello
+pascalcc run                  # builds and runs it
+pascalcc build                # -> build/hello
+pascalcc test                 # runs it and compares against test/hello.out
+```
+
+```
+hello/
+  afterschool-pascal.toml   what the compiler cannot work out for itself
+  src/hello.pas             the program
+  src/greet.pas             a module, imported by name and nothing else
+  test/hello.out            what `pascalcc test` expects
+  build/                    artefacts; the only thing .gitignore needs
+```
+
+`afterschool-pascal.toml` says which source is the program, where the
+executable goes, the optimisation level, the target, extra import paths and the
+**link flags** — which is the one a real program gets stuck on, since a program
+using `PasTls` otherwise has to know to set `AFTERSCHOOL_PASCAL_LDFLAGS=-lssl
+-lcrypto`. It is looked for here and in each enclosing directory, as `git`
+looks for its own.
+
+**It does not list your modules, and it never will.** `import greet;` finds
+`src/greet.pas` because the compiler looks in the importing source's own
+directory and then in each import path — so adding a module is adding a file,
+and there is no build order to maintain anywhere. A project is a convenience
+over `pascalcc src/hello.pas -o hello`, never a second way to compile.
+
 A `--dump-` flag asks the *compiler* a question and the answer is its standard
 output, so the driver adds nothing to one: no assembling, no linking, and the
 answer is not folded into stderr the way a diagnostic is.
