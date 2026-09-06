@@ -77,11 +77,18 @@ say whether the server still knows about it.
 program name alone. The second is the user-visible symptom, and a golden is
 what turns it from *the file looks empty* into a diff.
 
-**The first run of the sweep found the harness rather than the compiler.**
+**The sweep's own enumeration was wrong twice, and the second time on CI.**
 `git ls-files` quotes a path holding non-ASCII bytes, and
 `lsp/sessions/workspace/` has a directory named in Japanese (ADR-0291), so
 eight invocations "crashed" on a file whose name reached the compiler with
-literal quotes in it. `-z` is not a nicety here.
+literal quotes in it. Then `git ls-files -z` fixed that here and enumerated
+**zero** sources in CI's container, which runs as a different user than owns
+the checkout: git refuses such a repository outright — *detected dubious
+ownership*. **The floor is what reported it** (ADR-0282), which is the job a
+floor exists for, and the lesson generalises: a gate that reaches for git has
+to survive git declining to answer. It uses `find` over the roots now with git
+as an optional ignore-filter, which is `variant_check.sh`'s shape and was
+already the shape for a related reason.
 
 **It says nothing about what a dump *means*.** A task is reported as
 `procedure` by `--dump-symbols` and therefore drawn as one in an editor's

@@ -52,26 +52,44 @@ trap 'rm -rf "$work"' EXIT
 # rather than an editor that goes quiet.
 dumps=(--dump-symbols --dump-uses --dump-words --dump-imports)
 
-# What git tracks, which is the same rule `variant-check` uses and for the same
-# reason: a stray file in a working tree is not a source this project ships.
+# `find` over the roots, with git as an *optional filter* -- `variant_check.sh`'s
+# shape, and it is the shape for the reason that gate learned: a checkout may
+# have a retired corpus or a second build tree on disk, and what is gitignored
+# is not a source this project ships.
 #
-# `-z`, and it is not a nicety: `lsp/sessions/workspace/` holds a directory
-# whose name is Japanese (ADR-0291's long-path case), and plain `git ls-files`
-# quotes such a path and escapes the bytes -- so the name reaching the compiler
-# had literal quotes in it and eight invocations "crashed" on a file that was
-# never opened. The first run of this sweep found that rather than a defect.
-mapfile -d '' -t sources < <(cd "$root" && git ls-files -z '*.pas')
+# It was `git ls-files` first, and CI is where that failed. A container runs as
+# a different user than the checkout is owned by, so git refuses the repository
+# outright -- *detected dubious ownership* -- and the sweep enumerated **zero**
+# sources. The floor is what reported it (ADR-0282), doing exactly the job a
+# floor is for; every gate here that reaches for git has to survive git
+# declining to answer.
+#
+# The names matter: `lsp/sessions/workspace/` holds a directory named in
+# Japanese (ADR-0291's long-path case), which `git ls-files` quotes and escapes
+# and `find` does not. The first run of this sweep spent eight "crashes" on
+# that before it was a real answer.
+sources=$(mktemp)
+find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" "$root/examples" \
+     -name '*.pas' | sort > "$sources"
+if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$root" check-ignore --stdin < "$sources" > "$work/ignored.txt" 2>/dev/null || true
+  if [[ -s $work/ignored.txt ]]; then
+    grep -Fxv -f "$work/ignored.txt" "$sources" > "$work/kept.txt" || true
+    mv "$work/kept.txt" "$sources"
+  fi
+fi
+mapfile -t sources < "$sources"
 
 swept=0; crashed=0
 for src in "${sources[@]}"; do
   for d in "${dumps[@]}"; do
     swept=$((swept + 1))
-    out=$("$pascalc" "$d" "$root/$src" -o "$work/out.ll" 2>&1)
+    out=$("$pascalc" "$d" "$src" -o "$work/out.ll" 2>&1)
     st=$?
     # A diagnostic is an answer and a non-zero status with one is fine. What is
     # not fine is the runtime saying the program stopped, or a signal.
     if [[ $out == *"runtime error:"* ]] || (( st > 1 )); then
-      echo "tool-dumps: $d $src" >&2
+      echo "tool-dumps: $d ${src#"$root"/}" >&2
       printf '%s\n' "$out" | tail -2 | sed 's/^/  /' >&2
       crashed=$((crashed + 1))
     fi
