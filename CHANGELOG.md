@@ -13,6 +13,19 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-09-07
+
+**The library asked the language for something, and got it.** Traits landed in
+3.5.0 with one client; this release is the one where `PasContainer`'s map keys
+itself with a trait and every map call loses two arguments — the payoff the
+feature was measured against, and a break for every existing map client, said
+below in as many words. Around it: the sanitizers see compiled Pascal for the
+first time, an outline calls a task a task, a refused generic instantiation is
+reported once instead of a hundred times, and `pascalcc new-project` writes a
+project a program can be started in. The number is minor because the accepted
+language and the command line grew and nothing they accept changed meaning; a
+library interface changed, and the entry says which.
+
 ### Changed
 
 - **Every emitted function carries `sanitize_address` and `sanitize_thread`**
@@ -3549,6 +3562,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.6.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.6.0
 [3.5.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.1
 [3.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.0
 [3.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.4.0
