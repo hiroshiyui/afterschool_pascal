@@ -776,7 +776,10 @@ arrays spanning more than `maxint` values.
 **Tautological rule.** One whose ISO condition *is* the emitted test — "the nil
 check fires exactly when the pointer is nil". Deliberately not written: it would
 pass at once, prove nothing, and dilute what "no known gaps" means. Pointers get
-the cross-check and an AddressSanitizer run instead (ADR-0019).
+the cross-check instead (ADR-0019) — **and not an AddressSanitizer run, which
+this entry claimed until ADR-0342 probed it**: the emitted IR carries no
+`sanitize_address` attribute, so clang's pass instruments none of a compiled
+program's own loads and stores.
 
 ## Build and test
 

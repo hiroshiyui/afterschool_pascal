@@ -234,8 +234,19 @@ Not everything gets a rule. Pointer safety is not an arithmetic-lowering
 question, and a rule saying "the nil check fires exactly when the pointer is
 nil" would be the same sentence written twice — it would pass at once and prove
 nothing while making the count look better. Pointers are covered by the
-cross-check and by a run under AddressSanitizer instead, and ADR-0019 says so
-plainly rather than inflating the catalogue. The same reasoning keeps `eof`,
+cross-check, and ADR-0019 says so plainly rather than inflating the catalogue.
+
+**That sentence used to name AddressSanitizer as the other half and it was
+never true** (ADR-0342). The emitted IR carries no `sanitize_address`
+attribute, and clang's pass instruments only functions that do — so
+`AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` reaches the compilation of the
+`.ll` and changes nothing about a *program's* own loads and stores. A plain
+`new(p); q := p; dispose(p); q^ := 5` runs clean and prints 5 under a fully
+ASan-linked binary. The `sanitizers` gate is honestly described where it is
+defined — it asks whether the **runtime's own C** survives the suite, and it
+does that — but no argument of the form *ASan reports nothing* may be made
+about compiled Pascal. Whether to emit the attribute is a decision nobody has
+put; `doc/sop.md` §7 carries it. The same reasoning keeps `eof`,
 `eoln` and the buffer variable out: they are state properties of a stream. What
 they get instead is a test that can actually fail — `files_scratch.pas` opens
 three thousand scratch files, which exhausts the descriptor table if a block

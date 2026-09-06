@@ -188,3 +188,21 @@ seed/refresh.sh          # regenerate from the current source, then verify
 `refresh.sh` does not just regenerate: it rebuilds the compiler from the new
 seed and requires the result to reach a fixed point, so a seed is never
 committed without evidence that it reproduces itself.
+
+**It also translates from the repository root with a *relative* source path,
+and that is load-bearing** (ADR-0347). Since ADR-0293 every trap carries its
+own position, so the source's path is a string constant in the emitted module —
+`@at.file`. Handing the compiler an absolute path put the *machine that
+reseeded* into this committed artefact, and made
+`tests/checks/seed_current.sh` — *is the committed seed the one this source
+produces?* — answer about the directory: it could pass only where the reseed
+had happened, and reported everywhere else, correctly, that the seed is not
+this source's. It failed in the v3.5.0 tag job, which is the one place that
+check runs.
+
+Two things follow for anyone touching either script. They must go on
+translating the same way; they are one claim, and a difference between them is
+a seed that reproduces nowhere. And `seed-portable` is the `ctest` gate that
+asks the cheap half on every push — no string constant in a seed module begins
+with `/` — because `seed_current.sh` cannot be a `ctest` case at all: the seed
+is legitimately stale between releases, so it would fail on every commit.
