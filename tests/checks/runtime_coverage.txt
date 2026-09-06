@@ -1,0 +1,36 @@
+# Line coverage of runtime/*.c, over the corpus that links it
+# (ADR-0351).
+#
+# The runtime is the only C in this tree and every compiled
+# program links it; until this gate, which of its lines run was a
+# question nothing asked. It is also exactly what the sanitizers
+# see, ADR-0342 having established that AddressSanitizer never
+# instruments compiled Pascal -- so an uncovered line here is a
+# line ASan, UBSan, LSan and TSan looked at zero times.
+#
+# A ratchet, as tests/checks/line_coverage.txt and
+# tests/checks/lib_coverage.txt are and with their weakness: it
+# fails when the count rises, and a line that stops being reached
+# for a bad reason is invisible to it. What is kept is the count
+# and the per-file breakdown, so a regression names the file that
+# moved rather than only a number.
+#
+# runtime/pasrt_posix.c is the low row and the reason is in its
+# name: it is the sockets, the directory walk, the process and
+# the clock, and their error paths ask what a corpus running on a
+# working machine cannot arrange -- a failed bind, a directory
+# that vanished mid-walk. tests/checks/tls.sh drives more of it
+# and is not swept here, for lib_coverage.txt's reason: a number
+# that moves with whether a machine has libssl is not a ratchet.
+#
+# Regenerate with:
+#   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet
+# Doing so is a decision to argue for in the commit message.
+
+uncovered 436
+instrumented 2778
+
+runtime/pasrt.c 248/1720
+runtime/pasrt_posix.c 111/353
+runtime/pasrt_task.c 28/291
+runtime/pasrt_unicode.c 49/414

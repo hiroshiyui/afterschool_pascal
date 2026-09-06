@@ -297,7 +297,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang libclang-rt-dev git python3 binutils
+            ca-certificates cmake make clang libclang-rt-dev git python3 binutils \
+            llvm
       - uses: actions/checkout@v4
       - name: Configure and build
         run: |
@@ -323,6 +324,22 @@ jobs:
           # its author had.
           SANITIZE_MODE: thread
           SANITIZE_REQUIRE: '1'
+
+      - name: Measure the runtime's line coverage, and refuse to pass by skipping
+        run: tests/checks/runtime_coverage.py tools/pascalcc build/bin/pascalc
+        env:
+          # The third mode of the same harness (ADR-0351), and it belongs in
+          # this job rather than a new one: it needs exactly what the two steps
+          # above need, plus `llvm-profdata` and `llvm-cov` from the `llvm`
+          # package -- a separate one from `clang`, which is the whole reason
+          # the gate can skip.
+          #
+          # It is also the number those two steps were missing. ADR-0342
+          # established that AddressSanitizer never instruments compiled
+          # Pascal, so what they watch is `runtime/*.c` and only that; an
+          # uncovered line here is a line all four checkers looked at zero
+          # times.
+          RUNTIME_COVERAGE_REQUIRE: '1'
 
   unoptimised:
     # The corpus compiles at -O2, which is pascalcc's default and what a user

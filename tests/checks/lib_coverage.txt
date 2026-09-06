@@ -1,0 +1,57 @@
+# Statement coverage of lib/, over the cases that import it
+# (ADR-0350).
+#
+# A ratchet, as tests/checks/line_coverage.txt is and with its
+# weakness: it fails when the number rises, and a line that stops
+# being reached for a bad reason is invisible to it. What is kept
+# is the count and the per-module breakdown, so a regression names
+# the modules that moved rather than only a number.
+#
+# **Two modules read 0 and are not uncovered.** PasTls and
+# PasHttps are exercised by tests/checks/tls.sh, which is a gate
+# harness and not a corpus case, so this sweep never links them.
+# Driving it from here was rejected for the reason ADR-0346
+# learned the same day: tls.sh skips without libssl, so the number
+# would move with whether a machine has a package, and a ratchet
+# whose answer depends on the toolchain is not a ratchet. What
+# covers them is `tls`, with TLS_REQUIRE and a CI job refusing to
+# let it pass by skipping.
+#
+# Regenerate with:  python3 tests/checks/lib_coverage.py --write-ratchet
+# Doing so is a decision to argue for in the commit message.
+
+uncovered 389
+instrumented 2554
+
+lib/dialect/pascontainer.pas 0/9
+lib/dialect/pasdir.pas 1/20
+lib/dialect/pasenv.pas 0/8
+lib/dialect/paserror.pas 0/8
+lib/dialect/pasfs.pas 10/35
+lib/dialect/pashttp.pas 14/291
+lib/dialect/pashttps.pas 19/19
+lib/dialect/pasio.pas 6/22
+lib/dialect/pasjson.pas 51/463
+lib/dialect/paslist.pas 2/35
+lib/dialect/paslsp.pas 79/155
+lib/dialect/paslspdiag.pas 20/96
+lib/dialect/pasmathx.pas 0/4
+lib/dialect/pasnet.pas 4/53
+lib/dialect/pasos.pas 0/5
+lib/dialect/pasparse.pas 0/28
+lib/dialect/pasprocess.pas 2/39
+lib/dialect/pasregex.pas 6/332
+lib/dialect/passortx.pas 0/0
+lib/dialect/passtream.pas 0/26
+lib/dialect/pasterm.pas 7/32
+lib/dialect/pastime.pas 2/147
+lib/dialect/pastls.pas 149/149
+lib/dialect/pasunicode.pas 6/49
+lib/pasfile.pas 0/99
+lib/pasmap.pas 1/81
+lib/pasmath.pas 7/47
+lib/passort.pas 0/25
+lib/passtrings.pas 0/63
+lib/passtrvec.pas 3/93
+lib/pastext.pas 0/77
+lib/pasvector.pas 0/44

@@ -1,0 +1,139 @@
+# Statement coverage of lsp/pasls.pas, over the sessions
+# lsp/run.sh replays against it (ADR-0236, ADR-0241).
+#
+# A ratchet, as tests/checks/line_coverage.txt is and with its
+# weakness: it fails when the number rises, and a line that stops
+# being reached for a bad reason is invisible to it. What is kept
+# against that is the per-procedure breakdown, so a regression names
+# the procedures that moved rather than only a number.
+#
+# `ambiguous` is ratcheted too, and is not slack. A generic
+# routine's body is emitted in the translation that activates it
+# (AP 6.7.3.5), so PasContainer's vectors and maps are compiled
+# into this module carrying *their* line numbers; a server line
+# sharing a number with one of them is measurable by neither and
+# is subtracted from both halves. A new generic call site that ate
+# more of them would otherwise shrink the denominator and read
+# as an improvement.
+#
+# The thirteen lib/ components the server imports are not measured
+# here -- only pasls.pas is instrumented, because $PASCOV_LINES
+# records a bare line number and two files' lines would be one heap.
+# tests/checks/lib_coverage.py is their gate (ADR-0350), over the
+# corpus rather than over these sessions.
+#
+# Regenerate with:  python3 tests/checks/lsp_coverage.py --write-ratchet
+# Doing so is a decision to argue for in the commit message.
+
+uncovered 93
+instrumented 1396
+ambiguous 30
+sessions 32
+
+(program level) 5/52
+addref 2/12
+analyse 0/7
+askedat 0/6
+before 0/1
+bytecolumn 0/5
+calltool 2/35
+changeduri 0/4
+characterat 0/2
+charsof 0/3
+codeaction 0/25
+collectrefs 0/5
+compile 2/7
+compilercommand 2/9
+completion 1/53
+completionkindof 1/12
+container 0/1
+copyid 2/4
+corner 0/5
+covers 0/1
+definition 0/19
+diagcopy 2/18
+diagnosticsin 0/13
+didchange 0/9
+didclose 0/6
+didopen 0/5
+dirof 0/2
+dispatch 0/25
+docof 0/4
+dropdecl 0/6
+encodingname 0/2
+endswithtext 0/2
+extent 0/1
+fileindexof 0/3
+findroot 3/11
+finduse 8/48
+flush 0/3
+foldable 0/1
+folding 0/24
+forget 1/6
+formatcommand 2/10
+formatting 2/34
+gather 1/21
+hexvalue 1/1
+hover 0/25
+identin 0/7
+importsfor 1/15
+initialize 0/32
+isidentifier 2/22
+lineof 0/13
+linesastext 0/7
+mcpdispatch 2/21
+mcpinitialize 2/19
+namerange 0/10
+negotiate 0/6
+newresponse 0/3
+nodocument 0/1
+note 0/1
+offeritem 0/5
+offervocabulary 0/10
+outline 4/52
+outlinetext 0/20
+patharg 0/4
+pathtool 0/17
+pathtouri 0/9
+popsegment 0/3
+preparerename 1/17
+quickfix 0/23
+rangeformatting 0/10
+readenvironment 0/3
+readformatted 5/25
+readimportpaths 0/15
+readsidecar 0/27
+readtransport 1/5
+readuses 5/25
+readwhole 2/16
+refbefore 0/3
+references 3/34
+refuse 0/7
+renamesymbol 9/58
+renametarget 0/14
+resolve 1/12
+selection 2/46
+send 0/6
+shutdown 0/4
+sortrefs 0/7
+spanrange 0/10
+spans 0/1
+statementat 0/10
+statementsof 2/9
+stmtparse 1/8
+store 0/9
+symbolkindof 2/12
+symfield 0/10
+symparse 1/11
+symrest 0/13
+textcontent 0/9
+textoffile 1/7
+toollist 0/4
+unsupported 0/7
+uriof 2/5
+urioffile 0/3
+uritopath 0/11
+usesofcomponent 5/19
+vocabulary 2/15
+walkfor 0/26
+writescratch 0/15

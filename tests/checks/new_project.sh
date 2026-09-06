@@ -90,6 +90,27 @@ sed -i 's|^# ldflags.*|ldflags = ["-lm"]|' afterschool-pascal.toml
 "$driver" build >/dev/null || fail "ldflags = [\"-lm\"] did not link"
 sed -i 's|^ldflags.*|ldflags = ["-lnosuchlibraryanywhere"]|' afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then fail "a bogus ldflag still linked"; fi
+sed -i 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
+
+# --- 6b. and so do the other two keys that reach a tool -------------------
+#
+# `ldflags` was proved both ways above and its two neighbours were not, which
+# is the same decoration risk one key over: a value this reader parses and then
+# drops would pass every test here. Asserted by *refusal* rather than by
+# effect, because that is what needs no toolchain -- a valid cross target needs
+# a sysroot this machine may not have, and a flag clang accepts proves only
+# that clang tolerated it.
+sed -i 's|^# cflags.*|cflags = ["-nosuchclangflaganywhere"]|' afterschool-pascal.toml
+if "$driver" build >/dev/null 2>&1; then fail "a bogus cflag still compiled"; fi
+sed -i 's|^cflags.*|# cflags = []|' afterschool-pascal.toml
+
+sed -i 's|^# target.*|target = "nosucharch-unknown-none"|' afterschool-pascal.toml
+if "$driver" build >/dev/null 2>&1; then fail "a bogus target still built"; fi
+sed -i 's|^target.*|# target = ""|' afterschool-pascal.toml
+
+# ...and the project still builds with both back as comments, so the sed above
+# restored a file the reader accepts rather than one it merely tolerated.
+"$driver" build >/dev/null || fail "the project stopped building after 6b"
 
 # --- 7. a subcommand is a position, not a word ------------------------------
 #

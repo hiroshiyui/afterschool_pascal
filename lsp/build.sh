@@ -65,5 +65,25 @@ while IFS= read -r rel; do
   objects+=("$work/c$n.o")
 done <"$here/pasls.components"
 
-"$pascalcc" "${optflag[@]+"${optflag[@]}"}" "$here/pasls.pas" \
+# Statement coverage of the server, and of nothing it was linked with
+# (tests/checks/lsp_coverage.py). `--coverage` goes on *this* translation and
+# on no component's, which is ADR-0350's attribution problem met one directory
+# over: $PASCOV_LINES records a bare line number and no file, so a statement
+# reached at pasjson.pas:900 would otherwise be counted as pasls.pas:900. The
+# instrumented IR is written out as well, because the *denominator* is the
+# `pas_cov_hit` sites of the very module the numerator came from -- nothing
+# here may keep a second idea of what was executable (ADR-0104).
+#
+# An env var and not a flag, for AFTERSCHOOL_PASCAL_OPT's reason above: what
+# builds the server is `lsp/run.sh`, which passes this script its two arguments
+# and has no third to spare.
+covflag=()
+if [[ -n ${PASLS_COVERAGE_IR:-} ]]; then
+  covflag=(--coverage)
+  "$pascalcc" "${optflag[@]+"${optflag[@]}"}" -S --coverage "$here/pasls.pas" \
+    "${imports[@]+"${imports[@]}"}" -o "$PASLS_COVERAGE_IR"
+fi
+
+"$pascalcc" "${optflag[@]+"${optflag[@]}"}" "${covflag[@]+"${covflag[@]}"}" \
+  "$here/pasls.pas" \
   "${imports[@]+"${imports[@]}"}" "${objects[@]+"${objects[@]}"}" -o "$out"

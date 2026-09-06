@@ -81,12 +81,36 @@ trap 'rm -rf "$work"' EXIT
 #
 # ThreadSanitizer cannot be combined with AddressSanitizer -- clang refuses the
 # pair -- so the modes are exclusive rather than a longer flag list.
+#
+# **A third mode, and it asks a question rather than watching for a fault**
+# (ADR-0351). `runtime-coverage` needs exactly what the two above need -- a
+# second `libpasrt.a` built with extra flags, and every case linked against it
+# -- and differs only in what the flags are and in who reads the result. So it
+# is a mode for ADR-0327's reason and not a second script: the 120 lines below
+# that translate a case's components, supply its import paths and read its
+# sidecars are the part that took the defects out.
+#
+# Clang's source-based coverage instruments at the **front end**, so what it
+# measures is `runtime/*.c` and nothing of the Pascal: the compiled program's
+# `.ll` reaches clang with no `llvm.instrprof` intrinsics in it and acquires
+# none. That is the same asymmetry ADR-0342 recorded for AddressSanitizer, read
+# the other way round -- what the sanitizers can see is precisely what this can
+# count.
 mode=${SANITIZE_MODE:-address}
 case $mode in
-  address) san="-fsanitize=address,undefined -fno-omit-frame-pointer";;
-  thread)  san="-fsanitize=thread -fno-omit-frame-pointer";;
+  address)  san="-fsanitize=address,undefined -fno-omit-frame-pointer";;
+  thread)   san="-fsanitize=thread -fno-omit-frame-pointer";;
+  coverage) san="-fprofile-instr-generate -fcoverage-mapping";;
   *) echo "sanitize: unknown SANITIZE_MODE '$mode'" >&2; exit 1;;
 esac
+
+# Where the second runtime goes. `$work/lib` unless the caller named a
+# directory, and the caller that does is `runtime_coverage.py`: llvm-cov reads
+# the coverage mapping out of the **objects**, which have to outlive this
+# script, and `$work` is removed on the way out. One build and one path either
+# way -- a second build of the runtime here would be a second set of function
+# hashes for llvm-profdata to disagree with.
+rtdir=${SANITIZE_RT_DIR:-$work/lib}
 
 # Is the checker itself here? Debian's `clang` package has carried
 # compiler-rt separately before, and a missing one shows up as every link
@@ -99,18 +123,18 @@ if ! clang $san -o "$work/probe" "$work/probe.c" >"$work/probe.txt" 2>&1; then
   head -3 "$work/probe.txt" >&2
   sanskip "clang here cannot link $san"
 fi
-mkdir -p "$work/lib"
+mkdir -p "$rtdir"
 for u in pasrt pasrt_posix pasrt_unicode pasrt_task; do
   # shellcheck disable=SC2086
   if ! clang $san -O1 -I"$root/runtime" -c "$root/runtime/$u.c" \
-       -o "$work/$u.o" 2>"$work/cc.txt"; then
+       -o "$rtdir/$u.o" 2>"$work/cc.txt"; then
     echo "sanitize: the runtime does not build under $san" >&2
     head -20 "$work/cc.txt" >&2
     exit 1
   fi
 done
-ar rcs "$work/lib/libpasrt.a" "$work"/pasrt.o "$work"/pasrt_posix.o \
-       "$work"/pasrt_unicode.o "$work"/pasrt_task.o || exit 1
+ar rcs "$rtdir/libpasrt.a" "$rtdir"/pasrt.o "$rtdir"/pasrt_posix.o \
+       "$rtdir"/pasrt_unicode.o "$rtdir"/pasrt_task.o || exit 1
 
 # Every case the catalogue says ends with something outstanding. Read once.
 declare -A outstanding=()
@@ -175,7 +199,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
       cn=$((cn + 1))
       if ! env "${import_env[@]+"${import_env[@]}"}" \
              AFTERSCHOOL_PASCAL_CFLAGS="$san" \
-             AFTERSCHOOL_PASCAL_RUNTIME="$work/lib" \
+             AFTERSCHOOL_PASCAL_RUNTIME="$rtdir" \
              PASCALC="$pascalc" \
              "$pascalcc" "${argv[@]+"${argv[@]}"}" \
              "${paths[@]+"${paths[@]}"}" -c "$dir/$rel" \
@@ -209,7 +233,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
   if [[ -n $compfail ]] ||
      ! env "${import_env[@]+"${import_env[@]}"}" \
        AFTERSCHOOL_PASCAL_CFLAGS="$san" \
-       AFTERSCHOOL_PASCAL_RUNTIME="$work/lib" \
+       AFTERSCHOOL_PASCAL_RUNTIME="$rtdir" \
        PASCALC="$pascalc" \
        "$pascalcc" "$opt" "${argv[@]+"${argv[@]}"}" \
        "${paths[@]+"${paths[@]}"}" "$src" "${objs[@]+"${objs[@]}"}" \

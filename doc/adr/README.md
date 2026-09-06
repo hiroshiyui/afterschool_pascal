@@ -358,3 +358,6 @@ the alternatives that were rejected and why.
 | [0347](0347-the-seed-named-the-machine-that-made-it.md) | The seed named the machine that made it | Accepted |
 | [0348](0348-a-project-is-a-convenience-over-a-file.md) | A project is a convenience over a file | Accepted |
 | [0349](0349-the-dumps-a-tool-asks-for-had-no-corpus.md) | The dumps a tool asks for had no corpus | Accepted |
+| [0350](0350-the-library-had-no-coverage.md) | The library had no coverage | Accepted |
+| [0351](0351-the-runtime-had-no-coverage.md) | The runtime had no coverage | Accepted |
+| [0352](0352-a-generic-body-belongs-to-two-files.md) | A generic body belongs to two files | Accepted |

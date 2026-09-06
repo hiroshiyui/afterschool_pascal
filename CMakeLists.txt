@@ -323,6 +323,36 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
                    ${CMAKE_SOURCE_DIR})
 
+  # ADR-0350: how much of lib/ does the corpus run? `line_coverage.py`
+  # measures the compiler's three program-components and nothing else, so
+  # 11 160 lines across 32 modules -- the largest body of this dialect outside
+  # the compiler -- were measured by nothing. Every module is imported by some
+  # case, which is `procedure-coverage`'s question; what fraction of one runs
+  # was nobody's. Same machinery and same attribution trick: one module
+  # instrumented per link, so a bare line number is unambiguous.
+  add_test(NAME lib-coverage
+           COMMAND ${CMAKE_COMMAND} -E env python3
+                   ${CMAKE_SOURCE_DIR}/tests/checks/lib_coverage.py
+                   --build ${CMAKE_BINARY_DIR}
+                   ${CMAKE_SOURCE_DIR})
+  set_tests_properties(lib-coverage PROPERTIES SKIP_RETURN_CODE 77)
+
+  # How much of the language server do its 32 recorded sessions run? The
+  # sessions are goldens compared byte for byte (ADR-0236, ADR-0241), and a
+  # golden says the answers are right without saying how much of the 3814-line
+  # server was ever asked -- which is ADR-0350's finding one directory over.
+  # It drives lsp/run.sh rather than reimplementing the framing, the sidecars
+  # and the scratch paths, for `thread-sanitizer`'s reason; so it fails when a
+  # session fails too, a coverage number taken from a conversation that went
+  # wrong measuring nothing.
+  add_test(NAME lsp-coverage
+           COMMAND ${CMAKE_COMMAND} -E env python3
+                   ${CMAKE_SOURCE_DIR}/tests/checks/lsp_coverage.py
+                   --build ${CMAKE_BINARY_DIR}
+                   ${CMAKE_SOURCE_DIR})
+  set_tests_properties(lsp-coverage PROPERTIES SKIP_RETURN_CODE 77
+                       TIMEOUT 900)
+
   # ADR-0349: does the compiler survive every tool dump over every source?
   # The dumps a *tool* asks for -- an editor's outline, its go-to-definition,
   # the word lists a completion offers -- had one case each over one small
@@ -773,6 +803,33 @@ set_tests_properties(thread-sanitizer PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 1800
                      ENVIRONMENT "${APASCAL_TEST_ENV};SANITIZE_MODE=thread")
+
+# ...and the same harness a third time, asking how much of the runtime the
+# corpus reaches at all (ADR-0351). `line-coverage` measures the compiler's
+# three components and `lib-coverage` the 32 library modules, so every line of
+# Pascal here is measured and the 5 551 lines of C were measured by nothing --
+# `gcov` left with the C++ implementation (ADR-0232) and nothing replaced it.
+#
+# It is the denominator the two rows above were missing. ADR-0342 established
+# that AddressSanitizer never instruments compiled Pascal, so what those gates
+# watch is `runtime/*.c` and only that; clang's source-based coverage
+# instruments at the same place, and an uncovered line here is a line all four
+# checkers looked at zero times.
+#
+# It drives sanitize.sh rather than repeating its 120 lines of component
+# linking, which is ADR-0327's argument reused, and skips 77 without
+# llvm-profdata or llvm-cov -- a separate package from clang on most
+# distributions. `RUNTIME_COVERAGE_REQUIRE` refuses to pass by skipping.
+if(Python3_FOUND)
+  add_test(NAME runtime-coverage
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/runtime_coverage.py
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+  set_tests_properties(runtime-coverage PROPERTIES
+                       SKIP_RETURN_CODE 77
+                       TIMEOUT 1200
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+endif()
 
 # runtime/pasrt_unicode.c against Unicode's own conformance files -- 20 034
 # normalisation cases, 766 segmentation cases and a sweep of every code point
