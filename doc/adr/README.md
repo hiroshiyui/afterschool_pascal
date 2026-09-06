@@ -361,3 +361,4 @@ the alternatives that were rejected and why.
 | [0350](0350-the-library-had-no-coverage.md) | The library had no coverage | Accepted |
 | [0351](0351-the-runtime-had-no-coverage.md) | The runtime had no coverage | Accepted |
 | [0352](0352-a-generic-body-belongs-to-two-files.md) | A generic body belongs to two files | Accepted |
+| [0353](0353-valgrind-sees-what-the-sanitizers-cannot.md) | Valgrind sees what the sanitizers cannot | Accepted |

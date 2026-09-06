@@ -190,6 +190,50 @@ involved and the order the stage-1 source was ported in.
 [doc/roadmap.md](roadmap.md#known-limitations) has the known limitations,
 including the ones that are deliberate.
 
+## What a build needs, and what it can do without
+
+**Four things and no more**: `clang`, `cmake`, `make` and `python3`, plus
+`git`. Nothing links libLLVM (ADR-0085), there is no C++ (ADR-0232), and the
+CMake project declares `LANGUAGES C`. That list is short on purpose and is
+checked by the CI jobs that install exactly it.
+
+**Everything below is optional, and a gate that needs one skips without it.**
+That is not laxity — a gate which silently skips and a gate which passes print
+the same green bar to `ctest`, so each of these has a `*_REQUIRE` variable that
+turns the skip into a failure, and a CI job sets it. `require-consistency`
+(ADR-0330) checks in both directions that every variable a check reads is set
+by some job and every variable a job sets is read by some check; it shipped
+broken four times before that.
+
+| tool | what it buys | gate | refuses to skip when |
+| --- | --- | --- | --- |
+| `valgrind` | the only oracle here for a memory error in **compiled Pascal** — a use-after-free, an invalid read, a read of uninitialised memory. It instruments nothing and needs no cooperation from the emitter, which is exactly why it works where AddressSanitizer does not (ADR-0342, ADR-0353) | `valgrind-corpus` | `VALGRIND_REQUIRE` |
+| `llc` (LLVM) | a second backend configuration over the same IR, and a compiler built through it that must translate every component identically (ADR-0331) | `llc-second-backend` | `LLC_REQUIRE` |
+| `llvm-profdata`, `llvm-cov` | line coverage of the C runtime, which `gcov` used to give and lost with the C++ (ADR-0351) | `runtime-coverage` | `RUNTIME_COVERAGE_REQUIRE` |
+| `fpc` | a Pascal processor nobody here wrote, answering the corpus (ADR-0234). It is **not an authority**: where the two disagree the clause decides and the disagreement is catalogued | `fpc-differential` | `FPC_DIFFERENTIAL_REQUIRE` |
+| libssl and `openssl` | the numbers `pastls.pas` transcribed out of OpenSSL's headers, judged against those headers, and two real servers (ADR-0264) | `tls` | `TLS_REQUIRE` |
+| `z3-solver` (pip) | the proofs. `pip install z3-solver`; without it `verify-lowering` skips and the lowering is tested rather than proved (ADR-0013) | `verify-lowering` | — |
+| a 32-bit libc and `gcc-multilib` | the corpus run where a pointer is four bytes (ADR-0325). `gcc-multilib` is the half that is easy to miss: clang links every program against `crtbeginS.o` and `-lgcc`, which come from GCC and not from libc (ADR-0345) | `target32` | `TARGET32_REQUIRE` |
+| a C cross compiler | the two opaque struct sizes on a machine that is not this one (ADR-0155) | `target-sizes` | `TARGET_SIZES_REQUIRE` |
+| the Unicode Character Database | the only oracle here nobody in this project wrote. Fetched and **never committed** (ADR-0189, ADR-0190) | `unicode-conformance` | `UNICODE_CONFORMANCE_REQUIRE` |
+| `libclang-rt-dev` | AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer over the runtime's own C (ADR-0261, ADR-0327) | `sanitizers`, `thread-sanitizer` | `SANITIZE_REQUIRE` |
+
+**Read the second row of that table against the first.** The four sanitizers
+watch `runtime/*.c` and nothing else, because clang's instrumentation passes
+act on functions carrying an attribute and this compiler emits none — so every
+argument of the form *ASan reports nothing* is about the C. Valgrind is what
+covers the Pascal, and the two are complements rather than alternatives: it
+sees a program's own loads and stores and it does not see a data race, which is
+ThreadSanitizer's half.
+
+**`podman` or `docker` is not in the table and is worth knowing about.** No
+gate uses one, and several defects this year were only reproducible in a
+container — a CI job runs as a different user than owns the checkout, which
+makes `git` refuse the repository (ADR-0345, ADR-0347), and a distribution's
+clang has a different default processor for `i386` than this machine's
+(ADR-0346). `podman run --rm -v "$PWD":/src:ro,z debian:trixie` is how each of
+those was reproduced before it was fixed.
+
 ## Verified, not just tested
 
 A compiler is the one program whose bugs are inherited by everything it builds,

@@ -804,7 +804,27 @@ set_tests_properties(thread-sanitizer PROPERTIES
                      TIMEOUT 1800
                      ENVIRONMENT "${APASCAL_TEST_ENV};SANITIZE_MODE=thread")
 
-# ...and the same harness a third time, asking how much of the runtime the
+# ...and the same harness a *fourth* time, under Valgrind (ADR-0353). It is the
+# only mode that instruments nothing, and that is why it exists: ADR-0342
+# established that `-fsanitize=address` reaches the compilation of the `.ll`
+# and changes nothing about a compiled program's own loads and stores, because
+# clang's pass instruments only functions carrying `sanitize_address` and this
+# emitter writes none. So the corpus was swept by four sanitizers that could
+# see the runtime's C and none of the Pascal, and a plain
+# `new(p); q := p; dispose(p); q^ := 5` printed 5 and exited 0 under all of
+# them. Valgrind reads the binary and needs no cooperation from the emitter.
+#
+# It is the slowest gate here and sets the suite's wall clock, which is the
+# price of the only oracle this tree has ever had for that class.
+add_test(NAME valgrind-corpus
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(valgrind-corpus PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 1800
+                     ENVIRONMENT "${APASCAL_TEST_ENV};SANITIZE_MODE=valgrind")
+
+# ...and the same harness a fifth time, asking how much of the runtime the
 # corpus reaches at all (ADR-0351). `line-coverage` measures the compiler's
 # three components and `lib-coverage` the 32 library modules, so every line of
 # Pascal here is measured and the 5 551 lines of C were measured by nothing --

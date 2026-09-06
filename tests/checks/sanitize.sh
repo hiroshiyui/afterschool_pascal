@@ -101,6 +101,30 @@ case $mode in
   address)  san="-fsanitize=address,undefined -fno-omit-frame-pointer";;
   thread)   san="-fsanitize=thread -fno-omit-frame-pointer";;
   coverage) san="-fprofile-instr-generate -fcoverage-mapping";;
+  # The fourth mode, and the only one that instruments *nothing* (ADR-0353).
+  # Valgrind reads the binary rather than the build, which is precisely why it
+  # is here: ADR-0342 established that `-fsanitize=address` reaches the
+  # compilation of the `.ll` and changes nothing about a compiled program's own
+  # loads and stores, because clang's pass instruments only functions carrying
+  # `sanitize_address` and this compiler emits none. So the corpus was checked
+  # by four sanitizers that could see the runtime's C and none of the Pascal.
+  # Valgrind needs no attribute, no flag and no cooperation from the emitter.
+  valgrind)  san=""
+             # Skips like every other tool this tree can do without, and
+             # refuses to (ADR-0330) when the variable says the job installed
+             # it. Valgrind is not a documented dependency: `doc/sop.md` and
+             # the developer guide list what a build needs, and this is a
+             # second opinion a developer may not have.
+             if ! command -v valgrind >/dev/null 2>&1; then
+               if [[ -n ${VALGRIND_REQUIRE:-} ]]; then
+                 echo "sanitize: valgrind is not installed, and" \
+                      "VALGRIND_REQUIRE is set" >&2
+                 exit 1
+               fi
+               echo "sanitize: valgrind is not installed -- skipping"
+               echo "  (Debian/Ubuntu: apt-get install valgrind)"
+               exit 77
+             fi;;
   *) echo "sanitize: unknown SANITIZE_MODE '$mode'" >&2; exit 1;;
 esac
 
@@ -263,8 +287,17 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
   # `exitcode=0` so the detection below is by what was *written* -- which is
   # what the address mode already does, ASan's own exit status never being
   # consulted here.
+  # Valgrind is a *wrapper* where the other three modes are a build, so the
+  # only thing that changes here is what runs the program. `--error-exitcode`
+  # is deliberately not used: this harness decides by what was **written**, as
+  # the address mode's comment above says, and a corpus case that traps on
+  # purpose already exits non-zero.
+  vg=()
+  [[ $mode == valgrind ]] &&
+    vg=(valgrind -q --error-exitcode=0 --errors-for-leak-kinds=none)
   ( cd "$work" && ASAN_OPTIONS=detect_leaks=1 \
-      TSAN_OPTIONS="halt_on_error=0 exitcode=0" ./prog ) \
+      TSAN_OPTIONS="halt_on_error=0 exitcode=0" \
+      ${vg[@]+"${vg[@]}"} ./prog ) \
     >"$work/out.txt" 2>"$work/err.txt" <"$in"
 
   # A program that wanted file names on its command line, which this harness
@@ -301,6 +334,23 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
     fi
     clean=$((clean + 1)); continue
   fi
+  # Valgrind's findings are `==pid== Invalid write of size 4` and the like,
+  # which match none of the three signatures above -- so without this arm the
+  # mode would run the whole corpus under Valgrind and report every case clean
+  # (ADR-0353). A gate that cannot see its own tool's output is the shape
+  # `format-check` shipped with (ADR-0282).
+  if [[ $mode == valgrind ]] &&
+     grep -qE '^==[0-9]+== (Invalid|Use of uninitialised|Conditional jump|Mismatched|Source and destination)' \
+       "$work/err.txt"; then
+    if grep -qE "^$name( |\$)" \
+         "$root/tests/checks/sanitizer_findings.txt" 2>/dev/null; then
+      known=$((known + 1)); continue
+    fi
+    echo "--- $name ---" >&2
+    grep -m6 -E '^==[0-9]+== ' "$work/err.txt" >&2
+    failed=$((failed + 1)); continue
+  fi
+  if [[ $mode == valgrind ]]; then clean=$((clean + 1)); continue; fi
   if grep -qE '^==[0-9]+==ERROR: |:[0-9]+:[0-9]+: runtime error: ' \
        "$work/err.txt"; then
     # LeakSanitizer alone, on a case the catalogue already accounts for, is the

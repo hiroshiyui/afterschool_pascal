@@ -279,8 +279,21 @@ def main():
                                  % (name, was.get(name, 0), unc, ins))
         return 1
 
-    note = "" if total_unc == prev_unc else \
-        " -- %d fewer than the ratchet; --write-ratchet" % (prev_unc - total_unc)
+    # Both directions, for ADR-0350's reason: an improvement left unrecorded
+    # keeps the old floor, so a later regression back to it passes and the
+    # slack accumulates until the gate admits whatever nobody chose. This is
+    # `verify/`'s KNOWN_GAP rule (ADR-0013) said about a number.
+    if total_unc < prev_unc:
+        sys.stderr.write(
+            "runtime-coverage: %d lines never run, was %d -- %d FEWER, which "
+            "is good and must be recorded: the ratchet still admits %d, so a "
+            "regression back to it would pass.\n"
+            "  python3 tests/checks/runtime_coverage.py --write-ratchet\n"
+            "and say in the commit message what covered them.\n"
+            % (total_unc, prev_unc, prev_unc - total_unc, prev_unc))
+        return 1
+
+    note = ""
     print("runtime-coverage: %d of %d lines across %d translation units "
           "(%.1f%%), %d of %d branches (%.1f%%)%s"
           % (total_ins - total_unc, total_ins, len(rows),

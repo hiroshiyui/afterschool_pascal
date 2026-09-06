@@ -346,8 +346,24 @@ def run(root, pascalc, pasrt, work, args):
             for proc, n in where.most_common(6):
                 print(f"      {n:4d} in {proc}", file=sys.stderr)
         return 1
-    note = "" if total_unc == prev_unc else \
-        f" -- {prev_unc - total_unc} fewer than the ratchet; --write-ratchet"
+    note = ""
+    # **Both directions**, which is what separates a catalogue from a ratchet
+    # and is `verify/`'s KNOWN_GAP rule (ADR-0013) said about a number. An
+    # improvement left unrecorded is not free: the floor stays where it was, so
+    # a later regression back to it passes, and the slack accumulates silently
+    # until the gate is measuring nothing anybody chose. `line-coverage` is
+    # one-directional and `doc/sop.md` §7 counts that as a cost; this one and
+    # its two siblings do not add to the count (ADR-0350).
+    if total_unc < prev_unc:
+        print(f"lib-coverage: {total_unc} statements never run, was "
+              f"{prev_unc} -- {prev_unc - total_unc} FEWER, which is good and "
+              f"must be recorded: the ratchet still admits {prev_unc}, so a "
+              f"regression back to it would pass.\n"
+              f"  python3 tests/checks/lib_coverage.py --write-ratchet\n"
+              f"and say in the commit message what covered them.",
+              file=sys.stderr)
+        return 1
+
     slow = f", {waited} case(s) gave up at 15s" if waited else ""
     generic = [n for n, unc, ins in rows if ins == 0]
     print(f"lib-coverage: {total_ins - total_unc} of {total_ins} statements "

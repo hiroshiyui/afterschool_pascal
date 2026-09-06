@@ -325,6 +325,26 @@ jobs:
           SANITIZE_MODE: thread
           SANITIZE_REQUIRE: '1'
 
+      - name: Install Valgrind
+        run: apt-get install -y --no-install-recommends valgrind
+
+      - name: The corpus under Valgrind, and refuse to pass by skipping
+        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        env:
+          # The fourth mode of the same harness (ADR-0353), and the only one
+          # that instruments nothing. It belongs in this job because it asks
+          # the question the three steps above cannot: ADR-0342 established
+          # that clang's sanitizer passes act on functions carrying an
+          # attribute and this emitter writes none, so what they watch is
+          # `runtime/*.c` and not one line of the compiled Pascal. Valgrind
+          # reads the binary instead.
+          #
+          # `valgrind` is its own package and is not a documented build
+          # dependency, which is the whole reason the gate can skip and
+          # therefore the whole reason this variable exists (ADR-0330).
+          SANITIZE_MODE: valgrind
+          VALGRIND_REQUIRE: '1'
+
       - name: Measure the runtime's line coverage, and refuse to pass by skipping
         run: tests/checks/runtime_coverage.py tools/pascalcc build/bin/pascalc
         env:

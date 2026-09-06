@@ -360,8 +360,23 @@ def main():
               "See doc/sop.md §5.", file=sys.stderr)
         return 1
 
-    note = "" if len(uncovered) == want else \
-        f" -- {want - len(uncovered)} fewer than the ratchet; --write-ratchet"
+    # Both directions, for ADR-0350's reason: an improvement left unrecorded
+    # keeps the old floor, so a later regression back to it passes and the
+    # slack accumulates until the gate admits whatever nobody chose. It is
+    # `verify/`'s KNOWN_GAP rule (ADR-0013) said about a number, and it applies
+    # to `ambiguous` as well -- a generic call site removed makes statements
+    # measurable again, and that too is a floor somebody has to record.
+    if len(uncovered) < want or len(ambiguous) < wamb:
+        print(f"lsp-coverage: {len(uncovered)} never run and "
+              f"{len(ambiguous)} unmeasurable, was {want} and {wamb} -- "
+              f"FEWER, which is good and must be recorded: the ratchet still "
+              f"admits the old numbers, so a regression back to them would "
+              f"pass.\n  python3 tests/checks/lsp_coverage.py --write-ratchet"
+              f"\nand say in the commit message what covered them.",
+              file=sys.stderr)
+        return 1
+
+    note = ""
     print(f"lsp-coverage: {len(ran)} of {len(denom)} statements run over "
           f"{sessions} sessions ({pct:.1f}%), {len(ambiguous)} unmeasurable "
           f"in {len(generics)} generic "
