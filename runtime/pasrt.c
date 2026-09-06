@@ -294,15 +294,6 @@ void pas_index_error_at(int lo, int hi, const char *file, int line, int col) {
   pas_error_end(file, line, col);
 }
 
-// The seed compiler (seed/*.ll) still calls this two-word form, and it must
-// go on linking until the next reseed: a position it does not pass is no
-// position, never a guessed one. Written with // because the path holds a
-// `/*` and a block comment cannot: -Wcomment is a warning and this file's
-// build has to stay clean.
-void pas_index_error(int lo, int hi) {
-  pas_index_error_at(lo, hi, NULL, 0, 0);
-}
-
 /// And the same for a store into a subrange whose bounds are discriminants
 /// (ISO/IEC 10206:1991 §6.2.3.8 b), ADR-0133). Where the bounds are constants
 /// the compiler writes the *type* -- `value out of range (small)`, or
@@ -316,15 +307,6 @@ void pas_range_error_at(int lo, int hi, const char *file, int line, int col) {
   fflush(stdout);
   fprintf(stderr, "runtime error: value out of range (%d..%d)", lo, hi);
   pas_error_end(file, line, col);
-}
-
-// The seed compiler (seed/*.ll) still calls this two-word form, and it must
-// go on linking until the next reseed: a position it does not pass is no
-// position, never a guessed one. Written with // because the path holds a
-// `/*` and a block comment cannot: -Wcomment is a warning and this file's
-// build has to stay clean.
-void pas_range_error(int lo, int hi) {
-  pas_range_error_at(lo, hi, NULL, 0, 0);
 }
 
 /// ISO/IEC 10206:1991 §6.4.6 d): two types produced from one schema with
@@ -342,15 +324,6 @@ void pas_disc_error_at(const char *schema, const char *disc, int left, int right
   pas_error_end(file, line, col);
 }
 
-// The seed compiler (seed/*.ll) still calls this two-word form, and it must
-// go on linking until the next reseed: a position it does not pass is no
-// position, never a guessed one. Written with // because the path holds a
-// `/*` and a block comment cannot: -Wcomment is a warning and this file's
-// build has to stay clean.
-void pas_disc_error(const char *schema, const char *disc, int left, int right) {
-  pas_disc_error_at(schema, disc, left, right, NULL, 0, 0);
-}
-
 /// ISO 7185 §6.7.2.5 compares two strings character by character and gives the
 /// operators only to strings of one length. Where both lengths are written in
 /// the program the compiler says so; where one is a discriminant, this does.
@@ -362,15 +335,6 @@ void pas_length_error_at(int left, int right, const char *file, int line,
           "(%d and %d)",
           left, right);
   pas_error_end(file, line, col);
-}
-
-// The seed compiler (seed/*.ll) still calls this two-word form, and it must
-// go on linking until the next reseed: a position it does not pass is no
-// position, never a guessed one. Written with // because the path holds a
-// `/*` and a block comment cannot: -Wcomment is a warning and this file's
-// build has to stay clean.
-void pas_length_error(int left, int right) {
-  pas_length_error_at(left, right, NULL, 0, 0);
 }
 
 static void pas_error2(const char *msg, const char *what) {
