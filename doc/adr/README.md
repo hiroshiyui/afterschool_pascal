@@ -323,7 +323,7 @@ the alternatives that were rejected and why.
 | [0312](0312-waiting-for-one-task.md) | Waiting for one task | Accepted |
 | [0313](0313-waiting-for-whichever-comes-first.md) | Waiting for whichever comes first | Accepted |
 | [0314](0314-a-decimal-is-the-language-s-to-round.md) | A decimal is the language's to round | Accepted |
-| [0315](0315-methods-and-traits-without-inheritance.md) | Methods and traits, without inheritance | Proposed |
+| [0315](0315-methods-and-traits-without-inheritance.md) | Methods and traits, without inheritance | Proposed (increment B built: ADR-0338 to ADR-0341) |
 | [0316](0316-an-array-says-what-its-components-are.md) | An array says what its components are | Accepted |
 | [0317](0317-the-other-half-of-the-borrow-argument.md) | The other half of the borrow argument | Accepted |
 | [0318](0318-the-borrow-that-may-not-release.md) | The borrow that may not release | Accepted |

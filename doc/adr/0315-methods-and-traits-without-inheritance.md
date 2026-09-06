@@ -4,10 +4,22 @@ Date: 2026-09-03
 
 ## Status
 
-**Proposed**, 2026-09-03. **Nothing is implemented.** This is the first record
-in this tree whose status is not *Accepted*, and the reason is that it was
-asked for as a design: the shape is to be argued before any code exists. Read
-it as a proposal with its costs measured, not as a decision taken.
+**Proposed**, 2026-09-03. **Increment B is built; A and C are not.** This is
+the first record in this tree whose status is not *Accepted*, and the reason is
+that it was asked for as a design: the shape was to be argued before any code
+existed. Read the increments A and C below as a proposal with its costs
+measured, not as a decision taken.
+
+**What changed, and it changed this record's own staging.** Increment B —
+traits, `impl … for`, `Self`, and `T: Trait` bounds — landed on 2026-09-06 by
+ADR-0338 to ADR-0341, and **A was not a prerequisite for it**, which the
+Staging table below asserts and which is wrong: B is built directly on
+AP 6.7.3.10.5's category machinery. Four further records were needed to get
+there and each says why the one before it was wrong, so the design below is
+not what was built — AP 6.7.9 and AP 6.7.10 are. `lib/dialect/passortx.pas`
+(ADR-0344) is the first client of it that is not a test. The body of this
+record is left as written, because what it is for is the argument against
+Object Pascal's model and the costing of three increments, and both survive.
 
 **The four choices it was written to put are settled** (2026-09-03, by the
 maintainer), and each is now stated as the decision below with the rejected
