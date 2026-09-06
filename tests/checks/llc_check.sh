@@ -79,10 +79,13 @@ done
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Which LLVM proved it. Worth printing: this check compares two backend
-# configurations of one LLVM, so the version is the whole of what it was.
+# Which LLVM proved it, and which machine. Worth printing: this check compares
+# two backend configurations of one LLVM, so the version is the whole of what
+# it was -- and the target is the whole of *which* code generator it was, which
+# is the half that went unsaid while the aarch64 job proved x86-64.
 echo "llc-second-backend: $(llc --version | grep -i version | head -1 |
                             sed 's/^ *//')"
+echo "llc-second-backend: target ${AFTERSCHOOL_PASCAL_TARGET:-x86_64 by default}"
 
 # `llc` defaults to a non-PIC relocation model while the system linker defaults
 # to PIE, and the mismatch fails at link time with a message about
@@ -90,6 +93,25 @@ echo "llc-second-backend: $(llc --version | grep -i version | head -1 |
 # argument to llc. `clang` compiling the .ll chooses the model itself, which is
 # why nothing else here has ever met this.
 llc_flags=(-relocation-model=pic)
+
+# Which target the emitted IR states, and it has to be said here.
+# `AFTERSCHOOL_PASCAL_TARGET` is read by `tools/pascalcc` (ADR-0156) and by
+# nothing else -- the compiler itself reads only `AFTERSCHOOL_PASCAL_PATH`
+# (ADR-0244) -- and this script drives `pascalc` directly, so without this the
+# modules below carry the default `x86_64-pc-linux-gnu` however the variable is
+# set.
+#
+# That is not cosmetic on a machine that is not x86-64: `llc` reads the triple
+# out of the module, so it emitted x86-64 assembly on the aarch64 host and the
+# aarch64 assembler rejected the first comment it met -- `#` begins an
+# immediate on AArch64, not a comment. The `second-backend on aarch64` job had
+# never passed since it was added.
+#
+# It must name the **host**, because this gate links what `llc` produced and
+# then runs it. A cross target would fail at the link or at the first
+# execution, and the two jobs that set the variable each run on the machine
+# they name.
+target=${AFTERSCHOOL_PASCAL_TARGET:+--target=$AFTERSCHOOL_PASCAL_TARGET}
 
 # ---- 1. llc accepts every module this compiler emits ----------------------
 #
@@ -99,7 +121,8 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas; do
   base=${src%.pas}
   # An error-path case has no module to assemble; it is expected not to compile.
   [[ -e $base.err ]] && continue
-  "$pascalc" "$src" -o "$work/t.ll" >/dev/null 2>&1 || continue
+  "$pascalc" ${target:+"$target"} "$src" -o "$work/t.ll" >/dev/null 2>&1 ||
+    continue
   if ! llc "${llc_flags[@]}" "$work/t.ll" -o "$work/t.s" 2>"$work/err"; then
     echo "llc-second-backend: llc rejected the module for $src" >&2
     sed -n 1,10p "$work/err" >&2
@@ -130,7 +153,7 @@ comps=($(cat "$root/selfhost/compiler.components") compiler.pas)
 imports=(); n=0
 for component in "${comps[@]}"; do
   n=$((n + 1))
-  "$pascalc" "${imports[@]+"${imports[@]}"}" \
+  "$pascalc" ${target:+"$target"} "${imports[@]+"${imports[@]}"}" \
       "$root/selfhost/$component" -o "$work/ref$n.ll"
   imports+=(--import "$root/selfhost/$component")
 done
@@ -149,7 +172,8 @@ for level in -O0 -O2; do
   imports=(); n=0
   for component in "${comps[@]}"; do
     n=$((n + 1))
-    "$work/pascalc$level" "${imports[@]+"${imports[@]}"}" \
+    "$work/pascalc$level" ${target:+"$target"} \
+        "${imports[@]+"${imports[@]}"}" \
         "$root/selfhost/$component" -o "$work/out$level.$n.ll"
     imports+=(--import "$root/selfhost/$component")
     if ! cmp -s "$work/ref$n.ll" "$work/out$level.$n.ll"; then

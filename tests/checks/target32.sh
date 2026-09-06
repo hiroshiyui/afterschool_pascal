@@ -75,11 +75,28 @@ command -v clang >/dev/null 2>&1 || skip "no clang"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# Which i386, and it has to be said rather than left to clang (ADR-0345).
+#
+# This gate asks whether a program behaves when a *pointer* is four bytes, and
+# the processor's floating-point unit is no part of that question -- but the
+# default answer to it moved under us. clang 19 compiles this triple for `i686`,
+# whose x87 registers are 80 bits wide, and clang 21 compiles it for `pentium4`,
+# which has SSE2 and rounds a double to a double. So `tests/round_equivalence`
+# and `tests/trap_sqrreal` passed on one machine and failed on the other, with
+# nothing in this repository different between them.
+#
+# `pentium4` is chosen because it is what a current clang already does, so the
+# gate measures what a user gets. What it therefore does *not* measure is
+# x87-only i386, where §6.7.6.3's `round` and D.32's `sqr` both diverge --
+# excess precision in the significand and in the exponent -- and that is a fact
+# about the target rather than about this gate: `doc/sop.md` §7 carries it.
+cpu=-march=pentium4
+
 # Can this machine link and run a 32-bit binary at all? Asked with C, before
 # anything of this compiler's is built, so a missing libc is reported as what
 # it is rather than as a Pascal failure.
 printf 'int main(void){return 0;}\n' > "$work/probe.c"
-clang --target=$target -o "$work/probe" "$work/probe.c" >/dev/null 2>&1 ||
+clang --target=$target $cpu -o "$work/probe" "$work/probe.c" >/dev/null 2>&1 ||
   skip "clang cannot link for $target (a 32-bit libc is a separate package)"
 "$work/probe" >/dev/null 2>&1 || skip "this machine cannot run an i386 binary"
 
@@ -87,7 +104,7 @@ clang --target=$target -o "$work/probe" "$work/probe.c" >/dev/null 2>&1 ||
 # the host's, and linking it would fail at the first object.
 mkdir -p "$work/rt"
 for c in "$root"/runtime/*.c; do
-  if ! clang --target=$target -O2 -fPIC -c "$c" \
+  if ! clang --target=$target $cpu -O2 -fPIC -c "$c" \
        -o "$work/rt/$(basename "${c%.c}").o" 2>"$work/cc.err"; then
     echo "target32: the runtime would not compile for $target:" >&2
     head -20 "$work/cc.err" >&2
@@ -99,6 +116,11 @@ ar rcs "$work/rt/libpasrt.a" "$work/rt"/*.o || exit 1
 export AFTERSCHOOL_PASCAL_RUNTIME=$work/rt
 export AFTERSCHOOL_PASCAL_TARGET=$target
 export PASCALC=${PASCALC:-$root/build/bin/pascalc}
+# The programs are compiled with the same processor the runtime above was, and
+# `AFTERSCHOOL_PASCAL_CFLAGS` reaches every clang `tools/pascalcc` starts
+# (ADR-0264). Appended rather than assigned, so a caller sanitising or
+# instrumenting this sweep keeps its flags.
+export AFTERSCHOOL_PASCAL_CFLAGS="${AFTERSCHOOL_PASCAL_CFLAGS:-} $cpu"
 
 mapfile -t known < <(grep -v '^\s*#' "$catalogue" | grep -v '^\s*$' | awk '{print $1}')
 is_known() { local n; for n in "${known[@]}"; do [[ $n == "$1" ]] && return 0; done; return 1; }

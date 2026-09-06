@@ -661,10 +661,21 @@ jobs:
           # carries the loader the resulting binary names -- both halves are
           # required, because this gate *runs* what it builds and a link that
           # succeeds proves nothing about that.
+          #
+          # `gcc-multilib` is the third and it is the C library's *other* half:
+          # clang links every program against `crtbeginS.o`, `-lgcc` and
+          # `-lgcc_s`, which come from GCC and not from libc, and the 32-bit
+          # copies of those are in no package the two above depend on. Without
+          # it the job died at its own probe, on three `cannot find` lines
+          # naming files nothing here mentions -- which is what it died on
+          # from the day it was written (ADR-0345). The name is the
+          # version-independent one on purpose: `libgcc-14-dev:i386` supplies
+          # the same files and stops being a package the day Debian moves to
+          # GCC 15.
           dpkg --add-architecture i386
           apt-get update
           apt-get install -y --no-install-recommends \
-            libc6-dev-i386 libc6-i386
+            libc6-dev-i386 libc6-i386 gcc-multilib
 
       - uses: actions/checkout@v4
 

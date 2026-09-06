@@ -353,3 +353,4 @@ the alternatives that were rejected and why.
 | [0342](0342-what-an-audit-found-that-every-oracle-was-green-over.md) | What an audit found that every oracle was green over | Accepted |
 | [0343](0343-the-client-comes-before-the-design.md) | The client comes before the design | Accepted |
 | [0344](0344-the-first-client-of-a-trait.md) | The first client of a trait | Accepted |
+| [0345](0345-a-gate-can-answer-about-the-wrong-machine.md) | A gate can answer about the wrong machine | Accepted |
