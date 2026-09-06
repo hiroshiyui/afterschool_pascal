@@ -228,6 +228,31 @@ else
   fi
 fi
 
+# --- and that every project subcommand is documented too (ADR-0348) --------
+#
+# The check above derives its flags from the *argument loop*, and the
+# subcommands are not in it: they are a `case` on `${1:-}` before it, because a
+# subcommand is recognised by position rather than by shape. So a new one would
+# have been undocumented and unasked -- which is the defect the check above
+# exists for, one dispatch over.
+#
+# Derived the same way, from the dispatch's own arms rather than from a list
+# here, so adding a fifth subcommand moves this check without it being edited.
+checked=$((checked + 1))
+undocumented=""
+while IFS= read -r cmd; do
+  [[ -n $cmd ]] || continue
+  printf '%s\n' "$help_text" |
+    grep -qE "(^|[[:space:],])$cmd([[:space:],]|\$)" ||
+      undocumented="$undocumented $cmd"
+done < <(sed -n '/^case \${1:-} in$/,/^esac$/p' "$driver" |
+         sed -n 's/^  \([a-z|-]*\)).*/\1/p' | tr '|' '\n' |
+         sed 's/^ *//; s/ *$//' | grep -v '^$' | sort -u)
+if [[ -n $undocumented ]]; then
+  echo "--- help: pascalcc accepts subcommands --help does not mention:$undocumented ---" >&2
+  failed=$((failed + 1))
+fi
+
 # --- and that --target= picks the machine the module says it is for ---------
 #
 # ADR-0156. `clang` overrides both header lines with its own target's, so what

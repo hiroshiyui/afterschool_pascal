@@ -323,6 +323,18 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
                    ${CMAKE_SOURCE_DIR})
 
+  # ADR-0348: does a generated project build, run and test itself? No test case
+  # can ask -- every case in the corpus is one `.pas` compiled where it sits,
+  # and what this asserts is a directory the driver wrote, a config it read
+  # back, and three subcommands that only mean anything together. The generated
+  # module was wrong once (`end.` where a module's routine ends `end;`), which
+  # reading the generator did not catch and one run did.
+  add_test(NAME new-project
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/new_project.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(new-project PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+
   # ADR-0347: does the committed seed name the machine that generated it?
   # Since ADR-0293 a trap carries its own position, so the source's path is a
   # string constant in the emitted module, and `seed/refresh.sh` was handing

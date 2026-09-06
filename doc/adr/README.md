@@ -356,3 +356,4 @@ the alternatives that were rejected and why.
 | [0345](0345-a-gate-can-answer-about-the-wrong-machine.md) | A gate can answer about the wrong machine | Accepted |
 | [0346](0346-an-i386-has-sse2.md) | An i386 has SSE2 | Accepted |
 | [0347](0347-the-seed-named-the-machine-that-made-it.md) | The seed named the machine that made it | Accepted |
+| [0348](0348-a-project-is-a-convenience-over-a-file.md) | A project is a convenience over a file | Accepted |

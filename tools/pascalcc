@@ -50,6 +50,23 @@
 #     -h, --help      write this list and stop
 #     <file>.o        an object to link, from a component compiled with -c
 #
+#   And a project, which is a convenience over the above and never a second
+#   way to compile (ADR-0348). Each of these is recognised as the *first*
+#   argument and nowhere else, so a file called `build.pas` still compiles:
+#
+#     new-project <name>  write a skeleton: src/, test/, build/, a
+#     new <name>          .gitignore, a README and afterschool-pascal.toml
+#     build           compile the program afterschool-pascal.toml names
+#     run             build it, then run it; further arguments go to it
+#     test            build it, run it, and compare against test.expected
+#
+#   `afterschool-pascal.toml` is looked for here and in each enclosing
+#   directory. It carries what the compiler cannot infer -- which source is
+#   the program, where the executable goes, the optimisation level, the
+#   target, extra import paths and the link flags -- and deliberately **does
+#   not list your modules**: `import greet;` finds `src/greet.pas` by name,
+#   so adding a module is adding a file.
+#
 #   AFTERSCHOOL_PASCAL_CFLAGS adds flags to every `clang` below, which is
 #   how a sanitizer reaches the link as well as the translations.
 #   AFTERSCHOOL_PASCAL_LDFLAGS adds flags to the final link only, and goes
@@ -132,6 +149,279 @@ if [[ -z ${AFTERSCHOOL_PASCAL_PATH:-} && -d $root/lib/afterschool ]]; then
 fi
 
 die() { echo "pascalcc: $*" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# A project: `new-project`, `build`, `run` and `test` (ADR-0348)
+# ---------------------------------------------------------------------------
+#
+# **Intercepted as `$1` and nowhere else**, which is ADR-0140's spelling rule
+# applied to a command line: a source file is `something.pas` and an object is
+# `something.o`, so a bare word in the first position is a shape no existing
+# invocation has. `pascalcc build.pas` still compiles a file called that.
+#
+# **What a project file is for, and what it must not become.** The import graph
+# stays *inferred*: `import greet;` finds `src/greet.pas` because ADR-0244
+# looks in the source's own directory, and no key here lists a module. Listing
+# them would undo the property `doc/tour.md` is written around -- there is no
+# manifest and no build order to maintain -- and a generator that invented one
+# would be adding back what the design removed. What the file carries is what
+# the compiler cannot infer and a person has to remember instead: which source
+# is the program, where the executable goes, the optimisation level, the
+# target, extra import paths, and the **link flags** a program binding a
+# foreign library needs. That last is the sharp one -- a program using
+# `PasTls` must today know to set AFTERSCHOOL_PASCAL_LDFLAGS=-lssl -lcrypto,
+# and nothing tells it so.
+
+proj_file=afterschool-pascal.toml
+
+# The TOML subset, and it is a subset on purpose: `[section]`, `key = "string"`,
+# `key = ["a", "b"]`, `#` to end of line, and nothing else. No integers, no
+# booleans, no nesting, no multi-line strings.
+#
+# **It refuses what it does not understand**, naming the line, because that is
+# this script's rule everywhere else -- a driver that silently ignored an
+# option would be a driver that lies about what it did. A misspelled key in a
+# build file is exactly the defect that is otherwise found by the build being
+# subtly wrong.
+proj_read() {                     # proj_read <file>; sets proj_<key> variables
+  local file=$1 out
+  out=$(awk -v FS='' '
+    function die(msg) { printf("pascalcc: %s:%d: %s\n", FILENAME, NR, msg) > "/dev/stderr"; exit 1 }
+    { line = $0 }
+    { sub(/[ \t]*#.*$/, "", line); sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }
+    line == "" { next }
+    line ~ /^\[[a-z]+\]$/ {
+      section = substr(line, 2, length(line) - 2)
+      if (section != "project" && section != "build" && section != "test")
+        die("unknown section [" section "]")
+      next
+    }
+    {
+      if (section == "") die("a key outside any [section]")
+      eq = index(line, "=")
+      if (eq == 0) die("not a key = value line")
+      key = substr(line, 1, eq - 1); val = substr(line, eq + 1)
+      sub(/[ \t]+$/, "", key); sub(/^[ \t]+/, "", val)
+      full = section "." key
+      if (full != "project.name" && full != "project.version" &&
+          full != "build.program" && full != "build.output" &&
+          full != "build.opt" && full != "build.target" &&
+          full != "build.import-path" && full != "build.cflags" &&
+          full != "build.ldflags" && full != "test.expected")
+        die("unknown key " full)
+      gsub(/-/, "_", key)
+      name = "proj_" section "_" key
+      if (val ~ /^\[.*\]$/) {
+        inner = substr(val, 2, length(val) - 2)
+        n = split(inner, parts, ",")
+        printf("%s=()\n", name)
+        for (i = 1; i <= n; i++) {
+          p = parts[i]
+          sub(/^[ \t]+/, "", p); sub(/[ \t]+$/, "", p)
+          if (p == "") continue
+          if (p !~ /^".*"$/) die("an array holds quoted strings")
+          printf("%s+=(%s)\n", name, "\047" substr(p, 2, length(p) - 2) "\047")
+        }
+      } else if (val ~ /^".*"$/) {
+        printf("%s=%s\n", name, "\047" substr(val, 2, length(val) - 2) "\047")
+      } else die("a value is a quoted string or an array of them")
+    }
+  ' "$file") || exit 1
+  eval "$out"
+}
+
+# Find the project file here or in an enclosing directory, and `cd` there, so
+# `pascalcc build` works from anywhere inside a project the way `git` does.
+proj_find() {
+  local d=$PWD
+  while [[ $d != / ]]; do
+    if [[ -f $d/$proj_file ]]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  die "no $proj_file here or above -- 'pascalcc new-project <name>' writes one"
+}
+
+# The skeleton. Four directories and a file each, and every one of them earns
+# itself: `src/` is where the import search already looks, so a module beside
+# the program needs no path and no declaration; `test/` holds the golden the
+# `test` subcommand compares against; `build/` is where artefacts go and is
+# the only thing in `.gitignore` that matters.
+proj_new() {
+  local name=$1 dir=$1
+  [[ $name =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] ||
+    die "a project name is a Pascal identifier: letters, digits and _, not starting with a digit"
+  [[ ! -e $dir ]] || die "'$dir' already exists"
+
+  mkdir -p "$dir/src" "$dir/test" "$dir/build"
+
+  cat > "$dir/$proj_file" <<EOF
+# What this project is, and what building it needs. The compiler works out the
+# rest: \`import greet;\` finds src/greet.pas by name, so no module is listed
+# here and no build order is maintained anywhere.
+
+[project]
+name    = "$name"
+version = "0.1.0"
+
+[build]
+program     = "src/$name.pas"
+output      = "build/$name"
+opt         = "-O2"
+import-path = ["src"]
+# target  = "x86_64-pc-linux-gnu"
+# cflags  = []
+# ldflags = ["-lssl", "-lcrypto"]   # a program binding PasTls needs these
+
+[test]
+expected = "test/$name.out"
+EOF
+
+  cat > "$dir/src/$name.pas" <<EOF
+{ $name -- written by \`pascalcc new-project\`.
+
+  The import below resolves by name: \`greet\` is src/greet.pas, in this
+  source's own directory, and nothing had to say so. }
+program $name(output);
+
+import greet;
+
+begin
+  writeln(Greeting('world'))
+end.
+EOF
+
+  cat > "$dir/src/greet.pas" <<'EOF'
+{ A module, so that the program beside it has something to import. A
+  module-heading *is* the interface: what is not exported here cannot be
+  reached, and there is no second file saying so. }
+module greet;
+
+export greet = (Greeting);
+
+function Greeting(who: string): string(64);
+
+end;
+
+function Greeting;
+begin
+  Greeting := 'Hello, ' + who + '!'
+end;
+
+end.
+EOF
+
+  printf 'Hello, world!\n' > "$dir/test/$name.out"
+
+  cat > "$dir/.gitignore" <<'EOF'
+build/
+*.ll
+*.o
+EOF
+
+  cat > "$dir/README.md" <<EOF
+# $name
+
+\`\`\`sh
+pascalcc build      # writes build/$name
+pascalcc run        # builds, then runs it
+pascalcc test       # builds, runs, and compares against test/$name.out
+\`\`\`
+
+Each reads \`$proj_file\`, which says which source is the program, where the
+executable goes and what the link needs. **It does not list your modules.**
+\`import greet;\` finds \`src/greet.pas\` because the compiler looks in the
+importing source's own directory and then in each \`import-path\` -- so adding
+a module is adding a file, and there is no build order to maintain.
+
+| | |
+| --- | --- |
+| \`src/\` | your program and its modules |
+| \`test/\` | the output \`pascalcc test\` expects |
+| \`build/\` | artefacts, and the only thing in \`.gitignore\` that matters |
+
+\`pascalcc\` still takes a file directly -- \`pascalcc src/$name.pas -o $name\`
+-- and a project is a convenience over that, never a different compiler.
+EOF
+
+  echo "pascalcc: wrote $dir/"
+  echo "  cd $dir && pascalcc run"
+}
+
+# `build`, `run` and `test`, and the whole of what they do is assemble a
+# command line this script already accepted. That is deliberate: a project is a
+# convenience over `pascalcc file.pas`, never a second way to compile, so
+# anything one of these can do a person can do by hand and see how.
+proj_build() {
+  local dir; dir=$(proj_find) || exit 1
+  cd "$dir" || die "cannot enter $dir"
+  proj_build_name= proj_build_program= proj_build_output= proj_build_opt=
+  proj_build_target= proj_project_name= proj_project_version= proj_test_expected=
+  proj_build_import_path=() proj_build_cflags=() proj_build_ldflags=()
+  proj_read "$proj_file"
+
+  [[ -n ${proj_build_program:-} ]] || die "$proj_file names no build.program"
+  [[ -f ${proj_build_program} ]] ||
+    die "build.program is '${proj_build_program}', which is not a file"
+  local out=${proj_build_output:-build/${proj_project_name:-a.out}}
+  mkdir -p "$(dirname "$out")"
+
+  local args=()
+  [[ -n ${proj_build_opt:-} ]] && args+=("${proj_build_opt}")
+  [[ -n ${proj_build_target:-} ]] && args+=("--target=${proj_build_target}")
+  local p
+  for p in ${proj_build_import_path[@]+"${proj_build_import_path[@]}"}; do
+    args+=(--import-path "$p")
+  done
+
+  # The two flag lists reach `clang` the way the environment variables do, and
+  # through the same two seams (ADR-0264) -- appended to whatever the caller
+  # already set rather than replacing it, so a sanitizer run over a project
+  # keeps its flags.
+  AFTERSCHOOL_PASCAL_CFLAGS="${AFTERSCHOOL_PASCAL_CFLAGS:-} ${proj_build_cflags[*]+${proj_build_cflags[*]}}" \
+  AFTERSCHOOL_PASCAL_LDFLAGS="${AFTERSCHOOL_PASCAL_LDFLAGS:-} ${proj_build_ldflags[*]+${proj_build_ldflags[*]}}" \
+    "$0" ${args[@]+"${args[@]}"} "${proj_build_program}" -o "$out" || exit 1
+  # Set rather than printed. It was printed once, and `out=$(proj_build)` put
+  # the whole of it in a subshell -- so `test` read the config, built, and then
+  # found none of the keys the *subshell* had set. A function that both does
+  # the work and answers a value has to answer it in a variable here.
+  proj_out=$out
+}
+
+proj_run() {
+  proj_build
+  "./$proj_out" "$@"
+}
+
+# The third subcommand, and it is what makes `test/` mean something. A project
+# with a golden nothing compares it against would be a directory the generator
+# invented, which is the shape this whole feature is written against.
+proj_test() {
+  proj_build
+  local out=$proj_out want=${proj_test_expected:-}
+  [[ -n $want ]] || die "$proj_file names no test.expected"
+  [[ -f $want ]] || die "test.expected is '$want', which is not a file"
+  local got; got=$(mktemp)
+  if ! "./$out" > "$got" 2>&1; then
+    echo "pascalcc: $out exited non-zero" >&2
+    cat "$got" >&2; rm -f "$got"; exit 1
+  fi
+  if diff -u "$want" "$got"; then
+    rm -f "$got"; echo "pascalcc: test ok"
+  else
+    rm -f "$got"; die "output differs from $want"
+  fi
+}
+
+case ${1:-} in
+  new-project|new)
+    [[ $# -eq 2 ]] || die "usage: pascalcc new-project <name>"
+    proj_new "$2"; exit 0 ;;
+  build) [[ $# -eq 1 ]] || die "'build' takes no arguments"
+         proj_build; printf '%s\n' "$proj_out"; exit 0 ;;
+  run)   shift; proj_run "$@"; exit $? ;;
+  test)  [[ $# -eq 1 ]] || die "'test' takes no arguments"
+         proj_test; exit 0 ;;
+esac
 
 out=
 mode=link          # link | object | ir
