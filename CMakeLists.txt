@@ -323,6 +323,16 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
                    ${CMAKE_SOURCE_DIR})
 
+  # ADR-0347: does the committed seed name the machine that generated it?
+  # Since ADR-0293 a trap carries its own position, so the source's path is a
+  # string constant in the emitted module, and `seed/refresh.sh` was handing
+  # the compiler an absolute one. `tests/checks/seed_current.sh` asks the whole
+  # question and can only run at a tag -- the seed is legitimately stale
+  # between releases -- so it found this eight releases late. This half costs a
+  # grep and holds on every push.
+  add_test(NAME seed-portable
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/seed_portable.sh)
+
   # ADR-0245: is an object built from an older module-heading refused? §6.11.1
   # makes the heading the interface, and until this nothing noticed that an
   # object had been built from a different one -- the program wrote

@@ -221452,7 +221452,7 @@ L4:
 @s15369 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
 @s15370 = private unnamed_addr constant [22 x i8] c"integer overflow in *\00"
 @s15371 = private unnamed_addr constant [36 x i8] c"case: no label matches the selector\00"
-@at.file = private unnamed_addr constant [61 x i8] c"/home/yhh/MyProjects/afterschool_pascal/selfhost/apfront.pas\00"
+@at.file = private unnamed_addr constant [21 x i8] c"selfhost/apfront.pas\00"
 @at.1 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 77, i32 3 }
 @at.2 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 541, i32 8 }
 @at.3 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 545, i32 13 }

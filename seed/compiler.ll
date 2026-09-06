@@ -78935,7 +78935,7 @@ L101:
 @s5752 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s5753 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s5754 = private unnamed_addr constant [9 x i8] c"=== sema\00"
-@at.file = private unnamed_addr constant [62 x i8] c"/home/yhh/MyProjects/afterschool_pascal/selfhost/compiler.pas\00"
+@at.file = private unnamed_addr constant [22 x i8] c"selfhost/compiler.pas\00"
 @at.1 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 0, i32 0 }
 @at.2 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 152, i32 3 }
 @at.3 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 152, i32 9 }

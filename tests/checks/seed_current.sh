@@ -72,14 +72,19 @@ while read -r component; do
 done < "$root/selfhost/compiler.components"
 expected+=(compiler.pas)
 
+# From `$root` with a **relative** source path, exactly as seed/refresh.sh
+# translates: ADR-0293 puts the source's own path into the emitted module as
+# `@at.file`, so an absolute one would make this check answer about the
+# directory rather than about the source. It did, and this job is the only
+# place it runs, so the tag was where that was found (ADR-0347).
 for component in "${expected[@]}"; do
   base=${component%.pas}
-  if ! "$pascalc" "${imports[@]+"${imports[@]}"}" \
-       "$root/selfhost/$component" -o "$work/$base.ll"; then
+  if ! ( cd "$root" && "$pascalc" "${imports[@]+"${imports[@]}"}" \
+         "selfhost/$component" -o "$work/$base.ll" ); then
     echo "seed-current: $component did not translate" >&2
     exit 1
   fi
-  imports+=(--import "$root/selfhost/$component")
+  imports+=(--import "selfhost/$component")
 
   if ! cmp -s "$work/$base.ll" "$root/seed/$base.ll"; then
     echo "seed/$base.ll is not what this source produces." >&2

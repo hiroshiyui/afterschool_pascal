@@ -56,13 +56,24 @@ mapfile -t components < <(grep -v '^[[:space:]]*$' \
                               "$root/selfhost/compiler.components")
 components+=(compiler.pas)
 
+# Translated from `$root` with a **relative** source path, and that is not a
+# tidiness: since ADR-0293 every trap the compiler emits carries its own
+# position, so the source's path is a string constant *in the emitted module*
+# -- `@at.file`. An absolute path would put the machine that reseeded into a
+# committed artefact, and `tests/checks/seed_current.sh` could then pass only
+# in the directory that generated it. It failed for exactly that reason in the
+# tag job for v3.5.0, which is the one place it runs (ADR-0347).
+#
+# `tests/checks/seed_current.sh` translates the same way and must go on doing
+# so: the two are one claim, and a difference between them is a seed that
+# reproduces nowhere.
 translate() {         # translate <compiler> <output-prefix>
   local cc=$1 prefix=$2 imports=() n=0
   for component in "${components[@]}"; do
     n=$((n + 1))
-    "$cc" "${imports[@]+"${imports[@]}"}" \
-        "$root/selfhost/$component" -o "$prefix$n.ll"
-    imports+=(--import "$root/selfhost/$component")
+    ( cd "$root" && "$cc" "${imports[@]+"${imports[@]}"}" \
+        "selfhost/$component" -o "$prefix$n.ll" )
+    imports+=(--import "selfhost/$component")
   done
 }
 

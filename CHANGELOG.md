@@ -157,6 +157,15 @@ first client found the fifth thing in under an hour, which is now a rule in
 
 ### Fixed
 
+- **The committed seed no longer names the machine that generated it**
+  (ADR-0347). Since ADR-0293 a trap carries its own position, so the source's
+  path is a string constant in the emitted module — and `seed/refresh.sh`
+  handed the compiler an absolute one, so `seed/*.ll` held the reseeding
+  machine's home directory and `tests/checks/seed_current.sh` could pass only
+  in the directory that had produced it. Both now translate from the repository
+  root with a relative path, and a new `seed-portable` gate asks the cheap half
+  of the question on every push rather than at a tag.
+
 - **Disposing a long owned chain or a deep owned tree costs one frame**
   (ADR-0322, ADR-0333, AP 6.4.14.3). The release routine walked the structure
   recursively, so a list or a tree deeper than the stack ended the program in a

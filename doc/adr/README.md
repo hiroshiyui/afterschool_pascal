@@ -355,3 +355,4 @@ the alternatives that were rejected and why.
 | [0344](0344-the-first-client-of-a-trait.md) | The first client of a trait | Accepted |
 | [0345](0345-a-gate-can-answer-about-the-wrong-machine.md) | A gate can answer about the wrong machine | Accepted |
 | [0346](0346-an-i386-has-sse2.md) | An i386 has SSE2 | Accepted |
+| [0347](0347-the-seed-named-the-machine-that-made-it.md) | The seed named the machine that made it | Accepted |

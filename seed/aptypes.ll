@@ -9771,7 +9771,7 @@ L7:
 @s460 = private unnamed_addr constant [5 x i8] c"both\00"
 @s461 = private unnamed_addr constant [61 x i8] c"each was defined separately and 6.4.1 makes the definitions \00"
 @s462 = private unnamed_addr constant [15 x i8] c"distinct types\00"
-@at.file = private unnamed_addr constant [61 x i8] c"/home/yhh/MyProjects/afterschool_pascal/selfhost/aptypes.pas\00"
+@at.file = private unnamed_addr constant [21 x i8] c"selfhost/aptypes.pas\00"
 @at.1 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 2511, i32 3 }
 @at.2 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 2516, i32 3 }
 @at.3 = private unnamed_addr constant { ptr, i32, i32 } { ptr @at.file, i32 4742, i32 16 }
