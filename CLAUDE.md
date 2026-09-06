@@ -71,7 +71,7 @@ selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
 cmake --install build --prefix /opt/apascal  # bin/, lib/, lib/afterschool/
 seed/refresh.sh                             # regenerate the seed (release only)
 tests/checks/seed_current.sh                # is the committed seed this source's? (release only)
-tools/release.sh --archive build v3.5.0     # what a tag ships; --check <archive> is what the job runs on it (ADR-0296)
+tools/release.sh --archive build v3.5.1     # what a tag ships; --check <archive> is what the job runs on it (ADR-0296)
 
 tools/pascalcc tests/hello.pas -o /tmp/hello && /tmp/hello
 tools/pascalcc -S tests/hello.pas -o /dev/stdout   # inspect IR

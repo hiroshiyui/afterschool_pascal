@@ -13,6 +13,42 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-09-06
+
+**Nothing about the language changed.** The version number here tracks the
+accepted language, the diagnostics and the command line, and this release
+touches none of them: it is the documentation pass after 3.5.0 plus four dead
+symbols removed from the runtime. It is recorded because a release with nothing
+in it for a user is worth saying so plainly rather than dressing up.
+
+What the documentation pass found is the part worth reading, and it is in
+[`doc/history.md`](doc/history.md) under *The release that checked itself*:
+three defects that cutting 3.5.0 surfaced and no gate could see, a seed that
+named the machine that made it, and two documents claiming an oracle —
+AddressSanitizer over compiled Pascal — that has never existed.
+
+### Removed
+
+- **Four runtime symbols that nothing called**: `pas_index_error`,
+  `pas_range_error`, `pas_disc_error` and `pas_length_error`, the two-word
+  forms kept as wrappers when ADR-0293 gave every trap its own position. The
+  3.5.0 reseed made them dead — the seed calls only the `_at` forms — and
+  `doc/sop.md` §7 had said since ADR-0293 that they could go at the next
+  reseed.
+
+  **The one compatibility note in this release**: IR emitted by **v3.4.0 or
+  earlier** calls the two-word forms, so such a module will not link against
+  this runtime. Anything emitted by 3.5.0 or later is unaffected, and the
+  release archive ships the compiler and the runtime together. Recompile the
+  source rather than relinking old `.ll`.
+
+### Fixed
+
+- **A trap in a seed-built compiler names its position.** The wrappers passed
+  none, so a crash *in* `build/bin/pascalc` — which `procedure-coverage` and
+  `fuzz` watch for — reported where nothing. This is a fact about building the
+  compiler rather than about using it.
+
 ## [3.5.0] - 2026-09-06
 
 The release that finished the memory model and then found out what it had left
@@ -3449,6 +3485,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.5.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.1
 [3.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.0
 [3.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.4.0
 [3.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.3.0

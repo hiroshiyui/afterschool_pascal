@@ -27,8 +27,9 @@ nobody has decided yet.
 
 ## Where development stands — 2026-09-06
 
-**Released: v3.5.0**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
-below the release line is in it. The compiler builds itself, stage 2 equals
+**Released: v3.5.1**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
+below the release line is in it. 3.5.1 changed nothing about the language: it
+is 3.5.0's documentation pass and four dead runtime symbols. The compiler builds itself, stage 2 equals
 stage 3 in every program-component, and the suite is green at `-O2` and at
 `-O0`.
 
@@ -36,6 +37,7 @@ stage 3 in every program-component, and the suite is green at `-O2` and at
 | --- | --- |
 | **Open and ready to do** | the platforms, and only the platforms — **and 32-bit is no longer among them** (ADR-0325, ADR-0346). **macOS has never been tried** and the runtime's five non-ISO names are all there, which makes it the cheapest unknown on this page; **Windows** needs two hand-written `FILE*`-over-memory functions, `_access` for `access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does, 13 offsets. Everything else below is a decision, a measurement, or a resource |
 | **Open and awaiting a decision** | the object model, and only it — ADR-0315 is `Proposed`, and what a retaken count changed about it is below. **Three rows left this cell on 2026-09-05, none by being built**: the ordinary `^T` is *kept* and written down as the unchecked form (ADR-0336); a record's `Drop` stays a row for a corrected reason, one asker being below the threshold for a design and wanting an ordering hook rather than a release; and whether a container owns its storage is answered *both, per container*, with the rule written down (ADR-0337) |
+| **Open and asked for** | one row, added 2026-09-06: **there is no way to start a project except by hand** — `pascalcc new-project <name>`, under [Getting it and learning it](#getting-it-and-learning-it). Three things need deciding before it is worth building, and none of them is the code |
 | **Open and awaiting a program** | [What a daily program still cannot reach for](#what-a-daily-program-still-cannot-reach-for), whose inventory is **empty** and whose lesson is what it keeps in its place. A row here is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
@@ -1153,6 +1155,36 @@ found.
   `pascalc prog.pas`. Two right answers to two different questions, wrong
   together; `bare-source-name` is the gate, and it has to be one because no
   test case can choose how it is named.
+
+- **There is no way to start a project except by hand.** *Asked for on
+  2026-09-06.* A person who has just installed the compiler has `pascalc`, a
+  library reachable by name, and no answer to *where do I put things*. Every
+  other row in this chapter was about what surrounds the compiler once you are
+  using it; this one is about the first ten minutes, and it is the only row
+  here that nobody has estimated.
+
+  What is wanted is `pascalcc new-project <name>` — alias `new` — writing a
+  skeleton: a program source that compiles and runs as it stands, a place for
+  modules the import search already looks in (`<directory>/<name>.pas` is the
+  rule, ADR-0244, so a `src/` beside the program needs no configuration at
+  all), a `.gitignore`, and whatever a reader needs to know what the
+  directories are for.
+
+  **Three things have to be decided before it is worth building**, and none of
+  them is the code. Whether the skeleton is one file or a tree — the import
+  search means a flat directory already works, so a tree has to earn itself.
+  Whether it writes anything a build needs, given that this language
+  deliberately has **no manifest and no build order to maintain**
+  (`doc/tour.md`), and a generator that invents one would be adding the thing
+  the design removed. And whether it belongs in `tools/pascalcc` at all, which
+  is a shell script that assembles and links, or in a program of its own —
+  `pascalc` cannot host it, a compiler that writes directories being a
+  different tool.
+
+  The test it has to pass is the chapter's own: does it get somebody from
+  *installed* to *a program running* faster than the tour does? If the answer
+  is that the tour's three lines are already enough, the row closes by being
+  answered rather than by being built, as three rows in this file have.
 
 ### Tooling
 

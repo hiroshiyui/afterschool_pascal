@@ -1186,7 +1186,7 @@ L1:
   store ptr @at.74, ptr @pas_at
   call void @pas_file_init(ptr %v77, i32 3, i32 73, ptr @s74, i32 1, i32 1, i32 0, i32 0)
   store ptr null, ptr @pas_at
-  call void @m.aptypes.afterschool.21c443973b6a41b6.init()
+  call void @m.aptypes.afterschool.1e4a5aab02f919e0.init()
   call void @m.apfront.afterschool.149c074f31f5cbfb.init()
   call void @p635(ptr @frame1)
   %v78 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 75
@@ -1389,7 +1389,7 @@ L9:
   %v173 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 74
   call void @pas_file_done(ptr %v173)
   call void @m.apfront.afterschool.149c074f31f5cbfb.fini()
-  call void @m.aptypes.afterschool.21c443973b6a41b6.fini()
+  call void @m.aptypes.afterschool.1e4a5aab02f919e0.fini()
   ret i32 0
 }
 
@@ -73273,7 +73273,7 @@ L101:
 @s90 = private unnamed_addr constant [18 x i8] c"i386-pc-linux-gnu\00"
 @s91 = private unnamed_addr constant [36 x i8] c"case: no label matches the selector\00"
 @s92 = private unnamed_addr constant [30 x i8] c"pascalc (Afterschool Pascal) \00"
-@s93 = private unnamed_addr constant [6 x i8] c"3.5.0\00"
+@s93 = private unnamed_addr constant [6 x i8] c"3.5.1\00"
 @s94 = private unnamed_addr constant [66 x i8] c"Afterschool Pascal -- the compiler, written in Afterschool Pascal\00"
 @s95 = private unnamed_addr constant [34 x i8] c"usage: pascalc [options] file.pas\00"
 @s96 = private unnamed_addr constant [45 x i8] c"  -o <file>       where to write the LLVM IR\00"
@@ -82752,8 +82752,8 @@ L101:
 @v.aptypes.progmainindex = external global i8
 @v.aptypes.annotate = external global i8
 @frame.aptypes = external global i8
-declare void @m.aptypes.afterschool.21c443973b6a41b6.init()
-declare void @m.aptypes.afterschool.21c443973b6a41b6.fini()
+declare void @m.aptypes.afterschool.1e4a5aab02f919e0.init()
+declare void @m.aptypes.afterschool.1e4a5aab02f919e0.fini()
 @frame.apfront = external global i8
 declare void @m.apfront.afterschool.149c074f31f5cbfb.init()
 declare void @m.apfront.afterschool.149c074f31f5cbfb.fini()

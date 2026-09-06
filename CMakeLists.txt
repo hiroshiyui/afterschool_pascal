@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.20)
 # C only. The C++ reference front end went with ADR-0232's conformance modes,
 # and with it the last thing here that needed a C++ compiler.
-project(afterschool_pascal VERSION 3.5.0 LANGUAGES C)
+project(afterschool_pascal VERSION 3.5.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 
