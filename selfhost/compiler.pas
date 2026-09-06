@@ -521,8 +521,6 @@ begin
   writeln('usage: pascalc [options] file.pas');
   writeln('  -o <file>       where to write the LLVM IR');
   writeln('                  (the source name with .ll, by default)');
-  writeln('                  (the dialect: Extended Pascal and what is');
-  writeln('                  added to it)');
   writeln('  --import <f>    a program-component already translated; its');
   writeln('                  module-headings supply this one''s interfaces');
   writeln('  --import-path <d>  where to look for an interface no --import');
@@ -533,8 +531,8 @@ begin
   writeln('  --dump-ast      write the parse tree and stop');
   writeln('  --dump-sema     write the tree Sema annotated and stop');
   writeln('  --target=<t>    which machine the emitted module states it is');
-  writeln('                  for: x86_64-pc-linux-gnu (default) or');
-  writeln('                  aarch64-linux-gnu');
+  writeln('                  for: x86_64-pc-linux-gnu (default),');
+  writeln('                  aarch64-linux-gnu or i386-pc-linux-gnu');
   writeln('  --dump-all      write all three, with section headers');
   writeln('  --dump-dispatch compile as usual, then write every');
   writeln('                  case-statement that dispatches on an');
