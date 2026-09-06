@@ -193,6 +193,32 @@ done
 
 [[ -n $source_file ]] || die "no input file"
 
+# An i386 this compiler emits for has SSE2, and this is where that is said
+# (ADR-0346). The IR is unaffected -- a `double` is a double in it whatever the
+# processor -- so nothing about this reaches `pascalc`; what needs saying is
+# which x86 the assembler generates for, and clang's default answer for this
+# triple is `i686`, whose x87 registers are eighty bits wide.
+#
+# Two things break on those eighty bits, both of them requirements rather than
+# preferences. 6.7.6.3 defines `round(x)` as equivalent to `trunc(x +- 0.5)`,
+# and the two disagree at -0.49999999999999994 where the sum is exactly -1.0 as
+# a double and a shade above -1 in a register. And D.32 makes `sqr(x)` yielding
+# a value the type does not have an *error*, which is checked by asking whether
+# the result is infinite -- and a fifteen-bit exponent makes `sqr(-1e200)` an
+# ordinary finite number, so the check does not fire and the program prints
+# where every other target here stops. A missed error condition is not
+# something a dialect aiming at modern computing gets to have on one target.
+#
+# `pentium4` rather than `-msse2 -mfpmath=sse`: it is one flag, it is what a
+# current clang already defaults to for this triple, and it names a processor
+# rather than a pair of code-generation switches. `tests/checks/target32.sh`
+# builds a runtime with direct clang calls and says the same thing there; the
+# two are the only places, and each names the other.
+cpu=()
+case $target in
+  *=i386-pc-linux-gnu) cpu=(-march=pentium4) ;;
+esac
+
 # The installed library goes on the end, after whatever --import-path the
 # caller wrote: the search takes the first directory holding the file, so a
 # caller's own copy of a module has to be looked at first or the flag would
@@ -275,7 +301,7 @@ for c in "${resolved[@]+"${resolved[@]}"}"; do
     die "component '$c' did not translate"
   fi
   cat "$work/c$n.txt" >&2
-  clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c \
+  clang ${target:+"$target"} ${cpu[@]+"${cpu[@]}"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c \
     "$work/c$n.ll" -o "$work/c$n.o" || die "component '$c' did not assemble"
   objects+=("$work/c$n.o")
 done
@@ -303,7 +329,7 @@ fi
 # -Wno-override-module: the IR names its own target triple, which clang would
 # otherwise warn about when it agrees with its own.
 if [[ $mode == object ]]; then
-  exec clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c "$ir" \
+  exec clang ${target:+"$target"} ${cpu[@]+"${cpu[@]}"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} -fPIC -c "$ir" \
        -o "${out:-$base.o}"
 fi
 
@@ -324,7 +350,7 @@ fi
 # first, and the exit status is still a failure. A driver that turned a link
 # error into something else would be the silent-ignoring this script's header
 # refuses.
-if clang ${target:+"$target"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
+if clang ${target:+"$target"} ${cpu[@]+"${cpu[@]}"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
      "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm -pthread \
      ${extra_ldflags[@]+"${extra_ldflags[@]}"} \
      -o "${out:-$base}" 2>"$work/link.txt"; then

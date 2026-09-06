@@ -456,6 +456,42 @@ target_check() { # <expected triple> <env value> <extra args...>
 target_check aarch64-unknown-linux-gnu aarch64-linux-gnu
 target_check x86_64-pc-linux-gnu       aarch64-linux-gnu --target=x86_64-pc-linux-gnu
 
+# --- an i386 this compiler emits for has SSE2 (ADR-0346) --------------------
+#
+# The one property here that cannot be read off the IR. A `double` is a double
+# in it whatever the processor, so what the rule decides is which x86 *clang*
+# generates for -- and clang's own default for this triple is `i686`, whose
+# eighty-bit x87 registers make 6.7.6.3's `round` contradict its clause and
+# D.32's `sqr` error go undetected. So the command line the driver builds is
+# what is asserted, traced out of `bash -x`.
+#
+# The trace is read whether or not clang then succeeds: a machine with no
+# 32-bit toolchain cannot finish this compilation and can still be asked what
+# the driver would have run.
+#
+# Both directions, and the second is the one that matters -- a rule written
+# without its condition would narrow *every* target to a 2003 processor and no
+# other check here would notice.
+cpu_check() { # <env value> <yes|no>
+  local env=$1 want=$2 trace
+  checked=$((checked + 1))
+  trace=$(AFTERSCHOOL_PASCAL_TARGET=$env PASCALC=$pascalc \
+          AFTERSCHOOL_PASCAL_RUNTIME=$runtime \
+          bash -x "$driver" -c "$work/target.pas" -o "$work/t.o" 2>&1 || true)
+  if grep -q -- '-march=pentium4' <<<"$trace"; then
+    [[ $want == yes ]] ||
+      { echo "--- target: $env was narrowed to a pentium4 ---" >&2
+        failed=$((failed + 1)); }
+  else
+    [[ $want == no ]] ||
+      { echo "--- target: $env was not given a processor with SSE2 ---" >&2
+        failed=$((failed + 1)); }
+  fi
+}
+cpu_check i386-pc-linux-gnu   yes
+cpu_check aarch64-linux-gnu   no
+cpu_check x86_64-pc-linux-gnu no
+
 # --- a misused command line is reported, and reported as a failure ----------
 #
 # The command line is part of the interface (CHANGELOG says so in as many

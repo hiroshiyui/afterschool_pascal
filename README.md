@@ -340,6 +340,13 @@ by default, `aarch64-linux-gnu`, or `i386-pc-linux-gnu`. `pascalcc` hands it to
 tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
 ```
 
+**An i386 has SSE2** (ADR-0346). `pascalcc` names `-march=pentium4` for that
+triple and for no other, because clang's own default there is `i686`, whose
+eighty-bit x87 registers make `round` contradict the clause defining it and
+stop `sqr`'s overflow error being detected at all. What that gives up is a
+Pentium III and earlier; a caller who wants the x87 back can name
+`-march=i686` in `AFTERSCHOOL_PASCAL_CFLAGS`.
+
 Any other target is refused. The list is short because each entry is a claim
 that this compiler's own size and alignment rules have been compared against
 LLVM's for that machine, which has been done for those three and no others —

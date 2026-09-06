@@ -115,6 +115,18 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **An i386 this compiler emits for has SSE2** (ADR-0346,
+  `doc/implementation-defined.md` §2.2). `tools/pascalcc` names
+  `-march=pentium4` on every `clang` it starts for `i386-pc-linux-gnu`, and for
+  no other target. clang's own default processor for that triple is `i686`,
+  whose x87 registers are eighty bits wide, and two things break on those
+  eighty bits: §6.7.6.3 defines `round(x)` as equivalent to `trunc(x ± 0.5)`
+  and the two disagree at `-0.49999999999999994`, and D.32's `sqr` error goes
+  **undetected**, `sqr(-1e200)` being an ordinary finite number in a register
+  with a fifteen-bit exponent. What is given up is a Pentium III and earlier.
+  A caller who wants the x87 back can name `-march=i686` in
+  `AFTERSCHOOL_PASCAL_CFLAGS`.
+
 - **A trait may not be named `numeric`, `ordinal`, `ordered` or `equatable`**
   (ADR-0344, AP 6.7.9). Those four spellings name a type-parameter category
   wherever a bound is written and nothing is looked up there, and a bound is

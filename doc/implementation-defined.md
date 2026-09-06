@@ -79,7 +79,7 @@ string-character (E.1).
 | 10206 | 7185 | Feature | This processor |
 |---|---|---|---|
 | E.3 | E.8 | `maxint` | `2147483647`. The integer type is −maxint..maxint (ADR-0014), so −2147483648 is not a value of it: the literal is refused at compile time and `-maxint - 1` traps. |
-| E.4 | E.3 | the real-type | IEEE 754 binary64. |
+| E.4 | E.3 | the real-type | IEEE 754 binary64, **at every stage of an expression and not only in storage** — which is a requirement on the target rather than on the type, and the reason an i386 this compiler emits for is required to have SSE2 (ADR-0346). |
 | E.5 | — | `minreal` | `2.2250738585072014e-308` — the smallest positive *normal* value, `DBL_MIN`. |
 | E.6 | — | `maxreal` | `1.7976931348623157e308` — `DBL_MAX`. |
 | E.7 | — | `epsreal` | `2.220446049250313e-16` — 2⁻⁵², `DBL_EPSILON`. |
@@ -93,6 +93,22 @@ string-character (E.1).
 Each of `minreal`, `maxreal` and `epsreal` is the shortest decimal that
 round-trips to the binary64 value it names, and the same characters appear in
 both compilers (ADR-0062).
+
+**An i386 this compiler emits for has SSE2**, and that is a decision rather
+than an observation (ADR-0346). `i386-pc-linux-gnu` is one of the three
+targets `--target=` admits, and clang's own default processor for it is
+`i686`, whose x87 registers are eighty bits wide — so an intermediate value
+would be wider than the type holding it, and two of this document's own
+answers would stop being true on that one target. §6.7.6.3 defines `round(x)`
+as equivalent to `trunc(x ± 0.5)`, and the two disagree at
+`-0.49999999999999994`, where the sum is exactly `-1.0` as a double and a
+shade above `-1` in a register; and D.32 makes `sqr(x)` yielding a value the
+type does not have an *error*, detected by asking whether the result is
+infinite, which a fifteen-bit exponent prevents — so `sqr(-1e200)` prints
+where every other target here stops. `tools/pascalcc` names `-march=pentium4`
+for this triple and for no other; the processor is from 2003, and a missed
+error condition on one target is not something this dialect will carry to
+reach older ones.
 
 ### 2.3 Output
 

@@ -75,21 +75,23 @@ command -v clang >/dev/null 2>&1 || skip "no clang"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Which i386, and it has to be said rather than left to clang (ADR-0345).
+# Which i386, and it is the language's answer rather than this gate's
+# (ADR-0345, ADR-0346). An i386 this compiler emits for has SSE2:
+# `tools/pascalcc` puts `-march=pentium4` on every clang it starts for this
+# triple, because clang's own default here is `i686`, whose eighty-bit x87
+# registers make §6.7.6.3's `round` contradict its clause and D.32's `sqr`
+# error go undetected.
 #
-# This gate asks whether a program behaves when a *pointer* is four bytes, and
-# the processor's floating-point unit is no part of that question -- but the
-# default answer to it moved under us. clang 19 compiles this triple for `i686`,
-# whose x87 registers are 80 bits wide, and clang 21 compiles it for `pentium4`,
-# which has SSE2 and rounds a double to a double. So `tests/round_equivalence`
-# and `tests/trap_sqrreal` passed on one machine and failed on the other, with
-# nothing in this repository different between them.
+# It is repeated here because this gate builds a runtime and a probe with
+# **direct** clang calls, which is the one path `pascalcc` is not on. Those two
+# places are the whole of it and each names the other; a runtime built for a
+# different processor than the programs linking it is what this line prevents.
 #
-# `pentium4` is chosen because it is what a current clang already does, so the
-# gate measures what a user gets. What it therefore does *not* measure is
-# x87-only i386, where §6.7.6.3's `round` and D.32's `sqr` both diverge --
-# excess precision in the significand and in the exponent -- and that is a fact
-# about the target rather than about this gate: `doc/sop.md` §7 carries it.
+# It also happens to be what makes this gate answer the same thing everywhere.
+# clang 19 defaults this triple to `i686` and clang 21 to `pentium4`, so before
+# the processor was named `tests/round_equivalence` and `tests/trap_sqrreal`
+# failed on CI and passed on a developer's machine with nothing in the tree
+# different between them.
 cpu=-march=pentium4
 
 # Can this machine link and run a 32-bit binary at all? Asked with C, before
@@ -116,11 +118,6 @@ ar rcs "$work/rt/libpasrt.a" "$work/rt"/*.o || exit 1
 export AFTERSCHOOL_PASCAL_RUNTIME=$work/rt
 export AFTERSCHOOL_PASCAL_TARGET=$target
 export PASCALC=${PASCALC:-$root/build/bin/pascalc}
-# The programs are compiled with the same processor the runtime above was, and
-# `AFTERSCHOOL_PASCAL_CFLAGS` reaches every clang `tools/pascalcc` starts
-# (ADR-0264). Appended rather than assigned, so a caller sanitising or
-# instrumenting this sweep keeps its flags.
-export AFTERSCHOOL_PASCAL_CFLAGS="${AFTERSCHOOL_PASCAL_CFLAGS:-} $cpu"
 
 mapfile -t known < <(grep -v '^\s*#' "$catalogue" | grep -v '^\s*$' | awk '{print $1}')
 is_known() { local n; for n in "${known[@]}"; do [[ $n == "$1" ]] && return 0; done; return 1; }
