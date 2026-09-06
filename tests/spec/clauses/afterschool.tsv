@@ -62,6 +62,7 @@
 6.4.6	Assignment-compatibility
 6.4.7	Schemata
 6.4.7.1	Type-valued discriminants
+6.4.7.2	The bound of a type-valued discriminant
 6.4.9	Type-inquiry
 6.4.11	Optional-types
 6.4.11.1	The denoter
@@ -168,6 +169,13 @@
 6.7.8	Task-declarations
 6.7.8.1	What may cross into a task
 6.7.8.2	What a task's body may name
+6.7.9	Trait-declarations
+6.7.9.1	Self
+6.7.9.2	A trait's routine names
+6.7.10	Implementation-declarations
+6.7.10.1	Where an implementation may stand
+6.7.10.2	Selecting an implementation
+6.7.10.3	Reading a trait heading
 6.8	Expressions
 6.8.3	Operators
 6.8.3.5	Relational operators

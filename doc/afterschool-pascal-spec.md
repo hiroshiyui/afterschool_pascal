@@ -1896,6 +1896,28 @@ word-symbol of the dialect that it is not already of ISO 7185 §6.1.2 and
 ISO/IEC 10206:1991 §6.1.2. It is admitted in one position and is a word-symbol
 of both standards there and everywhere else.
 
+**6.4.7.2 The bound of a type-valued discriminant [added].** A
+discriminant-specification whose type is `type` may instead name a trait
+(6.7.9):
+
+    discriminant-specification = identifier-list ':'
+                                 ( ordinal-type-name | 'type'
+                                 | trait-identifier ) .
+
+Each identifier of such a discriminant-specification shall be a type-valued
+discriminant exactly as the `type` form makes it. It shall be an error for the
+corresponding actual-discriminant of a tuple the type is produced with to be a
+type for which no implementation-declaration (6.7.10) of that trait is in
+force; the error shall be reported, and shall be attributed to the
+type-denoter that produced the type.
+
+NOTE — This is where a bound pays. The client names the type once, in the
+type-denoter it writes, and every routine over the schema is unchanged: a
+routine taking a pointer to the schema determines nothing from its own
+parameter (6.7.3.10.4), so a bound written on the routine could not reach the
+case a growable container is. Both sites at which such a type is produced are
+covered, a pointer's domain-type and a written-out application (ADR-0338).
+
 NOTE 1 — A schema parameterises a type by a *value* in ISO/IEC 10206:1991,
 which is what makes `list of T` unsayable there and what a library here has
 been paying for: `PasVector` holds integers, `PasStrVec` and `PasList` hold
@@ -2738,14 +2760,27 @@ type-parameter-specification may be preceded, within the
 formal-parameter-section, by a **type-parameter-category**:
 
     type-parameter-specification = identifier-list ':'
-                                   [ type-parameter-category ] 'type' .
+                                   [ type-parameter-bound ] 'type' .
+    type-parameter-bound         = type-parameter-category
+                                 | trait-identifier .
     type-parameter-category      = 'numeric' | 'ordinal'
                                  | 'ordered' | 'equatable' .
 
 The identifiers `numeric`, `ordinal`, `ordered` and `equatable` occurring as a
 type-parameter-category shall have no defining-point and shall be identified by
-their spelling in that position only. It shall be an error for any other
-identifier to occur in that position; the error shall be reported.
+their spelling in that position only. Any other identifier occurring in that
+position shall denote a trait (6.7.9), and shall be identified in the region
+the formal-parameter-section is written in and not in the one an activation
+stands in. It shall be an error for an identifier in that position to denote
+neither; the error shall be reported.
+
+Where a type parameter is written with a trait-identifier, it shall be an
+error for the corresponding component of the type-argument-tuple of an
+activation to be a type for which no implementation-declaration (6.7.10) of
+that trait is in force; the error shall be reported at the activation.
+
+A type-parameter-bound shall name one category or one trait. Two are not
+admitted.
 
 Where a type parameter is written with a type-parameter-category, it shall be
 an error for the corresponding component of the type-argument-tuple of an
@@ -2781,8 +2816,9 @@ refused there, as it was before. What a category moves is the diagnostic for
 the block that misuses a type its category does **not** admit, from the
 generic's own source to the call that asked for it.
 
-NOTE 10 — The four spellings are recognised between the `:` of a
-formal-parameter-section and the word-symbol `type`, and nowhere else. A
+NOTE 10 — The four spellings, and a trait's identifier, are recognised between
+the `:` of a formal-parameter-section and the word-symbol `type`, and nowhere
+else. A
 parameter-form is one type-identifier, schema-name or type-inquiry, and what
 may follow one is `;` or `)`, so an identifier followed by the word-symbol
 `type` is a juxtaposition no program of the languages this document is written
@@ -2790,16 +2826,19 @@ against could contain. The category therefore reserves nothing and puts
 nothing in any region, and a program may go on declaring a type, a variable, a
 field or a routine of each of the four names.
 
-NOTE 11 — The set is closed. A category is a name for a group of operators
-this document already gives, so admitting an arbitrary predicate would be
-admitting a second type system; where a requirement on a type parameter is not
-one of these four, 6.7.3.10.2 remains the mechanism and the diagnostic is the
-body's.
+NOTE 11 — The set of *categories* is closed, and a trait is not a fifth one. A
+category is a name for a group of operators this document already gives; a
+trait names routines a **program** gives. Collapsing the two would be the
+second type system this note refuses, which is why the bound is a separate
+alternative of the production above and not another spelling in the list
+(ADR-0338).
 
-NOTE 12 — A formal-discriminant of 6.4.7.1 takes no category. A schema's
-type-valued discriminant is written where a *type-denoter* is being built and
-not where a routine is being activated, so there is no activation for a
-refusal to be attributed to.
+NOTE 12 — A formal-discriminant of 6.4.7.1 takes no category, and this remains
+true of the four: a schema's type-valued discriminant is written where a
+*type-denoter* is being built and not where a routine is being activated, so
+there is no activation for a refusal to be attributed to. A **trait** bound is
+admitted there (6.4.7.2), because its refusal is attributed to the
+type-denoter the program wrote.
 
 #### 6.7.5 Required procedures [extended]
 
@@ -3317,6 +3356,12 @@ written `task` alone gets the diagnostic it got before.
 task-declaration shall be a value parameter, and its type shall be
 transferable (6.4.16.3), a channel-type, or a handle-type (6.4.12).
 
+It shall not be a parameter whose type is produced from a schema-name written
+without its actual-discriminant-part (§6.7.3.2), nor from a conformant array
+schema (ISO 7185 §6.6.3.7): such a parameter has no value of its own to copy,
+what the activation-point brings being an address and a tuple, and a task's
+activation has no activation-point's frame to read the tuple from (ADR-0342).
+
 It shall not be a variable parameter, and it shall not be a procedural or
 functional parameter (§6.7.3.4, §6.7.3.5).
 
@@ -3393,6 +3438,179 @@ it, and that procedure may name whatever its own scope admits — so a task can
 still reach a global through a call. Closing that needs a whole-program walk
 over the call graph, which this processor does not do, and it is recorded as
 unchecked rather than claimed (`doc/sop.md` §7).
+
+**6.7.9 Trait-declarations [added].**
+
+    trait-declaration = 'trait' identifier ';'
+                        { trait-heading ';' } 'end' .
+    trait-heading     = procedure-heading | function-heading .
+
+A trait-declaration shall declare a **trait**. A trait is not a type: its
+identifier shall denote no type and shall stand in no type-denoter. It shall
+stand as a bound (6.4.7.2, 6.7.3.10.5) and nowhere else.
+
+`trait` shall not be a word-symbol. A declaration-part admits only `label`,
+`const`, `type`, `var`, `procedure`, `function` and `begin`, every one of them
+a word-symbol, so an identifier in this position is already a syntax error in
+both standards; the second token is required to be an identifier as well, so a
+program that wrote `trait` alone gets the diagnostic it got before (ADR-0140).
+
+A trait-declaration shall occur in a declaration-part, and its position among
+the constant, type, variable and procedure-and-function-declaration-parts shall
+be significant: ISO/IEC 10206:1991 §6.2.2.9 requires an applied occurrence to
+follow the defining-point, so a trait shall be declared before the bound that
+names it.
+
+A trait-heading shall not have a directive.
+
+**6.7.9.1 `Self`.** Within a trait-heading, the identifier `Self` shall denote
+the type of the implementation the heading is read for (6.7.10). It shall
+occur only as the whole parameter-form of a formal parameter, or as the whole
+result-type of a function-heading; it shall be an error for it to occur within
+either, and the error shall be reported at the trait-declaration.
+
+`Self` shall be a required identifier of the region enclosing the
+program-block, so a program may declare its own (ISO/IEC 10206:1991 §6.1.3),
+and within a trait-heading that declaration shall not be in force.
+
+NOTE 1 — A formal parameter named `self` cannot be written, and this is a
+consequence of §6.1.2 rather than a rule of this clause: case is not
+significant, so `self` and `Self` are one identifier and a parameter of that
+name is a redeclaration. The receiver takes a name of the program's choosing,
+which every example in this document does (ADR-0340).
+
+NOTE 2 — The restriction to a whole parameter-form is what lets
+ISO/IEC 10206:1991 §6.6.3.6's congruity be reused unchanged. §6.4.1 gives each
+type-denoter that is not a type-name its own type, so `array of Self` written
+in a trait and `array of Point` written in an implementation would be two type
+objects and congruity, which compares identity, would refuse every
+implementation — reporting, at each of them, about a parameter list the
+implementer did not write (ADR-0339).
+
+NOTE 3 — `^Self` is not refused by this clause because it cannot be written:
+§6.7.3.1's parameter-form is a type-identifier, a schema-name or a
+type-inquiry, so a pointer type-denoter has no position in a formal parameter
+list. It is unformable rather than checked, which is the shape of AP 6.4.14.9's
+own guarantee and carries the same caveat — a later feature that gives such a
+denoter a position takes this property with it silently (ADR-0201).
+
+NOTE 4 — A trait routine therefore takes and returns whole values of the
+implementing type. That is what the constructs this feature was measured
+against ask for, and a schema-name argument or a type-inquiry over `Self` is
+refused with the same message pending a decision that has no caller
+(ADR-0339).
+
+**6.7.9.2 A trait's routine names.** The identifier of a trait-heading shall
+have no defining-point in the block containing the trait-declaration. It shall
+be identified only as 6.7.10.2 identifies it.
+
+NOTE 5 — Two implementations of one trait each define every one of its
+routines, so declaring those names in the block the implementations stand in
+would make the second a redeclaration of the first (ADR-0340). This is not a
+per-type scope and involves no receiver syntax: the key is the trait.
+
+NOTE 6 — Two *traits* declaring one spelling are a program's problem exactly
+as two modules declaring one spelling are, and ISO/IEC 10206:1991 §6.11's
+`qualified` is the language's answer to both (ADR-0339).
+
+**6.7.10 Implementation-declarations [added].**
+
+    implementation-declaration = 'impl' trait-identifier 'for' type-identifier
+                                 ';' { implementation-routine ';' } 'end' .
+    implementation-routine     = ( 'procedure' | 'function' ) identifier ';'
+                                 block .
+
+An implementation-declaration shall declare that the type its
+type-identifier denotes **implements** the trait its trait-identifier denotes.
+
+`impl` shall not be a word-symbol, for 6.7.9's reason and by the same
+two-token test.
+
+The type-identifier shall denote a type. It shall not denote a schema, and it
+shall not denote a subrange-type.
+
+Each implementation-routine shall name a routine the trait declares, and shall
+write that name **alone**: the heading is the trait's, read with `Self` bound
+to the type this implementation is for, and shall not be written a second time.
+Every routine the trait declares shall be defined exactly once.
+
+For a given trait and a given type there shall be at most one
+implementation-declaration in a program-component.
+
+**6.7.10.1 Where an implementation may stand.** An implementation-declaration
+shall occur in the declaration-part of a program-block or of a module-block. It
+shall not occur in the declaration-part of a procedure or a function, and it
+shall not occur in a module-heading.
+
+NOTE 7 — An implementation is a fact about one translation (ADR-0341). Nested
+in a procedure it would be selected from outside that procedure, where the
+frames its routines read do not exist — which gave a wrong answer with a zero
+exit status before it was refused. In a module-heading it would be a routine
+body where §6.11.1 admits only headings.
+
+NOTE 8 — A *trait* may be declared in a module-heading and is then exported
+like any other name, which is what makes a trait bindable by a client. A
+module's own routines can reach an implementation the **client** wrote, where
+those routines are generic over a pointer: AP 6.7.3.5 re-reads a generic's
+body in the translation that activates it, which is the client's. A module
+supplying an implementation for its clients is **not provided**; a client that
+wants one writes it, and `doc/implementation-defined.md` carries the entry
+(ADR-0341).
+
+**6.7.10.2 Selecting an implementation.** Where a function-designator or a
+procedure-statement names an identifier that has no defining-point in force,
+and the first actual-parameter is a variable-access, the identifier shall be
+identified as a routine of the implementation, if there is one, that
+implements a trait declaring that identifier for the type of that
+variable-access. Where the type of that variable-access is a subrange-type,
+its host-type shall be used.
+
+Where more than one such implementation is found and they implement different
+traits, it shall be an error, and the error shall be reported.
+
+Where the first actual-parameter is not a variable-access, no implementation
+shall be selected.
+
+NOTE 9 — This lookup is consulted only after an ordinary one has failed, which
+is ISO/IEC 10206:1991 §6.2.2.11's own placement, so a program that declares
+its own routine of the name goes on meaning what it meant. A parameter or a
+variable of the name shadows the trait routine for the same reason.
+
+NOTE 10 — What "only after" costs is that a declaration in force **hides** the
+trait's routine of that spelling entirely: the identifier is identified, and
+its actual-parameters are then checked against the routine that was found. A
+program declaring `Rank` over integers cannot reach a trait's `Rank` over a
+record by writing `Rank`, and what it is told is that its argument has the
+wrong type. This is the ordinary consequence of one identifier having one
+meaning in a region, and ISO/IEC 10206:1991 §6.11's `qualified` is the
+language's answer where a program needs both.
+
+NOTE 11 — The type is read from the *designator*, whose type is a fact about
+its declaration, so it is read without checking the expression: checking it
+here would check every first actual twice and report a bad one twice
+(ADR-0340). A literal, an expression and a function-designator therefore select
+nothing and fall to the ordinary diagnostic for an identifier that denotes no
+routine, which is the right message for a call that can select nothing.
+
+NOTE 12 — Selection by host-type is ISO 7185 §6.4.2.4's rule said once more,
+and it is why a trait meant to serve subranges takes its receiver **by value**:
+§6.6.3.3 requires an actual variable parameter to have the formal's own type,
+so a `protected var` receiver of type `integer` is not usable at a subrange of
+integer, and the call says so (ADR-0340).
+
+NOTE 13 — Only a function-designator selects an implementation. A trait may
+declare a procedure and an implementation may define it, and calling it is not
+yet provided.
+
+**6.7.10.3 Reading a trait heading.** For each implementation-declaration, each
+heading of the trait shall be read again, with `Self` denoting the type the
+implementation is for and with the defining-points in force at the
+trait-declaration.
+
+NOTE 14 — Read again rather than copied, and the reason is AP 6.7.3.5's:
+resolution annotates the nodes it reads, so one heading shared between two
+implementations reports the first implementation's types at the second
+(ADR-0340). Re-reading is parsing, so it cannot disagree with parsing.
 
 ### 6.8 Expressions [extended]
 

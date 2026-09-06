@@ -568,3 +568,11 @@ afterschool	6.9.3.15.1	testable
 afterschool	6.9.3.15.2	testable	
 afterschool	6.9.3.15.3	testable	
 afterschool	6.9.3.15.4	testable	
+afterschool	6.4.7.2	testable	
+afterschool	6.7.9	testable	
+afterschool	6.7.9.1	testable	
+afterschool	6.7.9.2	testable	
+afterschool	6.7.10	testable	
+afterschool	6.7.10.1	testable	
+afterschool	6.7.10.2	testable	
+afterschool	6.7.10.3	structural	states how a trait heading is read for each implementation; every requirement it carries is one of 6.7.9.1's or 6.7.10's and is reported there
