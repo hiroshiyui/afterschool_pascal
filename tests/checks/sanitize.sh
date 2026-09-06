@@ -160,6 +160,71 @@ done
 ar rcs "$rtdir/libpasrt.a" "$rtdir"/pasrt.o "$rtdir"/pasrt_posix.o \
        "$rtdir"/pasrt_unicode.o "$rtdir"/pasrt_task.o || exit 1
 
+# **Does the sanitizer see compiled Pascal?** Asked of a Pascal program, after
+# the C probe above asked whether the checker links at all -- because for the
+# whole of this gate's life the answer was no and nothing here could tell
+# (ADR-0342): clang's passes instrument only a function carrying
+# `sanitize_address` or `sanitize_thread`, and the emitter wrote neither, so a
+# use-after-free written in Pascal printed 5 under a fully ASan-linked binary
+# and every one of the 377 programs below was "clean" of a class the tool had
+# not been asked about. ADR-0358 put the attributes on every function this
+# compiler emits, and this is the step that refuses to sweep without them: a
+# probe the sanitizer *must* report, compiled the way every case below is,
+# through the same pascalcc, the same compiler and the same runtime. It is the
+# floor's argument one step earlier -- a run that reaches nothing prints the
+# same tally as a clean one, and so does a run whose instrument is switched
+# off. Valgrind needs no attribute (ADR-0353) and coverage asks a different
+# question, so the two modes that instrument are the two that are asked.
+case $mode in
+  address)
+    cat >"$work/probe.pas" <<'EOF'
+program SanProbe(output);
+type Ptr = ^integer;
+var p, q: Ptr;
+begin
+  new(p); q := p; dispose(p); q^ := 5; writeln(q^)
+end.
+EOF
+    want='ERROR: AddressSanitizer: heap-use-after-free';;
+  thread)
+    cat >"$work/probe.pas" <<'EOF'
+program SanProbe(output);
+var n: integer; a, b: task;
+procedure Bump;
+var k: integer;
+begin
+  for k := 1 to 100000 do n := n + 1
+end;
+task Worker;
+begin
+  Bump
+end;
+begin
+  spawn a := Worker; spawn b := Worker; wait(a); wait(b); writeln(n)
+end.
+EOF
+    want='WARNING: ThreadSanitizer: data race';;
+  *) want=;;
+esac
+if [[ -n $want ]]; then
+  if ! AFTERSCHOOL_PASCAL_CFLAGS="$san" AFTERSCHOOL_PASCAL_RUNTIME="$rtdir" \
+       PASCALC="$pascalc" "$pascalcc" "$work/probe.pas" -o "$work/probe" \
+       >"$work/probe.txt" 2>&1; then
+    echo "sanitize[$mode]: the Pascal probe does not build" >&2
+    head -5 "$work/probe.txt" >&2
+    exit 1
+  fi
+  "$work/probe" >"$work/probe.txt" 2>&1 || true
+  if ! grep -q "$want" "$work/probe.txt"; then
+    echo "sanitize[$mode]: the sanitizer does not see compiled Pascal --" \
+         "the probe ran without '$want', so the emitted functions carry no" \
+         "sanitize_* attribute (ADR-0342, ADR-0358) and every 'clean' below" \
+         "would be a program the tool was never asked about" >&2
+    head -3 "$work/probe.txt" >&2
+    exit 1
+  fi
+fi
+
 # Every case the catalogue says ends with something outstanding. Read once.
 declare -A outstanding=()
 while read -r name n; do

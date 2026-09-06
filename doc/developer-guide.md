@@ -207,7 +207,7 @@ broken four times before that.
 
 | tool | what it buys | gate | refuses to skip when |
 | --- | --- | --- | --- |
-| `valgrind` | the only oracle here for a memory error in **compiled Pascal** — a use-after-free, an invalid read, a read of uninitialised memory. It instruments nothing and needs no cooperation from the emitter, which is exactly why it works where AddressSanitizer does not (ADR-0342, ADR-0353) | `valgrind-corpus` | `VALGRIND_REQUIRE` |
+| `valgrind` | the second opinion on a memory error in **compiled Pascal** — a use-after-free, an invalid read, and a read of uninitialised memory, which is the one AddressSanitizer does not see. It instruments nothing and needs no cooperation from the emitter, which is why it worked where AddressSanitizer did not until ADR-0358, and why it would notice that attribute going missing (ADR-0342, ADR-0353) | `valgrind-corpus` | `VALGRIND_REQUIRE` |
 | `llc` (LLVM) | a second backend configuration over the same IR, and a compiler built through it that must translate every component identically (ADR-0331) | `llc-second-backend` | `LLC_REQUIRE` |
 | `llvm-profdata`, `llvm-cov` | line coverage of the C runtime, which `gcov` used to give and lost with the C++ (ADR-0351) | `runtime-coverage` | `RUNTIME_COVERAGE_REQUIRE` |
 | `fpc` | a Pascal processor nobody here wrote, answering the corpus (ADR-0234). It is **not an authority**: where the two disagree the clause decides and the disagreement is catalogued | `fpc-differential` | `FPC_DIFFERENTIAL_REQUIRE` |
@@ -216,15 +216,19 @@ broken four times before that.
 | a 32-bit libc and `gcc-multilib` | the corpus run where a pointer is four bytes (ADR-0325). `gcc-multilib` is the half that is easy to miss: clang links every program against `crtbeginS.o` and `-lgcc`, which come from GCC and not from libc (ADR-0345) | `target32` | `TARGET32_REQUIRE` |
 | a C cross compiler | the two opaque struct sizes on a machine that is not this one (ADR-0155) | `target-sizes` | `TARGET_SIZES_REQUIRE` |
 | the Unicode Character Database | the only oracle here nobody in this project wrote. Fetched and **never committed** (ADR-0189, ADR-0190) | `unicode-conformance` | `UNICODE_CONFORMANCE_REQUIRE` |
-| `libclang-rt-dev` | AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer over the runtime's own C (ADR-0261, ADR-0327) | `sanitizers`, `thread-sanitizer` | `SANITIZE_REQUIRE` |
+| `libclang-rt-dev` | AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer over the runtime's own C (ADR-0261, ADR-0327) and, since ADR-0358, over compiled Pascal — every emitted function carries `sanitize_address` and `sanitize_thread`, and the harness proves it on a probe before it sweeps | `sanitizers`, `thread-sanitizer` | `SANITIZE_REQUIRE` |
 
 **Read the second row of that table against the first.** The four sanitizers
-watch `runtime/*.c` and nothing else, because clang's instrumentation passes
-act on functions carrying an attribute and this compiler emits none — so every
-argument of the form *ASan reports nothing* is about the C. Valgrind is what
-covers the Pascal, and the two are complements rather than alternatives: it
-sees a program's own loads and stores and it does not see a data race, which is
-ThreadSanitizer's half.
+watched `runtime/*.c` and nothing else until ADR-0358, because clang's
+instrumentation passes act on functions carrying an attribute and this
+compiler emitted none — so every argument of the form *ASan reports nothing*
+was about the C. Every function the compiler emits carries `sanitize_address`
+and `sanitize_thread` now, the harness refuses to sweep until a probe the
+sanitizer must report is reported, and the corpus was clean under both on the
+day it was switched on. Valgrind is the complement rather than the alternative:
+it instruments nothing, so it needs no cooperation from the emitter; it sees
+an uninitialised read, which ASan does not; and it does not see a data race,
+which is ThreadSanitizer's half.
 
 **`podman` or `docker` is not in the table and is worth knowing about.** No
 gate uses one, and several defects this year were only reproducible in a
@@ -280,19 +284,20 @@ nil" would be the same sentence written twice — it would pass at once and prov
 nothing while making the count look better. Pointers are covered by the
 cross-check, and ADR-0019 says so plainly rather than inflating the catalogue.
 
-**That sentence used to name AddressSanitizer as the other half and it was
-never true** (ADR-0342). The emitted IR carries no `sanitize_address`
-attribute, and clang's pass instruments only functions that do — so
-`AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` reaches the compilation of the
-`.ll` and changes nothing about a *program's* own loads and stores. A plain
-`new(p); q := p; dispose(p); q^ := 5` runs clean and prints 5 under a fully
-ASan-linked binary. The `sanitizers` gate is honestly described where it is
-defined — it asks whether the **runtime's own C** survives the suite, and it
-does that — but no argument of the form *ASan reports nothing* may be made
-about compiled Pascal. Whether to emit the attribute is a decision nobody has
-put; `doc/sop.md` §7 carries it. The same reasoning keeps `eof`,
-`eoln` and the buffer variable out: they are state properties of a stream. What
-they get instead is a test that can actually fail — `files_scratch.pas` opens
+**That sentence used to name AddressSanitizer as the other half, and it was
+not true until ADR-0358** (ADR-0342). The emitted IR carried no
+`sanitize_address` attribute, and clang's pass instruments only functions that
+do — so `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` reached the compilation
+of the `.ll` and changed nothing about a *program's* own loads and stores, and
+a plain `new(p); q := p; dispose(p); q^ := 5` printed 5 under a fully
+ASan-linked binary. Every emitted function carries the attribute now, that
+probe is what the `sanitizers` gate compiles before it sweeps and refuses to
+continue without, and the sentence is true again, with Valgrind beside it for
+what ASan does not see.
+
+The reasoning that keeps pointers out of the catalogue keeps `eof`,
+`eoln` and the buffer variable out too: they are state properties of a stream.
+What they get instead is a test that can actually fail — `files_scratch.pas` opens
 three thousand scratch files, which exhausts the descriptor table if a block
 exit ever stops closing them, and that was checked against a deliberately
 broken runtime.

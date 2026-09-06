@@ -2771,7 +2771,7 @@ begin
           WritePoolIr(r^.dom^.aliasAt, r^.dom^.aliasLen);
         writeln(ircode);
         writeln(ircode, 'define internal void @ownrel', r^.id:1,
-                '(ptr %own) {');
+                '(ptr %own) #1 {');
         nextReg := 0;
         nextBlock := 0;
         chain := SelfOwnedField(r^.dom, threaded);
@@ -11186,7 +11186,7 @@ begin
   writeln(ircode);
   write(ircode, 'define internal void ');
   PutTaskName(p);
-  writeln(ircode, '(ptr %a) {');
+  writeln(ircode, '(ptr %a) #1 {');
   BeginFunction(p);
   StrClear(a);
   StrAppend(a, '%');
@@ -11485,7 +11485,7 @@ begin
     writeln(ircode);
     write(ircode, 'define internal void ');
     PutDeferName(p);
-    writeln(ircode, '(ptr %frame) {');
+    writeln(ircode, '(ptr %frame) #1 {');
     BeginFunction(p);
     e := p^.defers;
     while e <> nil do begin
@@ -11534,7 +11534,7 @@ begin
   if p^.kind = skFunc then
     if IsMemory(p^.stype) then write(ircode, ', ptr %res');
   PutParamTypes(p^.params, true);
-  writeln(ircode, ') {');
+  writeln(ircode, ') #1 {');
 
   EnterFrame(p);
   EmitStmt(d^.pdBody^.blBody);
@@ -11641,6 +11641,16 @@ begin
   writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');
   writeln(ircode, 'declare i32 @_setjmp(ptr) #0');
   writeln(ircode, 'attributes #0 = { returns_twice }');
+  { Every function this emitter defines carries #1 (ADR-0358). The two
+    attributes are inert until clang runs the pass they name, and the pass
+    instruments only a function that carries them -- so without this line
+    `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` reached the compilation of
+    every .ll and changed nothing about a program's own loads and stores, and
+    `new(p); q := p; dispose(p); q^ := 5` printed 5 under a fully ASan-linked
+    binary (ADR-0342). Measured before it was taken: the corpus is clean under
+    both, 377 programs under ASan and the eleven concurrent ones under TSan,
+    so what it changes is what the sanitizers gate is an oracle *for*. }
+  writeln(ircode, 'attributes #1 = { sanitize_address sanitize_thread }');
   writeln(ircode, 'declare void @pas_reset(ptr)');
   writeln(ircode, 'declare void @pas_rewrite(ptr)');
   writeln(ircode, 'declare void @pas_get(ptr)');
@@ -11968,7 +11978,7 @@ begin
   writeln(ircode);
   write(ircode, 'define void ');
   PutModulePart(p, true);
-  writeln(ircode, '() {');
+  writeln(ircode, '() #1 {');
   EnterFrame(p);
   if m^.mdInit <> nil then EmitStmt(m^.mdInit);
   EmitExitTarget(p);
@@ -11984,7 +11994,7 @@ begin
   writeln(ircode);
   write(ircode, 'define void ');
   PutModulePart(p, false);
-  writeln(ircode, '() {');
+  writeln(ircode, '() #1 {');
   BeginFunction(p);
   if m^.mdFini <> nil then EmitStmt(m^.mdFini);
   EmitExitTarget(p);
@@ -12165,7 +12175,7 @@ begin
     implementation to say how a program parameter names an external file and
     this one binds them to the arguments, in the order they are written. }
   writeln(ircode);
-  writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) {');
+  writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) #1 {');
   EnterFrame(programSym);
   EmitStmt(progBlock^.blBody);
   { AP 6.7.5.9 in the main-program-block terminates the *program*, and does it

@@ -1761,10 +1761,12 @@ from the standards' text. **Five have run** (ADR-0162, ADR-0167, ADR-0168,
 ADR-0171, ADR-0342); the fifth was scoped to the memory model on 2026-09-06
 and found **three real holes every gate here was green over**, which is what
 the instrument exists for. It also found the largest thing in that record and
-the one no reading was needed for: **AddressSanitizer has never instrumented
+the one no reading was needed for: **AddressSanitizer had never instrumented
 compiled Pascal**, the emitted IR carrying no `sanitize_address` attribute, so
 every argument of the form *ASan reports nothing* made about a program's
-behaviour was empty. The *Known limitations* chapter used to close with the
+behaviour was empty — until ADR-0358 put the attribute on every emitted
+function, measured the corpus clean under it, and made the gate refuse to
+sweep without first proving that it bites. The *Known limitations* chapter used to close with the
 note that the next audit is worth running whenever that chapter has not moved
 for a while, and the note belongs here, since a claim no test names is a claim
 nothing checks.

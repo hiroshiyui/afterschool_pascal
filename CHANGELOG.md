@@ -15,6 +15,14 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **Every emitted function carries `sanitize_address` and `sanitize_thread`**
+  (ADR-0358). `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` now instruments
+  the program and not only the runtime — a use-after-free written in Pascal
+  is reported with a stack trace where it printed a value — and
+  `-fsanitize=thread` sees a race between two tasks. The attributes are inert
+  without the flag. The `sanitizers` and `thread-sanitizer` gates refuse to
+  sweep until a probe the sanitizer must report is reported, and the corpus
+  was clean under both with compiled Pascal instrumented on the day.
 - **`--dump-symbols` reports a task as `task`** (ADR-0357), where it reported
   `procedure` — a task is started by `spawn` and cannot be called, so an outline
   naming it a procedure sent a reader to the wrong construct. The language

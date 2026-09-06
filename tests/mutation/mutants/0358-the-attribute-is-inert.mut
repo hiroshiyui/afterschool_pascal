@@ -1,0 +1,8 @@
+adr: 0358
+file: selfhost/compiler.pas
+kills: sanitizers
+why: The attribute group every function references names nothing a sanitizer pass acts on, so clang instruments no compiled Pascal and the harness's own probe -- a use-after-free written in Pascal -- prints 5 under a fully ASan-linked binary, exactly as it did before this record. The gate refuses to sweep and says the emitted functions carry no sanitize_* attribute; without that step, 377 programs would be reported clean of a class the tool was never asked about.
+--- old
+  writeln(ircode, 'attributes #1 = { sanitize_address sanitize_thread }');
+--- new
+  writeln(ircode, 'attributes #1 = { nounwind }');

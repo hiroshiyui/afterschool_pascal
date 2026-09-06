@@ -366,3 +366,4 @@ the alternatives that were rejected and why.
 | [0355](0355-a-maps-key-implements-key.md) | A map's key implements Key | Accepted |
 | [0356](0356-a-refusal-is-said-once.md) | A refusal is said once | Accepted |
 | [0357](0357-a-task-is-its-own-word.md) | A task is its own word | Accepted |
+| [0358](0358-the-sanitizers-see-compiled-pascal.md) | The sanitizers see compiled Pascal | Accepted |
