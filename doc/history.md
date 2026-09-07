@@ -43,6 +43,7 @@ part that never changes was the first 2,000 lines a reader met.
 | [The four decisions the goal forced](#the-four-decisions-the-goal-forced) | ADR-0109's four, and the thing they have in common: not one decided the question its row was written to pose |
 | [The 32-bit port, and the width it left](#the-32-bit-port-and-the-width-it-left) | the two struck rows of the cross-platform chapter, moved whole, and the third time a foreign width was wrong — found by a register nobody could have found it with |
 | [After v3.6.0](#after-v360-a-configuration-file-and-the-boundary-audited) | six records in one day: a TOML library, a project reader that read all of it, and a command injection found, closed, audited and audited again |
+| [The blind-spot register](#the-blind-spot-register-the-audits-and-what-closed) | `doc/sop.md` §7's five audits and every row struck as closed, moved whole when the register was compacted to what is open |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -8208,3 +8209,439 @@ closed it; the width by one CI container with a dirty register; and the nine
 bindings by applying that container's lens by hand to every declaration,
 because no container could reach six of them. Each is now held by a gate whose
 first act was to fail on the defect it was written for.
+
+## The blind-spot register: the audits, and what closed
+
+`doc/sop.md` §7 is the live register of what is not checked, and it was
+compacted on 2026-09-07 to the open rows and a dated audit log. Everything it
+had accumulated that is *settled* — five end-to-end audits with what each
+found, every row struck as closed with the reason, and the list of gaps closed
+before the register had rows — is here, verbatim, in the order it stood. The
+open rows are still in `doc/sop.md`, each shortened to its claim; the record
+each cites carries the working.
+
+### The audits, as they were written
+
+**Audited as a whole on 2026-08-25** (ADR-0197), for the first time in 57 rows — until
+then it had only been appended to, which is the decay a register is supposed to
+prevent happening to the register itself. Four rows had gone stale in a way
+that mattered. Two ended "nothing is implemented yet", dating themselves from a
+record whose feature had since shipped; one carried a citation count from
+before four increments moved it; and one — the string-arena counter — said
+"a fifth producer would have nothing looking for it" while **three** had
+arrived and none had. Fixing that last one is the whole argument for reading
+this file rather than only writing to it. Re-audit after a milestone, as
+`docs-engineering` does for the rest of the documentation.
+
+**Audited as a whole again on 2026-08-29**, after ADR-0243, ADR-0244 and
+ADR-0245 landed in one batch. Five kinds of decay, and the two sharpest were
+not in this register at all — which is the argument for reading the whole
+documentation set on the same pass rather than only this file.
+
+- **A table that had stopped being a table**, twice. `CLAUDE.md`'s gate list
+  had the `runtime-isoc` row split in half by the `unicode-conformance` row
+  wedged between its two pieces, and this file had a row broken across two
+  lines; both render as a mangled row and an orphan paragraph. `CLAUDE.md` is
+  loaded into *every* session before any work starts and the damage had
+  survived however many readings since. **`markdown-tables` is the gate that
+  answers it** — every row the width of its header, in 92 tables across 274
+  files — and the class is why it is a gate rather than a proofread: a broken
+  table renders as something that still looks like documentation.
+- **And a third that the gate deliberately does not reach.** A cell held
+  `grep -lic 'mutation\|mutant'` in a code span, and GFM turns `\|` into a
+  literal `|` *everywhere*, code span included — so the command rendered as
+  `'mutation|mutant'`, which under basic `grep` matches a pipe character rather
+  than either word. The source was well formed and only the reader was misled;
+  nothing can tell it from a cell that wants a literal pipe. It is rewritten
+  without the alternation, and its counts had drifted too: 103 of 234 → 107 of
+  246.
+- **An arithmetic claim in prose, and it was false.** Two documents illustrated
+  `MapKey`'s 63-character bound with a URI that is **44** characters and fits.
+  The finding was true — one from this checkout's own `selfhost/` is 67 — and
+  the illustration of it was not. That is the shape ADR-0072 named for clause
+  numbers, met for a *number a reader could add up*: no oracle here checks
+  arithmetic written in prose, and the wrong example had been copied into a
+  second file.
+- **Six counts quoted from a gate had moved.** `variant-check` 936 → 952
+  sources and 2855 → 2935 guards; `target-layout` "four and a half thousand" →
+  9320; `heap-balance` 7 of 29 → 5 of 39; `clause-citations` 9145 across 1505
+  files → 9344 across 1537; `pending.txt` 187 → 188; and `procedure-coverage`
+  679 of 681 → **629 of 631**, which had moved *down* and so could not have
+  been explained away as growth. Every one was found by running the gate, which
+  is the only way any of them is ever found.
+- **A catalogue quoted as three where the gate says six.** `runtime-isoc`'s
+  POSIX header list gained `<netdb.h>`, `<poll.h>` and `<sys/socket.h>` with
+  ADR-0203 and ADR-0205, and the sentence naming it was never touched — a
+  *porting cost* understated by half in the file a reader consults to learn it.
+- **The `model-drift` CodeGen-region row met for a third and fourth time**, by
+  ADR-0244 and ADR-0245. Both were driver and emitter work below the banner
+  with no lowering in them, both needed the trailer, and one increment earlier
+  in the same week was pushed without it. The row was right, and reading it is
+  what put the trailer on these two.
+
+**The numbers re-run on 2026-09-01, and only the numbers.** Not an end-to-end
+read of every row — this was the narrower sweep the skill that governs these
+audits names as its own structural blind spot: *step 2 audits what a document
+says about the code, and a document quoting a gate is a different question.*
+Every count in `CLAUDE.md`, this file, `README.md` and `doc/developer-guide.md`
+that a gate reports was checked by **running the gate**, seventeen commits
+after the last such sweep. Five had moved and one was simply wrong:
+
+- `variant-check` 779 sources / 3144 guards → **785 / 3185**;
+  `clause-citations` 9344 across 1537 files → **10 307 across 1661**;
+  `format-check` 774 of 783 → **776 of 785**; `predicate-kinds` 39 predicates
+  → **40**, and `doc/developer-guide.md` had it as **36**, two documents
+  disagreeing about one gate's own answer.
+- **`line-coverage`'s pair was not stale, it was miscast.** *784 of the 853
+  directions never taken* is a **finding** ADR-0274 measured once, written in
+  the present tense beside two ratchets that move with the corpus — which now
+  answer 9747 of 10 608. It is now dated as a measurement, which is the repair;
+  updating the numbers would have destroyed the finding.
+- **And one claim that no arithmetic would have caught.** `CLAUDE.md` said
+  every testable clause of the dialect spec is cited *but for the three AP
+  5.5 d) names*. `run.py --coverage` says **114 of 118**, and the four are
+  6.7.7.6.1, 6.11, 6.13.1 and 6.13.2 — a different count *and* a different
+  identity, the last two being the clauses `stale-component` exists for and so
+  held by a harness rather than by a scenario. The sentence had a specific,
+  checkable, wrong referent, which is the shape ADR-0072 named for clause
+  numbers met once more.
+
+**A fourth shape, found on 2026-09-01 by trimming `doc/roadmap.md`, and it is
+not a number.** The three audits above look for a claim that has drifted from
+the code. This one is a claim that never met the code at all: **ADR-0266,
+ADR-0267 and ADR-0268 had landed and reached no document outside their own
+records.** Two of them closed roadmap rows that were still written as open --
+*`take` is refused for a handle in as many words* (ADR-0267 widened it) and
+the concurrency row reading **unblocked and unbuilt** (ADR-0268 built it) --
+and ADR-0267 was in no README, no digest and no `CLAUDE.md` bullet. A fourth
+claim, that the terminal binding an IDE needs is small and shaped and will be
+built *whenever something asks for it*, had been built by ADR-0262. And
+`doc/history.md`'s increment table had stopped counting seventeen increments
+earlier while its preamble said *thirty so far*.
+
+None of these is reachable by re-running a gate, which is what the audit above
+does: a gate answers a question about the compiler, and these are documents
+that were never told a decision was made. The distinguishing feature is that
+each was found by reading a **record** and asking where else it should appear
+-- the opposite direction from every other audit here, which starts from the
+document.
+
+**A gate could ask this and none does.** Every accepted ADR whose change moved
+the accepted language should be named somewhere outside `doc/adr/`, and
+`grep -l "ADR-0267" -- ':!doc/adr'` answers in one command. What makes it more
+than a grep is deciding which records *must* appear -- a gate over all 286
+would fail on every internal one -- and that is the design question rather
+than the mechanism. Not built here; recorded so the next reader does not
+conclude from four repairs that the class is closed.
+
+**A fifth shape, found on 2026-09-01 by a `security-audit` pass: a gate that
+prints a claim it never evaluated.** Not a stale number and not an untold
+document -- a check whose *subject* is silently empty, so it passes by asking
+nothing and says so in a sentence a reader takes for a measurement. Two of
+them, in one afternoon, and both were green on every run since they were
+written:
+
+- **`runtime-isoc` never bounded the concurrency unit's headers.** Pass 5
+  compared each `#include` against `$ISO_HEADERS` -- **a variable assigned
+  nowhere in the script**, the other four passes spelling it `iso_headers` and
+  holding base names *without* the `.h`. Under `set -u` the reference killed
+  the subshell it stood in, so `task_extra` came back empty whatever the file
+  included, and the summary went on calling `runtime/pasrt_task.c` *bounded by
+  `<pthread.h>` alone* as a fact. Adding `<sys/mman.h>` to it left the gate
+  **green and silent**; the only visible trace was one line of unread stderr.
+  ADR-0186 makes that list the whole of what a port has to satisfy, so the
+  claim was load-bearing and unchecked.
+- **`sanitizers` could not link 47 of the cases it counted.** `pascalcc`
+  translates every component `--dump-imports` reports *except* what the caller
+  named with `--import` -- "its object is the caller's to supply" -- and this
+  harness named them and supplied none, so every case with a `.components`
+  sidecar failed at the **link** and was counted as a *skip*. The runtime's
+  fourth translation unit was missing from the gate's own `libpasrt.a` too
+  (ADR-0268 added `runtime/pasrt_task.c` after ADR-0261 wrote the list), so
+  `tests/dialect/concurrency.pas` could not link either. 288 of 346 runnable
+  programs were reaching the only memory-safety oracle here, and the whole of
+  `lib/` and `lib/dialect/` was reaching it through **no case at all**. Both
+  are repaired -- 288 clean becomes **334**, and the 187 remaining skips are
+  exactly the 175 cases with no `.out` plus the 12 wanting file names on a
+  command line. The argument is the mutation: under-allocating a channel's
+  buffer by one element is an ASan heap-buffer-overflow the repaired gate
+  **flags**, and that the gate as it stood **passed** -- 288 clean, 0 flagged,
+  exit 0, with a heap overflow live in the runtime.
+
+The shape is `format-check`'s (ADR-0282) met twice more, and the lesson is
+narrower than "test the tests": **a gate that reports a count is checkable and
+a gate that reports a property is not.** `sanitize.sh` prints its four
+tallies, and the skip number had been 233 in plain sight for as long as the
+gate existed. What no reader could see is that a skip meant *did not link*
+rather than *has no `.out`*. A denominator a gate cannot fall below is the
+cheap answer -- this one has a floor of 100 and 288 cleared it comfortably --
+and the repair is to make the harness say **why** it skipped, since the three
+reasons were one number and only two of them are honest. It now reports
+`187 skipped (175 with no .out, 12 wanting file names, 0 unbuilt)`, and says
+in words that a case which cannot be linked is coverage lost rather than a
+case with nothing to run. **`unbuilt` is the number to read**: removing the
+fourth translation unit again makes it 1 and prints the reason, where the old
+tally moved from 233 to 234 and said nothing.
+
+**A count is now stated in one place where it was stated in four.** The
+language server's findings were *twenty-one, fifteen closed, six open* in this
+file's sibling documents and *twenty-six, seventeen, nine* in the section that
+is actually maintained. Rather than syncing four copies, three of them now
+point at the one that is kept — a fact stated twice is a fact that will
+disagree with itself, and this one had, in three places at the same snapshot.
+
+**ADR-0233's rows, added on implementation** (2026-08-28). The compiler became
+three §6.13 program-components, which **narrowed** the linking row below rather
+than striking it and **closed** the diverse-double-compiling window for good.
+It also moved eleven gates: every one that read "the compiler's source" or ran
+the compiler over it was reading or measuring a third of a compiler the moment
+the split landed, and every one of them now goes through
+`tests/checks/components.py`. Two ways that failure was *silent* are worth
+carrying forward, because neither is peculiar to this change:
+`procedure-coverage` and `line-coverage` *degraded* to a **skip** when the
+compiler could not translate its own source, so a break in them read as a
+missing `clang` — and both were skipping on the day the split landed. **Fixed
+on review**: the two now tell a skip (nothing on this machine to run with) from
+a failure (the measurement is broken) and exit 1 for the second, which is what
+every other gate here does. The second hazard stands, being a property of the
+language: an exported routine's header appears **twice** — §6.11.1 puts it in
+the module-heading and leaves the block repeating the name alone — so a regex
+anchored on `^function Name(` matches an interface entry with no body and finds
+nothing to read.
+
+**ADR-0236's row, added and struck on 2026-08-29.** The language server is the
+first program here that lives outside `tests/`, so it was briefly the first
+thing in the tree that every corpus sweep was blind to at once. The row was
+written saying the fix was a decision rather than a chore; it was a chore, and
+the row now records what closing it cost and what it bought — which was nothing
+for coverage and a real check for leaks. **Writing a row down is what got it
+closed**, and it is the second time in two days that has happened here: the
+`fpc-differential` gate shipped with a `*_REQUIRE` variable nothing set, was
+declared as a row, and had a CI job the same afternoon.
+
+**Audited again on 2026-08-28**, after version 3, over 67 rows. Six had gone
+stale and the release is why five of them did — a register describing what is
+*not* checked is exactly what a change that deletes five gates falsifies. Two
+rows closed: case-exhaustiveness is no longer read over the source (ADR-0229,
+ADR-0230 — and the row still said it was, having been rewritten around the
+gate's other half while its own title stayed false), and the
+mode-portability row is moot, its mechanism deleted rather than fixed. Three
+carried a **count a gate answers** — 1019 sources, 2821 guards, 368 citations
+across 331 scenarios — every one of them wrong, and every one of them checked
+by running the gate rather than by reading the sentence, which is the only way
+this shape is ever caught. One named `reserved_words.py` as the last gate
+parsing the compiler's source, and that file is deleted; the shape it stood for
+is not, so the row keeps it with ten live examples instead of one dead one.
+
+**Read end to end a third time on 2026-08-28**, after ADR-0233 landed and
+ADR-0234 was written — the same date as the audit above and a different tree,
+which is itself the finding: two of the four stale rows below were falsified by
+changes made *that day*, and a register re-read only after a milestone would
+have carried them for weeks. What it found:
+
+- **A row whose closing condition arrived.** "No third-party corpus" ended
+  *there is no replacement and none is available*. `fpc-differential` is not a
+  corpus and the title stands, but an external answer of some kind became
+  available that morning. This is ADR-0197's third shape exactly, and the
+  second time this register has been caught by it.
+- **A closed row describing a sandbox that had changed underneath it.** The
+  `langspec-audit` row said readers get the standards and *the BSI suite*;
+  ADR-0232 removed the suite and `sandbox.sh` says so in a paragraph where the
+  copy used to be. A struck-through row is still read — that is what struck
+  through means here — so it goes stale like any other.
+- **Two counts a gate answers.** `variant-check` says 936 sources where the row
+  said 934, the split having added two; the guard count was right. And the
+  mutation row's *two hundred records carry a mutation in their prose* is 103
+  of 234 by the only grep that can be written for it, which is an upper bound.
+  Both were checked by running the gate, which is the only way this shape is
+  ever caught.
+- **A row that was missing, which is the one worth the whole read.**
+  `fpc-differential` shipped that morning with a `FPC_DIFFERENTIAL_REQUIRE`
+  nothing set, so the only gate here answering the corpus with a second
+  processor ran on one machine and no CI job. Every comparable skipping oracle
+  had that covered years-equivalent ago. The row went in and was closed the
+  same day by the job that installs `fpc`; it is kept struck below because
+  what it records is that the gap was *shipped*.
+- **One row verified rather than assumed**, and it is the one ADR-0197 was
+  written about: the string-arena row says there are **eight** producers and
+  that a ninth would have nothing looking for it. There are eight
+  (`strTemps := strTemps + 1` in `selfhost/compiler.pas`). It is current, and
+  it is the row most likely to be stale next.
+
+**Read end to end a fourth time on 2026-09-06**, after v3.5.0 was cut. What it
+found is ADR-0197's three shapes again, one of each, which is the argument for
+doing this on a clock rather than after a change:
+
+- **A row whose own closing condition had arrived and nobody had looked.** *A
+  seed-built compiler's own traps name no position* ended *closes itself at the
+  next reseed, when the wrappers can go*. The release reseeded — twice — and
+  the seed now calls only the `_at` forms. The four wrappers in
+  `runtime/pasrt.c` were dead code that had linked for eight days after they
+  stopped being needed, and the person who met the condition was cutting a
+  release and did not re-read this file. That is exactly why the shape is
+  written down.
+- **Three counts a gate answers, and one of them is the third time.**
+  `variant-check` says 881 sources and 3531 guards where the row said 779 and
+  2855; the specification suite is 513 citations across 417 scenarios with 133
+  of 146 testable clauses cited, where the row said 360, 319 and 98 of 101 —
+  and that row *already* says to run the gate rather than trust it, having gone
+  stale twice before. It is now three. A row that warns about its own numbers
+  does not stop them going stale; running the gate does.
+- **A row that arrived twice in one day and was written both times.** The
+  environment-variable row (ADR-0335) gained `llc_check.sh` (ADR-0345) and
+  `seed_current.sh` (ADR-0347) as a second and third instance, and the row's
+  statement widened with them: it is not about environment variables, it is
+  about a harness passing a path, a target or a flag that is right where it was
+  written and wrong where it runs.
+
+Nothing else was found stale, and two rows were verified rather than assumed:
+the string-arena row still says **eight** producers and there are eight, which
+is the second audit running to make that check and the row ADR-0197 was written
+about; and the `-O1`/`-O3` row is still a judgement nobody has revisited.
+
+**Read end to end a fifth time on 2026-09-07**, the day after the fourth,
+because six records landed in it and a register re-read only on a clock would
+have carried what they falsified for a week. What it found is one row in the
+shape ADR-0197 named and one it did not:
+
+- **A row whose premise had been false for two days, and the closing record
+  did not re-read it.** *A slice's foreign count is widened to `i64` and
+  nothing can see that it is* argued the widening was right because every
+  target zero-extends a 32-bit register write — true of x86-64 and aarch64,
+  and this compiler admitted i386 on 2026-09-05 (ADR-0325), where `size_t` is
+  32 bits and the widening is wrong by the ABI. ADR-0364 fixed the emitter
+  and gated it without touching the row, which is the shape of the string-arena
+  row again: the person meeting the condition is working on a feature. Struck
+  below with the correction beside it.
+- **Two rows narrowed by the same records and not by their authors.** The
+  temporary-name race is `TemporaryPath`'s alone now that the server uses
+  `mkdtemp` (ADR-0363); and the *external declaration against the function it
+  names* row gained the one property ADR-0364 does hold — a scalar's width, as
+  a catalogue — while its title stands.
+- **And a comment and a document the records did not reach.** `lsp/pasls.pas`'s
+  header still said the scratch file carried the process id and was left
+  behind at exit, and `lsp/README.md` still gave `$TMPDIR/pasls-<pid>.pas` as
+  the default and described the `.tmpdir` session as checking a file named
+  for the pid — four paragraphs describing the mechanism ADR-0363 replaced
+  *because it was a hazard*. ADR-0197's fourth shape: a record that reached no
+  document outside itself, found by reading the record and asking where else
+  it should appear.
+
+- **And one the pass itself produced.** Rewriting that header comment two
+  lines shorter moved `lsp-coverage` from 92 never run and 32 unmeasurable to
+  91 and 30 — a comment, in a file where `--coverage` keys on the line. The
+  comment was padded back to eleven lines so that a docs commit leaves every
+  gate's output identical, which is this file's own rule; what it says about
+  the gate is that its two counts are not a property of the program alone, and
+  a ratchet that moves under a comment is one a reader should not read as a
+  measurement to the unit.
+
+Verified rather than assumed: the string-arena row still says **eight**
+producers and there are eight, a third audit running; `runtime-coverage` still
+reports `pasrt_posix.c` at 111 of 353 uncovered, the row's 68.6%, the new
+`pasx_exec_*` lines being reached by `lib_process_execute`; and the `-O1`/`-O3`
+row is still a judgement nobody has revisited.
+
+### The rows struck as closed
+
+| Blind spot | Consequence | Recorded |
+| --- | --- | --- |
+| ~~`langspec-audit`'s readers are **not isolated**~~ — closed by ADR-0228 | The harness injected `CLAUDE.md` — the reasoning for the clauses under audit included — before a reader's first turn, and it could not decline; all seven readers of the second run disclosed it, so a CONFIRMED verdict meant "no independent oracle contradicts it" and not "an uninfluenced reader agreed". Readers now run **out of process** against a sandbox built outside the repository, with the standards, a `pascalcc` and a **comment-stripped** compiler source and nothing else — the BSI suite was in it until ADR-0232, and `sandbox.sh` now carries a paragraph where the copy was, because 812 programs this compiler cannot compile would fail a reader for one reason having nothing to do with the clause under audit. Asked whether it was given project documentation, a reader in the repository names Afterschool Pascal and its path; one in the sandbox answers no. What is *not* closed: a reader is still a reader of the same family as the implementer, so a shared blind spot in reading English is untouched | ADR-0107, ADR-0228 |
+| ~~**`lsp/` is outside every corpus sweep**~~ — closed the day it was written | `line-coverage`, `procedure-coverage`, `heap-balance`, `variant-check` and the `--dump-all` sweep were all globbed over `tests/`, and `lsp/pasls.pas` is not there — it lives in `lsp/` because a server has to be a binary an editor can be pointed at rather than one compiled into a temporary directory and thrown away (ADR-0236). The row said the fix was a decision between two shapes; **it was the first shape and it was four lines**. `coverage.py` gained a group, `variant_check.sh` gained a `find` root, and `build.sh` learned `AFTERSCHOOL_PASCAL_OPT` so the corpus-wide `-O0` sweep reaches a program whose whole shape is a loop (ADR-0102). `heap-balance` needed more than a root and is the one worth reading: the server has no `.out` and cannot have one, so `run_test.sh` cannot drive it and `lsp/run.sh` does — which meant that harness had to take `run_test.sh`'s care about `PASHEAP_BALANCE` **twice over**, since `pascalcc` builds the server and the server then starts `pascalc` once per document, and both are Pascal programs on this runtime whose allocations are not the server's. Without that the first measurement read 16 324 outstanding variables; with it, four sessions balance at 0 and `pasls` is a catalogue line. **What the coverage half bought is nothing, and that is the result**: 446 statements never run before and after, so the server reaches no compiler statement the corpus did not already. What is *not* closed is not peculiar to `lsp/` — nothing measures any corpus program's own statement coverage, `pascalc --coverage` notwithstanding, and `fpc-differential` and `diagnostic-coverage` do not reach it by construction rather than by omission | ADR-0236, ADR-0102, ADR-0183 |
+| ~~**`fpc-differential` is run by no CI job**, so in practice it runs where someone has Free Pascal~~ — closed the same day it was opened | it skips 77 without `fpc`, which is right — `fpc` is not a documented dependency and must not become one. Every other gate here that skips is covered by a job that *refuses* to: `target-sizes` has `TARGET_SIZES_REQUIRE` set in two jobs and `unicode-conformance` has `UNICODE_CONFORMANCE_REQUIRE` in one, precisely so a skip cannot pass for a check. `FPC_DIFFERENTIAL_REQUIRE` exists and **nothing sets it**, so the second processor answers the corpus only on a machine that happens to have one — which today is the machine ADR-0234 was written on. The catalogue fails in both directions, so what is at risk is not a wrong entry but a **silent** one: a disagreement that appears or disappears between releases would be seen by whoever next runs it and by nobody else. The fix was a job that installs `fpc` and sets the variable, which is what the two rows above did for their oracles, and it exists: `a second processor answers the corpus`. The row is kept struck rather than deleted because what it records is that the gap was **shipped** — ADR-0234 landed with a `*_REQUIRE` nothing set, and it took reading this register end to end to notice. **It has happened three more times** (`target32`, `TLS_REQUIRE` since ADR-0264, and a `SANITIZE_REQUIRE` named by a comment and read by nothing), so ADR-0330 made it mechanical: `require-consistency` compares the variables the checks read against the variables the workflows set, in both directions, and its own mutation caught it matching a name in a *comment* — the same defect it exists to refuse | ADR-0234 |
+| ~~Coverage is measured per **statement**, not per branch~~ — closed by ADR-0274 | `if c then a else b` on one line counted as covered when either arm ran, a decision with no else-part had nothing on its false side to count, and a short-circuit operator's right operand is an expression and had no counter at all. `--coverage` now emits a second counter on each edge of every decision the *source* writes — an if, a while, a repeat, and each `and`/`or` — keyed on line **and column**, and `line-coverage` gates a second ratchet over it. The census is the size of what was missing: **784 of the 853 directions never taken sit on lines statement coverage calls covered**, and every one of those decisions was reached and evaluated and only ever went one way. What does *not* close: a `for`'s test and every runtime check are outside the boundary on purpose, the first being generated from the bounds rather than written and the second being the compiler's branch rather than the program's; and a decision inside a schema's body is counted once however many tuples instantiate it, §6.4.7 re-emitting the body per tuple while the key is a source position — which is ADR-0104's own property, stated rather than found later | ADR-0104, ADR-0274 |
+| ~~**Two gates flaked once each on 2026-09-06**~~ — the second is explained and closed 2026-09-07; the first stands | `fpc-differential` failed in a full run and passed on rerun and on a second full run, and that one is still unexplained. The second — `tests/extended/lib_strings.pas` failing with *unexpected character '}'* at 10:53 in a coverage sweep — **was not the compiler and not a short read.** It was this register's own author: the sweep was a sibling agent's, run in the working tree while `lib-coverage`'s mutation check rewrote every line of that file matching `Reverse(` or `Times(` to `{ removed }`, and line 6 of its leading comment contains `Reverse(s)`. A `}` on line 6 closes the comment there, lines 7–9 lex as identifiers, and the real closing `}` at 10:53 is the first and only error — which is exactly the one line the sweep printed, and is reproducible on demand by applying that regex and compiling. What ruled the compiler out along the way was worth having: the position was correct so nothing was truncated, 400 parallel compilations were clean, and Valgrind found zero errors translating that file and all three program-components. **The lesson is not new and was already written down**: `tests/mutation/run.py` refuses to start when a file a mutant names has uncommitted changes, precisely so a mutation never edits a tree something else is reading, and an ad-hoc mutation done by hand in the checkout bypassed that discipline while two agents swept the same tree. A mutation check belongs on a copy in scratch, or on a tree nothing else is running in | ADR-0207, ADR-0281, ADR-0353 |
+| ~~Case-exhaustiveness is checked over the **source**, not by asking the compiler~~ — closed by ADR-0229 and ADR-0230 | This row closed in two halves and the second was written while the row still said the opposite. `kind-exhaustive` first grew from `typeKind` alone to every enumeration (ADR-0145), which closed the row that had stood here; what was left was the *oracle* -- it parsed `compiler.pas` and could ask the built compiler nothing. ADR-0229 moved the case-statements onto `--dump-dispatch` and ADR-0230 moved the chains, so it reads no Pascal at all and the question is put to the compiler. **What does not close with it** is that the gate still cannot judge whether an arm is *right*: `tyOptional: StaticThroughout := true` satisfies it and is wrong, and that belongs to the row about a predicate rather than to this one. Nor is a crash on a case-statement a question a program can be written to ask, the arm that is missing being the one no program reaches -- which is why the gate exists at all | ADR-0018, ADR-0124, ADR-0145, ADR-0229, ADR-0230 |
+| ~~A **missing join** is not caught by any case~~ — closed by ADR-0312 | AP 6.9.3.12.1 joins every task a block spawned before releasing anything of that block's, and the emitter puts the join first in the epilogue. Removing it entirely left `tests/dialect/concurrency.pas` **green**: every task in it finishes before its block ends, so nothing observed the difference. The row said what would close it -- a task still running when its block ends *and* whose continued running is observable -- and called it a race to write deliberately; `tests/dialect/task_join.pas` is that program and it needed the new construct's client to be written before anybody wrote it. The spawn is inside a procedure, so the join is at that procedure's `end` and no statement in the program performs it; the task sleeps a second and writes to a stream it owns, which its block flushes and closes; the program then reads that file by name. **Mutation confirms it**: with the block-end join removed the new case fails and `concurrency.pas` stays green, exactly as this row predicted. Three things do **not** close with it. The oracle a channel offers is still the wrong one -- a value the task *sent* has already been synchronised, so any case written that way passes with the join deleted, and this row's replacement is one case and not a property of the corpus. The case's margin is a **one-second sleep** and not a construction that cannot race, so on a machine slow enough it could fail for the other reason. And the row below is untouched: AP 6.7.8.2's ban is still not transitive, and ThreadSanitizer over every concurrent program -- including the claim that a task record's join is claimed once when `wait` and the block's join both arrive -- is still run by hand and is still not a gate | ADR-0201, ADR-0268, ADR-0312 |
+| ~~**The langspec-audit sandbox cannot run its own compiler**~~ — closed 2026-09-06 (ADR-0342), and the cause was not the sandbox | The 2026-09-06 run reproduced it exactly and named it: a `-p` reader has **nobody to approve a permission prompt**, so every Write and every Bash call is refused and the reader can only read. `--allowedTools` is the whole fix and the skill's launch line now carries it; the same run then returned four reports resting on 116, 73, 45 and 30 compiled probes, and three compiler defects came out of them. The second half of that run is worth as much: a subscription **session limit** refused four of six readers in one line of output that reads like a report (`You've hit your session limit`), so a word count is now the first thing the skill says to check. Neither is checked before readers are launched, which is the residue. The original row read as a fact about the sandbox and was a fact about the harness invoking it | ADR-0107, ADR-0228, ADR-0288, ADR-0342 |
+| ~~**ThreadSanitizer is not a gate**~~ — closed 2026-09-05 (ADR-0327) | The concurrency construct's real oracle is TSan: it found the runtime's global handle list being unlinked by two threads on the *first run of the first program that spawned two tasks*, and then the string arena's cursor -- and neither is a defect any golden could hold, both orders producing the same output nearly always. It was run by hand. `sanitizers` (ADR-0261) builds the corpus under ASan and UBSan and does **not** build it under TSan, so a race introduced tomorrow has nothing watching for it. What would close it is a fourth pass in that harness over the cases that spawn, which is cheap and is not built. **Two changes have widened what it is being asked to watch and neither armed it.** ADR-0312 made the task record reference-counted and its join *claimed* under a mutex, so that `wait` and the block's own join -- whichever arrives first -- call `pthread_join` exactly once and the loser waits on a condition variable. ADR-0313 then added the select-statement, whose correctness is stated as an invariant about two mutexes: *no thread ever holds a channel's mutex and the activity mutex at the same time*, which is what makes the design deadlock-free and a wakeup impossible to lose. `tests/dialect/select_contended.pas` is the program to run TSan over -- four workers selecting on two shared channels while the program feeds both -- and its own oracle is a deterministic **total**, which is all a golden can be here: every value sent is received once and forwarded once, so the sum is the same however the schedule fell out. **A total cannot see an ordering defect**, and TSan remains the only thing that can. Eight concurrent programs were clean under it by hand on 2026-09-03, three runs each; nothing made that happen again. **`thread-sanitizer` is what does**, and it is the fourth pass this row asked for, arrived at as a *mode* of `sanitize.sh` rather than a second script: the 120 lines that translate a case's components and read its sidecars are the part that took the defects out — 47 cases were silently unlinked once — and a copy of them is a copy free to drift. ASan and TSan cannot be combined, clang refusing the pair, so it is a second invocation. **The corpus is chosen by what each source writes** and not from a list, so a concurrent program added later is swept without the gate being edited; eleven qualify today and all eleven are clean. Two things this row said are now measured rather than asserted: unlocking the store in `pas_chan_send` flags five of the eleven, which is the mutation that proves it watches; and moving `pas_select_turn++` outside the activity mutex flags **nothing**, which says the corpus contends on `select` less than `select_contended.pas`'s name suggests and is a gap of the corpus rather than of the gate. **And it is required in CI in the same commit**, the `sanitizers` job gaining a step that refuses a skip — this row's own lesson applied at the moment the gate landed rather than the third time. AP 6.7.8.2's ban is still not transitive, and that half of the row above is untouched | ADR-0261, ADR-0268, ADR-0312, ADR-0313, ADR-0327 |
+| ~~**A seed-built compiler's own traps name no position**~~ -- closed 2026-09-06 by the v3.5.0 reseed | The seed called `pas_index_error(i32, i32)` and three siblings, kept as wrappers passing no position, so a trap *in* a seed-built compiler said where nothing. The row named its own closing condition -- *the next reseed, when the wrappers can go* -- which is ADR-0197's second shape and the reason it is written down here rather than left to whoever reseeds: the person meeting the condition is doing something else. The seed now calls only the `_at` forms (17 and 1 call sites), the four wrappers were dead and are deleted, and the read that found it was this register's own | ADR-0293, ADR-0197 |
+| ~~A **dump's exit status** is read by nothing~~ — closed by ADR-0269 | `tests/checks/coverage.py` drove `--dump-all` over every source in the corpus and read the *lines reached*, and nothing read what the child did. So a compiler that **stopped** while dumping one — a case-statement with no matching label is a halt, ADR-0018 — wrote a short dump, was counted as having run, and said nothing. `--dump-sema` crashed on every program declaring a fallible-type for three days and 714 green cases; it surfaced only because a new branch in the same walker went unreached and `line-coverage` asked why. `sweep()` now reports every invocation the compiler did not survive and `procedure-coverage` fails on it — a **negative return code**, which is a signal, or `runtime error:` at the start of a line of *standard error*, which separates a trap from the exit 1 a third of this corpus is written to produce. Matching that text anywhere would match a dump of the compiler's own source, whose emitter carries the literal on standard output; `variant_check.sh` met that on its first run. Mutating `Tokenize` to store 3 into a `1..2` makes it name 1426 of 1435 invocations where the whole suite was green before. **This row named its own closing condition and then sat for five records**, which is ADR-0197's second shape exactly. What does not close: the *content* of a dump. A walker that writes the wrong thing without stopping is caught by `tests/dumps/`'s goldens for the shapes those cases have and by nothing else | ADR-0103, ADR-0104, ADR-0176, ADR-0269 |
+| ~~A slice's foreign count is widened to `i64` and **nothing can see that it is**~~ — closed 2026-09-07 (ADR-0364), and the row was **wrong in its premise**: on i386 `size_t` is `i32`, so the widening was not *right for a reason no program can exhibit* but wrong by the ABI and working by cdecl's grace, and it had been since ADR-0325 admitted the target two days earlier while this row went on saying LP64 was the only architecture. The emitter asks `PtrSize` at both sites now, and `foreign-width` reads the declaration back from a probe per target — `ptr, i64` on LP64, `ptr, i32` on i386 — so the mutation this row said survives is killed. What the row said about a *behavioural* oracle stands and is the record's whole argument: the catalogue is the test because no case can be. | As it stood: ADR-0129 crosses a buffer as `(ptr, i64)` because every length this target's data path takes is a `size_t`. Dropping the `sext` and passing the count as an `i32` is a mutation that survives: x86-64 and aarch64 both zero the upper half of a register written 32 bits wide, and a slice's length is checked non-negative and cannot reach 2^31 without an array of two billion components. So the widening is right for a reason no program here can exhibit. Not worth a gate -- what would have to change is the architecture -- but it must not be read as covered, because the two tests that name the feature pass without it | ADR-0129, ADR-0128, ADR-0364 |
+| ~~`target32` runs where a 32-bit libc happens to be, and **no CI job requires it**~~ — closed the same day it was opened | ADR-0325 admits `i386-pc-linux-gnu` and `tests/checks/target32.sh` builds a runtime for it and runs the whole corpus, catching what `target-layout` cannot — the two defects the port found were in neither a layout rule nor a frame, and that gate passed with `select` segfaulting. It skips 77 without a 32-bit libc, which is a separate package on most distributions, and `TARGET32_REQUIRE` existed with **nothing setting it** — precisely the shape the `fpc-differential` row above records as having been *shipped*. The `a pointer is four bytes` job installs the multiarch packages and sets the variable. **A job of its own rather than a step of `test`**, for `second-backend`'s reason: a 32-bit libc is not a documented dependency and adding it to the container every other job shares would make the documented list a lie. It carries a C probe before the build, so a package name that is wrong on some future image reddens with an obvious cause rather than as a Pascal failure. The row is kept struck rather than deleted because what it records is that the gap was **shipped**: the gate landed the same day with a `*_REQUIRE` nobody set, which is the second time that has happened here | ADR-0325 |
+| ~~The aarch64 job runs the **suite**, not the other oracles~~ — narrowed 2026-09-05 (ADR-0331) | ADR-0159's CI job builds and runs the whole corpus natively on arm64, which is what turns the port from links into runs. `llc-second-backend` skipped there, so a miscompilation of the compiler that only an aarch64 backend produces had nothing looking for it — the corpus catches a compiler that is wrong and cannot catch one that is wrong *and* reproduces itself, both stages of `irtest.sh` coming from one binary and every golden having been written by it. **`second-backend-aarch64` is that oracle**, a job of its own so that `llvm` stays out of the container the documented build is checked in. It was recorded as a resource problem and was not one: the objection was against the *test* job's install line and never against a second job, and the arm64 runner was already in use. What stays deliberate is the SMT proofs, which are about the lowering *model* — the same Python file on either machine — and are required by the two x86-64 jobs. And since ADR-0296 a release ships an aarch64 archive built and suite-tested by that job, so what this row now records is the one oracle that still does not follow | ADR-0159, ADR-0296, ADR-0331 |
+| ~~A module exporting an **undiscriminated schema** with a tagged variant is called portable~~ — moot since ADR-0232 | ADR-0137 locks a module whose interface reaches a record with a tagged variant-part, and ADR-0142 fixed the parameter walk that missed one route. A route still open: a module exporting `Box(n: integer) = record pad: array [1..n] of integer; case k: Sel of …` by *name*, undiscriminated, emits the dialect aliases and links into an Afterschool Pascal program, which AP §6.13.1 forbids. **No misbehaving program was built from it** — every way of giving the module something to write re-discriminates the schema and is caught, so it looks reachable only in combination with ADR-0142's defect, which is fixed. It was left alone because the fix belonged with a probe demonstrating the harm, and installing one on a forbidden-but-harmless link would have spent the meaning of the other seven combinations. **ADR-0232 dissolved it rather than fixing it**: `ComputeModePortable`, the alias and the mode in the linkage name are all deleted, every translation writes one tag, and there is no second language for a module to be wrongly called portable *to*. The rule it was an exception to survives as AP 6.13.1's NOTE 3, which is why this row is struck rather than removed | ADR-0137, ADR-0142, ADR-0232 |
+| ~~**AddressSanitizer does not see compiled Pascal at all**~~ — closed twice on 2026-09-07: the *class* by ADR-0353, and the *instrument* by ADR-0358, which put `sanitize_address` and `sanitize_thread` on every emitted function, measured the corpus clean under both with compiled Pascal instrumented (377 under ASan at 81 s, 11 under TSan at 8 s), and made `sanitize.sh` refuse to sweep until a probe the sanitizer must report is reported. Kept for the record of how long it stood | The emitted IR carries no `sanitize_address` attribute, and clang's pass instruments only functions that do — so `AFTERSCHOOL_PASCAL_CFLAGS=-fsanitize=address` reaches the compilation of the `.ll` and changes nothing about the program's own loads and stores. A plain `new(p); q := p; dispose(p); q^ := 5` runs clean and prints 5 under a fully ASan-linked binary. `sanitizers` is honestly described — it asks whether the **runtime's own C** survives the suite, and it does that — but every argument of the form *ASan reports nothing* made about a **program's** behaviour is empty, and the row above makes one. The same holds of `thread-sanitizer` and of every TSan run this project has done by hand. **The fix is one attribute and was measured**: with `sanitize_address` on the emitted functions, that program reports the use-after-free with a stack trace. It is not taken, being a change to what every compilation emits and one that would redden the gate over whatever 383 corpus programs turn out to contain — which is a decision, and it has still never been put. **What changed is that it no longer has to be**: `valgrind-corpus` instruments nothing, reads the binary, reports that probe as an invalid write and an invalid read, and finds the corpus clean at 377 of 377 (ADR-0353). So the *class* is covered and the *speed* is not — ASan is orders of magnitude faster and could run where 170 seconds cannot. Every sentence above about what the four sanitizers watched was exactly true of them until ADR-0358. **Put, and taken**: the gate over 377 programs did not redden, so the cost the sentence above priced was nothing, and the speed is covered too | ADR-0261, ADR-0327, ADR-0342, ADR-0353, ADR-0358 |
+| ~~A release of an owned pointer reached through a **further activation** is not detected under a borrow~~ — closed by ADR-0319, and the reason is worth more than the row was | AP 6.4.14.7 requires an owned pointer not to be released while something it owns is bound elsewhere, and this processor detects the two forms one activation can be asked about: the actual-parameters of one call, and a with-statement's own binding. What it cannot see is `Bump(g^)` → `Clear` → `ClearIt(g)` → `dispose` — the callee reaching the owner as a non-local, or being handed it by something other than the activation-point that made the borrow. **No local rule can**, which is why the cheap refusal was shipped as a narrowing and said so: closing it needs either a per-routine summary of the non-local owned pointers it may release, closed over the call graph and carrying across a program-component boundary the module-heading has no room for (§6.13.2), or a borrow flag beside the variable and a trap at the three release points — the second is sound, complete and survives separate compilation, and is a lowering rather than a rule. Every oracle here was green over the defect this row is the residue of: `heap-balance` counts `new=1 dispose=1` and is right, ASan reports nothing, and the corpus case for the construct exercised every borrow shape but this one. Annex C.12 was the clause's own entry and is withdrawn. **The row was an artefact of where the question was asked.** Both mechanisms it named — a per-routine summary closed over the call graph, or a dynamic borrow flag — answer *may this release happen*, and both are expensive for the reason it gives. AP 6.4.14.9 asks instead *may this borrow be formed*, which is a question about **scope**: a borrow is refused where the activated block can name the owner, and a block can name a variable of the outermost block or one declared in a block containing it. That is available where the program is translated and across a component boundary in both directions, and it needs no summary, no flag and no word of storage. What it costs is that an owned structure held in a variable of the outermost block cannot be lent at all — measured over the corpus before it was written: twelve such borrows, every one in a test written for the construct, none in `lib/` or `examples/` (ADR-0319). **The lesson is the one the row did not know it was carrying**: a gap can be an artefact of the question, and two records costed mechanisms for the wrong one before anybody re-read the requirement | ADR-0317, ADR-0201, ADR-0181, ADR-0318, ADR-0319 |
+| ~~A generic's diagnostic **names the generic and not the call that asked for it**~~ | **Closed** (ADR-0261). One more diagnostic is reported at the activation's own position -- `this activation is what asked for that instantiation of 'add'` -- in the ordinary `file:line:col: error:` format, so every reader of a diagnostic already parses it. One per *tuple* and not per activation, which is AP 6.7.3.10.2 working: a second activation naming the same types finds the instantiation in the cache and has nothing new to report. A generic activating a generic produces one line per level, innermost first, which is the backtrace this row said the machinery for did not exist -- and it did not need to: the recursion already knows which activation it is inside. The row became a demand rather than a grumble when ADR-0254 landed, an inferred activation naming no type at all | ADR-0211, ADR-0254, ADR-0261 |
+| ~~A **field selection** is answered by no dump, where a discriminant is~~ — closed by ADR-0247 | ADR-0246's `--dump-uses` reported every applied occurrence that resolves to a *symbol*, and a record field is a `fieldPtr`: `r.x` produced no line, while `v.cap` — a schema's discriminant, identical in the source — did. The asymmetry was visible in `tests/dumps/uses.dump` and explained nowhere in it. It cost **one integer**: §6.4.3.3 makes a record a region and gives every field-identifier a defining-point in it, and `fieldRec` was already recording `line` and `col` for a diagnostic (ADR-0045) — what was missing is which *file*, a record declared in an imported module having fields whose positions are that module's. §6.8.3.10's bare form answers the field too, not the with-statement that gave it a nearer defining-point. The row is struck rather than removed because the two rows beside it look alike and are not: each of those needs a fact nothing records, where this one needed a fact already recorded | ADR-0247, ADR-0246 |
+| ~~An **interface** has a name and no position~~ — closed by ADR-0248 | `ifaceRec` held a name, an owner and its constituents, and never where the `export` clause was written, so §6.11.3's `M.x` hovered on `M` and jumped nowhere. An interface is found by *spelling* — `FindInterface` walks a list comparing the pool — so no question the compiler asks about one had ever needed a position. Three integers on that record, set at the one site §6.11.1 puts a defining-point. **The occurrence that mattered turned out not to be the qualifier**: `import Middle;` is where a module says where it gets things from and is the line a reader most wants to follow, and it was reported by nothing at all | ADR-0248, ADR-0246 |
+| ~~A **defining** occurrence answers `null`, where an editor answers the declaration itself~~ — closed by ADR-0250 | ADR-0246's dump reported *applied* occurrences only, so a position on a `var` line or a procedure heading had no line over it. Every name a block declares is on the scope chain at that block's depth, so one walk after `CheckDeclarations` reports them all — after, because at `Declare` a variable has no type yet and the hover this is for would have shown `?`. **The half that is not a no-op** is §6.6.1's `forward` and §6.11.1's heading: the completing block is the same routine, so the name at the implementation resolves to the interface that promised it. The *interface's* own export-part followed in ADR-0251, along with a module's declarations — §6.11.1 puts them in a heading and §6.2.2.12 makes them the block's too, so the walk takes a boundary and each name is reported once | ADR-0251, ADR-0250, ADR-0246 |
+| ~~A name inside a **schema's body** resolves in no file the dump can name~~ — closed by ADR-0249 | §6.4.7 keeps a schema's *syntax* and re-resolves the body once per distinct tuple, **where the type is written** — so `curFile` names the writer's file while the line and column being reported are the schema's, and for anything out of `lib/` those are two different files. ADR-0246 excluded productions for that and paid with `cap` in `array [1..cap]`, resolved nowhere else and so reported nowhere. What closed it is a fact that record created for another purpose: a schema is a symbol and a symbol carries `declFile`, so a production reports exactly when the schema is the document's own. The **negative** half is asserted rather than assumed — `tests/dumps/uses_module.pas` produces a schema declared in its component on every run, and the golden shows no line from that body, because a rule that silently reports nothing and one that correctly reports nothing look identical from outside | ADR-0249, ADR-0246 |
+| ~~**Nothing fails when this tree's own source acquires an unprotected read-only `var` parameter**~~ -- closed by ADR-0286, and **the reason this row gave for declining a gate was wrong** | The gap was real: a `.warn` sidecar makes a *test case* fail, `selfhost/`, `lib/` and `lsp/` have no sidecars, and every harness that compiles them reads the exit status rather than what the compiler said -- so the build printed the warning and succeeded. What was wrong is the second sentence, *it is a fixed point rather than a count, so a gate would have to iterate to convergence*: iterating is what **reaching** zero needed, and *holding* zero needs one sweep. `warning-free` makes the broader claim instead of ADR-0283's narrow one, and it is cheaper -- the compiler is quiet on success, so **every implementation source must compile with nothing on either stream**, which covers all four warnings and every message added after them without matching a wording. Removing one `protected` leaves 798 of 798 green. Its second claim, that every source named as deliberately broken still is, found `selfhost/badsema/components/exporter.pas` on the first run | ADR-0283, ADR-0286 |
+| ~~**A schema whose binding failed leaves `^integer`, and every generic body instantiated against it reports a fault located in the library**~~ -- closed by ADR-0356 the same day: the type carries the fact that it was refused, `InstantiateGeneric` checks no body against it, and `CheckCall` no longer reports `unknown function` under a refusal it has just read; five goldens lost fifteen cascade lines and `lib_container_bad_key.err` is the one line it was always about. The client's own direct uses of the placeholder still report, by decision | `BoundSchema` answers nil when a type-valued discriminant fails its bound, and the pointer-domain path turns nil into `intType` -- the placeholder every error path in Sema leaves, and the right one for a *value*. For a schema it is wrong in a way no node can say: `nErrType` (ADR-0306) lets an expression node keep the assignment check quiet, but a *type* carries no such flag, so `MapInit` instantiated against `^integer` reports `tag values are only for a pointer to a record with a variant part` and six `cannot select a field of a value of type integer`, all located in `pascontainer.pas`, after the one line that is the diagnostic; a client that also puts and gets reads a hundred. `tests/dialect/lib_container_bad_key.pas` pins the first line as the claim and the cascade as a record, kept to one call so the golden is eight lines. Closing it is a Sema change to what a failed binding produces -- a placeholder a type can be asked about -- and the case that names the fix is already there | ADR-0355, ADR-0356 |
+
+### Closed before the register had rows
+
+Kept, when it stood in `doc/sop.md`, because a register that only grows is a
+register nobody trusts:
+
+- *A `forward`-declared function could not name its own result.* §6.7.2 puts
+  the result identifier's defining-point in "the block of the function-block,
+  **if any**, associated with the identifier of the function-heading" — the same
+  words the next paragraph uses of the formal-parameter-list, which has always
+  reached a forward body. The asymmetry was literal: parameters bound from the
+  *symbol*, the result variable from the *declaration node*, and a forward
+  body's node carries no specification. §6.11.1 makes every exported function a
+  `forward`, so this reached every module in `lib/`;
+  `tests/extended/forward_resultvar.pas` is the case. It was recorded here as
+  the first question for the next `langspec-audit` and did not need one.
+- *The model-drift gate could not survive a force-push.* Its base resolution
+  lived in the workflow's shell and asked `git rev-parse --verify`, which exits
+  0 for a full 40-hex string without ever looking the object up — so the
+  discarded SHA a force-push reports was waved through and the job died in
+  `git diff` a line later (run 32131932455). The rule now lives in
+  `model_drift.resolve_base`, one copy rather than one per caller, and
+  `model-drift-base` is a `ctest` case over a repository built for the purpose.
+  What is left of that gap is the row above.
+- *And a second time, in the same file.* `seed-is-current` runs only at a
+  release tag, so the fourteen lines of shell that were its whole check had
+  nowhere to be exercised first — and they were written in bash, while a
+  `run:` block in a container is `sh -e {0}`. The job died on a syntax error
+  at the tag, having translated nothing (run 33178547669). The answer is
+  ADR-0233's second commit and the same one as before: the check is
+  `tests/checks/seed_current.sh`, run by hand at a release and by the job at
+  the tag, so the text CI runs is the text a release ran. What is left is that
+  a `run:` block still has no local exercise, and the way to keep one honest
+  is to keep it to a line.
+- *`-O0` was two cases wide.* The `unoptimised` CI job now runs the whole
+  corpus at `-O0`, and `AFTERSCHOOL_PASCAL_OPT=-O0 ctest` does it locally. What
+  is left of that gap is the first two rows above.
+- *Four diagnostics counted but unenforced.* `tests/checks/unreachable_diagnostics.txt`
+  is now a catalogue with an argument per entry, and the `diagnostic-coverage`
+  case fails in both directions (§5).
+- *Clause coverage had an untriaged denominator.* Every heading is classified
+  testable, structural or not-implemented (`tests/spec/clauses/triage.tsv`), so
+  the figure is counted against the **testable** clauses and not against the
+  headings, and `spec-clause-traceability` gates it in both directions
+  (ADR-0106). It was 14 of 207 testable rather than 14 of 292 headings when
+  this was written and the file holds 467 rows now; no document pins the pair,
+  because both move. What is left of that gap is the row above.
+- *"§5 is an argument, not a number."* There is a number now —
+  `procedure-coverage`, 554 of 556 when it was measured and 629 of 631 today —
+  and the two rows above are what is left of
+  that gap rather than the gap itself. Measuring it found the dumps: four
+  documented flags whose thirty-one walker procedures were entered by no case
+  at all, so nothing checked they did not crash (ADR-0103).
+
+**A sixth shape, found on 2026-09-02 by ADR-0291: a constant the seed decides
+rather than the source.** ADR-0126 recorded this for a fixed *buffer* — the
+array that has to hold this source is the seed's, so raising the constant here
+does not raise the one that matters — and it is not only true of buffers. It is
+true of a constant that shapes a type the compiler **synthesises** and then
+**uses on itself**. `BindingType` is the whole of that class today and cost an
+out-of-cycle reseed: the compiler declares `b: BindingType` to read its own
+arguments (ADR-0081), and that variable's layout was decided by whatever
+compiled `compiler.pas` — the seed. `dateLen` and `timeLen` are *not* in it,
+though they look alike: the compiler emits them into the program it compiles
+and declares no `TimeStamp` of its own, so the value it uses is the one its own
+source gave it.
+
+Nothing checks it, and the failure is silent in the worst direction: the source
+says 4096, every reader believes it, the suite is green, and the shipped
+compiler behaves as though it still said 255 — while every program that
+compiler *builds* gets the new number, which is what makes it look fixed. An
+ordinary array bound written in the source does not have this property at all.
+The two look identical in the source and differ in who evaluates them, so the
+test to apply by hand, until something can apply it, is: **does this constant
+shape a type this compiler synthesises and also declares a variable of?**
