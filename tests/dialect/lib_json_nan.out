@@ -1,0 +1,9 @@
+nan <> nan          = FALSE
+not (nan = nan)     = TRUE
+abs(inf) > maxreal  = TRUE
+abs(nan) > maxreal  = FALSE
+nan rendered: returned=TRUE code=0
+inf rendered: returned=TRUE code=0
+RealToStr(0.75)     = 0.75
+RealToStr(1.0)      = 1
+RealToStr(-1.0E-7)  = -1E-7

@@ -1,0 +1,8 @@
+adr: 0359
+file: lib/pastext.pas
+kills: lib_json_nan
+why: The guard asks `x <> x` again, which is the usual spelling of *is this a NaN* and is not one on this processor: `<>` on reals emits `fcmp one`, false whenever an operand is unordered, so the guard is never taken for a NaN and the scan below reads past the end of what `writestr` wrote for one. The case is stopped by `array index out of bounds (1..21)` inside the library.
+--- old
+  if not (x = x) or (abs(x) > maxreal) then PlainReal(x, s)
+--- new
+  if (x <> x) or (abs(x) > maxreal) then PlainReal(x, s)

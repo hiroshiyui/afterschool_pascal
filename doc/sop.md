@@ -483,6 +483,24 @@ gets a decision undone by somebody later "fixing" it. What is in place instead
 is a rule in the roadmap's own *How this page is written*, saying which
 document takes what, and a reader is the whole of the enforcement.
 
+**`<>` on reals is not the negation of `=`, and nothing decides whether it
+should be** (ADR-0359). `opNe` emits `fcmp one` — *ordered* not-equal — so for
+a NaN both `x = x` and `x <> x` are false, and a processor on which neither
+the relation nor its negation holds has made them something other than a pair.
+Neither standard contemplates the value: real accuracy is implementation-
+defined (§6.7.2.2) and there is no NaN in either model, so no clause settles
+it, and this processor admits one by admitting IEEE arithmetic. It cost a
+shipped library a trap — `PasJson`'s guard against a value with no decimal
+spelling asked `x <> x` and could never fire, so writing a NaN stopped the
+program inside the library with an index out of bounds. **The library is fixed
+and the language question is not**: changing `opNe` to `fcmp une` is a class A
+change touching every real `<>` in the tree, needing a `verify/` rule and a
+model change, and it trades *`<>` is the negation of `=`* against *`a <> b`
+implies `a < b` or `a > b`*. `tests/dialect/lib_json_nan.pas` pins both
+answers, so the day it is decided that case is what says so. No oracle here
+could have found it: the corpus has no literal for a NaN because the language
+has none, and the case that holds one had to build it.
+
 **Nothing enumerates this tree's sidecar conventions, and the tools that read
 them drift apart** (ADR-0311). `.components`, `.importpath`, `.importenv`,
 `.opt`, `.in`, `.err`, `.warn`, `.epoch`, `.status`, `.flags`, `.dump` and

@@ -1,3 +1,4 @@
 ../../lib/dialect/paserror.pas
 ../../lib/dialect/pascontainer.pas
+../../lib/pastext.pas
 ../../lib/dialect/pasjson.pas
