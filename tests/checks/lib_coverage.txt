@@ -20,8 +20,8 @@
 # Regenerate with:  python3 tests/checks/lib_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 455
-instrumented 3475
+uncovered 456
+instrumented 3521
 
 lib/dialect/pascontainer.pas 0/9
 lib/dialect/pasdir.pas 1/20
@@ -39,7 +39,7 @@ lib/dialect/pasmathx.pas 0/4
 lib/dialect/pasnet.pas 4/53
 lib/dialect/pasos.pas 0/5
 lib/dialect/pasparse.pas 0/28
-lib/dialect/pasprocess.pas 2/39
+lib/dialect/pasprocess.pas 3/85
 lib/dialect/pasregex.pas 6/332
 lib/dialect/passortx.pas 0/0
 lib/dialect/passtream.pas 0/26

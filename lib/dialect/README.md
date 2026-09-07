@@ -287,6 +287,18 @@ decision**: this library clamps a capacity request (`Claimed`) because a
 container smaller than asked for still answers correctly about what is in it,
 and a clamped key does not.
 
+**A failure whose *shape* the system chooses.** `PasProcess.Execute` runs a
+command that is not there, and POSIX lets a system answer that in two ways: the
+spawn itself fails, or a child starts and exits 127. They are told apart
+nowhere — a program that really does exit 127 is indistinguishable from the
+second — so the module documents the answer rather than normalising it. On
+every system this compiler admits a target for, the spawn fails and the caller
+sees `errIO`; the corpus pins that in
+`tests/dialect/lib_process_execute.pas` case 3. It is the one place in this
+library where the *kind* of the answer, and not only its value, is the
+operating system's to pick, and it is why `Execute` cannot promise the 127 that
+`Run` gets from a shell.
+
 **Nothing checks any of this.** Both rules are conventions, not gates: a new
 module returning a result record with a tag spelled `success` would compile,
 link and pass every test in this repository, and so would one answering an

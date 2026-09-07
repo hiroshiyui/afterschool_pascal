@@ -653,16 +653,18 @@ end;
   `run_test.sh` reads the same file: a second field used to name a standard
   and ADR-0232 removed the modes. }
 function ReadSidecar(sidecar: PathName; target: PathName;
-                     whenAbsent: boolean; var words: CommandLine): boolean;
+                     whenAbsent: boolean; var words: ArgV): boolean;
 var f: bindable text;
     b: BindingType;
     line, full: PathName;
-    acc: CommandLine;
+    junk, mark: integer;
     i: integer;
 begin
   ReadSidecar := false;
-  words := '';
-  acc := '';
+  { The words go straight onto the vector and `mark` is how they come off
+    again: this is called once per candidate sidecar and all but one of them
+    is the wrong one (ADR-0362). }
+  mark := ArgsLen(words);
   b := binding(f);
   b.name := sidecar;
   bind(f, b);
@@ -680,22 +682,22 @@ begin
     if line <> '' then begin
       full := Resolve(DirOf(sidecar), line);
       if full = target then begin
-        words := acc;
         unbind(f);
         exit(true)
       end;
-      { A command line that would not fit is one the compiler would refuse
-        anyway (ADR-0235). Dropping the tail leaves the earlier components,
-        which is the half a reader is more likely to want. }
-      if length(acc) + length(full) + 13 <= CommandMax then
-        acc := acc + ' --import ''' + full + ''''
+      { ADR-0235's bound is the compiler's and is now the compiler's to
+        report: a word is a word here, so there is no line for a path to
+        overflow and nothing to silently drop the tail of. `AddArg` answers
+        errFull at 4096 words, which is more than any build description. }
+      junk := ord(AddArg(words, '--import'));
+      junk := ord(AddArg(words, full))
     end
   end;
   unbind(f);
-  if whenAbsent then begin
-    words := acc;
+  if whenAbsent then
     ReadSidecar := true
-  end
+  else
+    junk := DropArgs(words, mark)
 end;
 
 { The `--import-path` words from a `name.importpath` sidecar: one directory a
@@ -714,13 +716,16 @@ end;
   so a sidecar found anywhere can say whether it is about this file; a list of
   directories names nobody, and a walk would hand one document another's search
   path. }
-function ReadImportPaths(sidecar: PathName; var words: CommandLine): boolean;
+function ReadImportPaths(sidecar: PathName; var words: ArgV): boolean;
 var f: text;
     b: BindingType;
     line, full: PathName;
+    junk: integer;
 begin
   ReadImportPaths := false;
-  words := '';
+  { It **appends**, where ReadSidecar may take its words back off again: this
+    one never speculates, so there is nothing to undo, and the directories
+    combine with whatever the components answered. }
   b := binding(f);
   b.name := sidecar;
   bind(f, b);
@@ -730,13 +735,9 @@ begin
     readln(f, line);
     if line <> '' then begin
       full := Resolve(DirOf(sidecar), line);
-      { ADR-0235's bound again: a command line that would not fit is one the
-        compiler would refuse anyway, and the earlier directories are the half
-        a reader is more likely to want. }
-      if length(words) + length(full) + 18 <= CommandMax then begin
-        words := words + ' --import-path ''' + full + '''';
-        ReadImportPaths := true
-      end
+      junk := ord(AddArg(words, '--import-path'));
+      junk := ord(AddArg(words, full));
+      ReadImportPaths := true
     end
   end;
   unbind(f)
@@ -747,7 +748,7 @@ end;
   lists sorted so that a workspace with two candidates answers the same way
   twice. }
 function WalkFor(dir: PathName; depth: integer; target: PathName;
-                 var words: CommandLine): boolean;
+                 var words: ArgV): boolean;
 var names: StrVecPtr;
     i: integer;
     nm, full: PathName;
@@ -791,13 +792,13 @@ begin
 end;
 
 { The `--import` words for a document, or none. }
-function ImportsFor(target: PathName; var words: CommandLine): boolean;
+function ImportsFor(target: PathName; var words: ArgV): boolean;
 var base: PathName;
-    paths: CommandLine;
     i: integer;
     found: boolean;
 begin
-  words := '';
+  { It appends to a vector a caller has already started -- the program to run
+    is the first word and goes on before this. }
   if target = '' then exit(false);
   i := length(target);
   while (i > 0) and (target[i] <> '.') and (target[i] <> '/') do i := i - 1;
@@ -814,11 +815,7 @@ begin
   { And the directories, which are a separate claim and combine with either
     answer: a document may name the components it follows *and* a place to
     look for the rest. }
-  if ReadImportPaths(base + '.importpath', paths) then
-    if length(words) + length(paths) <= CommandMax then begin
-      words := words + paths;
-      found := true
-    end;
+  if ReadImportPaths(base + '.importpath', words) then found := true;
   ImportsFor := found
 end;
 
@@ -888,40 +885,101 @@ end;
   file on disk that somebody owns and writing a `.ll` next to it would be this
   program leaving something behind (ADR-0241). Under LSP the two are the same
   path and the parameter costs nothing. }
-function CompilerCommand(flags: CommandLine; imports: CommandLine;
-                        source: PathName; dumpTo: PathName;
-                        var cmd: CommandLine): boolean;
+{ The words that ask the compiler about a source, in two halves because the
+  `--import` words go between them and are read from a file.
+
+  **It was one function building a shell command and that was a hole**
+  (ADR-0362). The source is a path this program was *given* -- by an editor
+  over LSP, and under MCP by whatever is driving the model -- and it was
+  wrapped in apostrophes and handed to `system`. A path holding an apostrophe
+  closes the quoting, and what follows it is a command: a file named
+  `a'; touch PWNED; echo '.pas` created the file. Nothing is quoted now
+  because nothing re-reads it.
+
+  `StartArgs` is the program and the one flag; the caller may then push
+  `--import` words with `ImportsFor`; `EndArgs` is the source and where the IR
+  goes.
+
+  The source is a parameter and the *output* is not: the IR goes beside the
+  scratch file whatever is being compiled, because under MCP the source is a
+  file on disk that somebody owns and writing a `.ll` next to it would be this
+  program leaving something behind (ADR-0241). }
+function StartArgs(var v: ArgV; flag: PathName): boolean;
+var e: ErrorCode;
+    i, j: integer;
 begin
-  cmd := '';
-  { Checked rather than concatenated: a variable-string assignment past its
-    capacity is a run-time error, and the pieces here are all a caller's. }
-  if length(compilerCmd) + length(flags) + length(imports) + length(source)
-     + length(scratchPath) + length(dumpTo) + 32 > CommandMax then begin
-    Note('the compiler command line would be longer than this program holds');
+  StartArgs := false;
+  e := NewArgs(v);
+  if Failed(e) then begin
+    Note('no memory for a compiler command line');
     exit(false)
   end;
-  cmd := compilerCmd + flags + imports + ' ''' + source + ''' -o '''
-         + scratchPath + '.ll''';
-  { The empty `dumpTo` is the ordinary case and the pipe is the answer: what
-    the compiler wrote comes back through `Capture` or `CaptureLines`. A named
-    one is for a dump whose lines are not all lines -- the `--dump-uses` file
-    table holds paths, and the per-line bound of a vector sized for 40 000
-    short rows would cut them (ADR-0292). Both streams either way, because
-    this compiler writes its diagnostics to `output`: no standard Pascal
-    program has a second one. }
-  if length(dumpTo) > 0 then
-    cmd := cmd + ' >''' + dumpTo + '''';
-  cmd := cmd + ' 2>&1';
-  CompilerCommand := true
+  { `PASLS_COMPILER` may name a program with flags after it -- that is what it
+    could always hold, a shell having split it -- so it is split here on
+    blanks and nowhere else. It is this program's own configuration and not a
+    caller's, and splitting on a blank is the whole of what the shell did to
+    it that anyone relied on. }
+  i := 1;
+  while i <= length(compilerCmd) do begin
+    while (i <= length(compilerCmd)) and (compilerCmd[i] = ' ') do i := i + 1;
+    j := i;
+    while (j <= length(compilerCmd)) and (compilerCmd[j] <> ' ') do j := j + 1;
+    if j > i then e := AddArg(v, compilerCmd[i..j - 1]);
+    i := j
+  end;
+  if ArgsLen(v) = 0 then begin
+    Note('PASLS_COMPILER names no program');
+    exit(false)
+  end;
+  if flag <> '' then e := AddArg(v, flag);
+  StartArgs := true
 end;
 
-function Compile(imports: CommandLine; var out: CaptureText): boolean;
-var cmd: CommandLine;
+function EndArgs(var v: ArgV; source: PathName): boolean;
+var e: ErrorCode;
+begin
+  e := AddArg(v, source);
+  e := AddArg(v, '-o');
+  e := AddArg(v, scratchPath + '.ll');
+  EndArgs := not Failed(e)
+end;
+
+{ The whole of a one-flag question: build the words, run them, collect the
+  lines. Five of the dumps here need nothing else -- a flag that stops after
+  the parse reads no import at all -- and each of them was six lines of
+  command building before ADR-0362.
+
+  A list of lines and not one buffer for ADR-0239's reason: these answers are
+  one line per thing and `CaptureMax` was sized for diagnostics. }
+function AskLines(flag: PathName; source: PathName; cap: integer;
+                  var lines: StrVecPtr; var r: RunResult): boolean;
+var v: ArgV;
+begin
+  { The vector is this routine's to make and to take back, so a caller has no
+    cleanup branch of its own -- five of them would each have been two
+    statements no session can reach. }
+  AskLines := false;
+  if not (StartArgs(v, flag) and EndArgs(v, source)) then exit(false);
+  SVecNew(lines, cap);
+  r := ExecuteLines(v, lines);
+  AskLines := true
+end;
+
+{ `target` is the document's *real* path, which is what the sidecars name; the
+  scratch copy of its bytes is what the compiler is pointed at. }
+function Compile(target: PathName; var out: CaptureText): boolean;
+var v: ArgV;
     r: RunResult;
+    found: boolean;
 begin
   out := '';
-  if not CompilerCommand('', imports, scratchPath, '', cmd) then exit(false);
-  r := Capture(cmd, out);
+  if not StartArgs(v, '') then exit(false);
+  found := ImportsFor(target, v);
+  if not EndArgs(v, scratchPath) then exit(false);
+  { Both streams, which `2>&1` used to buy and no caller can write where no
+    shell reads one. This compiler writes its diagnostics to `output` and a
+    driver in front of it writes to the other stream. }
+  r := ExecuteBoth(v, out);
   if not r.ok then begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
     Compile := false
@@ -972,16 +1030,13 @@ procedure Analyse(uri: DocUri);
 var d: Document;
     out: CaptureText;
     note: JsonPtr;
-    words: CommandLine;
-    found: boolean;
 begin
   if not DocOf(uri, d) then exit;
   if not WriteScratch(d.text) then exit;
   { The document's *real* path, not the scratch one: the sidecars name the
     file the client is editing, and the scratch file is a copy of its bytes
     somewhere else entirely. }
-  found := ImportsFor(UriToPath(uri), words);
-  if not Compile(words, out) then exit;
+  if not Compile(UriToPath(uri), out) then exit;
   note := DiagPublish(uri, DiagnosticsIn(out, d.text));
   Send(note);
   JsonFree(note)
@@ -1355,7 +1410,6 @@ var uri: DocUri;
     i, depth, lastDepth, symLine, symCol, symLen: integer;
     d: Document;
     lines: StrVecPtr;
-    cmd: CommandLine;
     r: RunResult;
     reply, result, obj: JsonPtr;
     kids, owner: array [0..SymDepthMax] of JsonPtr;
@@ -1378,12 +1432,10 @@ begin
     { A scratch path that cannot be written leaves the outline empty rather
       than stopping the server, which is what the answer below already is for
       a document nobody opened. }
+    { No imports: the flag stops after the parse and a name is a name
+      whether or not the module it came from was found. }
     if WriteScratch(d.text)
-       { No imports: the flag stops after the parse and a name is a name
-         whether or not the module it came from was found. }
-       and CompilerCommand(' --dump-symbols', '', scratchPath, '', cmd) then begin
-      SVecNew(lines, 64);
-      r := CaptureLines(cmd, lines);
+       and AskLines('--dump-symbols', scratchPath, 64, lines, r) then begin
       if not r.ok then
         Note('could not run the compiler: ' + ErrorText(r.cause))
       else begin
@@ -1636,7 +1688,7 @@ var i, ul, uc, un: integer;
     d: Document;
     lines: StrVecPtr;
     files: PathVec;
-    cmd, words: CommandLine;
+    v: ArgV;
     dump: PathName;
     r: RunResult;
     text: StrItem;
@@ -1648,10 +1700,10 @@ begin
   if not WriteScratch(d.text) then exit(false);
   { The document's real path, as Analyse uses it: the sidecar names the file
     the client is editing and the scratch file is a copy of its bytes. }
-  found := ImportsFor(UriToPath(uri), words);
+  if not StartArgs(v, '--dump-uses') then exit(false);
+  found := ImportsFor(UriToPath(uri), v);
+  if not EndArgs(v, scratchPath) then exit(false);
   dump := scratchPath + '.uses';
-  if not CompilerCommand(' --dump-uses', words, scratchPath, dump, cmd) then
-    exit(false);
   { A list of lines and not one buffer, for ADR-0239's reason met a second
     time: this answer is one line per name in the file and `CaptureMax` was
     sized for diagnostics. }
@@ -1665,7 +1717,7 @@ begin
   else begin
     SVecNew(lines, 64);
     VecInit(PathVec, files, 4);
-    r := Run(cmd);
+    r := ExecuteToFile(v, dump);
     if not r.ok then begin
       Note('could not run the compiler: ' + ErrorText(r.cause));
       SVecFree(lines);
@@ -2043,28 +2095,29 @@ end;
   own went to, that one having been read into the cache already. }
 function UsesOfComponent(docFiles: PathVec; k: integer;
                          var lines: StrVecPtr; var files: PathVec): boolean;
-var words, cmd: CommandLine;
+var v: ArgV;
     dump, path, one: PathName;
     j: integer;
+    e: ErrorCode;
     r: RunResult;
 begin
   UsesOfComponent := false;
-  words := '';
+  if not StartArgs(v, '--dump-uses') then exit(false);
   for j := 1 to k - 1 do begin
     one := VecGet(PathName, docFiles, j + 1);
-    if length(words) + length(one) + 13 > CommandMax then begin
+    e := AddArg(v, '--import');
+    e := AddArg(v, one);
+    if Failed(e) then begin
       Note('a component''s imports would not fit on a command line');
       exit(false)
-    end;
-    words := words + ' --import ''' + one + ''''
+    end
   end;
   path := VecGet(PathName, docFiles, k + 1);
+  if not EndArgs(v, path) then exit(false);
   dump := scratchPath + '.uses';
-  if not CompilerCommand(' --dump-uses', words, path, dump, cmd) then
-    exit(false);
   SVecNew(lines, 64);
   VecInit(PathVec, files, 4);
-  r := Run(cmd);
+  r := ExecuteToFile(v, dump);
   if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
   else if ReadUses(dump, lines, files) then exit(true);
   SVecFree(lines);
@@ -2254,7 +2307,6 @@ end;
 function IsIdentifier(name: JsonLine): boolean;
 var bt: BindingType;
     path: EnvText;
-    cmd: CommandLine;
     lines: StrVecPtr;
     r: RunResult;
     ok: boolean;
@@ -2273,9 +2325,7 @@ begin
   rewrite(scratchFile);
   writeln(scratchFile, name);
   unbind(scratchFile);
-  if not CompilerCommand(' --dump-tokens', '', path, '', cmd) then exit(false);
-  SVecNew(lines, 4);
-  r := CaptureLines(cmd, lines);
+  if not AskLines('--dump-tokens', path, 4, lines, r) then exit(false);
   ok := false;
   if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
   else if SVecLen(lines) = 2 then
@@ -2642,12 +2692,11 @@ procedure CallTool(id: JsonPtr; params: JsonPtr);
 var reply, err, result: JsonPtr;
     name: JsonLine;
     path: PathName;
-    cmd: CommandLine;
-    words: CommandLine;
+    v: ArgV;
     lines: StrVecPtr;
     doc: JsonChars;
     r: RunResult;
-    found: boolean;
+    found, junk: boolean;
 begin
   reply := NewResponse(id);
   if JsonTextInto(JsonMember(params, 'name'), name) <> errNone then name := '';
@@ -2674,20 +2723,23 @@ begin
     JsonPut(reply, 'result',
             TextContent(JsonNewText('no such file: ' + path), true))
   else begin
-    words := '';
-    if name = 'diagnostics' then found := ImportsFor(path, words);
-    if name = 'outline' then
-      found := CompilerCommand(' --dump-symbols', '', path, '', cmd)
-    else
-      found := CompilerCommand('', words, path, '', cmd);
+    { The path here comes from the caller driving the model, which is the
+      sharpest form of ADR-0362's problem: it was wrapped in apostrophes and
+      handed to a shell. Now it is a word. }
+    if name = 'outline' then found := StartArgs(v, '--dump-symbols')
+    else begin
+      found := StartArgs(v, '');
+      if found then junk := ImportsFor(path, v)
+    end;
+    if found then found := EndArgs(v, path);
     if not found then
       JsonPut(reply, 'result',
-              TextContent(JsonNewText('the compiler command line would be '
-                                      + 'longer than this program holds'),
+              TextContent(JsonNewText('the compiler command line could not '
+                                      + 'be assembled'),
                           true))
     else begin
       SVecNew(lines, 64);
-      r := CaptureLines(cmd, lines);
+      r := ExecuteLines(v, lines);
       if not r.ok then
         JsonPut(reply, 'result',
                 TextContent(JsonNewText('could not run the compiler: '
@@ -2848,14 +2900,12 @@ end;
   answer: folding is asked once when a document is opened or changed, where a
   hover is asked on every cursor pause. }
 function StatementsOf(uri: DocUri; var lines: StrVecPtr): boolean;
-var d: Document; cmd: CommandLine; r: RunResult;
+var d: Document; r: RunResult;
 begin
   StatementsOf := false;
   if not DocOf(uri, d) then exit;
   if not WriteScratch(d.text) then exit;
-  if not CompilerCommand(' --dump-stmts', '', scratchPath, '', cmd) then exit;
-  SVecNew(lines, 64);
-  r := CaptureLines(cmd, lines);
+  if not AskLines('--dump-stmts', scratchPath, 64, lines, r) then exit;
   if r.ok then StatementsOf := true
   else begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
@@ -3034,28 +3084,22 @@ end;
   and a client clamps it; computing the exact end would mean measuring the
   last line in the negotiated encoding, and `LineOf` bounds a line at
   `DiagLine`'s capacity, which the corpus exceeds. }
-function FormatCommand(source: PathName; lo, hi: integer;
-                       var cmd: CommandLine): boolean;
+function FormatArgs(var v: ArgV; source: PathName;
+                    lo, hi: integer): boolean;
 var span: JsonLine;
+    e: ErrorCode;
 begin
-  cmd := '';
-  if length(compilerCmd) + length(source) + 2 * length(scratchPath) + 48
-     > CommandMax then begin
-    Note('the compiler command line would be longer than this program holds');
-    exit(false)
-  end;
-  cmd := compilerCmd + ' --format';
+  FormatArgs := false;
+  if not StartArgs(v, '--format') then exit(false);
   { AP: --range=L:H asks the formatter for those lines alone, indented as they
     stand in the whole file -- the printer walks the lines before them with its
     sink closed, so the indentation is the one it accumulated and not a guess
     (ADR-0284). lo = 0 asks for the whole document. }
   if lo > 0 then begin
     writestr(span, lo:1, ':', hi:1);
-    cmd := cmd + ' --range=' + span
+    e := AddArg(v, '--range=' + span)
   end;
-  cmd := cmd + ' ''' + source + ''' -o '''
-         + scratchPath + '.ll'' > ''' + scratchPath + '.fmt''';
-  FormatCommand := true
+  FormatArgs := EndArgs(v, source)
 end;
 
 { What the formatter wrote, appended to a JSON string value. Read a character
@@ -3118,15 +3162,17 @@ var reply, result, edit, rng, a, b, text: JsonPtr;
     uri: DocUri;
     i, n, lines: integer;
     d: Document;
-    cmd: CommandLine;
+    v: ArgV;
     r: RunResult;
 begin
   reply := NewResponse(id);
   result := JsonNewArray;
   uri := UriOf(params);
   if DocOf(uri, d) then begin
-    if WriteScratch(d.text) and FormatCommand(scratchPath, lo, hi, cmd) then begin
-      r := Run(cmd);
+    if WriteScratch(d.text) and FormatArgs(v, scratchPath, lo, hi) then begin
+      { The formatted text goes to a file, which is what `> '...fmt'` was; it
+        can be larger than any string sized for it. }
+      r := ExecuteToFile(v, scratchPath + '.fmt');
       if not r.ok then
         Note('could not run the compiler: ' + ErrorText(r.cause))
       else if r.val <> 0 then
@@ -3269,7 +3315,7 @@ end;
   clobbered by it and that is safe: every request that needs one writes it
   first. }
 function Vocabulary: boolean;
-var probe: JsonChars; cmd: CommandLine; r: RunResult; lines: StrVecPtr;
+var probe: JsonChars; r: RunResult; lines: StrVecPtr;
 begin
   if vocab <> nil then exit(true);
   Vocabulary := false;
@@ -3277,9 +3323,7 @@ begin
   JsonCharsAddLine(probe, 'program w;');
   JsonCharsAddLine(probe, 'begin end.');
   if WriteScratch(probe) then
-    if CompilerCommand(' --dump-words', '', scratchPath, '', cmd) then begin
-      SVecNew(lines, 128);
-      r := CaptureLines(cmd, lines);
+    if AskLines('--dump-words', scratchPath, 128, lines, r) then begin
       if r.ok then begin
         vocab := lines;
         Vocabulary := true
@@ -3328,7 +3372,6 @@ procedure Completion(id: JsonPtr; params: JsonPtr);
 var uri: DocUri;
     d: Document;
     lines: StrVecPtr;
-    cmd: CommandLine;
     r: RunResult;
     reply, result, items: JsonPtr;
     text: StrItem;
@@ -3352,10 +3395,8 @@ begin
   if DocOf(uri, d) and (line >= 1) then begin
     if Vocabulary then OfferVocabulary(items);
     if WriteScratch(d.text)
-       and CompilerCommand(' --dump-symbols', '', scratchPath, '', cmd) then
+       and AskLines('--dump-symbols', scratchPath, 64, lines, r) then
     begin
-      SVecNew(lines, 64);
-      r := CaptureLines(cmd, lines);
       if not r.ok then
         Note('could not run the compiler: ' + ErrorText(r.cause))
       else begin

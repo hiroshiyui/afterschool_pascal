@@ -143,3 +143,37 @@ header: <termios.h>
 # else. The request and the struct are BSD-derived and are on every Unix this
 # compiler admits a target for.
 header: <sys/ioctl.h>
+
+# ADR-0362: `posix_spawn_file_actions_t`, for PasProcess.Execute -- running a
+# command as *words* rather than as a line a shell re-reads. The type is what
+# puts it here: it is an opaque struct a caller declares by name, it has no
+# defined layout at all, and the three routines that fill it in take its
+# address. `posix_spawn` rather than `fork` because this language has two
+# threads of control (AP 6.9.3.12) and a `fork` in a process with more than one
+# leaves the child holding a lock nothing will unlock.
+#
+# ISO C has one way to run a command, `system`, and it is a *string*: the shell
+# decides where the words are, so every value in it is read as syntax. That is
+# the defect this entry exists to have closed.
+header: <spawn.h>
+
+# ADR-0362: `WIFEXITED` and `WEXITSTATUS`, for what the child did. They are
+# macros over a wait status and `waitpid` is declared here beside them, so
+# there is no name to catalogue instead -- which is the distinction this
+# section exists for. PasProcess.ExitCode decodes `system`'s status by hand
+# because `system` is ISO C and its caller is a *module*; here the runtime is
+# already reading the status and the macros of the system that wrote it are
+# the right reader.
+header: <sys/wait.h>
+
+# ADR-0362: `O_WRONLY`, `O_CREAT` and `O_TRUNC`, for the mode of
+# PasProcess.ExecuteToFile -- the child's output sent straight to a file. They
+# are macros whose *values* differ between systems, which is the same reason
+# `struct termios` is here and not a number written out in a module: `O_CREAT`
+# is 0100 on Linux and 0x200 on macOS, and a module carrying either would open
+# something else on the other.
+#
+# ISO C's `fopen` cannot be asked for this at all -- what has to be opened is
+# descriptor 1 *of another process*, before it runs, and a `FILE *` in this one
+# is not that.
+header: <fcntl.h>

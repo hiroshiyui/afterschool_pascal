@@ -466,6 +466,18 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**Nothing sweeps this tree for a command built out of a value.** ADR-0362
+closed the one that existed — `lsp/pasls.pas` quoting a client-supplied path
+into a `popen` string — and converted that program to `PasProcess.Execute`, but
+what fixed it was reading the program, not a gate. `command-injection` holds
+*that* program against *that* shape; it cannot see a second caller of `Run` or
+`Capture` written tomorrow with a value in the string, and neither can anything
+else here. The distinction a gate would have to draw is between a command a
+program wrote out, where `Run` is right, and one assembled out of values, where
+it is not — and that is a question about where a string came from, which no
+oracle here can follow. It is a `security-audit` question, and the module says
+the rule at the routine because there is nowhere else to say it.
+
 **Nothing checks that a decision reached the specification or the register.**
 `doc/roadmap.md` is a queue, `doc/afterschool-pascal-spec.md` says what the
 language is, and `doc/implementation-defined.md` says what this processor

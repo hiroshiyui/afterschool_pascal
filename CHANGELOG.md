@@ -15,6 +15,15 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A command as words, not as a line** — `PasProcess.Execute` and the four
+  routines beside it (`ExecuteInto`, `ExecuteBoth`, `ExecuteLines`,
+  `ExecuteToFile`), over an `ArgV` built with `NewArgs`, `AddArg`, `ArgsLen`
+  and `DropArgs`. The words are carried as words and no shell reads them, so
+  an argument holding a space, an apostrophe, a semicolon or a backquote is an
+  argument. `Run`, `Capture` and `CaptureLines` are unchanged and remain the
+  right answer for a pipeline or a redirection; prefer `Execute` wherever any
+  part of the command came from outside the program (ADR-0362).
+
 - **A TOML library** — `lib/dialect/pastoml.pas`, TOML v1.0.0 whole rather
   than a subset: bare, quoted and dotted keys; basic, literal and both
   multi-line string forms; decimal, hexadecimal, octal and binary integers with
@@ -37,6 +46,16 @@ appears below in the release where it still existed.
   does for the compiler. ADR-0361.
 
 ### Fixed
+
+- **A path the language server was given could run a command** (ADR-0362).
+  `lsp/pasls.pas` assembled a shell command and wrapped the source path in
+  apostrophes; a path holding an apostrophe closed the quoting, so a file named
+  `a'; touch PWNED; echo '.pas` ran `touch PWNED` when an editor asked for its
+  outline — and under MCP the path comes from whatever is driving the model.
+  The server now spawns the compiler with an argument vector and quotes
+  nothing. `tools/pascalcc` was never affected: it is bash and uses arrays.
+  The new `command-injection` gate holds both halves — that nothing ran, and
+  that such a file still compiles.
 
 - **`afterschool-pascal.toml` is read as TOML.** The driver read it with a
   declared subset written in `awk`, which got two kinds of legal document

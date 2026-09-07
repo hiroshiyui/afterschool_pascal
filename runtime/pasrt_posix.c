@@ -48,14 +48,18 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
 #include <signal.h>
+#include <spawn.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -701,4 +705,280 @@ int pasx_term_restore(void) {
  * the state being here. */
 int pasx_term_raw_active(void) {
   return pasx_term_saved_fd >= 0 ? 1 : 0;
+}
+
+/* --- an argument vector, and the process it starts (ADR-0362) -------------
+ *
+ * `PasProcess.Run` and `Capture` hand a *string* to `system` and `popen`, and
+ * the shell then decides where one word ends and the next begins. That is the
+ * right interface for a command a program wrote out and the wrong one for a
+ * command assembled out of values -- a path, a flag, something a caller sent
+ * -- because every such value is read as shell syntax. `lsp/pasls.pas` quoted
+ * its path with apostrophes and a path containing one escaped the quoting;
+ * ADR-0362 has the probe.
+ *
+ * So this is the other interface: the words are carried as words and no shell
+ * ever sees them. The vector is built here rather than in Pascal because argv
+ * is a `char *[]` -- an array of pointers, which AP 6.7.7.6.2's boundary has
+ * no way to spell -- so the caller pushes one string at a time and the
+ * pointers never cross. It is a handle (AP 6.4.12): `pasx_argv_free` is its
+ * closer, so the words are freed when the Pascal variable dies.
+ *
+ * **`posix_spawn` and not `fork`.** This language has two threads of control
+ * (AP 6.9.3.12), and a `fork` in a process with more than one leaves the child
+ * able to call only what is async-signal-safe -- `execvp` searching a PATH is
+ * not on that list on every libc. `posix_spawn` exists for exactly this and
+ * the implementation does whatever its system makes safe.
+ *
+ * `posix_spawnp` is the PATH-searching form, which is what a driver needs:
+ * `echo` rather than `/bin/echo`. POSIX lets a system report a command that
+ * cannot be executed either from the call or through a child that exits 127,
+ * and the two are told apart nowhere; doc/implementation-defined.md records
+ * which this one does.
+ */
+
+/* The most words this will carry. It is a bound and not a budget: a command
+ * line long enough to reach it is one the operating system would refuse for
+ * ARG_MAX anyway, and a caller that reaches it is told rather than growing
+ * until malloc fails. */
+#define PASX_ARGV_MAX 4096
+
+/* The child inherits this process's environment, and `environ` is how a
+ * spawn is told so. POSIX declares it in <unistd.h>, and glibc puts that
+ * declaration behind a feature-test macro this file does not set -- so it is
+ * written out here, which is what POSIX itself tells a program to do. */
+extern char **environ;
+
+struct pasx_argv {
+  char **v; /* NULL-terminated, which is what argv is */
+  int n;    /* words pushed */
+  int cap;  /* slots, always at least n + 1 so v[n] is the NULL */
+};
+
+/* An empty vector, or NULL where there was no memory. */
+void *pasx_argv_new(void) {
+  struct pasx_argv *a = malloc(sizeof *a);
+
+  if (!a)
+    return NULL;
+  a->n = 0;
+  a->cap = 8;
+  a->v = malloc((size_t)a->cap * sizeof *a->v);
+  if (!a->v) {
+    free(a);
+    return NULL;
+  }
+  a->v[0] = NULL;
+  return a;
+}
+
+/* Copy one word onto the end. 0 written, 1 no room, 2 nothing to write to.
+ *
+ * The copy is this vector's own: the caller's string is a Pascal value whose
+ * lifetime is its block, and the words have to outlive the push. */
+int pasx_argv_push(void *p, const char *s) {
+  struct pasx_argv *a = p;
+  size_t n;
+  char *copy;
+
+  if (!a || !s)
+    return 2;
+  if (a->n >= PASX_ARGV_MAX)
+    return 1;
+  if (a->n + 2 > a->cap) {
+    int cap = a->cap * 2;
+    char **v = realloc(a->v, (size_t)cap * sizeof *v);
+
+    if (!v)
+      return 1;
+    a->v = v;
+    a->cap = cap;
+  }
+  n = strlen(s);
+  copy = malloc(n + 1);
+  if (!copy)
+    return 1;
+  memcpy(copy, s, n + 1);
+  a->v[a->n++] = copy;
+  a->v[a->n] = NULL;
+  return 0;
+}
+
+/* How many words are in it, so that a caller can refuse to run an empty one
+ * without keeping a count of its own. */
+int pasx_argv_count(void *p) {
+  struct pasx_argv *a = p;
+
+  return a ? a->n : 0;
+}
+
+/* Drop every word after the first `keep` of them, so that a caller which
+ * speculated -- pushed the words of a candidate and then found it was the
+ * wrong one -- can put the vector back where it was. `ArgsLen` before is the
+ * mark; this is the reset. Answers how many are left. */
+int pasx_argv_drop(void *p, int keep) {
+  struct pasx_argv *a = p;
+
+  if (!a)
+    return 0;
+  if (keep < 0)
+    keep = 0;
+  while (a->n > keep)
+    free(a->v[--a->n]);
+  a->v[a->n] = NULL;
+  return a->n;
+}
+
+/* The closer. Answers 0 always: there is nothing a release can be told. */
+int pasx_argv_free(void *p) {
+  struct pasx_argv *a = p;
+  int i;
+
+  if (!a)
+    return 0;
+  for (i = 0; i < a->n; i++)
+    free(a->v[i]);
+  free(a->v);
+  free(a);
+  return 0;
+}
+
+/* A running child, and the stream its output arrives on when one was asked
+ * for. It is a handle for the reason the vector is: what a program would hold
+ * otherwise is a process identifier, which AP 6.4.2.6.2 would let it add to
+ * and wait for twice (ADR-0151). */
+struct pasx_proc {
+  pid_t pid;
+  FILE *out; /* NULL when nothing was captured */
+};
+
+/* Start `argvp`. `capture` says where the child's output goes: 0 leaves both
+ * streams this process's, 1 puts its standard output on a pipe, 2 puts its
+ * output and its standard error together on one -- which is what `2>&1` used
+ * to be written for and cannot be written at all where no shell reads it --
+ * and 3 sends both to the file `path` names, created or truncated.
+ *
+ * Mode 3 is here rather than left to the caller because a dump can be larger
+ * than any string a program would size for it: the caller that needs it is
+ * asking the compiler for a table and reading the file afterwards.
+ *
+ * status: 0 started, 1 no words to run, 2 the system refused.
+ */
+void *pasx_exec_start(void *argvp, int capture, const char *path, int *status) {
+  struct pasx_argv *a = argvp;
+  struct pasx_proc *pr;
+  posix_spawn_file_actions_t fa;
+  int fds[2], rc;
+  pid_t pid;
+
+  if (!status)
+    return NULL;
+  if (!a || a->n == 0) {
+    *status = 1;
+    return NULL;
+  }
+  pr = malloc(sizeof *pr);
+  if (!pr) {
+    *status = 2;
+    return NULL;
+  }
+  pr->out = NULL;
+  fds[0] = -1;
+  fds[1] = -1;
+  if ((capture == 1 || capture == 2) && pipe(fds) != 0) {
+    free(pr);
+    *status = 2;
+    return NULL;
+  }
+  if (posix_spawn_file_actions_init(&fa) != 0) {
+    if (fds[0] >= 0) {
+      close(fds[0]);
+      close(fds[1]);
+    }
+    free(pr);
+    *status = 2;
+    return NULL;
+  }
+  if (capture == 1 || capture == 2) {
+    /* The read end has no business in the child, and the write end is a
+     * descriptor it should not see under its own number either: a child that
+     * kept it open would hold the pipe open after it exited and the reader
+     * would never see the end of the stream. */
+    posix_spawn_file_actions_adddup2(&fa, fds[1], 1);
+    if (capture == 2)
+      posix_spawn_file_actions_adddup2(&fa, fds[1], 2);
+    posix_spawn_file_actions_addclose(&fa, fds[0]);
+    posix_spawn_file_actions_addclose(&fa, fds[1]);
+  } else if (capture == 3) {
+    if (!path || !*path) {
+      posix_spawn_file_actions_destroy(&fa);
+      free(pr);
+      *status = 2;
+      return NULL;
+    }
+    /* The child opens it, so a file this process may not create is the
+     * child's failure to start and not a half-run command. */
+    posix_spawn_file_actions_addopen(&fa, 1, path,
+                                     O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    posix_spawn_file_actions_adddup2(&fa, 1, 2);
+  }
+  rc = posix_spawnp(&pid, a->v[0], &fa, NULL, a->v, environ);
+  posix_spawn_file_actions_destroy(&fa);
+  if (rc != 0) {
+    if (fds[0] >= 0) {
+      close(fds[0]);
+      close(fds[1]);
+    }
+    free(pr);
+    *status = 2;
+    return NULL;
+  }
+  if (fds[0] >= 0) {
+    close(fds[1]);
+    pr->out = fdopen(fds[0], "r");
+    if (!pr->out)
+      close(fds[0]);
+  }
+  pr->pid = pid;
+  *status = 0;
+  return pr;
+}
+
+/* The next character of what the child wrote, or -1 at the end of it and
+ * whenever nothing was captured. A character at a time is PasStream's shape
+ * and `Collect`'s; the stream is buffered, so it is not a system call each. */
+int pasx_exec_getc(void *p) {
+  struct pasx_proc *pr = p;
+
+  if (!pr || !pr->out)
+    return -1;
+  return fgetc(pr->out);
+}
+
+/* Wait for the child and release it: the closer, so a Pascal variable holding
+ * one is waited for at the end of its block whatever else happened.
+ *
+ * Answers the exit code, or -1 where the child did not exit normally -- it was
+ * killed by a signal, or could not be waited for at all. A signal is not given
+ * a number of its own here for the reason `ExitCode` gives: the caller has
+ * `RunResult`, whose failure side is a reason and not a status. */
+int pasx_exec_close(void *p) {
+  struct pasx_proc *pr = p;
+  int st = 0, code;
+
+  if (!pr)
+    return -1;
+  if (pr->out)
+    fclose(pr->out);
+  /* EINTR is the one failure worth retrying: a signal arriving while this
+   * process waits says nothing about the child. */
+  while (waitpid(pr->pid, &st, 0) < 0) {
+    if (errno != EINTR) {
+      free(pr);
+      return -1;
+    }
+  }
+  code = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+  free(pr);
+  return code;
 }

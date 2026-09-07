@@ -458,6 +458,20 @@ if(Python3_FOUND)
   set_tests_properties(stale-component PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+  # ADR-0362: is a path this program was *given* still only a path? The
+  # language server built a shell command and wrapped the source in
+  # apostrophes, so a file named `a'; touch PWNED; echo '.pas` ran the command
+  # in its own name -- over LSP from an editor, and under MCP from whatever is
+  # driving the model. Its own harness for long-path's reason met a fourth
+  # time: no test case can choose how it is *named*. Both directions -- a
+  # payload that runs is the defect, and a payload path that stops working is
+  # the other half, which is what quoting more cleverly would fail.
+  add_test(NAME command-injection
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/command_injection.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+  set_tests_properties(command-injection PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}" TIMEOUT 300)
+
   # ADR-0291: can this compiler open a file whose path is longer than a name?
   # `nameStr` was 255 and held an identifier and a file name alike, so a
   # source at a 310-character path stopped the compiler at `pas_str_fits`

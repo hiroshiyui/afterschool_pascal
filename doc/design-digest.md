@@ -3039,6 +3039,44 @@ reason for the gap rather than as a request to close it.
 - **An empty variable answers zero and is not an error** — the assignment of
   `nil`, not `dispose` of nil.
 
+### A command as words (`PasProcess.Execute`, ADR-0362)
+
+`system` and `popen` take a **command line**, so a shell decides where one word
+ends and the next begins. That is the right interface for a command a program
+wrote out and the wrong one for a command assembled out of values, because a
+value in a shell's hands is syntax. `lsp/pasls.pas` wrapped a client-supplied
+path in apostrophes and handed the result to `popen`; a file named
+`a'; touch PWNED; echo '.pas` created the file, over LSP from an editor and
+over MCP from whatever drives the model.
+
+- **The vector lives on the far side and is a handle.** argv is a `char *[]`
+  and AP 6.7.7.6.2's boundary cannot spell an array of pointers, so a caller
+  pushes one string at a time and no pointer ever crosses. `pasx_argv_free` is
+  the closer, so the words die with the variable.
+- **An argument is a schematic `string`, not a `StrItem`.** Probed rather than
+  assumed: an `external` takes a value parameter of any capacity, so a path
+  longer than a name (ADR-0291) is a word like any other.
+- **`posix_spawnp`, not `fork` + `execvp`.** The language has two threads of
+  control (AP 6.9.3.12), and `fork` in a process with more than one leaves the
+  child holding a lock nothing will unlock. The `p` form searches `PATH`,
+  which is what a driver needs.
+- **`DropArgs` is the way back out of a guess.** A builder that walks a
+  workspace trying `.components` sidecars gets all but one of them wrong;
+  `ArgsLen` is the mark and `DropArgs` the reset. `take` moves a handle — that
+  was probed too — but a move replaces where an append was wanted.
+- **The empty vector is guarded twice and neither guard is spare.**
+  AP 6.4.12.3 makes lending an empty handle to a foreign routine a run-time
+  error, so the Pascal check is what stands between a released vector and a
+  stopped program; the C checks because it is C. Removing the Pascal one is
+  what the compiler refused, in those words.
+- **Five entry points because nobody can write `2>&1` any more.**
+  `ExecuteInto` leaves standard error alone as `Capture` does; `ExecuteBoth`,
+  `ExecuteLines` and `ExecuteToFile` join it, each answering *what did this
+  command report*, whose answer is on both streams.
+- **`Run` stays.** A pipeline and a redirection are what a shell is for. The
+  rule is at the routine: prefer `Execute` wherever any part of the command
+  came from outside the program.
+
 **A mutation is a file the harness runs** (ADR-0207). `tests/mutation/` holds
 one `.mut` per recorded mutation — the substitution, the test that must fail,
 and why — and `run.py` applies each, rebuilds, requires the named test to

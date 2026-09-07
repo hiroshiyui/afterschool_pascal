@@ -1,0 +1,10 @@
+adr: 0362
+file: lsp/pasls.pas
+kills: command-injection
+why: The source path is wrapped in apostrophes again, as it was before ADR-0362 -- harmless on its own, because nothing re-reads them, and that is the point: the quoting was never the fix. What it breaks is the *other* direction the gate asserts, the payload file no longer compiling, because the compiler is now handed a name with apostrophes in it that no file has. A reader who answers this mutation by quoting more cleverly has to notice that the shell is gone.
+--- old
+  e := AddArg(v, source);
+  e := AddArg(v, '-o');
+--- new
+  e := AddArg(v, '''' + source + '''');
+  e := AddArg(v, '-o');

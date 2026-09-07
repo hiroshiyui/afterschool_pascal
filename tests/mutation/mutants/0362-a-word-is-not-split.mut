@@ -1,0 +1,10 @@
+adr: 0362
+file: runtime/pasrt_posix.c
+kills: lib_process_execute
+why: A word is cut at the first blank, which is what a shell does to a command line and what the whole construct exists not to do. It is the defect in miniature: an argument holding a space stops being one argument. Case 2 of the corpus program carries a shell's whole vocabulary and is what notices.
+--- old
+  n = strlen(s);
+  copy = malloc(n + 1);
+--- new
+  n = strcspn(s, " ");
+  copy = malloc(n + 1);

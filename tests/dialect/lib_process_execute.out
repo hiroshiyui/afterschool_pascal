@@ -1,0 +1,21 @@
+hello
+1 ok=TRUE code=0 words=2
+2 [a'; touch PWNED; echo 'b $HOME `id` * | wc
+]3 ok=FALSE cause=the operation was refused
+4 3
+5 ok=FALSE cause=not present
+6 no error len=644
+7 [out
+]8 [out
+err
+]9 words=2
+10 ok=TRUE
+11 ok=TRUE code=0 [far more]
+12 lines=2 [one][two]
+13 ok=TRUE code=0
+13 [written]
+13 [also]
+14 pushed=3 back to 1
+14 [kept
+]15 no room left at 4097 words=4096
+16 words=0 add=not present drop=0

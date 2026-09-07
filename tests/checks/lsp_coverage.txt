@@ -25,26 +25,26 @@
 # Regenerate with:  python3 tests/checks/lsp_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 94
-instrumented 1394
+uncovered 92
+instrumented 1390
 ambiguous 32
 sessions 32
 
 (program level) 5/52
 addref 2/12
-analyse 0/7
+analyse 0/6
 askedat 0/6
+asklines 0/5
 before 0/1
 bytecolumn 0/5
-calltool 2/35
+calltool 2/34
 changeduri 0/4
 characterat 0/2
 charsof 0/3
 codeaction 0/25
 collectrefs 0/5
-compile 2/7
-compilercommand 2/9
-completion 1/53
+compile 2/9
+completion 1/51
 completionkindof 1/12
 container 0/1
 copyid 3/5
@@ -61,24 +61,25 @@ dispatch 0/25
 docof 0/3
 dropdecl 0/6
 encodingname 0/2
+endargs 0/4
 endswithtext 0/2
 extent 0/1
 fileindexof 0/3
 findroot 3/11
-finduse 8/48
+finduse 7/48
 flush 0/3
 foldable 0/1
 folding 0/24
 forget 1/6
-formatcommand 2/10
+formatargs 0/6
 formatting 2/34
 gather 1/21
 hexvalue 1/4
 hover 0/25
 identin 0/7
-importsfor 1/15
+importsfor 1/11
 initialize 0/32
-isidentifier 2/22
+isidentifier 2/20
 lineof 0/13
 linesastext 0/7
 mcpdispatch 2/21
@@ -90,7 +91,7 @@ nodocument 0/2
 note 0/1
 offeritem 0/5
 offervocabulary 0/10
-outline 4/52
+outline 4/50
 outlinetext 0/20
 patharg 0/4
 pathtool 0/17
@@ -101,8 +102,8 @@ quickfix 0/23
 rangeformatting 0/10
 readenvironment 0/3
 readformatted 5/25
-readimportpaths 0/15
-readsidecar 0/27
+readimportpaths 0/14
+readsidecar 0/25
 readtransport 1/5
 readuses 5/25
 readwhole 2/16
@@ -118,8 +119,9 @@ shutdown 0/4
 sortrefs 0/7
 spanrange 0/10
 spans 0/1
+startargs 4/17
 statementat 0/10
-statementsof 2/9
+statementsof 2/7
 stmtparse 1/8
 store 0/9
 symbolkindof 2/12
@@ -133,7 +135,7 @@ unsupported 0/7
 uriof 2/5
 urioffile 0/3
 uritopath 0/11
-usesofcomponent 5/19
-vocabulary 2/15
+usesofcomponent 4/19
+vocabulary 2/13
 walkfor 0/26
 writescratch 0/15
