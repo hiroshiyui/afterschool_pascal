@@ -5,6 +5,9 @@ a header inside a dotted k: not of the expected form at 3:6
 an array is not a table ar: not of the expected form at 2:6
 reaching into an inline ta: not of the expected form at 2:6
 a table array over a table: not of the expected form at 2:6
+a header through a dotted : not of the expected form at 2:8
+a dotted key into a header: not of the expected form at 3:7
+ extending an inline table: not of the expected form at 2:7
             a leading zero: not of the expected form at 1:6
      a trailing underscore: not of the expected form at 1:7
       a leading underscore: not of the expected form at 1:5

@@ -68,6 +68,13 @@ begin
   Refuse('an array is not a table array', 'a = [1]|[[a]]');
   Refuse('reaching into an inline table', 'p = { x = 1 }|[p.q]');
   Refuse('a table array over a table', '[a]|[[a]]');
+  { The three that reach `Descend` rather than the final segment, which is a
+    different arm of the same rule and was reached by nothing until a mutation
+    said so: the refusals above all land on the *last* segment of a path, and
+    these land on one it passes through. }
+  Refuse('a header through a dotted table', 'a.b.c = 1|[a.b.d]');
+  Refuse('a dotted key into a header', '[a.b]|[a]|b.c = 2');
+  Refuse('extending an inline table', 'p = { x = 1 }|p.y = 2');
   Refuse('a leading zero', 'a = 01');
   Refuse('a trailing underscore', 'a = 1_');
   Refuse('a leading underscore', 'a = _1');
