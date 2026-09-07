@@ -27,12 +27,14 @@ nobody has decided yet.
 
 ## Where development stands — 2026-09-07
 
-**Released: v3.6.0**, and `CHANGELOG.md`'s `Unreleased` is empty — everything
-below the release line is in it. It is the first release whose headline is a
-**library** change that breaks existing programs: `PasContainer`'s map keys
-itself with a trait, so every map call loses two arguments (ADR-0355). The
-compiler builds itself, stage 2 equals stage 3 in every program-component, and
-the suite is 896 cases green at `-O2` and at `-O0`.
+**Released: v3.6.0**, the first release whose headline is a **library**
+change that breaks existing programs: `PasContainer`'s map keys itself with a
+trait, so every map call loses two arguments (ADR-0355). `CHANGELOG.md`'s
+`Unreleased` holds the day after it — a TOML library and the project reader
+rewritten over it, and a command injection in the language server found,
+closed, audited and audited again (ADR-0359 – ADR-0364) — none of it a change
+to the language. The compiler builds itself, stage 2 equals stage 3 in every
+program-component, and the suite is 905 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
@@ -42,10 +44,17 @@ the suite is 896 cases green at `-O2` and at `-O0`.
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. The parts below hold no partially landed feature — a feature lands with its clause, its record and its case, or it does not land |
 
-**What moved most recently is the oracles and not the language** — set out in
-[`doc/history.md`](history.md#the-oracles-that-were-not-looking), because it is
-settled and this page is for what is not.
+**What moved most recently is the boundary** — set out in
+[`doc/history.md`](history.md#after-v360-a-configuration-file-and-the-boundary-audited),
+because it is settled and this page is for what is not. A path an editor
+handed `lsp/pasls.pas` could run a command (ADR-0362); the audit over the fix
+returned six findings, four older than the fix (ADR-0363); and one CI container
+with a dirty register showed that a foreign scalar bound at the wrong width has
+**no behavioural oracle on any one host**, so the claim is now a catalogue
+(ADR-0364). Nothing in it was found by an oracle failing.
 
+**Before that, the oracles** — in
+[`doc/history.md`](history.md#the-oracles-that-were-not-looking).
 **In short**: a coverage review asked what is measured and the answer was
 46 718 lines of 67 931, so `lib/`, `runtime/*.c` and `lsp/pasls.pas` gained
 gates of their own; the dumps a tool asks for turned out to have no corpus, and
@@ -57,7 +66,7 @@ time**. Each of those had been true for as long as the thing it watches has
 existed, and every one of them was found by asking what an oracle covers rather
 than by an oracle failing.
 
-**Before that**, the memory model was struck as closed on 2026-09-04 and
+**And before that**, the memory model was struck as closed on 2026-09-04 and
 corrected three times the day after. Three of its four rows are settled and
 [the chapter](history.md#the-memory-model-read-against-the-goal) has the
 working; what stands is [below](#memory-model-and-memory-safety). The lesson
@@ -911,78 +920,16 @@ part of what it says.
 #### What is left
 
 - ~~**32-bit, which is the real work.**~~ — **done** (ADR-0325) on 2026-09-05,
-  and the row named **four** rules where there are seven. It had `LlSize` says
-  a pointer is 8, `tyProc` and `tySlice` are two pointers, and `tyFile`'s
-  alignment is 8; what it left out is `tyInt64`, `tyReal` and `tyHandle`, which
-  i386 aligns to 4 as well — the three a reader would not have caught, a wrong
-  alignment costing no diagnostic anywhere. `PtrSize` and `WordAlign` are the
-  two functions every one of the seven now asks, `--target=i386-pc-linux-gnu`
-  is admitted, and **573 of the 574 corpus sources build and run there** —
-  564 of 570 on the day the port landed, and the six became one when
-  ADR-0328 gave a foreign declaration a way to name a C integer of the
-  target's width. The gate prints its own denominator and it moves with the
-  corpus: `bash tests/checks/target32.sh`, 2026-09-05.
-
-  **Running it found two defects no arithmetic check here could see**, neither
-  in a layout rule and neither in a frame: `pas_select` indexed its arm array
-  with `sizeof` where the compiler strides `PAS_SELECT_ARM_SIZE` — one number
-  on an LP64 target and two on i386 — and the compiler wrote the arm's fourth
-  field at a literal 16, where i386 puts it at 12. `target-layout` passed with
-  both in place and `tests/dialect/select.pas` segfaulted, which is why
-  `target32` exists.
-
-  **And it left one question that only a release found: *which* i386.**
-  Nothing in the triple names a processor, and clang's default for it moved —
-  clang 19 compiles `i386-pc-linux-gnu` for `i686` and clang 21 for
-  `pentium4`. On the x87 an eighty-bit register makes §6.7.6.3's `round`
-  contradict the clause defining it, and — the one that decided it — D.32's
-  `sqr` error goes **undetected**, `sqr(-1e200)` being an ordinary finite
-  number in a register with a fifteen-bit exponent. **An i386 this compiler
-  emits for has SSE2** (ADR-0346): `tools/pascalcc` names `-march=pentium4`
-  for that triple and no other, and `doc/implementation-defined.md` §2.2 says
-  so where it answers what the real-type is. What is given up is a Pentium III
-  and earlier, which is the trade ADR-0109's own test settles.
-
-  **ADR-0129's `i64` at the foreign boundary was the second, independent
-  question**, and it read as still open here for as long as it took to write
-  the row below, which decides it the same day. Five of the six failures the
-  port catalogued were it: a declaration naming a C `long`, `size_t` or
-  `time_t` as `int64` is right on LP64 and four bytes too wide on i386, and
-  `strlen('hello')` answered 21474836485. The sixth was
-  `tests/index_span.pas`, which allocates 2 GB on purpose and is the one row
-  left.
-
+  and the row had named four rules where there are seven. The port, the two
+  defects no arithmetic check could see, and *which* i386 (ADR-0346) are in
+  [`doc/history.md`](history.md#the-32-bit-port-and-the-width-it-left).
 - ~~**How a foreign declaration should name a C `long`**~~ (ADR-0129) —
-  **decided** the same day it was measured (ADR-0328, AP 6.4.2.7). `clong` and
-  `csize` are required identifiers denoting `int64` or `integer` by target, and
-  **two rather than one** because the two widths are not the same question:
-  they agree on all three admitted targets and differ on Windows x64, which is
-  LLP64 and is the next target this chapter names. All five catalogued cases
-  pass and `tests/checks/target32_known.txt` is down to one row — the program
-  that allocates 2 GB on purpose.
-
-  Two things came out of it that a decision alone would not have. One of the
-  five was **not a declaration**: `pas_gettimestamp` wrote `now = (time_t)v`
-  and a truncated `LLONG_MAX` lands on 1969-12-31, a date the calendar accepts,
-  so a program asking for an unrepresentable instant was told it was valid. And
-  the portable narrowing is **two lines and not one** — admitting `trunc` of an
-  integer would have made it one, and would have withdrawn a conformance fix
-  taken deliberately from the validation suite's DEV158, in a commit about a
-  foreign boundary where nobody would look for it. `tests/trunc_integer.pas`
-  caught it in the same run.
-
-  **And a sixth was still there, invisible at the level the gate ran at**
-  (ADR-0334, 2026-09-05). `tests/dialect/int64_foreign.pas` declared C's `labs`
-  as taking an `int64` — the wrong ABI on every ILP32 target, and it had been
-  wrong since the file was written on 2026-08-19. `target32` swept it 570
-  sources at a time and passed, because at `-O2` the optimiser folds `labs` of
-  a constant away before the ABI matters; at `-O0` it answers
-  `-3028092405585415680`. **No job ran the combination** — `thirty-two-bit`
-  took the default `-O2`, and the `unoptimised` job has no 32-bit libc, so
-  `target32` skips inside it and ctest reads a skip as success. Two jobs, two
-  axes, and the cell where they cross was empty. The job runs the gate at both
-  levels now, and the general form of it is `doc/sop.md` §7's rather than this
-  page's.
+  **decided** the same day it was measured (ADR-0328, AP 6.4.2.7), and then
+  found wrong **twice more** with the decision in place: `labs` at `-O0`
+  (ADR-0334), and nine bindings plus the emitter's own slice count that no
+  corpus on any one host could convict (ADR-0364), so `foreign-width` holds
+  the claim as a catalogue. All three are in the same chapter of
+  [`doc/history.md`](history.md#the-32-bit-port-and-the-width-it-left).
 
 **The rest is small and specific.** s390x's `tySet` alignment (13 offsets;
 `target-layout`'s second claim is what would catch it now — i386 does not have
@@ -1436,7 +1383,8 @@ the record.
 | Is the memory model the one its records describe? | No, and not in the direction expected: three of a review's four rows closed within two days — the borrow rule's invalidation half is refused where a borrow is *formed*, the fifth warning was measured and retired, and the release walk that ended in a signal is a work list. The fourth, a record's `Drop`, is still open with exactly one asker. [The chapter](history.md#the-memory-model-read-against-the-goal) | ADR-0317 – ADR-0337 |
 | What separates this from a language a person picks up on a Tuesday? | Eight rows, every one struck within four days of being written: an archive, a tour, twelve examples, a position in every trap message, a project skeleton, two more server methods, and two claims that were true of every spelling of the command but the one a person types | ADR-0293 – ADR-0308, ADR-0348 |
 | Mutation testing, committed to the tree | One file per recorded mutation and a harness that runs them; not a `ctest` case, because it edits the tree. A register of demonstrations and not a measurement | ADR-0207 |
-| Is the platform lock scoped? | Three things, two done; 32-bit is what remains | ADR-0155 – ADR-0159 |
+| Is the platform lock scoped? | Three things, two done at once and the third — 32-bit — on 2026-09-05, when the *offsets* turned out to be the wrong measure of it: seven rules, not four | ADR-0155 – ADR-0159, ADR-0325 |
+| Is a foreign scalar the width of its C type? | Not by inspection: `time` as `int64` gave the right answer on every host but one CI container, and the mutation putting it back survived. `clong`/`csize` are the answer and `foreign-width` is what holds it, as a catalogue — [the chapter](history.md#the-32-bit-port-and-the-width-it-left) | ADR-0328, ADR-0364 |
 | Can a conforming program learn that a file is missing? | `binding(f).bound` says whether it is there | ADR-0172 |
 | Can a program get its arguments as a list? | `argcount` and `argument(k)`, required identifiers of the dialect | ADR-0173 |
 | Can a foreign address be owned? | A handle-type: a file variable for it, released where a file closes | ADR-0174 |

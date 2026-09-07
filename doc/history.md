@@ -41,6 +41,8 @@ part that never changes was the first 2,000 lines a reader met.
 | [What each landed feature left open](#what-each-landed-feature-left-open) | the FFI and container residue, and the prior it arrived at: ask whether the address can be retired at the call |
 | [The concurrency row and the four cheaper answers](#the-concurrency-row-and-the-four-cheaper-answers) | the cell that became an essay — measure the cost before naming the mechanism, four times over and once against itself |
 | [The four decisions the goal forced](#the-four-decisions-the-goal-forced) | ADR-0109's four, and the thing they have in common: not one decided the question its row was written to pose |
+| [The 32-bit port, and the width it left](#the-32-bit-port-and-the-width-it-left) | the two struck rows of the cross-platform chapter, moved whole, and the third time a foreign width was wrong — found by a register nobody could have found it with |
+| [After v3.6.0](#after-v360-a-configuration-file-and-the-boundary-audited) | six records in one day: a TOML library, a project reader that read all of it, and a command injection found, closed, audited and audited again |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -3396,8 +3398,10 @@ importable before it configures, so a green bar means the proofs ran.
 
 ### Cross-platform support, measured
 
-The roadmap's cross-platform chapter keeps what is still open — 32-bit, and
-the small specific things — and a summary of what the lock turned out to be.
+The roadmap's cross-platform chapter keeps what is still open — the small
+specific things; 32-bit was among them until ADR-0325, and [its rows are
+below](#the-32-bit-port-and-the-width-it-left) — and a summary of what the lock
+turned out to be.
 This is the measurement it rests on, made on 2026-08-22 against
 `aarch64-linux-gnu`, and the three items it closed.
 
@@ -8025,3 +8029,182 @@ eleven words now; `pasls` maps `task` beside `function` for `SymbolKind` and
 a *library* change that breaks existing programs: every map call loses two
 arguments. Minor, because the accepted language and the command line grew and
 nothing they already accepted changed meaning.
+
+## The 32-bit port, and the width it left
+
+The roadmap's cross-platform chapter carried these two rows struck through for
+two days, each with its whole body, and this is where the bodies went. What
+stays there is what they left: s390x, Windows, and a macOS nobody has tried.
+The measurement the port rests on is
+[above](#cross-platform-support-measured), made on 2026-08-22.
+
+### The two rows as they stood
+
+#### 32-bit, which is the real work — done (ADR-0325)
+
+Struck on 2026-09-05, and the row named **four** rules where there are seven. It had `LlSize` says
+a pointer is 8, `tyProc` and `tySlice` are two pointers, and `tyFile`'s
+alignment is 8; what it left out is `tyInt64`, `tyReal` and `tyHandle`, which
+i386 aligns to 4 as well — the three a reader would not have caught, a wrong
+alignment costing no diagnostic anywhere. `PtrSize` and `WordAlign` are the
+two functions every one of the seven now asks, `--target=i386-pc-linux-gnu`
+is admitted, and **573 of the 574 corpus sources build and run there** —
+564 of 570 on the day the port landed, and the six became one when
+ADR-0328 gave a foreign declaration a way to name a C integer of the
+target's width. The gate prints its own denominator and it moves with the
+corpus: `bash tests/checks/target32.sh`, 2026-09-05.
+
+**Running it found two defects no arithmetic check here could see**, neither
+in a layout rule and neither in a frame: `pas_select` indexed its arm array
+with `sizeof` where the compiler strides `PAS_SELECT_ARM_SIZE` — one number
+on an LP64 target and two on i386 — and the compiler wrote the arm's fourth
+field at a literal 16, where i386 puts it at 12. `target-layout` passed with
+both in place and `tests/dialect/select.pas` segfaulted, which is why
+`target32` exists.
+
+**And it left one question that only a release found: *which* i386.**
+Nothing in the triple names a processor, and clang's default for it moved —
+clang 19 compiles `i386-pc-linux-gnu` for `i686` and clang 21 for
+`pentium4`. On the x87 an eighty-bit register makes §6.7.6.3's `round`
+contradict the clause defining it, and — the one that decided it — D.32's
+`sqr` error goes **undetected**, `sqr(-1e200)` being an ordinary finite
+number in a register with a fifteen-bit exponent. **An i386 this compiler
+emits for has SSE2** (ADR-0346): `tools/pascalcc` names `-march=pentium4`
+for that triple and no other, and `doc/implementation-defined.md` §2.2 says
+so where it answers what the real-type is. What is given up is a Pentium III
+and earlier, which is the trade ADR-0109's own test settles.
+
+**ADR-0129's `i64` at the foreign boundary was the second, independent
+question**, and it read as still open here for as long as it took to write
+the row below, which decides it the same day. Five of the six failures the
+port catalogued were it: a declaration naming a C `long`, `size_t` or
+`time_t` as `int64` is right on LP64 and four bytes too wide on i386, and
+`strlen('hello')` answered 21474836485. The sixth was
+`tests/index_span.pas`, which allocates 2 GB on purpose and is the one row
+left.
+
+#### How a foreign declaration should name a C `long` — decided (ADR-0328)
+
+The question was ADR-0129's, and it was **decided** the same day it was measured (ADR-0328, AP 6.4.2.7). `clong` and
+`csize` are required identifiers denoting `int64` or `integer` by target, and
+**two rather than one** because the two widths are not the same question:
+they agree on all three admitted targets and differ on Windows x64, which is
+LLP64 and is the next target this chapter names. All five catalogued cases
+pass and `tests/checks/target32_known.txt` is down to one row — the program
+that allocates 2 GB on purpose.
+
+Two things came out of it that a decision alone would not have. One of the
+five was **not a declaration**: `pas_gettimestamp` wrote `now = (time_t)v`
+and a truncated `LLONG_MAX` lands on 1969-12-31, a date the calendar accepts,
+so a program asking for an unrepresentable instant was told it was valid. And
+the portable narrowing is **two lines and not one** — admitting `trunc` of an
+integer would have made it one, and would have withdrawn a conformance fix
+taken deliberately from the validation suite's DEV158, in a commit about a
+foreign boundary where nobody would look for it. `tests/trunc_integer.pas`
+caught it in the same run.
+
+**And a sixth was still there, invisible at the level the gate ran at**
+(ADR-0334, 2026-09-05). `tests/dialect/int64_foreign.pas` declared C's `labs`
+as taking an `int64` — the wrong ABI on every ILP32 target, and it had been
+wrong since the file was written on 2026-08-19. `target32` swept it 570
+sources at a time and passed, because at `-O2` the optimiser folds `labs` of
+a constant away before the ABI matters; at `-O0` it answers
+`-3028092405585415680`. **No job ran the combination** — `thirty-two-bit`
+took the default `-O2`, and the `unoptimised` job has no 32-bit libc, so
+`target32` skips inside it and ctest reads a skip as success. Two jobs, two
+axes, and the cell where they cross was empty. The job runs the gate at both
+levels now, and the general form of it is `doc/sop.md` §7's rather than this
+page's.
+
+### The width, a third time — closed (ADR-0364)
+
+Twice above a foreign declaration naming `int64` for a C `long` was found by
+running the corpus on i386 — five in the port's catalogue, and `labs` at
+`-O0`. The third time no corpus could have found it, and that is the whole of
+the record.
+
+**`time` bound as `int64` answered 7682741216296735854** on CI's i386
+container (ADR-0364's context), `time_t` being a `long` there and the high
+word whatever the spare register held. On the machine that wrote the fix the
+register happened to be clean: the wrong binding gave the right answer,
+`target32` was green with the defect in it, and the mutation putting `int64`
+back **survived**. A width defect at the boundary has no behavioural test on
+any one host, which is the shape ADR-0325's own rows had missed — both of
+those were found by a program *behaving* wrongly, and this one behaved
+correctly everywhere but one container.
+
+The audit that followed applied that one lens to every `external` in the
+tree and found the same shape **nine more times**, none provable: `read` and
+`write` answer `ssize_t`, `fflush` takes a pointer, and six OpenSSL bindings
+are `long`s and pointers — all `int64`, and the TLS six unreachable even by
+the container, since libssl cannot be built for i386 on CI at all. And one in
+the **compiler**: the emitter widened a slice's count to `i64` on every target
+(ADR-0129), where i386's `size_t` is `i32`. It worked there by cdecl's grace,
+the callee reading the low word and stepping over the four bytes above it, and
+`doc/sop.md` §7 had carried a row saying exactly that the widening was right
+for a reason no program could exhibit — written for LP64, and falsified the
+day a target that was not LP64 was admitted, without anyone re-reading it.
+
+**What closed it is a catalogue and not a case** (`foreign-width`): every
+heading ending in `external` under `lib/` and `lsp/` that names `int64` must
+carry a row saying which C type is 64 bits everywhere — `ExtFileInfo`'s
+`long long *` is the one such row — and the emitter's declaration is read
+back from a probe compiled per admitted target, `ptr, i64` on the two LP64
+targets and `ptr, i32` on i386. Both directions, and deterministic where the
+corpus was a coin. The mutation that survived is killed on every host.
+
+## After v3.6.0: a configuration file, and the boundary audited
+
+Six records in one day, 2026-09-07, none of them a language change, and the
+first four of them one thread.
+
+**A NaN answers no to both questions** (ADR-0359). `PasJson`'s guard against a
+value with no decimal spelling asked `x <> x`, which on this processor is
+*ordered* not-equal and false for a NaN, so writing one stopped the program
+inside the library with an index out of bounds. The guard asks `not (x = x)`
+now, `RealToStr` moved to `PasText` where a second format could reach it, and
+the question the record opens — whether `<>` on reals should be the negation
+of `=` — is a `doc/sop.md` §7 row and not decided.
+
+**A TOML document** (ADR-0360) is the thirty-third module: TOML v1.0.0 whole,
+because a subset of a format is what `pascalcc`'s project reader had been and
+what ADR-0361 replaced the next commit — `output = "build/demo#1"` had
+silently built `build/demo`, and a one-element array holding a comma was three
+malformed strings. `bin/apconfig` reads `afterschool-pascal.toml` over
+`PasToml`, is built by the compiler the tree just produced, and writes
+`key=value` for a `case` in the driver to read; the driver stayed a shell
+script by decision.
+
+**A command is words, not a line** (ADR-0362). Answering the `apconfig`
+question found that `lsp/pasls.pas` assembled a shell command and quoted the
+source path with apostrophes, so a file named `a'; touch PWNED; echo '.pas`
+ran `touch PWNED` when an editor asked for its outline — proved by doing it,
+over MCP, before the record was written. `PasProcess.Execute` and four
+routines beside it carry an `ArgV` through `posix_spawnp` and no shell reads
+them; the server was converted, `Run` stays for a line a person wrote, and the
+`command-injection` gate holds both halves — that nothing runs, and that such
+a file still compiles.
+
+**A boundary answers; it does not stop** (ADR-0363). The `security-audit` run
+over that change the same afternoon returned six findings, four of them older
+than the routine they were found through: a path holding `chr(0)` stopped the
+server on one request, `ExecuteToFile` followed a symbolic link and the
+server's scratch files were composed at the top of `TMPDIR` under a guessable
+name, no `Execute` had a deadline, a child inherited every open descriptor,
+three `posix_spawn` file-action returns went unchecked, and a failed `fdopen`
+dropped the output silently. One rule closed all six: a library routine that
+takes a value from outside answers with a code, and the trap is for the
+program's own mistakes. `Deadline`, `TemporaryDirectory` over `mkdtemp`,
+`O_NOFOLLOW`, `FD_CLOEXEC` and the mode letter `e` on every `fopen` are the
+mechanism; the project-wide audit that followed applied the rule to
+**nineteen** routines across six modules, each of which had reached ADR-0122's
+trap on a name holding `chr(0)`, and to the width above.
+
+**What the day argues** is the sentence `doc/sop.md` §7 already carried: a
+gate that prints a claim it never evaluated. Nothing here was found by an
+oracle failing. The injection was found by reading a program while answering a
+design question; the six findings by an audit commissioned on the change that
+closed it; the width by one CI container with a dirty register; and the nine
+bindings by applying that container's lens by hand to every declaration,
+because no container could reach six of them. Each is now held by a gate whose
+first act was to fail on the defect it was written for.
