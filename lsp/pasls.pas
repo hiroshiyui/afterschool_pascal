@@ -58,17 +58,17 @@
   **The compiler reads a file, so the document has to become one.** An editor
   holds a buffer that has never been saved, which is the whole reason a server
   exists, so the text is written to a scratch file and the scratch file is
-  what `pascalc` is pointed at. The name carries this program's process
-  identifier -- `PasProcess.ProcessId`, which the language did not have until
-  this server needed it (ADR-0242) -- so two servers sharing a `TMPDIR` do not
-  share the file. `PASLS_SCRATCH` still overrides it whole, which is how a
-  harness points every session at a path of its own, and two servers told the
-  same path share it again by the instruction of whoever told them.
+  what `pascalc` is pointed at. It is `doc.pas` inside a directory this
+  program made for itself with `mkdtemp` (ADR-0363), so two servers sharing a
+  `TMPDIR` share nothing and nobody else there can guess a name and plant a
+  link at it -- which the old name, the process id at the top of `TMPDIR`
+  (ADR-0242), kept two servers apart with and kept nobody else out.
 
-  The file is left behind when the server ends, and deliberately: it is the
-  exact source `pascalc` was handed, which is the one artefact worth having
-  when the server and the editor disagree about a document. One file per
-  process under `TMPDIR` is what `TMPDIR` is for.
+  The directory and everything composed in it go at `exit`; the exact source
+  `pascalc` was handed survives only where `PASLS_SCRATCH` names it.
+  `PASLS_SCRATCH` still overrides the file whole, which is how a harness
+  points every session at a path of its own; then nothing is made and nothing
+  is removed, and two servers told one path share it as they were told to.
 
   **The positions are the compiler's, converted once.** `ErrorAt` counts lines
   and columns from one; LSP counts both from zero, and `PasLspDiag.DiagJson`
