@@ -1,0 +1,8 @@
+adr: 0363
+file: runtime/pasrt_posix.c
+kills: lib_process_execute
+why: The deadline is recorded and never armed, so case 19's child -- a shell whose grandchild holds the pipe for thirty seconds -- holds this side for thirty seconds and then answers `after`, ok = true. The case's `under 10s` and its `ok` both turn, and the harness's per-case timeout is what would have said so had the case not.
+--- old
+  pr->has_deadline = a->deadline_ms > 0;
+--- new
+  pr->has_deadline = 0;

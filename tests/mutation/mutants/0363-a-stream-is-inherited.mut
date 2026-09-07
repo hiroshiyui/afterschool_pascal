@@ -1,0 +1,8 @@
+adr: 0363
+file: runtime/pasrt.c
+kills: lib_process_execute
+why: The mode letter that keeps a text file out of a child comes off the one `fopen` a `reset` on a text file reaches, and case 20 -- which holds a text file open on purpose while it spawns a shell that lists its own descriptors -- counts one where it counted none.
+--- old
+    f->fp = fopen(name, f->direct ? "r+be" : f->istext ? "re" : "rbe");
+--- new
+    f->fp = fopen(name, f->direct ? "r+be" : f->istext ? "r" : "rbe");

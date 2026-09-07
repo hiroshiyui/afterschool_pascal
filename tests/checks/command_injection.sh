@@ -94,10 +94,58 @@ case $out in
   *) fail "the payload file did not compile through diagnostics: $out" ;;
 esac
 
+# A path holding chr(0) -- JSON spells it \u0000 -- used to stop the server at
+# the first foreign crossing (ADR-0122's trap, at PasFS.Exists), so one request
+# ended the session and every request after it went unanswered. The third
+# request here is the ordinary one and must be answered; the second must be
+# refused and not obeyed.
+python3 - > "$work/nul.jsonl" <<'PEOF'
+import json
+nul = chr(0)
+print(json.dumps({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"gate","version":"1"}}}))
+print(json.dumps({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"outline","arguments":{"path":"/tmp/x" + nul + "y.pas"}}}))
+print(json.dumps({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"outline","arguments":{"path":"$PAYLOAD"}}}))
+PEOF
+sed -i "s|\$PAYLOAD|$work/$payload|" "$work/nul.jsonl"
+out=$(PASLS_COMPILER=$pascalc PASLS_SCRATCH=$work/scratch "$work/pasls" --mcp < "$work/nul.jsonl" 2>&1)
+case $out in
+  *'"id":3'*'program Payload'*) ;;
+  *) fail "a path holding chr(0) ended the session; the request after it was not answered: $out" ;;
+esac
+case $out in
+  *'"id":2,"error"'*) ;;
+  *) fail "a path holding chr(0) was not refused: $out" ;;
+esac
+
+# And the scratch files: with PASLS_SCRATCH unset the server must put them in
+# a directory of its own under TMPDIR, not beside everybody else's -- a name
+# composed at the top of a shared directory is one another user can plant a
+# link at first -- and must take that directory away when it exits.
+mkdir -p "$work/tmp"
+# Seen from inside the compiler, because the directory is gone by the time the
+# server has exited: PASLS_COMPILER is a command, and this one looks round
+# before it compiles.
+cat >"$work/spy" <<SPY
+#!/usr/bin/env bash
+ls -A "\$TMPDIR" >"$work/seen"
+exec "$pascalc" "\$@"
+SPY
+chmod +x "$work/spy"
+TMPDIR=$work/tmp PASLS_COMPILER=$work/spy "$work/pasls" --mcp < "$work/nul.jsonl" >/dev/null 2>&1
+seen=$(tr '\n' ' ' <"$work/seen" 2>/dev/null)
+case $seen in
+  pasls-??????' ') ;;
+  *) fail "while the server ran, TMPDIR held [$seen] and not one private pasls-XXXXXX directory" ;;
+esac
+if [[ -n $(ls -A "$work/tmp") ]]; then
+  fail "the private scratch directory was left behind at exit: $(ls "$work/tmp")"
+fi
+
 if [[ $fails -eq 0 ]]; then
   echo "command-injection: a path holding an apostrophe, a semicolon and a" \
        "command is a path -- outline and diagnostics both read it and neither" \
-       "ran it"
+       "ran it; one holding chr(0) is refused without ending the session; and" \
+       "the scratch files live in a private directory that is gone at exit"
   exit 0
 fi
 exit 1

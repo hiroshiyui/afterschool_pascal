@@ -18,4 +18,9 @@ err
 14 pushed=3 back to 1
 14 [kept
 ]15 no room left at 4097 words=4096
-16 words=0 add=not present drop=0
+16 words=0 add=not present drop=0 deadline=not present
+17 nul word=not of the expected form nul path=not of the expected form words=1
+18 through link ok=FALSE cause=the operation was refused
+18 victim still [precious]
+19 ok=FALSE cause=the operation was refused captured=[before] under 10s=TRUE bad deadline=outside the representable range
+20 inherited=0

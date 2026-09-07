@@ -15,6 +15,11 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`PasProcess.Deadline`** — how long any run of an `ArgV` may take; on expiry
+  the child is killed, the pipe is closed so a grandchild cannot hold the
+  caller either, and the run is `errIO`. **`PasFS.TemporaryDirectory`** — a
+  directory of the program's own, over `mkdtemp`, for a caller that wants
+  several files by names of its choosing (ADR-0363).
 - **A command as words, not as a line** — `PasProcess.Execute` and the four
   routines beside it (`ExecuteInto`, `ExecuteBoth`, `ExecuteLines`,
   `ExecuteToFile`), over an `ArgV` built with `NewArgs`, `AddArg`, `ArgsLen`
@@ -47,6 +52,15 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Six findings of the security audit over `PasProcess.Execute`** (ADR-0363),
+  four of them older than it: a path holding `chr(0)` stopped the language
+  server on one request, and is now refused as a code; `ExecuteToFile`
+  followed a symbolic link, and the server's scratch files were composed at
+  the top of `TMPDIR` under a guessable name — `O_NOFOLLOW` now, and a private
+  `mkdtemp` directory removed at `exit`; no `Execute` had a deadline; a child
+  inherited every open descriptor (`FD_CLOEXEC` on pipes and sockets, mode
+  `e` on every `fopen`); three `posix_spawn` file-action returns went
+  unchecked; and a failed `fdopen` dropped the output silently.
 - **A path the language server was given could run a command** (ADR-0362).
   `lsp/pasls.pas` assembled a shell command and wrapped the source path in
   apostrophes; a path holding an apostrophe closed the quoting, so a file named

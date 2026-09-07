@@ -1,0 +1,10 @@
+adr: 0363
+file: lib/dialect/pasprocess.pas
+kills: lib_process_execute
+why: The chr(0) check in AddArg is taken out, so a word holding one reaches ADR-0122's crossing and the program stops instead of answering errSyntax. Case 17 is the word; what fails is the whole case, the process having ended there.
+--- old
+  else if HoldsNul(arg) then
+    AddArg := errSyntax
+--- new
+  else if false then
+    AddArg := errSyntax

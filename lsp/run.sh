@@ -59,6 +59,11 @@
 #                         the file left in it -- which must carry the server's
 #                         own process id (ADR-0242). Every other session sets
 #                         the path, so this is the only one that can see it
+#   sessions/name.notmpdir a marker: PASLS_SCRATCH is left unset and TMPDIR
+#                         names a directory no machine has, so the server can
+#                         make no directory of its own (ADR-0363). What is
+#                         pinned is that it still answers, and where it says
+#                         nothing can be written
 #   sessions/name.mcp     a marker: this session is MCP and not LSP. The server
 #                         is started with --mcp, the framing is one JSON
 #                         message to a line rather than Content-Length, and it
@@ -180,6 +185,20 @@ for session in "$here"/sessions/*.jsonl; do
     export PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc"
     if [[ -n $own_tmpdir ]]; then
       export TMPDIR="$own_tmpdir"
+      # And a compiler that looks round before it compiles: the scratch
+      # directory is gone when the server exits (ADR-0363), so the only moment
+      # anything can see it is while the server is asking the compiler about
+      # a document. `PASLS_COMPILER` is a command and this is one.
+      cat >"$work/$name.spy" <<SPY
+#!/usr/bin/env bash
+ls -A "\$TMPDIR" >"$work/$name.seen"
+exec env -u PASHEAP_BALANCE "$pascalc" "\$@"
+SPY
+      chmod +x "$work/$name.spy"
+      export PASLS_COMPILER="$work/$name.spy"
+      unset PASLS_SCRATCH
+    elif [[ -f ${session%.jsonl}.notmpdir ]]; then
+      export TMPDIR=/no-such-directory-at-all
       unset PASLS_SCRATCH
     else
       export PASLS_SCRATCH="$scratch"
@@ -220,19 +239,24 @@ for session in "$here"/sessions/*.jsonl; do
     continue
   fi
   if [[ -n $own_tmpdir ]]; then
-    # What the server chose when it was told nothing: one file, under TMPDIR,
-    # named for the process that wrote it. A name that carried no pid would be
-    # a name a second server would collide with, and nothing else here can see
-    # that -- every other session hands the server a path.
-    left=$(cd "$own_tmpdir" && ls -A | sort | tr '\n' ' ')
-    pid=$(<"$work/$name.pid")
-    # Two files and not one: the compiler is told to write its IR beside the
-    # source it was handed, so the `.ll` carries the same name. Both are named
-    # here, because "everything this server left is its own" is the property
-    # and a second server's leavings would be a second pair.
-    want="pasls-$pid.pas pasls-$pid.pas.ll "
-    if [[ $left != "$want" ]]; then
-      echo "--- $name: TMPDIR holds [$left] and not [$want] ---" >&2
+    # What the server chose when it was told nothing: a directory of its own
+    # under TMPDIR, made for it by the system (ADR-0363), with the document
+    # inside. It was one file named `pasls-<pid>.pas` at the top of TMPDIR
+    # (ADR-0242), which kept two servers apart and kept nothing else out --
+    # a name anyone sharing the directory could compose first and plant a
+    # link at. Seen from inside the compiler, because afterwards it is gone.
+    seen=$(sort "$work/$name.seen" 2>/dev/null | tr '\n' ' ')
+    case $seen in
+      pasls-??????' ') ;;
+      *) echo "--- $name: while the server ran, TMPDIR held [$seen] and not one private pasls-XXXXXX directory ---" >&2
+         failed=$((failed + 1))
+         continue ;;
+    esac
+    # And nothing afterwards: the server takes its directory away. A session
+    # that ended without `exit` would leave it, and this one ends with one.
+    left=$(cd "$own_tmpdir" && ls -A | tr '\n' ' ')
+    if [[ -n $left ]]; then
+      echo "--- $name: after the server exited, TMPDIR still holds [$left] ---" >&2
       failed=$((failed + 1))
       continue
     fi

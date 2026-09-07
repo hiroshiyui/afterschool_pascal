@@ -61,6 +61,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /* What a file *is*, for a library module that may not ask C directly.
@@ -142,6 +143,17 @@ const char *pasx_dir_next(void *d, int cap, int *status) {
   }
   *status = 0;
   return e->d_name;
+}
+
+/* Mark a descriptor as not for the child: the audit found every open file of
+ * the parent visible in `ls /proc/self/fd` from a spawned shell. Sockets and
+ * pipes are marked where they are made; the runtime's own streams carry the
+ * mode letter `e`, which C11 7.21.5.3 lets a libc read and lets it ignore. */
+static void pasx_cloexec(int fd) {
+  int flags = fcntl(fd, F_GETFD);
+
+  if (flags >= 0)
+    fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 }
 
 /* --- sockets, for PasNet (ADR-0203) --------------------------------------
@@ -247,6 +259,8 @@ static void *pasx_socket_open(const char *host, const char *service,
 
   for (a = list; a; a = a->ai_next) {
     fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+    if (fd >= 0)
+      pasx_cloexec(fd);
     if (fd < 0)
       continue;
     if (passive) {
@@ -288,6 +302,8 @@ void *pasx_socket_accept(void *p, int *status) {
     return NULL;
   }
   fd = accept(s->fd, NULL, NULL);
+  if (fd >= 0)
+    pasx_cloexec(fd);
   if (fd < 0) {
     *status = 2;
     return NULL;
@@ -750,9 +766,10 @@ int pasx_term_raw_active(void) {
 extern char **environ;
 
 struct pasx_argv {
-  char **v; /* NULL-terminated, which is what argv is */
-  int n;    /* words pushed */
-  int cap;  /* slots, always at least n + 1 so v[n] is the NULL */
+  char **v;        /* NULL-terminated, which is what argv is */
+  int n;           /* words pushed */
+  int cap;         /* slots, always at least n + 1 so v[n] is the NULL */
+  int deadline_ms; /* 0: wait for ever, which is what a shell does */
 };
 
 /* An empty vector, or NULL where there was no memory. */
@@ -763,6 +780,7 @@ void *pasx_argv_new(void) {
     return NULL;
   a->n = 0;
   a->cap = 8;
+  a->deadline_ms = 0;
   a->v = malloc((size_t)a->cap * sizeof *a->v);
   if (!a->v) {
     free(a);
@@ -802,6 +820,19 @@ int pasx_argv_push(void *p, const char *s) {
   a->v[a->n++] = copy;
   a->v[a->n] = NULL;
   return 0;
+}
+
+/* How long a run of these words may take, in milliseconds; 0 is for ever.
+ * It is a property of the vector rather than an argument of every run because
+ * the five runs would each have taken it, and a caller sets it once. On
+ * expiry the child is killed and the run answers as a child that did not exit
+ * normally: the security audit's finding that a grandchild holding the pipe
+ * stalls the caller for its whole life (ADR-0363). */
+void pasx_argv_deadline(void *p, int ms) {
+  struct pasx_argv *a = p;
+
+  if (a)
+    a->deadline_ms = ms < 0 ? 0 : ms;
 }
 
 /* How many words are in it, so that a caller can refuse to run an empty one
@@ -847,10 +878,42 @@ int pasx_argv_free(void *p) {
  * for. It is a handle for the reason the vector is: what a program would hold
  * otherwise is a process identifier, which AP 6.4.2.6.2 would let it add to
  * and wait for twice (ADR-0151). */
+#define PASX_PROC_BUF 4096
+
 struct pasx_proc {
   pid_t pid;
-  FILE *out; /* NULL when nothing was captured */
+  int fd; /* the pipe's read end, or -1 when nothing was captured */
+  int killed;
+  struct timespec until; /* when deadline_ms > 0 */
+  int has_deadline;
+  unsigned char buf[PASX_PROC_BUF];
+  int at, have; /* the unread part of buf */
 };
+
+/* Milliseconds from now until `until`, floored at 0. */
+static int pasx_ms_left(const struct timespec *until) {
+  struct timespec now;
+  long long ms;
+
+  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+    return 0;
+  ms = (long long)(until->tv_sec - now.tv_sec) * 1000 +
+       (until->tv_nsec - now.tv_nsec) / 1000000;
+  return ms < 0 ? 0 : ms > 0x7fffffff ? 0x7fffffff : (int)ms;
+}
+
+static void pasx_exec_expire(struct pasx_proc *pr) {
+  if (!pr->killed) {
+    kill(pr->pid, SIGKILL);
+    pr->killed = 1;
+  }
+  /* And stop reading: a grandchild holding the write end would otherwise keep
+   * this side waiting after the child is gone -- the case the audit timed. */
+  if (pr->fd >= 0) {
+    close(pr->fd);
+    pr->fd = -1;
+  }
+}
 
 /* Start `argvp`. `capture` says where the child's output goes: 0 leaves both
  * streams this process's, 1 puts its standard output on a pipe, 2 puts its
@@ -882,13 +945,30 @@ void *pasx_exec_start(void *argvp, int capture, const char *path, int *status) {
     *status = 2;
     return NULL;
   }
-  pr->out = NULL;
+  pr->fd = -1;
+  pr->killed = 0;
+  pr->at = 0;
+  pr->have = 0;
+  pr->has_deadline = a->deadline_ms > 0;
+  if (pr->has_deadline) {
+    clock_gettime(CLOCK_MONOTONIC, &pr->until);
+    pr->until.tv_sec += a->deadline_ms / 1000;
+    pr->until.tv_nsec += (long)(a->deadline_ms % 1000) * 1000000L;
+    if (pr->until.tv_nsec >= 1000000000L) {
+      pr->until.tv_sec += 1;
+      pr->until.tv_nsec -= 1000000000L;
+    }
+  }
   fds[0] = -1;
   fds[1] = -1;
   if ((capture == 1 || capture == 2) && pipe(fds) != 0) {
     free(pr);
     *status = 2;
     return NULL;
+  }
+  if (fds[0] >= 0) {
+    pasx_cloexec(fds[0]);
+    pasx_cloexec(fds[1]);
   }
   if (posix_spawn_file_actions_init(&fa) != 0) {
     if (fds[0] >= 0) {
@@ -899,28 +979,42 @@ void *pasx_exec_start(void *argvp, int capture, const char *path, int *status) {
     *status = 2;
     return NULL;
   }
+  rc = 0;
   if (capture == 1 || capture == 2) {
     /* The read end has no business in the child, and the write end is a
      * descriptor it should not see under its own number either: a child that
      * kept it open would hold the pipe open after it exited and the reader
-     * would never see the end of the stream. */
-    posix_spawn_file_actions_adddup2(&fa, fds[1], 1);
+     * would never see the end of the stream. (Both are FD_CLOEXEC as well,
+     * which closes them for a child that is not this one.) */
+    rc |= posix_spawn_file_actions_adddup2(&fa, fds[1], 1);
     if (capture == 2)
-      posix_spawn_file_actions_adddup2(&fa, fds[1], 2);
-    posix_spawn_file_actions_addclose(&fa, fds[0]);
-    posix_spawn_file_actions_addclose(&fa, fds[1]);
+      rc |= posix_spawn_file_actions_adddup2(&fa, fds[1], 2);
   } else if (capture == 3) {
-    if (!path || !*path) {
-      posix_spawn_file_actions_destroy(&fa);
-      free(pr);
-      *status = 2;
-      return NULL;
+    if (!path || !*path)
+      rc = 1;
+    else
+      /* The child opens it, so a file this process may not create is the
+       * child's failure to start and not a half-run command. O_NOFOLLOW
+       * because the path is a name the program composed and a symbolic link
+       * planted there by somebody else is not what it composed: the audit
+       * overwrote a file through one (ADR-0363). */
+      rc |= posix_spawn_file_actions_addopen(
+          &fa, 1, path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0666);
+    rc |= posix_spawn_file_actions_adddup2(&fa, 1, 2);
+  }
+  /* An action that could not be recorded -- there was no memory for it -- is
+   * a child that would run with its streams where they were, and a dump that
+   * went to the terminal while the file it was meant for stayed stale would
+   * read as a right answer. Refused here instead. */
+  if (rc != 0) {
+    posix_spawn_file_actions_destroy(&fa);
+    if (fds[0] >= 0) {
+      close(fds[0]);
+      close(fds[1]);
     }
-    /* The child opens it, so a file this process may not create is the
-     * child's failure to start and not a half-run command. */
-    posix_spawn_file_actions_addopen(&fa, 1, path,
-                                     O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    posix_spawn_file_actions_adddup2(&fa, 1, 2);
+    free(pr);
+    *status = 2;
+    return NULL;
   }
   rc = posix_spawnp(&pid, a->v[0], &fa, NULL, a->v, environ);
   posix_spawn_file_actions_destroy(&fa);
@@ -935,50 +1029,143 @@ void *pasx_exec_start(void *argvp, int capture, const char *path, int *status) {
   }
   if (fds[0] >= 0) {
     close(fds[1]);
-    pr->out = fdopen(fds[0], "r");
-    if (!pr->out)
-      close(fds[0]);
+    pr->fd = fds[0];
   }
   pr->pid = pid;
   *status = 0;
   return pr;
 }
 
-/* The next character of what the child wrote, or -1 at the end of it and
- * whenever nothing was captured. A character at a time is PasStream's shape
- * and `Collect`'s; the stream is buffered, so it is not a system call each. */
+/* The next character of what the child wrote, or -1 at the end of it,
+ * whenever nothing was captured, and when the deadline has passed -- in which
+ * case the child has been killed and the close below says so.
+ *
+ * Read into a buffer of this side's own rather than through a FILE, because a
+ * FILE reads ahead and a poll on the descriptor beneath it would then wait
+ * for data the FILE already holds. */
 int pasx_exec_getc(void *p) {
   struct pasx_proc *pr = p;
+  ssize_t n;
+  int ready;
 
-  if (!pr || !pr->out)
+  if (!pr)
     return -1;
-  return fgetc(pr->out);
+  if (pr->at < pr->have)
+    return pr->buf[pr->at++];
+  if (pr->fd < 0)
+    return -1;
+  for (;;) {
+    ready = pasx_fd_ready(pr->fd, pr->has_deadline ? pasx_ms_left(&pr->until) : -1);
+    if (ready < 0)
+      return -1;
+    if (ready == 0) {
+      /* Only a deadline makes poll answer nothing; time is up. */
+      pasx_exec_expire(pr);
+      return -1;
+    }
+    n = read(pr->fd, pr->buf, sizeof pr->buf);
+    if (n > 0) {
+      pr->at = 1;
+      pr->have = (int)n;
+      return pr->buf[0];
+    }
+    if (n == 0 || errno != EINTR)
+      return -1;
+  }
 }
 
 /* Wait for the child and release it: the closer, so a Pascal variable holding
  * one is waited for at the end of its block whatever else happened.
  *
  * Answers the exit code, or -1 where the child did not exit normally -- it was
- * killed by a signal, or could not be waited for at all. A signal is not given
- * a number of its own here for the reason `ExitCode` gives: the caller has
- * `RunResult`, whose failure side is a reason and not a status. */
+ * killed by a signal, this side's deadline included, or could not be waited
+ * for at all. A signal is not given a number of its own here for the reason
+ * `ExitCode` gives: the caller has `RunResult`, whose failure side is a
+ * reason and not a status. */
 int pasx_exec_close(void *p) {
   struct pasx_proc *pr = p;
   int st = 0, code;
+  pid_t got;
 
   if (!pr)
     return -1;
-  if (pr->out)
-    fclose(pr->out);
-  /* EINTR is the one failure worth retrying: a signal arriving while this
-   * process waits says nothing about the child. */
-  while (waitpid(pr->pid, &st, 0) < 0) {
+  if (pr->fd >= 0) {
+    close(pr->fd);
+    pr->fd = -1;
+  }
+  for (;;) {
+    /* With a deadline the wait is a poll, because waitpid has no timeout:
+     * WNOHANG, and a short sleep between looks. Without one it blocks, and
+     * EINTR is the one failure worth retrying -- a signal arriving here says
+     * nothing about the child. */
+    if (pr->has_deadline && !pr->killed) {
+      got = waitpid(pr->pid, &st, WNOHANG);
+      if (got == 0) {
+        struct timespec nap;
+
+        if (pasx_ms_left(&pr->until) == 0) {
+          pasx_exec_expire(pr);
+          continue;
+        }
+        nap.tv_sec = 0;
+        nap.tv_nsec = 5000000L;
+        nanosleep(&nap, NULL);
+        continue;
+      }
+    } else
+      got = waitpid(pr->pid, &st, 0);
+    if (got == pr->pid)
+      break;
     if (errno != EINTR) {
       free(pr);
       return -1;
     }
   }
-  code = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+  code = (WIFEXITED(st) && !pr->killed) ? WEXITSTATUS(st) : -1;
   free(pr);
   return code;
+}
+
+/* --- a private directory (ADR-0363) --------------------------------------
+ *
+ * `pasx_temp_name` in pasrt.c makes a *file* exclusively, with C11's `x`, and
+ * that is enough for a caller who wants one file. A caller who wants a place
+ * to put several -- a source, the IR beside it, a dump beside that -- has no
+ * exclusive way to make the second and third, and a name composed in a shared
+ * directory is a name somebody else may have planted a link at first. So this
+ * makes the directory, and everything inside it is then the caller's alone.
+ * `mkdtemp` is POSIX and edits its argument in place, which is why it is here
+ * and not bound from the module: a Pascal string crosses as a copy.
+ *
+ * Same answer shape as pasx_temp_name: the name in a static buffer, valid
+ * until the next call; 0 made, 2 refused, 3 longer than `cap`. */
+#define PASX_TDIR_MAX 4096
+static char pasx_tdir_buf[PASX_TDIR_MAX + 1];
+
+const char *pasx_temp_dir(const char *dir, const char *prefix, int cap,
+                          int *status) {
+  int n;
+
+  if (!status)
+    return NULL;
+  if (!dir || !prefix || cap < 0 || cap > PASX_TDIR_MAX) {
+    *status = 2;
+    return NULL;
+  }
+  n = snprintf(pasx_tdir_buf, sizeof pasx_tdir_buf, "%s%s%sXXXXXX", dir,
+               (*dir && dir[strlen(dir) - 1] == '/') ? "" : "/", prefix);
+  if (n < 0) {
+    *status = 2;
+    return NULL;
+  }
+  if (n > cap || (size_t)n >= sizeof pasx_tdir_buf) {
+    *status = 3;
+    return NULL;
+  }
+  if (!mkdtemp(pasx_tdir_buf)) {
+    *status = 2;
+    return NULL;
+  }
+  *status = 0;
+  return pasx_tdir_buf;
 }

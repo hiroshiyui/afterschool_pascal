@@ -3076,6 +3076,19 @@ over MCP from whatever drives the model.
 - **`Run` stays.** A pipeline and a redirection are what a shell is for. The
   rule is at the routine: prefer `Execute` wherever any part of the command
   came from outside the program.
+- **A boundary answers; it does not stop** (ADR-0363). The audit of the day it
+  landed found six things, four of them older than it. `chr(0)` in a word or a
+  path is `errSyntax` at the routine, where ADR-0122's trap had stopped the
+  language server on one request. `ExecuteToFile` opens with `O_NOFOLLOW`, and
+  `pasls` works in a `mkdtemp` directory of its own (`PasFS.TemporaryDirectory`)
+  taken away at `exit` — the fallback when none can be made is
+  `/dev/null/doc.pas`, a path nothing can create, never the old guessable
+  name. `Deadline(v, seconds)` kills the child and closes the pipe on expiry,
+  so a grandchild holding the write end cannot hold this side; reading is
+  `poll` over the runtime's own buffer because a `FILE` reads ahead. Pipes and
+  sockets are `FD_CLOEXEC`, and every `fopen` in the ISO C unit carries the
+  mode letter `e`, which C11 7.21.5.3 lets a libc read or ignore. Every
+  file-action return is checked, and there is no `fdopen` left to fail.
 
 **A mutation is a file the harness runs** (ADR-0207). `tests/mutation/` holds
 one `.mut` per recorded mutation — the substitution, the test that must fail,

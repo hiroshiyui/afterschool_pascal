@@ -56,7 +56,8 @@ export PasFS = (MaxPath, PathName, PathResult,
                 FileKind, fkRegular, fkDirectory, fkOther,
                 FileInfo, InfoResult,
                 Remove, Rename, MakeDirectory, RemoveDirectory, Exists,
-                WorkingDirectory, LinkTarget, Info, TemporaryPath);
+                WorkingDirectory, LinkTarget, Info, TemporaryPath,
+                TemporaryDirectory);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -197,6 +198,16 @@ function LinkTarget(path: PathName) = r: PathResult;
   were all taken. }
 function TemporaryPath(dir, prefix: PathName) = r: PathResult;
 
+{ A directory of this program's own, made under `dir` with `prefix` and six
+  characters the system chose, readable and writable by this user alone. It
+  is for a caller that wants *several* files with names of its choosing -- a
+  source, the IR beside it, a dump beside that -- which `TemporaryPath` cannot
+  give: it makes one file exclusively, and the second name composed beside it
+  is a name somebody else may have planted a link at first (ADR-0363).
+  Nothing removes it; `Remove` what you put in it and `RemoveDirectory` it.
+  `errFull` and `errIO` as `TemporaryPath` answers them. }
+function TemporaryDirectory(dir, prefix: PathName) = r: PathResult;
+
 end;
 
 { The directive, kept to this module. An exported constituent's linkage name is
@@ -307,6 +318,20 @@ begin
       a bound was reached: a path this module cannot hold is the overwhelmingly
       likely reading, and PasOS.LastErrorText is where the difference is. }
     r := errFull
+  else
+    r := got^
+end;
+
+function ExtTempDir(dir, prefix: string; cap: integer;
+                    var status: integer): OptPathName;
+  external 'pasx_temp_dir';
+
+function TemporaryDirectory;
+var got: OptPathName; st: integer;
+begin
+  got := ExtTempDir(dir, prefix, MaxPath, st);
+  if got = nil then
+    if st = 3 then r := errFull else r := errIO
   else
     r := got^
 end;

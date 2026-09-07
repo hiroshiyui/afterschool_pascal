@@ -466,6 +466,16 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**`lib-coverage` cannot measure a case that takes a program-parameter.** It
+runs every case with no arguments (ADR-0350), so `lib_fs.pas` — which takes
+one — stops at its first statement under the sweep and has never contributed
+a line; the ten uncovered lines it reported for `PasFS` were the module minus
+what *other* cases reach. ADR-0363 found this by adding a routine there and
+watching every statement of it read as unreached. The exercise went into a
+parameterless case, `lib_fs_tempdir.pas`, which is the workaround and not the
+fix: the fix is the sweep reading `run_test.sh`'s argument convention, and it
+is declined here because the one case affected is now measured by another.
+
 **Nothing sweeps this tree for a command built out of a value.** ADR-0362
 closed the one that existed — `lsp/pasls.pas` quoting a client-supplied path
 into a `popen` string — and converted that program to `PasProcess.Execute`, but

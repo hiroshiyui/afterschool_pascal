@@ -1,0 +1,8 @@
+adr: 0363
+file: lsp/pasls.pas
+kills: lsp-server
+why: The fallback for a TMPDIR nothing can be made in composes the old top-level name again, which is the guessable name the private directory exists to stop. The `notmpdir` session's note names where nothing could be written, and it names a different place.
+--- old
+    else scratchPath := '/dev/null/doc.pas'
+--- new
+    else scratchPath := LookupOr('TMPDIR', '/tmp') + '/pasls-' + mine + '.pas'

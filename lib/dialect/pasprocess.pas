@@ -81,7 +81,7 @@ module PasProcess;
 
 export PasProcess = (CommandMax, CommandLine, RunResult,
                      Run, Capture, CaptureLines,
-                     ArgV, NewArgs, AddArg, ArgsLen, DropArgs,
+                     ArgV, NewArgs, AddArg, ArgsLen, DropArgs, Deadline,
                      Execute, ExecuteInto, ExecuteBoth,
                      ExecuteLines, ExecuteToFile,
                      ExitCode, Sleep, Seconds, CpuSeconds, ProcessId);
@@ -179,6 +179,14 @@ function ArgsLen(protected var v: ArgV): integer;
   left. }
 function DropArgs(var v: ArgV; keep: integer): integer;
 
+{ How long any run of these words may take, in seconds; 0 -- the state a new
+  vector is in -- is for ever, which is what a shell allows. When the time is
+  up the child is killed and the run answers `errIO`, a child that did not
+  exit normally; what was captured before that is kept. A grandchild that
+  stays behind holding the pipe is covered too: the audit timed one stalling
+  a caller for its whole life (ADR-0363). `errAbsent` for an empty vector. }
+function Deadline(var v: ArgV; seconds: integer): ErrorCode;
+
 { Run the words and wait. The child's streams are this program's, so it
   writes where this one writes; `ok` with its exit code, as `Run` answers.
 
@@ -213,7 +221,10 @@ function ExecuteLines(protected var v: ArgV; var lines: StrVecPtr): RunResult;
   would size for it: a caller asking a compiler for a table reads the file
   afterwards. `errIO` where the child could not be started, which includes a
   path it could not open -- the file is opened by the child, so a refusal is
-  a command that never ran rather than one that ran and wrote nowhere. }
+  a command that never ran rather than one that ran and wrote nowhere. A
+  symbolic link at `path` is refused the same way: the name is one this
+  program composed, and a link planted there is not what it composed
+  (ADR-0363). `errSyntax` for a path holding chr(0). }
 function ExecuteToFile(protected var v: ArgV; path: string): RunResult;
 
 { The exit code inside a wait status, as `system` returns one: the second
@@ -379,6 +390,19 @@ function ExtArgvPush(v: ArgV; s: string): integer; external 'pasx_argv_push';
 function ExtArgvCount(v: ArgV): integer; external 'pasx_argv_count';
 function ExtArgvDrop(v: ArgV; keep: integer): integer;
   external 'pasx_argv_drop';
+procedure ExtArgvDeadline(v: ArgV; ms: integer); external 'pasx_argv_deadline';
+
+{ A string on its way to a foreign routine may not hold chr(0) -- ADR-0122
+  stops the program at the crossing, and stopping is the right answer for a
+  program's own value and the wrong one for a word that came from outside. It
+  is refused here first, as a code (ADR-0363). }
+function HoldsNul(s: string): boolean;
+var k: integer;
+begin
+  HoldsNul := false;
+  for k := 1 to length(s) do
+    if s[k] = chr(0) then exit(true)
+end;
 
 type
   { the child, and the stream its output arrives on; the closer waits for it,
@@ -408,6 +432,8 @@ var status: integer;
 begin
   if v = nil then
     AddArg := errAbsent
+  else if HoldsNul(arg) then
+    AddArg := errSyntax
   else begin
     status := ExtArgvPush(v, arg);
     if status = 0 then AddArg := errNone
@@ -424,6 +450,20 @@ end;
 function DropArgs;
 begin
   if v = nil then DropArgs := 0 else DropArgs := ExtArgvDrop(v, keep)
+end;
+
+function Deadline;
+begin
+  if v = nil then
+    Deadline := errAbsent
+  else if seconds < 0 then
+    Deadline := errRange
+  else begin
+    { Milliseconds over there; a second here is the grain `Sleep` uses, and a
+      run shorter than one is not what a deadline is for. }
+    ExtArgvDeadline(v, seconds * 1000);
+    Deadline := errNone
+  end
 end;
 
 { Every one of the three is this: start the child, read what it writes if
@@ -529,7 +569,8 @@ end;
 function ExecuteToFile;
 var r: RunResult;
 begin
-  Spawn(v, 3, path, r, Discard);
+  if HoldsNul(path) then r := errSyntax
+  else Spawn(v, 3, path, r, Discard);
   ExecuteToFile := r
 end;
 

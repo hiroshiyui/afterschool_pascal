@@ -371,3 +371,4 @@ the alternatives that were rejected and why.
 | [0360](0360-a-toml-document.md) | A TOML document | Accepted |
 | [0361](0361-a-subset-of-a-format-is-a-defect.md) | A subset of a format is a defect | Accepted |
 | [0362](0362-a-command-is-words-not-a-line.md) | A command is words, not a line | Accepted |
+| [0363](0363-a-boundary-answers-it-does-not-stop.md) | A boundary answers; it does not stop | Accepted |

@@ -1,0 +1,8 @@
+adr: 0363
+file: lsp/pasls.pas
+kills: command-injection
+why: PathArg stops refusing a path holding chr(0), so the first foreign crossing -- PasFS.Exists -- stops the server, and the request after the bad one is never answered. The gate sends exactly that pair and requires the second to be answered.
+--- old
+    if p[k] = chr(0) then p := '' else k := k + 1;
+--- new
+    if false then p := '' else k := k + 1;

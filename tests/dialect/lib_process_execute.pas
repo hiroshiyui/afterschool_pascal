@@ -38,6 +38,7 @@ var
   b: BindingType;
   line: string(255);
   dump: string(255);
+  t: int64;
 
 { The words assembled somewhere other than where the command is run, which is
   the shape a driver has: a handle crosses as a `var` parameter. }
@@ -199,7 +200,81 @@ begin
         second opinion here to disagree with it. }
   v := nil;
   writeln('16 words=', ArgsLen(v):1, ' add=', ErrorText(AddArg(v, 'x')),
-          ' drop=', DropArgs(v, 0):1);
+          ' drop=', DropArgs(v, 0):1, ' deadline=', ErrorText(Deadline(v, 1)));
+
+  { 17. A word holding chr(0) is a code, not a stopped program (ADR-0363):
+        ADR-0122 makes the crossing a run-time error, and a value that came
+        from outside must be refused before it gets there. }
+  e := NewArgs(v);
+  e := AddArg(v, 'echo');
+  writeln('17 nul word=', ErrorText(AddArg(v, 'a' + chr(0) + 'b')),
+          ' nul path=', ErrorText(ExecuteToFile(v, 'x' + chr(0)).cause),
+          ' words=', ArgsLen(v):1);
+
+  { 18. A symbolic link at the dump path is refused and what it names is left
+        alone -- the audit overwrote a file through one. The link is made by
+        a child, this library having no way to make one and needing none. }
+  e := NewArgs(v);
+  e := AddArg(v, 'sh');
+  e := AddArg(v, '-c');
+  e := AddArg(v, 'echo precious > victim.txt && ln -sf victim.txt link.txt');
+  r := Execute(v);
+  e := NewArgs(v);
+  e := AddArg(v, 'echo');
+  e := AddArg(v, 'overwritten');
+  r := ExecuteToFile(v, 'link.txt');
+  writeln('18 through link ok=', r.ok, ' cause=', ErrorText(r.cause));
+  b := binding(f);
+  b.name := 'victim.txt';
+  bind(f, b);
+  reset(f);
+  readln(f, line);
+  unbind(f);
+  writeln('18 victim still [', line, ']');
+
+  { 19. A deadline: a child that outlives it is killed and the run is a
+        failure, and a grandchild that keeps the pipe open after it cannot
+        hold this side either -- which is the case the audit timed at the
+        grandchild's whole life. Timed coarsely: seconds, and the bound is
+        generous, because this is a claim about *not waiting for ever* and not
+        about how fast the machine is. }
+  e := NewArgs(v);
+  e := AddArg(v, 'sh');
+  e := AddArg(v, '-c');
+  e := AddArg(v, 'echo before; sleep 30 & sleep 30; echo after');
+  e := Deadline(v, 1);
+  t := Seconds;
+  r := ExecuteInto(v, out);
+  t := Seconds - t;
+  writeln('19 ok=', r.ok, ' cause=', ErrorText(r.cause),
+          ' captured=[', out[1..6], '] under 10s=', t < 10,
+          ' bad deadline=', ErrorText(Deadline(v, -1)));
+
+  { 20. What this program holds open, a child does not see: the audit found
+        every open file of the parent in the child's /proc/self/fd. `f` is
+        open on victim.txt for reading here, on purpose. }
+  b := binding(f);
+  b.name := 'victim.txt';
+  bind(f, b);
+  reset(f);
+  e := NewArgs(v);
+  e := AddArg(v, 'sh');
+  e := AddArg(v, '-c');
+  e := AddArg(v, 'ls -l /proc/self/fd 2>/dev/null | grep -c victim.txt; exit 0');
+  r := ExecuteInto(v, out);
+  unbind(f);
+  write('20 inherited=', out);
+
+  { What this program made, it takes away: `irtest.sh` runs every case in
+    the checkout, and a case that leaves a file behind is a case that dirties
+    the tree it is measuring. }
+  e := NewArgs(v);
+  e := AddArg(v, 'rm');
+  e := AddArg(v, '-f');
+  e := AddArg(v, dump);
+  e := AddArg(v, 'victim.txt');
+  e := AddArg(v, 'link.txt');
+  r := Execute(v);
 
   SVecFree(lines)
 end.

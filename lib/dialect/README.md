@@ -287,6 +287,16 @@ decision**: this library clamps a capacity request (`Claimed`) because a
 container smaller than asked for still answers correctly about what is in it,
 and a clamped key does not.
 
+**A value that came from outside is refused as a code, never trapped.** A
+string crossing to a foreign routine may not hold `chr(0)`, and ADR-0122 makes
+the crossing a run-time error — right for a program's own value, and wrong for
+one an editor, a client or a file supplied, because one such value then stops
+the whole program (ADR-0363: one MCP request ended the language server). So a
+routine that takes such text checks first and answers `errSyntax`:
+`PasProcess.AddArg` and `ExecuteToFile` do, and a program that holds outside
+text refuses it before its first crossing, as `pasls`'s `PathArg` does. The
+trap stays where it is; it is what makes the *next* such routine visible.
+
 **A failure whose *shape* the system chooses.** `PasProcess.Execute` runs a
 command that is not there, and POSIX lets a system answer that in two ways: the
 spawn itself fails, or a child starts and exits 127. They are told apart

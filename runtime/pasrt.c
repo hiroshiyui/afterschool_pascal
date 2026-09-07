@@ -160,7 +160,7 @@ static void pas_cov_dump(void) {
   int i;
 
   if (!path || !pas_cov_seen) return;
-  f = fopen(path, "a");
+  f = fopen(path, "ae");
   if (!f) return;
   for (i = 0; i <= pas_cov_high; i++)
     if (pas_cov_seen[i]) fprintf(f, "%d\n", i);
@@ -225,7 +225,7 @@ static void pas_br_dump(void) {
   int i;
 
   if (!path || !pas_br_key) return;
-  f = fopen(path, "a");
+  f = fopen(path, "ae");
   if (!f) return;
   for (i = 0; i < pas_br_cap; i++)
     if (pas_br_key[i])
@@ -1058,7 +1058,7 @@ void pas_reset(void *v) {
     /* A direct-access file may be sought into and updated afterwards, so it
      * is opened for both from the start — `SeekUpdate` is not allowed to
      * reopen, since §6.7.5.2 requires it to preserve the contents. */
-    f->fp = fopen(name, f->direct ? "r+b" : f->istext ? "r" : "rb");
+    f->fp = fopen(name, f->direct ? "r+be" : f->istext ? "re" : "rbe");
     if (!f->fp)
       pas_error2("cannot open for reading: ", name);
     break;
@@ -1106,7 +1106,7 @@ void pas_rewrite(void *v) {
     const char *name = pas_external(f);
     if (f->fp)
       fclose(f->fp);
-    f->fp = fopen(name, f->direct ? "w+b" : f->istext ? "w" : "wb");
+    f->fp = fopen(name, f->direct ? "w+be" : f->istext ? "we" : "wbe");
     if (!f->fp)
       pas_error2("cannot open for writing: ", name);
     f->atbol = 1;
@@ -1243,7 +1243,7 @@ void pas_extend(void *v) {
     const char *name = pas_external(f);
     if (f->fp)
       fclose(f->fp);
-    f->fp = fopen(name, f->direct ? "a+b" : f->istext ? "a" : "ab");
+    f->fp = fopen(name, f->direct ? "a+be" : f->istext ? "ae" : "abe");
     if (!f->fp)
       pas_error2("cannot open for appending: ", name);
     break;
@@ -1965,7 +1965,7 @@ static void pas_heap_dump(void) {
   FILE *f;
 
   if (!path) return;
-  f = fopen(path, "a");
+  f = fopen(path, "ae");
   if (!f) return;
   fprintf(f, "new=%lld dispose=%lld live=%lld\n", pas_heap_news,
           pas_heap_disposes, pas_heap_news - pas_heap_disposes);
@@ -3470,7 +3470,7 @@ const char *pasx_temp_name(const char *dir, const char *prefix, int cap,
       *status = 3;
       return NULL;
     }
-    f = fopen(pasx_temp_buf, "wx");
+    f = fopen(pasx_temp_buf, "wxe");
     if (f) {
       if (fclose(f) != 0) {
         *status = 2;

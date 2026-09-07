@@ -1,0 +1,9 @@
+made      = TRUE
+is dir    = TRUE
+chosen    = 6 characters
+child     = TRUE
+rm child  = no error
+rmdir     = no error
+gone      = FALSE
+nowhere   = the operation was refused
+too long  = the operation was refused

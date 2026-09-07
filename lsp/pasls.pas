@@ -299,6 +299,7 @@ var
   scratchFile: bindable text;
   scratchPath: EnvText;
   compilerCmd: EnvText;
+  scratchDir: PathName;
   { The compiler's own vocabulary -- every word-symbol and required identifier
     it knows -- as `--dump-words` wrote it, or nil before anything asked
     (ADR-0301). It is a property of the compiler and not of any document, so
@@ -2611,11 +2612,18 @@ end;
   `rel` unchanged when it is already absolute, so a caller that gave a full
   path is not touched. }
 function PathArg(params: JsonPtr): PathName;
-var args: JsonPtr; p: PathName;
+var args: JsonPtr; p: PathName; k: integer;
 begin
   args := JsonMember(params, 'arguments');
   if JsonTextInto(JsonMember(args, 'path'), p) <> errNone then p := ''
   else if p <> '' then p := Resolve(rootPath, p);
+  { JSON spells chr(0) as \u0000 and a path cannot hold one: the first
+    routine to hand it across the boundary would stop this program (ADR-0122),
+    and one request must not end the session. Refused as no path at all, which
+    the caller reports as the argument being unusable (ADR-0363). }
+  k := 1;
+  while k <= length(p) do
+    if p[k] = chr(0) then p := '' else k := k + 1;
   PathArg := p
 end;
 
@@ -3711,7 +3719,8 @@ begin
 end;
 
 procedure ReadEnvironment;
-var mine: EnvText;
+var made: PathResult;
+    mine: EnvText;
 begin
   compilerCmd := LookupOr('PASLS_COMPILER', 'pascalc');
   { The process identifier is in the default name, and that is the whole of
@@ -3722,9 +3731,32 @@ begin
     moment. What a name can carry is a number no other *live* process has,
     which is exactly the case this had to answer. }
   writestr(mine, ProcessId:1);
-  scratchPath := LookupOr('PASLS_SCRATCH',
-                          LookupOr('TMPDIR', '/tmp') + '/pasls-' + mine
-                          + '.pas')
+  { A directory of this server's own, and the scratch files inside it. It was
+    `$TMPDIR/pasls-<pid>.pas` with the IR, the dumps and the formatted text
+    composed beside it -- names anyone sharing the directory could guess and
+    plant a link at, so the compiler would truncate whatever the link named
+    (ADR-0363). `PASLS_SCRATCH` still overrides the file whole, which is how a
+    harness points every session at a path of its own; then nothing here is
+    made and nothing is removed. }
+  scratchDir := '';
+  scratchPath := LookupOr('PASLS_SCRATCH', '');
+  if scratchPath = '' then begin
+    made := TemporaryDirectory(LookupOr('TMPDIR', '/tmp'), 'pasls-');
+    if made.ok then begin
+      scratchDir := made.val;
+      scratchPath := scratchDir + '/doc.pas'
+    end
+    { A directory nothing could make means there is nowhere this server may
+      write, and the answer is a path that *cannot* be written -- not one at
+      the top of TMPDIR, which is the name this whole passage exists to stop
+      composing, and not one inside a directory that might exist after all,
+      which is that name under a different condition. `/dev/null` is a file
+      on every system this runs on, so nothing can be created under it, and
+      every write then says so per document, the way an unwritable
+      PASLS_SCRATCH does; `scratchDir` stays empty so nothing is removed at
+      exit. }
+    else scratchPath := '/dev/null/doc.pas'
+  end
 end;
 
 var body: JsonChars;
@@ -3868,5 +3900,16 @@ begin
   { And the compiler's vocabulary, which belongs to the session rather than to
     any document (ADR-0301). `heap-balance` is what would otherwise say so: it
     counts one vector never given back, exactly as it did for the cache above. }
-  if vocab <> nil then SVecFree(vocab)
+  if vocab <> nil then SVecFree(vocab);
+  { And the scratch directory, with what this server put in it: nothing else
+    will, and a directory per session that stayed would be `/tmp` filling
+    with them. Each name is one this program composed above. }
+  if scratchDir <> '' then begin
+    e := Remove(scratchPath);
+    e := Remove(scratchPath + '.ll');
+    e := Remove(scratchPath + '.uses');
+    e := Remove(scratchPath + '.name');
+    e := Remove(scratchPath + '.fmt');
+    e := RemoveDirectory(scratchDir)
+  end
 end.
