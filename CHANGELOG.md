@@ -13,6 +13,19 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-09-07
+
+**A command is words, not a line — and the boundary answers instead of
+stopping.** A path an editor handed the language server could run a shell
+command; closing that gave the library `PasProcess.Execute`, an audit of the
+fix the same afternoon closed six more findings, and a project-wide audit
+after it found nine foreign scalars bound at the wrong width and nineteen
+routines that stopped a program on a name holding `chr(0)`. Beside that, a
+TOML library and the project reader rewritten over it. Minor, because the
+library and the command line grew and nothing already accepted changed
+meaning; a program that met one of the fixed defects met a trap or a wrong
+width, and neither is a behaviour to preserve.
+
 ### Added
 
 - **`PasProcess.Deadline`** — how long any run of an `ArgV` may take; on expiry
@@ -3654,6 +3667,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.7.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.7.0
 [3.6.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.6.0
 [3.5.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.1
 [3.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.5.0

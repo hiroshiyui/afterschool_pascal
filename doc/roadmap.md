@@ -15,12 +15,13 @@ verbatim, the moment before it was cut to this.
 
 ## Where development stands — 2026-09-07
 
-**Released: v3.6.0**, the first release whose headline is a **library**
-change that breaks existing programs: `PasContainer`'s map keys itself with a
-trait (ADR-0355). `CHANGELOG.md`'s `Unreleased` holds the day after it — a
-TOML library, the project reader rewritten over it, and a command injection in
-the language server found, closed, audited and audited again (ADR-0359 –
-ADR-0364) — none of it a change to the language. The compiler builds itself,
+**Released: v3.7.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
+headline is the boundary: a command injection in the language server found,
+closed, audited and audited again (ADR-0362 – ADR-0364), a TOML library and
+the project reader rewritten over it (ADR-0360, ADR-0361) — none of it a
+change to the language. The release before it, v3.6.0, was the first whose
+headline broke existing programs: the map keys itself with a trait
+(ADR-0355). The compiler builds itself,
 stage 2 equals stage 3 in every program-component, and the suite is 905 cases
 green at `-O2` and at `-O0`.
 
