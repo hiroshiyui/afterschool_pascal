@@ -263,8 +263,12 @@ function ExtFd(s: Socket): integer; external 'pasx_socket_fd';
 { The client's half of OpenSSL. `TLS_client_method` answers a pointer to
   static storage which is only ever handed straight back to `SSL_CTX_new`, so
   6.7.7.9 c)'s `int64` is what it crosses as and nothing keeps it. }
-function ClientMethod: int64; external 'TLS_client_method';
-function CtxNew(method: int64): Context; external 'SSL_CTX_new';
+{ ADR-0364: a pointer is `csize`, a `long` is `clong`. Every one of these was
+  `int64`, which is the right width on LP64 and reads a dirty register on a
+  32-bit target; the `tls` gate cannot build for i386, so the foreign-width
+  gate is what holds them. }
+function ClientMethod: csize; external 'TLS_client_method';
+function CtxNew(method: csize): Context; external 'SSL_CTX_new';
 
 { Verification. `SSL_CTX_set_verify` takes a callback and this language has
   none to give (6.7.7.9 b), so the null pointer crosses as `int64` 0 -- which
@@ -272,7 +276,7 @@ function CtxNew(method: int64): Context; external 'SSL_CTX_new';
   as well. With SSL_VERIFY_PEER set the handshake itself fails on a bad
   chain, which is what makes the check impossible to forget rather than
   something the caller must remember to ask about afterwards. }
-procedure CtxSetVerify(c: Context; mode: integer; callback: int64);
+procedure CtxSetVerify(c: Context; mode: integer; callback: csize);
   external 'SSL_CTX_set_verify';
 function CtxDefaultAnchors(c: Context): integer;
   external 'SSL_CTX_set_default_verify_paths';
@@ -283,7 +287,7 @@ function CtxTrustFile(c: Context; path: string): integer;
   and `parg` is not read by that command -- the null-string is what this
   language can put in a `void *` position, 6.7.7.5 making it the address of a
   NUL-terminated copy. }
-function CtxCtrl(c: Context; cmd: integer; larg: int64; parg: string): int64;
+function CtxCtrl(c: Context; cmd: integer; larg: clong; parg: string): clong;
   external 'SSL_CTX_ctrl';
 
 function SslNew(c: Context): Session; external 'SSL_new';
@@ -291,7 +295,7 @@ function SslNew(c: Context): Session; external 'SSL_new';
 { Server-name indication. `SSL_set_tlsext_host_name` is a macro over this, and
   here `parg` *is* read: it is the name, and 6.7.7.5's NUL-terminated copy is
   exactly what the far side wants. }
-function SslCtrl(s: Session; cmd: integer; larg: int64; parg: string): int64;
+function SslCtrl(s: Session; cmd: integer; larg: clong; parg: string): clong;
   external 'SSL_ctrl';
 
 { The identity to check the certificate against. Answers 1 when it was set,
@@ -303,7 +307,7 @@ function SslSetHost(s: Session; name: string): integer;
 function SslSetFd(s: Session; fd: integer): integer; external 'SSL_set_fd';
 function SslConnect(s: Session): integer; external 'SSL_connect';
 function SslShutdown(s: Session): integer; external 'SSL_shutdown';
-function SslVerifyResult(s: Session): int64;
+function SslVerifyResult(s: Session): clong;
   external 'SSL_get_verify_result';
 function SslVersion(s: Session): OptProtocol; external 'SSL_get_version';
 
@@ -322,8 +326,8 @@ function SslError(s: Session; ret: integer): integer; external 'SSL_get_error';
 { What OpenSSL has to say, one entry at a time. `ERR_error_string_n` takes a
   buffer and a length, which is 6.7.7.7's order exactly, so a slice is what
   crosses and the length is one this compiler computed. }
-function ErrTake: int64; external 'ERR_get_error';
-procedure ErrString(e: int64; var b: array of char);
+function ErrTake: clong; external 'ERR_get_error';
+procedure ErrString(e: clong; var b: array of char);
   external 'ERR_error_string_n';
 
 { ------------------------------------------------------------------------ }

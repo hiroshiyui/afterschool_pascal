@@ -1,0 +1,9 @@
+adr: 0364
+file: selfhost/compiler.pas
+kills: foreign-width
+why: The emitter declares a slice's count as i64 on every target again, which cdecl forgives on i386 and the ABI does not. The emitter half of foreign-width reads the declaration back for i386 and requires ptr, i32.
+--- old
+          if PtrSize = 8 then write(ircode, 'ptr, i64')
+          else write(ircode, 'ptr, i32')
+--- new
+          write(ircode, 'ptr, i64')

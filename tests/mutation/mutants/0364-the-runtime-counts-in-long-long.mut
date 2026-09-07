@@ -1,0 +1,8 @@
+adr: 0364
+file: runtime/pasrt_posix.c
+kills: target32
+why: pasx_socket_poll declares its counts as long long again, the one runtime routine a slice reaches; with the emitter writing size_t's width the i386 call reads its count from the wrong half of the stack, and lib_net_wait.pas fails under target32 -- deterministically, the count being read from the stack and not from a register.
+--- old
+int pasx_socket_poll(const int *fds, size_t nfds, int *got, size_t ngot,
+--- new
+int pasx_socket_poll(const int *fds, long long nfds, int *got, long long ngot,

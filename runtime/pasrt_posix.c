@@ -523,13 +523,19 @@ int pasx_fd_ready(int fd, int timeout_ms) {
   return n > 0 && pf.revents != 0;
 }
 
-int pasx_socket_poll(const int *fds, long long nfds, int *got, long long ngot,
+/* Both counts are `size_t` and not `long long`: a slice crosses as an address
+ * and a count, and the count is size_t (ADR-0129) -- the target's width. They
+ * were `long long`, matched by an emitter that widened every count to i64 on
+ * every target; when ADR-0364 made the emitter write the target's width this
+ * was the one routine the runtime declared the other way, and
+ * lib_net_wait.pas on i386 read a count from the wrong half of the stack. */
+int pasx_socket_poll(const int *fds, size_t nfds, int *got, size_t ngot,
                      int timeout_ms) {
   struct pollfd *pf;
-  long long i;
+  size_t i;
   int n;
 
-  if (!fds || !got || nfds < 0 || ngot != nfds)
+  if (!fds || !got || ngot != nfds)
     return -1;
   for (i = 0; i < ngot; i++)
     got[i] = 0;

@@ -1,0 +1,8 @@
+adr: 0364
+file: lib/dialect/pasprocess.pas
+kills: foreign-width
+why: `time` is bound as answering int64 again -- right on LP64, a dirty high word on i386, and unprovable by any behavioural case on a host whose spare register is clean (it survived as a target32 mutation under ADR-0363). The catalogue half of foreign-width kills it on every host: a binding naming int64 with no row saying which C type is 64 bits everywhere.
+--- old
+function ExtTime(where: clong): clong; external 'time';
+--- new
+function ExtTime(where: int64): int64; external 'time';

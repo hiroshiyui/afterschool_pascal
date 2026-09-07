@@ -4120,9 +4120,20 @@ begin
     known, so what C receives is a bound this compiler proved. }
   if IsSlice(f^.stype) then begin
     EmitSliceValue(arg, a, alen);
-    ToInt64(alen, intType);
-    AppendOpnd(head, tail, a, true, nil);
-    AppendOpnd(head, tail, alen, false, int64Type)
+    { ...and `size_t` is the *target's* width (ADR-0364): i64 on LP64, where
+      the count is widened, and the i32 it already is on i386. It was
+      widened unconditionally, which cdecl forgave -- the callee read the low
+      word and stepped over the rest -- and the foreign-width gate is what
+      asks the declaration this writes on each target. }
+    if PtrSize = 8 then begin
+      ToInt64(alen, intType);
+      AppendOpnd(head, tail, a, true, nil);
+      AppendOpnd(head, tail, alen, false, int64Type)
+    end
+    else begin
+      AppendOpnd(head, tail, a, true, nil);
+      AppendOpnd(head, tail, alen, false, intType)
+    end
   end
   else if f^.kind = skVarParam then begin
     { The actual's own storage. Sema has already required a variable, so this
@@ -11918,8 +11929,11 @@ begin
         if first then first := false else write(ircode, ', ');
         { ADR-0129: one formal, two arguments -- the only place in this
           declaration list where the counts differ. }
-        if IsSlice(q^.sym^.stype) then
-          write(ircode, 'ptr, i64')
+        if IsSlice(q^.sym^.stype) then begin
+          { the count is size_t, and that is the target's width (ADR-0364) }
+          if PtrSize = 8 then write(ircode, 'ptr, i64')
+          else write(ircode, 'ptr, i32')
+        end
         { ADR-0122's two address rows print the same way, an opaque pointer
           being the whole of what either is on this side. }
         else if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) or

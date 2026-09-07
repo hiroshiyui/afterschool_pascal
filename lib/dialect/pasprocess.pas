@@ -276,7 +276,8 @@ function ExtSleep(seconds: integer): integer; external 'sleep';
   call left in the register. `time_t` above is `clong` for the same reason
   read the other way: it is a `long`, and a `long` is what `clong` is. }
 function ExtGetpid: integer; external 'getpid';
-function ExtFflush(stream: int64): integer; external 'fflush';
+{ A `FILE *` that is always null: pointer-sized, so `csize` (ADR-0364). }
+function ExtFflush(stream: csize): integer; external 'fflush';
 
 type
   { the child's standard output; pclose waits for the child }

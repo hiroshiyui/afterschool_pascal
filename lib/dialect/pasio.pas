@@ -144,9 +144,11 @@ function ExtOpen(path: string; flags: integer): integer; external 'open';
 function ExtReady(fd: integer; timeoutMs: integer): integer;
   external 'pasx_fd_ready';
 function ExtClose(fd: integer): integer; external 'close';
-function ExtRead(fd: integer; var b: array of char): int64; external 'read';
+{ `ssize_t`, which is pointer-sized: `csize` (AP 6.4.2.7). It was `int64`,
+  right on LP64 and a dirty high word on i386 -- ADR-0364. }
+function ExtRead(fd: integer; var b: array of char): csize; external 'read';
 function ExtWrite(fd: integer;
-                  protected var b: array of char): int64; external 'write';
+                  protected var b: array of char): csize; external 'write';
 
 { A count that came back from the kernel, made into a result. The narrowing is
   safe and not merely checked: what `read` and `write` answer is bounded by the

@@ -623,6 +623,19 @@ endif()
 # from the compiler's own token stream, `=>` honoured, and the sweep refuses
 # to pass by reading nothing. Skips (77) when pascalc has not been built.
 if(Python3_FOUND)
+  # ADR-0364: is every foreign scalar the width of its C type? `time` bound as
+  # `int64` answered 7682741216296735854 on CI's i386 container and the right
+  # epoch on the machine that wrote the fix -- the high word is whatever the
+  # spare register held -- so no behavioural case can hold this and the
+  # mutation putting `int64` back survived. What can be held is the
+  # declaration: every `external` naming `int64` carries a catalogued reason,
+  # both directions; and the emitter's own slice count is asked per target.
+  add_test(NAME foreign-width
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/foreign_width.py
+                   --pascalc ${APASCAL_PASCALC})
+  set_tests_properties(foreign-width PROPERTIES DEPENDS pascalc)
+
   add_test(NAME export-unique
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/export_unique.py

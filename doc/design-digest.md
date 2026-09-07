@@ -3089,6 +3089,14 @@ over MCP from whatever drives the model.
   sockets are `FD_CLOEXEC`, and every `fopen` in the ISO C unit carries the
   mode letter `e`, which C11 7.21.5.3 lets a libc read or ignore. Every
   file-action return is checked, and there is no `fdopen` left to fail.
+- **A foreign scalar is the target's width** (ADR-0364). `time` bound as
+  `int64` answered garbage on i386 and the right epoch on a host whose spare
+  register was clean, so a width defect at the boundary has no behavioural
+  oracle. Nine more bindings had the shape and one site in the emitter:
+  a slice's count was widened to `i64` on every target. `clong`/`csize` for
+  the bindings, `PtrSize` at the emitter's two sites, and `foreign-width` —
+  a catalogue of every `external` naming `int64` with the C type that really
+  is 64 bits everywhere, plus the emitter's declaration read back per target.
 
 **A mutation is a file the harness runs** (ADR-0207). `tests/mutation/` holds
 one `.mut` per recorded mutation — the substitution, the test that must fail,

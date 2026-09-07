@@ -52,6 +52,13 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Nine more foreign scalars bound at the wrong width, and the emitter's own
+  slice count** (ADR-0364): `read`/`write` (`ssize_t`), `fflush` (a pointer)
+  and six OpenSSL bindings (`long`s and pointers) were `int64`; now `csize`
+  or `clong`. A slice's count crossed every foreign call as `i64`, on i386
+  too, where `size_t` is 32 bits -- it is the target's width now. The new
+  `foreign-width` gate holds both, because no behavioural case can: on a
+  host whose spare register is clean the wrong width gives the right answer.
 - **`PasProcess.Seconds` and `CpuSeconds` answered garbage on i386**: `time`
   and `clock` were bound as returning `int64`, and both are `long`, 32 bits
   there -- the high word was whatever the register held. Bound as `clong`

@@ -302,6 +302,14 @@ def corpus(root):
     # diagnostic_coverage.py filters out as not being about a program, so
     # nothing but this reaches it. selfhost/producttest.sh is what asserts both.
     jobs.append((hello, ["--target=aarch64-linux-gnu"]))
+    # ADR-0364: the emitter writes a slice's count at the target's pointer
+    # width, so it has an arm only an ILP32 target takes -- at the argument
+    # and at the declaration. `hello` reaches neither; a module whose slice
+    # reaches an `external` (PasFS's readlink, called by LinkTarget) reaches
+    # both, so it is compiled for i386 here. Without this job the two arms
+    # were the ratchet's "2 lost" on the day they were written.
+    jobs.append((root / "lib" / "dialect" / "pasfs.pas",
+                 ["--target=i386-pc-linux-gnu"]))
     jobs.append((None, ["--target=riscv64-linux-gnu", hello]))
 
     # The command-line error paths, for the same reason and with the same

@@ -1,0 +1,18 @@
+# Every `external` declaration under lib/ and lsp/ whose signature names
+# `int64`, with the C type that really is 64 bits on every target this
+# compiler admits. tests/checks/foreign_width.py reads this and fails in both
+# directions: a binding naming int64 with no row here, and a row naming a
+# binding that no longer does.
+#
+# A row is an argument, not a registration. `long`, `size_t`, `ssize_t`,
+# `time_t`, `clock_t` and a pointer are the target's width and are `clong` or
+# `csize` (AP 6.4.2.7); a row for one of those is wrong however well it is
+# worded. What belongs here is `long long`, `int64_t`, `double`-sized
+# integers -- a width the C side wrote out.
+#
+# Format: <file>:<routine name>   <C type and why>
+
+# runtime/pasrt_posix.c declares `long long *size, long long *mtime` in its
+# own words (ADR-0185): the runtime chose 64 bits so that a file over 4 GB and
+# a date past 2038 are the same answer on every target.
+lib/dialect/pasfs.pas:ExtFileInfo   long long * out-parameters, declared so by the runtime
