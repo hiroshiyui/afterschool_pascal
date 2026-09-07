@@ -52,6 +52,11 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **`PasProcess.Seconds` and `CpuSeconds` answered garbage on i386**: `time`
+  and `clock` were bound as returning `int64`, and both are `long`, 32 bits
+  there -- the high word was whatever the register held. Bound as `clong`
+  now (AP 6.4.2.7); found by ADR-0363's deadline case, the first to compute
+  with `Seconds`, under the `target32` gate on CI.
 - **Six findings of the security audit over `PasProcess.Execute`** (ADR-0363),
   four of them older than it: a path holding `chr(0)` stopped the language
   server on one request, and is now refused as a code; `ExecuteToFile`

@@ -18,7 +18,7 @@
     `tests/dialect/lib_process.pas` pins the decoding against `exit 3`, which
     is how a number this module cannot read from a header is checked
     instead.
-  - `time` is ISO C and takes a pointer that may be null. Null is an `int64`
+  - `time` is ISO C and takes a pointer that may be null. Null is a `clong`
     zero through this FFI, as ADR-0151 records a `DIR *` is an `int64` --
     AP §6.7.7.9 c)'s note -- and no address is held afterwards.
   - `clock` is ISO C, and `CLOCKS_PER_SEC` is the one header number here:
@@ -258,16 +258,23 @@ function ProcessId: integer;
 end;
 
 function ExtSystem(command: string): integer; external 'system';
-function ExtTime(where: int64): int64; external 'time';
-function ExtClock: int64; external 'clock';
+{ `time_t` and `clock_t` are both `long` on every target this compiler
+  admits, and `long` is the target's width: `clong` (AP 6.4.2.7) is what says
+  so at the boundary. They were `int64`, which is right on LP64 and reads the
+  high word from whatever the register held on i386 -- `Seconds` answered
+  7682741216296735854 there, twice in a row, and the first case to *compute*
+  with it is what noticed (ADR-0363's case 19). `Seconds` still answers an
+  `int64`, the width a caller wants to subtract in. }
+function ExtTime(where: clong): clong; external 'time';
+function ExtClock: clong; external 'clock';
 function ExtSleep(seconds: integer): integer; external 'sleep';
 { `pid_t` is the one POSIX scalar typedef this module binds, and POSIX says
   only that it is a signed integer type. `integer` is the safe direction of
   the two this FFI has: where the typedef is wider, the low word is read and
   a process identifier fits it on every system anybody runs; where `int64`
   were used and the typedef is `int`, the high word would be whatever the
-  call left in the register. `time_t` above is `int64` for the opposite
-  reason -- it is 64 bits everywhere and a truncated one is wrong in 2038. }
+  call left in the register. `time_t` above is `clong` for the same reason
+  read the other way: it is a `long`, and a `long` is what `clong` is. }
 function ExtGetpid: integer; external 'getpid';
 function ExtFflush(stream: int64): integer; external 'fflush';
 

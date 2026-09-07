@@ -466,6 +466,22 @@ Live, and part of the SOP rather than an appendix: these are the things
 currently known not to be checked. Add to it when a gate is declined; remove
 from it when one is closed.
 
+**A foreign result declared wider than the C type has no oracle on a host
+where the spare register is clean.** `PasProcess` bound `time` and `clock` as
+`int64` where both are `long`; on i386 the high word is whatever `edx` held
+before the call. On CI's debian:trixie container it held garbage and
+`target32` failed; on the machine that wrote the fix it held zero, the wrong
+binding gave the right answer, and the same gate was green before and after.
+The mutation putting `int64` back therefore *survives* here and is not
+catalogued -- a mutation that kills only where a register happens to be dirty
+is a coin. What would close this is a gate that reads every `external`
+declaration's result type against the C prototype, which `foreign-layout`
+does for a record's fields and nothing does for a scalar typedef (ADR-0185's
+fifth decision names why a module cannot declare `struct stat`; it says
+nothing about `time_t`). Declined for now: the tree binds a handful of
+`long`-shaped results and each is now `clong`, and the rule is at
+AP 6.4.2.7.
+
 **`lib-coverage` cannot measure a case that takes a program-parameter.** It
 runs every case with no arguments (ADR-0350), so `lib_fs.pas` — which takes
 one — stops at its first statement under the sweep and has never contributed
