@@ -13,6 +13,29 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A task may have helper routines.** AP 6.7.8.2 admits a variable declared
+  "in that task-declaration or in a block within it", and a procedure or
+  function declared inside a task was refused its own parameters and its own
+  locals — so recursion inside a task, and any helper at all, could not be
+  written (ADR-0365).
+- **A task declared inside a task no longer lifts the rule from the one that
+  contains it.** Every statement of the outer body after the inner
+  declaration could name a global.
+- **`writeln(output, x)` is accepted inside a task**, as `writeln(x)` always
+  was; both write the same required variable.
+- **`task A; forward;` is refused.** AP 6.7.8 admits no directive.
+- **A task-declaration may stand in a module-block**, so a library module can
+  export a routine that spawns its own workers. A module-heading is refused
+  one, with a diagnostic that says why.
+- **A deferred statement of a block no longer runs before the block's tasks
+  are joined.** `defer c := nil` beside a `spawn` closed the channel the task
+  was still sending on, which AP 6.9.3.12.1 forbids.
+- **An integer expression may be sent on a channel of real, and passed to a
+  real formal of a task.** Both were accepted by the front end and then
+  refused by the assembler, 6.4.6 c)'s conversion never having been emitted.
+
 ## [3.7.0] - 2026-09-07
 
 **A command is words, not a line — and the boundary answers instead of

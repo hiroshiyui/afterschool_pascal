@@ -373,3 +373,4 @@ the alternatives that were rejected and why.
 | [0362](0362-a-command-is-words-not-a-line.md) | A command is words, not a line | Accepted |
 | [0363](0363-a-boundary-answers-it-does-not-stop.md) | A boundary answers; it does not stop | Accepted |
 | [0364](0364-a-foreign-scalar-is-the-targets-width.md) | A foreign scalar is the target's width | Accepted |
+| [0365](0365-the-concurrency-clauses-audited.md) | The concurrency clauses, audited | Accepted |

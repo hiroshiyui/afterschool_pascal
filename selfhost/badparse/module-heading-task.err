@@ -1,0 +1,1 @@
+<source>:5:1: error: a module-heading declares no task: a task has a body, so it belongs to the module-block, and a routine the module exports spawns it

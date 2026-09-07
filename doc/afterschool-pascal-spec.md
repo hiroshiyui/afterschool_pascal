@@ -3343,7 +3343,12 @@ emits its own declaration, and the linker resolves both to one symbol.
 A task-declaration shall declare a procedure whose activation may be commenced
 only by a spawn-statement (6.9.3.12), and a procedure-statement shall not
 commence one. It shall not have a directive; in particular it shall not be an
-external-declaration (6.7.7), a task's block being this program's.
+external-declaration (6.7.7), a task's block being this program's, and it
+shall not be a forward-declaration (ISO/IEC 10206:1991 §6.7.1). A
+task-declaration may occur wherever a procedure-declaration may, the
+procedure-and-function-declaration-part of a module-block (§6.11.1)
+included. A module-heading shall not contain a task-declaration, and a task
+shall not be exported.
 
 `task` is not a word-symbol. A declaration-part admits only `label`, `const`,
 `type`, `var`, `procedure`, `function` and `begin`, every one of them a
@@ -3419,7 +3424,8 @@ point — the rule is the one already written, asked of one more type.
 **6.7.8.2 What a task's body may name.** A variable-access occurring in the
 block of a task-declaration, or in the block of any procedure or function
 declared within it, shall denote a variable declared in that task-declaration
-or in a block within it.
+or in a block within it, or the required variable `input` or `output`
+(§6.10.1).
 
 NOTE 1 — 6.7.8.1 is not the whole rule, and believing it was is a mistake this
 document records rather than hides. Pascal's scope rules let a block name a
@@ -3438,6 +3444,13 @@ it, and that procedure may name whatever its own scope admits — so a task can
 still reach a global through a call. Closing that needs a whole-program walk
 over the call graph, which this processor does not do, and it is recorded as
 unchecked rather than claimed (`doc/sop.md` §7).
+
+NOTE 4 — "In a block within it" is the half an audit found unimplemented
+(ADR-0365): a procedure declared inside the task owns its own formals and
+locals, and they are storage of the task's activation as much as the task's
+own are. And `output` is named by every write-parameter-list that does not
+name a file (§6.10.3), so a rule refusing the spelling `writeln(output, x)`
+while admitting `writeln(x)` was a rule about spelling and not about storage.
 
 **6.7.9 Trait-declarations [added].**
 
@@ -3769,7 +3782,19 @@ written.
 
 Armed statements shall be executed before any file (§6.7.5) or handle (6.4.12)
 the block owns is closed, and before the value of a function is taken from its
-result variable.
+result variable, and after every activation the block commenced has been
+joined (6.9.3.12.1).
+
+NOTE 4 — The last of those is what a) and 6.9.3.12.1 would otherwise
+contradict: a) executes an armed statement when the statement-sequence
+completes, and for the statement-sequence of the block's own statement-part
+that is the moment before the block's activation ends, so a deferred release
+would close what a task still holds. The join therefore precedes the
+completion of that sequence. A defer-statement in a *nested* sequence is armed
+in that sequence and executed when it completes (NOTE 1), which is inside the
+block and not at its end, so a release written there is the release the
+program wrote where it wrote it — 6.4.16.4's, and not this clause's
+(ADR-0365).
 
 **6.9.3.11.3 What a deferred statement may not contain.** A deferred statement
 shall contain no goto-statement, no label, no defer-statement, no

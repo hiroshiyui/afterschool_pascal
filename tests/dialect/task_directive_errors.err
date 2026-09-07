@@ -1,0 +1,4 @@
+<source>:12:1: error: a task-declaration takes no directive: it cannot be 'forward'
+<source>:22:5: error: 'g' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
+<source>:26:3: error: 'g' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time
+<source>:26:8: error: 'g' is not this task's: a task may name only its own variables, because anything else is storage another activation may be writing at the same time

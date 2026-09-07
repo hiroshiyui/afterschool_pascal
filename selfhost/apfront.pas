@@ -5151,6 +5151,25 @@ begin
     else if AtPositionalDecl and
             PoolIs(tok[pos].at, tok[pos].len, 'impl     ') then
       Append(ph, pt, ParseImplDecl)
+    { AP 6.7.8's task-declaration in a module-block, by the same two-token
+      test the block's declaration-part uses: an identifier in this position
+      is a syntax error in both standards there too. A module-heading is
+      refused one, a task having a body and a heading holding none -- and
+      because a task is started by `spawn` from a routine, which is what a
+      module exports (ADR-0365). }
+    else if AtPositionalDecl and
+            PoolIs(tok[pos].at, tok[pos].len, 'task     ') then
+      if headings then begin
+        ErrorAtCur;
+        writeln('a module-heading declares no task: a task has a body, so ',
+                'it belongs to the module-block, and a routine the module ',
+                'exports spawns it');
+        Bail
+      end
+      else begin
+        parsingTask := true;
+        Append(ph, pt, ParseProcOrFunc(false))
+      end
     else
       done := true
   end;
@@ -6149,6 +6168,19 @@ begin
   IsVariable := (s <> nil) and
                 ((s^.kind = skVar) or (s^.kind = skParam) or
                  (s^.kind = skVarParam))
+end;
+
+{ AP 6.7.8.2: is this variable declared in the task being checked, or in a
+  block within it? Walks the owner chain -- a nested routine's owner is the
+  routine it is declared in (ADR-0016) -- so a helper declared inside the
+  task owns storage the task's activation owns. Asked only while `taskBody`
+  is set. }
+function OwnedByTask(v: symPtr): boolean;
+var s: symPtr;
+begin
+  s := v^.owner;
+  while (s <> nil) and (s <> taskBody) do s := s^.owner;
+  OwnedByTask := s = taskBody
 end;
 
 function IsInvocable;
@@ -16807,12 +16839,24 @@ begin
             tasks incrementing one global is a data race the formals rule
             cannot see, and this is where it is refused instead.
 
-            Asked of the **owner**: a task's locals and formals are owned by
-            the task, and everything else is not. A constant, a type and a
-            routine are all still reachable -- what a task may not have is a
-            second name for storage somebody else may be writing. }
+            Asked of the **owner**, and the clause says "in that
+            task-declaration or in a block within it": a routine declared
+            inside the task owns its own locals and formals, and those are
+            the task's storage as much as the task's own are -- the whole
+            subtree runs under the one activation. The first reading of this
+            compared the owner with the task itself and refused a nested
+            helper its own parameter (ADR-0365), so OwnedByTask walks the
+            owner chain instead. A constant, a type and a routine are all
+            still reachable -- what a task may not have is a second name for
+            storage somebody else may be writing.
+
+            `input` and `output` are reached from any block: a write with no
+            file-variable denotes `output` (6.10.3), and this processor never
+            refused that spelling, so refusing `writeln(output, ...)` was a
+            rule about a spelling and not about storage (ADR-0365). }
           if (taskBody <> nil) and (e^.vrSym <> nil) and
-             IsVariable(e^.vrSym) and (e^.vrSym^.owner <> taskBody) then begin
+             IsVariable(e^.vrSym) and not OwnedByTask(e^.vrSym) and
+             (e^.vrSym <> stdInput) and (e^.vrSym <> stdOutput) then begin
             ErrorAt(e^.line, e^.col);
             write('''');
             WritePool(e^.vrAt, e^.vrLen);
@@ -21155,6 +21199,12 @@ begin
         ErrorAt(d^.line, d^.col);
         writeln('a task has a block of this program: it cannot be ''external''')
       end
+      { AP 6.7.8 says *no* directive, and `forward` is one (6.1.4). An audit
+        found it accepted with `external` refused beside it (ADR-0365). }
+      else if d^.pdIsForward then begin
+        ErrorAt(d^.line, d^.col);
+        writeln('a task-declaration takes no directive: it cannot be ''forward''')
+      end
     end;
 
     if not sym^.isGeneric then InstantiateHeading(d, sym);
@@ -21166,7 +21216,7 @@ begin
 end;
 
 procedure CheckProcBody(d: nodePtr);
-var sym, outer: symPtr; p, q: symListPtr; mark: entryPtr;
+var sym, outer, outerTask: symPtr; p, q: symListPtr; mark: entryPtr;
 begin
   sym := d^.pdSym;
   { AP 6.7.3.5: a generic routine's block is not checked here and is not
@@ -21194,7 +21244,11 @@ begin
         task's rule, including a routine declared there -- its activation is
         the task's, so a variable it names from an enclosing block is one two
         threads reach. Nested rather than saved-and-cleared for that reason:
-        `taskBody` stays set through the whole subtree. }
+        `taskBody` stays set through the whole subtree -- and *restored* on
+        the way out rather than cleared, because a task declared inside a
+        task is checked first, and clearing it left the rest of the outer
+        body free to name any global (ADR-0365). }
+      outerTask := taskBody;
       if sym^.isTask then taskBody := sym;
 
       mark := scopeTop;
@@ -21280,7 +21334,7 @@ begin
       NoteUnwrittenVarParams(sym);
 
       currentProc := outer;
-      if sym^.isTask then taskBody := nil
+      taskBody := outerTask
     end
 end;
 

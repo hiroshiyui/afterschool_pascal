@@ -385,3 +385,246 @@ Feature: tasks and channels
       5 alpha
       4 beta
       """
+
+  # AP 6.7.8.2 says "in that task-declaration or in a block within it", and
+  # the first implementation compared a variable's owner with the task
+  # itself. A helper declared inside a task owns its own parameter and its
+  # own local, and both are the task's storage (ADR-0365).
+  @afterschool:6.7.8.2
+  Scenario: a routine declared inside a task names its own variables
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [2] of integer;
+      var c: ch; v: integer;
+      task t(out: ch; n: integer);
+      var acc, k: integer;
+        procedure add(k: integer);
+        var tmp: integer;
+        begin tmp := k * n; acc := acc + tmp end;
+      begin
+        acc := 0; add(2); add(3);
+        send(out, acc); k := release(out)
+      end;
+      begin
+        spawn t(c, 10);
+        while receive(c, v) do writeln(v:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      50
+      """
+
+  # Every write-parameter-list without a file-variable names output, so a
+  # task that may write may spell the variable it writes.
+  @afterschool:6.7.8.2
+  Scenario: a task may name the required variable output
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      task t(n: integer);
+      begin writeln(output, 'n=', n:1) end;
+      begin spawn t(4) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      n=4
+      """
+
+  # A task declared inside a task is checked first; the outer body after it
+  # is still the outer task's block and still under the rule.
+  @afterschool:6.7.8.2
+  Scenario: an inner task does not lift the rule from the outer task
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var g: integer;
+      task outer;
+        task inner;
+        begin end;
+      begin
+        spawn inner;
+        g := g + 1
+      end;
+      begin g := 0; spawn outer; writeln(g) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a task may name only its own variables
+      """
+
+  # "It shall not have a directive": forward is one.
+  @afterschool:6.7.8
+  Scenario: a task-declaration takes no forward directive
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      task a; forward;
+      task a;
+      begin end;
+      begin spawn a end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      it cannot be 'forward'
+      """
+
+  # Readings an adversarial audit confirmed (ADR-0365), each written for the
+  # requirement the reader attacked rather than for the behaviour that
+  # passed.
+  @afterschool:6.4.12.5
+  Scenario: release of an empty channel variable yields zero and is not an error
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var c: channel [1] of integer; r: integer;
+      begin
+        r := release(c); writeln(r:1, ' ', c = nil);
+        r := release(c); writeln(r:1, ' ', c = nil)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      0 TRUE
+      0 TRUE
+      """
+
+  @afterschool:6.4.16.4
+  Scenario: the end of a block closes a channel moved into it, and a task formal's end does not
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [2] of integer;
+      var c: ch; v: integer;
+      task consumer(inp: ch);
+      var x: integer;
+      begin
+        while receive(inp, x) do writeln('got ', x:1);
+        writeln('consumer saw close')
+      end;
+      procedure holder;
+      var e: ch;
+      begin e := take(c); send(e, 1) end;
+      begin
+        spawn consumer(c);
+        holder
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      got 1
+      consumer saw close
+      """
+
+  @afterschool:6.9.3.12
+  Scenario: a spawn's actual parameters are copied before the activation commences
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [2] of integer;
+      var c: ch; n, v: integer;
+      task t(out: ch; k: integer);
+      var r: integer;
+      begin send(out, k); r := release(out) end;
+      begin
+        n := 1;
+        spawn t(c, n);
+        n := 2;
+        while receive(c, v) do writeln(v:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      1
+      """
+
+  # AP 6.9.3.12.1: "before any variable of that block is released", and its
+  # NOTE 2 names the block's deferred statements. A defer of the block's own
+  # statement-part runs at 6.9.3.11.2 a)'s completion of that sequence, so
+  # the join has to precede it (ADR-0365).
+  @afterschool:6.9.3.12.1
+  Scenario: the join precedes a deferred statement of the block
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of integer;
+      var c: ch;
+      task slow(o: ch);
+      var i, s, k, r: integer;
+      begin
+        for k := 1 to 3 do begin
+          s := 0;
+          for i := 1 to 3000000 do s := (s + i) mod 7;
+          send(o, s)
+        end;
+        r := release(o)
+      end;
+      begin
+        defer writeln('deferred');
+        defer c := nil;
+        spawn slow(c);
+        writeln('body done')
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      body done
+      deferred
+      """
+
+  # 6.4.6 c)'s implicit conversion, in the position AP 6.9.3.13.1 added.
+  @afterschool:6.9.3.13.1
+  Scenario: an integer expression is sent on a channel of real
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of real;
+      var c: ch; r: real; i: integer;
+      begin
+        i := 2;
+        send(c, i);
+        send(c, 3);
+        if receive(c, r) then writeln(r:4:1);
+        if receive(c, r) then writeln(r:4:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+       2.0
+       3.0
+      """
+
+  # And in the position AP 6.9.3.12 added, where the ordinary rule for a
+  # procedure-statement's actual applies.
+  @afterschool:6.9.3.12
+  Scenario: an integer actual is passed to a real formal of a task
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type ch = channel [4] of real;
+      var c: ch; r: real;
+      task scale(x: real; o: ch);
+      var k: integer;
+      begin send(o, x * 2); k := release(o) end;
+      begin
+        spawn scale(3, c);
+        while receive(c, r) do writeln(r:4:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+       6.0
+      """

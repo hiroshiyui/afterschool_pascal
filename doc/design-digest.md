@@ -4874,14 +4874,24 @@ Five things carry it.
   cannot outlive the call, because the caller is not running during it*, and
   it named two threads as the one thing that breaks it. Every task a block
   spawned is joined before that block releases anything, and the emitter puts
-  the join first in the epilogue.
+  the join first in the epilogue — **and again before the block's own
+  statement-part completes** (ADR-0365), because AP 6.9.3.11.2 a) runs a
+  deferred statement when its sequence completes, which is before the
+  epilogue: `defer c := nil` closed a channel a task was still sending on.
+  `pas_tasks_join` empties the set, so the epilogue's call is a no-op and a
+  block that does not both spawn and defer emits nothing new.
 - **The formals rule was not the whole rule, and a probe found it.**
   AP 6.7.8.1 admits a transferable value parameter and a channel, and the
   argument for its sufficiency was good — a task can only reach what it was
   handed. But Pascal's scope rules let a nested block name an enclosing one's
   variables, and four tasks incrementing one global compiled and printed the
   right answer. AP 6.7.8.2 refuses that; it is not transitive, and
-  `doc/sop.md` §7 says so.
+  `doc/sop.md` §7 says so. **The rule is asked of the owner chain and not of
+  the owner** (ADR-0365): a helper declared inside the task owns its own
+  formals and locals, and an audit found them refused. `taskBody` is restored
+  on the way out of a nested task rather than cleared, or the rest of the
+  outer body checks under no rule at all; `input` and `output` are exempt,
+  `writeln(x)` naming `output` from any block anyway.
 - **The runtime's bookkeeping is per-thread, and TSan is what said so.** The
   open files, the live handles, the armed deferred statements and the string
   arena are each a stack of what the current chain of activations owns, and a

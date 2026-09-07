@@ -319,6 +319,10 @@ var
   strTemps: integer;
   nextProcId, nextStr: integer;
   irProc: symPtr;                { the procedure being emitted }
+  { The compound-statement that is the statement-part of the block being
+    emitted, so that its completion can be told from any other sequence's
+    (AP 6.9.3.12.1, ADR-0365). }
+  irBodySeq: nodePtr;
   irLevel: integer;
   { The level-0 block the function being emitted belongs to: the program, or
     the module a procedure was declared in. It is what FrameAt(0) names, since
@@ -622,6 +626,7 @@ begin
   tagHead := nil;
   tagTail := nil;
   targetIx := tgtX86;
+  irBodySeq := nil;
   covOpt := false;
   { Before anything is parsed: an argument past the last program-parameter is
     invisible to the loop below, which ends at the first unbound one. Reporting
@@ -3301,6 +3306,9 @@ procedure EmitAssign(s: nodePtr); forward;
   places and the earliest of them, a repeat-statement's body, is emitted
   before this is defined. }
 procedure EndSequence(list: nodePtr); forward;
+{ AP 6.9.3.12.1's join, emitted from the block's statement-part completion
+  as well as from its exit path (ADR-0365). }
+procedure JoinTasks(p: symPtr); forward;
 
 { The value a designator holds. An array or a record has no register form, so
   what it yields is its address; everything else is loaded from it. }
@@ -8588,6 +8596,13 @@ begin
       Def(chMark);
       writeln(ircode, 'call ptr @llvm.stacksave.p0()');
       EmitExpr(s^.pcArgs^.next, chVal);
+      { 6.4.6 c)'s implicit conversion, which every other position that takes
+        an *assignable* expression already performs. Sema admits an integer
+        where the component is real -- and without this the store below is
+        written at the component's type over a value of the expression's, so
+        `send(c, 1)` on a channel of real emitted `store double %i32` and the
+        module did not assemble (ADR-0365). }
+      ConvertFor(chVal, s^.pcArgs^.next^.ntype, s^.pcArgs^.ntype^.elem);
       Def(chTmp);
       write(ircode, 'alloca ');
       PutLlType(s^.pcArgs^.ntype^.elem);
@@ -10065,6 +10080,17 @@ begin
           EmitStmt(sub);
           sub := sub^.next
         end;
+        { AP 6.9.3.12.1: "before any variable of that block is released", and
+          NOTE 2 says the block's deferred statements are among the things
+          that must happen after the join. A defer of the block's own
+          statement-part runs *here*, at 6.9.3.11.2 a)'s completion of the
+          sequence, which the epilogue's join was too late for: `defer
+          c := nil` closed a channel a spawned task was still sending on
+          (ADR-0365). The join is idempotent -- pas_tasks_join empties the
+          set -- so the epilogue's stands unchanged and this costs nothing to
+          a block that does not both spawn and defer. }
+        if (s = irBodySeq) and irProc^.spawns and (irProc^.deferCount > 0) then
+          JoinTasks(irProc);
         EndSequence(s^.cpBody)
       end;
       { AP 6.9.3.11: arming is the whole of what a defer-statement emits. The
@@ -10398,6 +10424,23 @@ begin
   end
 end;
 
+{ AP 6.9.3.12.1's join. Emitted from two places -- here at the completion of
+  the block's own statement-part, where a deferred statement of that sequence
+  is about to run, and from the block's exit path -- and the second call finds
+  an empty set, `pas_tasks_join` clearing it as it joins. A block that spawns
+  nothing emits none of it. }
+procedure JoinTasks;
+var frame, rec: str;
+begin
+  if p^.spawns then begin
+    FrameAt(p^.level, frame);
+    TaskSetSlot(p, frame, rec);
+    write(ircode, '  call void @pas_tasks_join(ptr ');
+    PutOp(rec);
+    writeln(ircode, ')')
+  end
+end;
+
 { A block exit closes the files the block declared, which is ISO 7185's rule
   and also the only thing that flushes a file written to inside a procedure.
   Since AP 6.7.5.9 a block may be left before its last statement, so this is
@@ -10427,13 +10470,7 @@ begin
 
     It is emitted first for the same reason it is placed last in the frame:
     the ordering is the rule, and the rule is stated in one place. }
-  if p^.spawns then begin
-    FrameAt(p^.level, frame);
-    TaskSetSlot(p, frame, rec);
-    write(ircode, '  call void @pas_tasks_join(ptr ');
-    PutOp(rec);
-    writeln(ircode, ')')
-  end;
+  JoinTasks(p);
   if p^.deferCount > 0 then begin
     FrameAt(p^.level, frame);
     DeferRecord(p, frame, rec);
@@ -11425,6 +11462,9 @@ begin
     end
     else begin
       EmitExpr(arg, val);
+      { 6.4.6 c) again, for the reason the send-statement's arm gives: the
+        store below is written at the formal's type (ADR-0365). }
+      ConvertFor(val, arg^.ntype, l^.sym^.stype);
       Def(fld);
       write(ircode, 'getelementptr inbounds %targ', task^.irId:1, ', ptr ');
       PutOp(blk);
@@ -11509,7 +11549,7 @@ begin
 end;
 
 procedure EmitProcBody(d: nodePtr);
-var p: symPtr; slot, res, nm: str;
+var p: symPtr; slot, res, nm: str; outerSeq: nodePtr;
 begin
   p := d^.pdSym;
   writeln(ircode);
@@ -11548,7 +11588,10 @@ begin
   writeln(ircode, ') #1 {');
 
   EnterFrame(p);
+  outerSeq := irBodySeq;
+  irBodySeq := d^.pdBody^.blBody;
   EmitStmt(d^.pdBody^.blBody);
+  irBodySeq := outerSeq;
   EmitExitTarget(p);
   CloseFiles(p);
 
@@ -12191,7 +12234,9 @@ begin
   writeln(ircode);
   writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) #1 {');
   EnterFrame(programSym);
+  irBodySeq := progBlock^.blBody;
   EmitStmt(progBlock^.blBody);
+  irBodySeq := nil;
   { AP 6.7.5.9 in the main-program-block terminates the *program*, and does it
     by the ordinary end: 6.2.3.6's finalizations below run, which is what
     distinguishes it from 6.7.5.7's halt. }

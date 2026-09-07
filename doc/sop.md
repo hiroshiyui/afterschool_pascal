@@ -276,7 +276,9 @@ never evaluated. Audits so far, each written up in history: 2026-08-25
 (ADR-0197, four stale of 57), 2026-08-28 twice (six stale of 67; a row missing),
 2026-08-29 (five kinds of decay, two outside this file), 2026-09-01 (the
 numbers, and three records no document knew of), 2026-09-06 (a closing
-condition met by a release), 2026-09-07 (a premise falsified by a new target).
+condition met by a release), 2026-09-07 (a premise falsified by a new target),
+2026-09-08 (`langspec-audit` over the concurrency clauses: seven defects, four
+readings left unsettled, ADR-0365).
 
 **Verified on each audit rather than assumed**: the string-arena producer
 count — **eight** `strTemps := strTemps + 1` in `selfhost/compiler.pas` — and
@@ -324,6 +326,7 @@ the `-O1`/`-O3` row, still a judgement.
 | Nothing checks an external-declaration's **name** against another component's | Two modules may each declare `external 'strerror'` and 6.13 is working; that they *mean* the same routine is the row below | ADR-0147 |
 | Nothing checks that every string-arena producer is **counted** | The end-of-statement release is driven by a counter its producers bump; a ninth producer would have nothing looking for it, and a bump removed from a producer sharing its statement with another is invisible, which is why the pinning loops compare rather than assign | ADR-0111, ADR-0197 |
 | Nothing checks an `external` declaration against the function it names | The call site is the whole of the ABI: LLVM does not check a direct call against the declaration under opaque pointers, so a wrong arity, type or function is undefined behaviour with no diagnostic. **One property is held** (ADR-0364): a scalar's *width*, every `int64` in an `external` catalogued as a C type that is 64 bits everywhere — a claim a person wrote, not a header read | ADR-0121, ADR-0129, ADR-0364 |
+| **Four readings of the concurrency clauses are unsettled** | A `goto` out of a task's block compiles and hangs with no diagnostic; a `send` arm on a closed channel raises its error only when the select's rotation reaches that arm, where an *empty* channel-variable is an error every time; `after` refuses an `int64`; a trailing `;` before a select's `end` is accepted. Each admits two readings, so none takes a scenario | ADR-0365 |
 | A task's ban on non-local variables is **not transitive** | AP 6.7.8.2 refuses a non-local in a task's own block; a task may call a procedure declared outside it that names a global. Closing it needs the call graph across component boundaries, which is why the clause states the limit | ADR-0201, ADR-0268 |
 | **A `verify/` precondition stricter than the compiler's own check passes in silence** | Narrowing a hypothesis only makes a proof easier; `index_span_is_representable` said `<` where Sema said `>=`, both agreed, and `array [0..maxint]` was refused for eleven increments. A precondition must carry the sentence it restates so the two can be compared by eye | ADR-0013, ADR-0289 |
 | **Nothing detects a harness that ignores a path, target or flag it is handed** | Three in a week: `sanitize.sh` and `AFTERSCHOOL_PASCAL_OPT`, `llc_check.sh` and the target, `seed_current.sh` and an absolute path. `require-consistency` does this for `*_REQUIRE`; the same for `AFTERSCHOOL_PASCAL_*` needs a judgement about which harness should read which | ADR-0330, ADR-0335, ADR-0345, ADR-0347 |
