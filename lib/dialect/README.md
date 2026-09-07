@@ -291,10 +291,12 @@ and a clamped key does not.
 string crossing to a foreign routine may not hold `chr(0)`, and ADR-0122 makes
 the crossing a run-time error — right for a program's own value, and wrong for
 one an editor, a client or a file supplied, because one such value then stops
-the whole program (ADR-0363: one MCP request ended the language server). So a
-routine that takes such text checks first and answers `errSyntax`:
-`PasProcess.AddArg` and `ExecuteToFile` do, and a program that holds outside
-text refuses it before its first crossing, as `pasls`'s `PathArg` does. The
+the whole program (ADR-0363: one MCP request ended the language server). So
+**every** routine that takes such text asks `PasError.HoldsNul` first and
+answers a code -- `errSyntax`, `false` or `nil` -- and a program that holds
+outside text refuses it before its first crossing, as `pasls`'s `PathArg`
+does. `tests/dialect/lib_boundary_nul.pas` asks all nineteen; the audit that
+followed ADR-0363 found all nineteen stopping. The
 trap stays where it is; it is what makes the *next* such routine visible.
 
 **A failure whose *shape* the system chooses.** `PasProcess.Execute` runs a

@@ -52,6 +52,12 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Nineteen library routines stopped the program on a name holding
+  `chr(0)`** -- every path, name, host or service taken by `PasFS`, `PasDir`,
+  `PasEnv`, `PasIO`, `PasStream` and `PasNet` reached ADR-0122's trap. Each
+  now answers a code (`errSyntax`, `false` or `nil`) through the shared
+  `PasError.HoldsNul`, which is ADR-0363's rule applied to the whole library
+  rather than to the two routines it was written for.
 - **Nine more foreign scalars bound at the wrong width, and the emitter's own
   slice count** (ADR-0364): `read`/`write` (`ssize_t`), `fflush` (a pointer)
   and six OpenSSL bindings (`long`s and pointers) were `int64`; now `csize`

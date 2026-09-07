@@ -163,6 +163,7 @@ end;
 function OpenRead;
 var fd: integer;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   { O_RDONLY. See the module's own comment for why it is the only flag here. }
   fd := ExtOpen(path, 0);
   if fd < 0 then r := errIO else r := fd

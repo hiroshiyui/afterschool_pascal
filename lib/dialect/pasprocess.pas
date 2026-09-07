@@ -400,17 +400,6 @@ function ExtArgvDrop(v: ArgV; keep: integer): integer;
   external 'pasx_argv_drop';
 procedure ExtArgvDeadline(v: ArgV; ms: integer); external 'pasx_argv_deadline';
 
-{ A string on its way to a foreign routine may not hold chr(0) -- ADR-0122
-  stops the program at the crossing, and stopping is the right answer for a
-  program's own value and the wrong one for a word that came from outside. It
-  is refused here first, as a code (ADR-0363). }
-function HoldsNul(s: string): boolean;
-var k: integer;
-begin
-  HoldsNul := false;
-  for k := 1 to length(s) do
-    if s[k] = chr(0) then exit(true)
-end;
 
 type
   { the child, and the stream its output arrives on; the closer waits for it,

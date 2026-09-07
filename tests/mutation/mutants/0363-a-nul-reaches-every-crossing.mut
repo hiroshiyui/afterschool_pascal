@@ -1,0 +1,12 @@
+adr: 0363
+file: lib/dialect/paserror.pas
+kills: lib_boundary_nul
+why: HoldsNul answers false for everything, so every one of the nineteen guards lets a name holding chr(0) through to ADR-0122's crossing and the first of them stops the program. The case prints one line per routine and the golden has nineteen; a stop at the first leaves none.
+--- old
+  HoldsNul := false;
+  for k := 1 to length(s) do
+    if s[k] = chr(0) then exit(true)
+--- new
+  HoldsNul := false;
+  for k := 1 to 0 do
+    if s[k] = chr(0) then exit(true)

@@ -141,6 +141,7 @@ function ExtDirNext(d: Dir; cap: integer;
 
 function OpenDir;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   d := ExtOpendir(path);
   if d = nil then OpenDir := errIO else OpenDir := errNone
 end;

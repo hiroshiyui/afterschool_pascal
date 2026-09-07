@@ -1,0 +1,9 @@
+adr: 0363
+file: lib/dialect/pasfs.pas
+kills: lib_boundary_nul
+why: Exists stops asking, which is the shape a twentieth routine written next year takes: nineteen refuse and one does not, and the one is where the program stops. Exists is first in the case, so the whole golden goes.
+--- old
+  if HoldsNul(path) then Exists := false
+  else Exists := ExtAccess(path, 0) = 0
+--- new
+  Exists := ExtAccess(path, 0) = 0

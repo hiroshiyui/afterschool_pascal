@@ -42,6 +42,7 @@ lib_lsp_jsonl 0
 lib_map 0
 lib_process 0
 lib_process_execute 0
+lib_boundary_nul 0
 lib_strvec 0
 lib_toml 0
 lib_toml_build 0

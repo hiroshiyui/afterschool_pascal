@@ -77,7 +77,8 @@ end;
 
 function Lookup;
 begin
-  Lookup := ExtGetenv(name)
+  if HoldsNul(name) then Lookup := nil
+  else Lookup := ExtGetenv(name)
 end;
 
 function LookupOr;
@@ -96,12 +97,14 @@ end;
 
 function Define;
 begin
-  Define := Refused(ExtSetenv(name, val, 1))
+  if HoldsNul(name) or HoldsNul(val) then Define := errSyntax
+  else Define := Refused(ExtSetenv(name, val, 1))
 end;
 
 function Undefine;
 begin
-  Undefine := Refused(ExtUnsetenv(name))
+  if HoldsNul(name) then Undefine := errSyntax
+  else Undefine := Refused(ExtUnsetenv(name))
 end;
 
 end.

@@ -224,6 +224,7 @@ end;
 function NetConnect;
 var status: integer;
 begin
+  if HoldsNul(host) or HoldsNul(service) then exit(errSyntax);
   status := 0;
   s := ExtConnect(host, service, status);
   NetConnect := Opened(s, status)
@@ -232,6 +233,7 @@ end;
 function NetListen;
 var status: integer;
 begin
+  if HoldsNul(host) or HoldsNul(service) then exit(errSyntax);
   status := 0;
   s := ExtListen(host, service, status);
   NetListen := Opened(s, status)

@@ -32,7 +32,8 @@ module PasError;
 
 export PasError = (ErrorCode,
                    errNone, errSyntax, errRange, errAbsent, errFull, errIO,
-                   ErrText, ErrorText, Failed, Fallible, ValueOr);
+                   ErrText, ErrorText, Failed, Fallible, ValueOr,
+                   HoldsNul);
 
 type
   { Short enough that a caller can put one in a fixed field without asking how
@@ -73,6 +74,16 @@ function Failed(e: ErrorCode): boolean;
   the tag selects (ADR-0118). }
 function ValueOr(T: type; res: Fallible(T); whenBad: T): T;
 
+{ Whether `s` holds chr(0) -- the one character a string cannot carry across
+  to a foreign routine, ADR-0122 making that crossing a run-time error. That
+  is the right answer for a program's own value and the wrong one for a
+  value an editor, a client or a file supplied, because one such value then
+  stops the whole program: one MCP request ended the language server
+  (ADR-0363). So every routine in this library that hands outside text
+  across asks this first and answers `errSyntax`, or `false`, or `nil` --
+  a code, never a stop. It is here because every module imports this one. }
+function HoldsNul(s: string): boolean;
+
 end;
 
 function ErrorText;
@@ -95,6 +106,14 @@ end;
 function ValueOr;
 begin
   if res.ok then ValueOr := res.val else ValueOr := whenBad
+end;
+
+function HoldsNul;
+var k: integer;
+begin
+  HoldsNul := false;
+  for k := 1 to length(s) do
+    if s[k] = chr(0) then exit(true)
 end;
 
 end.

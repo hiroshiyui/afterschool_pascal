@@ -1,0 +1,21 @@
+PasFS.Exists            FALSE
+PasFS.Remove            not of the expected form
+PasFS.Rename            not of the expected form / not of the expected form
+PasFS.MakeDirectory     not of the expected form
+PasFS.RemoveDirectory   not of the expected form
+PasFS.Info              FALSE not of the expected form
+PasFS.LinkTarget        FALSE not of the expected form
+PasFS.TemporaryPath     FALSE not of the expected form
+PasFS.TemporaryPath     FALSE not of the expected form (prefix)
+PasFS.TemporaryDirectory FALSE not of the expected form
+PasDir.OpenDir          not of the expected form
+PasEnv.Lookup           TRUE
+PasEnv.Define           not of the expected form / not of the expected form
+PasEnv.Undefine         not of the expected form
+PasIO.OpenRead          FALSE not of the expected form
+PasStream.OpenRead      not of the expected form
+PasStream.OpenWrite     not of the expected form
+PasStream.OpenAppend    not of the expected form
+PasNet.NetConnect       not of the expected form / not of the expected form
+PasNet.NetListen        not of the expected form
+all nineteen answered

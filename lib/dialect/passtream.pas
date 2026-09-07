@@ -118,18 +118,21 @@ end;
 
 function StreamOpenRead;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   s := ExtFopen(path, 'r');
   StreamOpenRead := Opened(s)
 end;
 
 function StreamOpenWrite;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   s := ExtFopen(path, 'w');
   StreamOpenWrite := Opened(s)
 end;
 
 function StreamOpenAppend;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   s := ExtFopen(path, 'a');
   StreamOpenAppend := Opened(s)
 end;

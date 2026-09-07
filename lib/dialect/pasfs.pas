@@ -255,12 +255,14 @@ end;
 
 function Remove;
 begin
-  Remove := Refused(ExtRemove(path))
+  if HoldsNul(path) then Remove := errSyntax
+  else Remove := Refused(ExtRemove(path))
 end;
 
 function Info;
 var size, mtime: int64; kind, rc: integer; got: FileInfo;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   size := 0;
   mtime := 0;
   kind := 0;
@@ -286,11 +288,13 @@ end;
 
 function Rename;
 begin
-  Rename := Refused(ExtRename(oldPath, newPath))
+  if HoldsNul(oldPath) or HoldsNul(newPath) then Rename := errSyntax
+  else Rename := Refused(ExtRename(oldPath, newPath))
 end;
 
 function MakeDirectory;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   { 493 is 0o755. Written as a decimal because neither standard has an octal
     literal, and named here so the next reader does not have to work it out. }
   MakeDirectory := Refused(ExtMkdir(path, 493))
@@ -298,13 +302,16 @@ end;
 
 function RemoveDirectory;
 begin
-  RemoveDirectory := Refused(ExtRmdir(path))
+  if HoldsNul(path) then RemoveDirectory := errSyntax
+  else RemoveDirectory := Refused(ExtRmdir(path))
 end;
 
 function Exists;
 begin
-  { F_OK, and the one `access` mode whose value a header is not needed for. }
-  Exists := ExtAccess(path, 0) = 0
+  { F_OK, and the one `access` mode whose value a header is not needed for.
+    A path holding chr(0) names nothing (ADR-0363). }
+  if HoldsNul(path) then Exists := false
+  else Exists := ExtAccess(path, 0) = 0
 end;
 
 function WorkingDirectory;
@@ -329,6 +336,7 @@ function ExtTempDir(dir, prefix: string; cap: integer;
 function TemporaryDirectory;
 var got: OptPathName; st: integer;
 begin
+  if HoldsNul(dir) or HoldsNul(prefix) then exit(errSyntax);
   got := ExtTempDir(dir, prefix, MaxPath, st);
   if got = nil then
     if st = 3 then r := errFull else r := errIO
@@ -339,6 +347,7 @@ end;
 function TemporaryPath;
 var got: OptPathName; st: integer;
 begin
+  if HoldsNul(dir) or HoldsNul(prefix) then exit(errSyntax);
   got := ExtTempName(dir, prefix, MaxPath, st);
   if got = nil then
     if st = 3 then r := errFull else r := errIO
@@ -349,6 +358,7 @@ end;
 function LinkTarget;
 var b: PathBuffer; n: int64; t: PathName;
 begin
+  if HoldsNul(path) then exit(errSyntax);
   n := ExtReadlink(path, b);
   if n < 0 then
     r := errIO
