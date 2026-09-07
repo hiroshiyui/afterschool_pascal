@@ -1245,9 +1245,12 @@ A `channel [n] of T` is a bounded queue and **is** a handle: no copy, released
 when its block ends, `release` to close it earlier. A `task` is a procedure
 only `spawn` may start, and three things may cross into one: a **copy** of a
 transferable value, a **reference** to a channel, and a **handle moved in** —
-nothing else, and it may name only its own variables. Those two rules together
-are the whole of share-nothing: a task cannot reach a variable another
-activation may be writing.
+nothing else, and it may name only its own variables — its own and those of
+any routine declared inside it, so a task has helpers like any other block,
+and `output` besides. Those two rules together are the whole of share-nothing:
+a task cannot reach a variable another activation may be writing. A task is
+declared where a procedure is, a module's own block included, so a library
+module exports the routine that spawns its workers.
 
 A handle is *moved* where a channel is *lent*, and the actual says so:
 
@@ -1264,8 +1267,10 @@ a copy would leave two owners. A channel is safe to share because it is the
 one object here with a lock in it; a socket has none, so what crosses is
 ownership.
 
-Every task a block spawned is **joined** before that block releases anything,
-which is what makes a lent channel safe. `send` waits while the channel is
+Every task a block spawned is **joined** before that block releases anything —
+before its deferred statements run, too, so `defer c := nil` beside a `spawn`
+closes the channel after the task is done with it — and that is what makes a
+lent channel safe. `send` waits while the channel is
 full and stops the program if it was closed; `receive` waits while it is empty
 and answers *false* once it is closed and drained, which is the loop condition
 above. **A release the program writes closes the channel wherever it stands**,
