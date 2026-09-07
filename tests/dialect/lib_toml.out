@@ -1,0 +1,75 @@
+parse ok=TRUE
+top-level entries=27
+title=[TOML "demo"]
+lit=[C:\path\no-escape]
+multi=[one two
+]
+mlit=[a'b]
+title bytes=11 [2]=O [6]=" not-a-string len=0
+document bytes=669 [1]=# full=FALSE
+n1=1000 n2=2147483647 n3=493 n4=10 n5=-17
+f1=3.1415 f1 as integer=-1 n5 as float= -17.0
+yes=TRUE
+d1 form=0 y=1979 m=5 d=27 timevalid=FALSE
+d2 form=1 h=7 ns=500000000 datevalid=FALSE
+d3 form=2 offset=0
+d5 form=3 offset=-420
+list=1 2 3 
+nest[1][2]=2
+point.y=2
+dotted.a.b=9 dotted.a.c=10
+server.port=8080 server.tls.verify=TRUE
+fruit is a table array=TRUE count=2
+fruit[2].name=banana
+fruit[2].variety.kind=cavendish
+absent kind=6 count=0 int=-1
+--- rendered (code=0) ---
+title = "TOML \"demo\""
+lit = "C:\\path\\no-escape"
+multi = "one two\n"
+mlit = "a'b"
+n1 = 1000
+n2 = 2147483647
+n3 = 493
+n4 = 10
+n5 = -17
+f1 = 3.1415
+f2 = 6.626E-34
+f3 = inf
+f4 = -inf
+f5 = nan
+f6 = 1.0
+yes = true
+d1 = 1979-05-27
+d2 = 07:32:00.5
+d3 = 1979-05-27T07:32:00
+d4 = 1979-05-27T07:32:00Z
+d5 = 1979-05-27T00:32:00-07:00
+list = [1, 2, 3]
+nest = [[1, 2], ["a"]]
+point = { x = 1, y = 2 }
+
+[dotted]
+
+[dotted.a]
+b = 9
+c = 10
+
+[server]
+host = "localhost"
+port = 8080
+
+[server.tls]
+verify = true
+
+[[fruit]]
+name = "apple"
+
+[[fruit]]
+name = "banana"
+
+[fruit.variety]
+kind = "cavendish"
+--- end ---
+reparse ok=TRUE
+round trip identical=TRUE

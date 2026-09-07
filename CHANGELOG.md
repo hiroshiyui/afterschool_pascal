@@ -13,6 +13,35 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A TOML library** — `lib/dialect/pastoml.pas`, TOML v1.0.0 whole rather
+  than a subset: bare, quoted and dotted keys; basic, literal and both
+  multi-line string forms; decimal, hexadecimal, octal and binary integers with
+  underscores; floats with `inf` and `nan`; all four date-time forms; arrays
+  over several lines and with a trailing comma; inline tables; tables; and
+  arrays of tables. `TomlParse` and `TomlParseChars` answer a `TomlResult`, and
+  `TomlPositionOf` turns the byte a refusal stopped at into a line and a
+  column. `TomlPath(doc, 'server.port')` is the dotted lookup a configuration
+  reader wants; `TomlRender` writes a document back, and parsing that and
+  rendering again reproduces it byte for byte. A **date-time** is §6.4.3.4's
+  own `TimeStamp` with a nanosecond and a UTC offset beside it, so a program
+  hands the result straight to `PasTime`. An **integer** is `integer`, so a
+  value outside -maxint..maxint is `errRange` and never a wrapped number.
+  ADR-0360.
+- `PasText.RealToStr` — the shortest decimal that reads back as a given real,
+  which was `PasJson`'s and is now where two formats can reach it. ADR-0359.
+
+### Fixed
+
+- **Writing a NaN through `PasJson` stopped the program.** The guard against a
+  value with no decimal spelling asked `x <> x`, which is false for a NaN on
+  this processor — `<>` on reals is *ordered* not-equal — so the guard never
+  fired and the scan below it read past the end of what `writestr` had
+  written, reporting `array index out of bounds` against a line of the
+  library. It asks `not (x = x)` now. A program could only reach it by
+  computing a NaN, this language having no literal for one. ADR-0359.
+
 ## [3.6.0] - 2026-09-07
 
 **The library asked the language for something, and got it.** Traits landed in

@@ -1,0 +1,12 @@
+adr: 0360
+file: lib/dialect/pastoml.pas
+kills: lib_toml_errors
+why: Run goes back to being a function whose caller writes `ok := Run(false)`, so *did it read any digits* overwrites the refusal it had just recorded and `a = 1_` is accepted -- an underscore that is not between digits. It is the defect the module actually had for one draft, and it is the shape worth pinning: a routine that reports through a var parameter and also answers must not do both.
+--- old
+      else if Digit(Peek(b, i)) then
+        Run(false)
+--- new
+      else if Digit(Peek(b, i)) then begin
+        Run(false);
+        ok := true
+      end

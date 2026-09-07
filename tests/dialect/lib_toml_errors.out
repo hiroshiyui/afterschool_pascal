@@ -1,0 +1,39 @@
+       a key defined twice: not of the expected form at 2:5
+     a table defined twice: not of the expected form at 2:4
+a header over a dotted key: not of the expected form at 2:4
+a header inside a dotted k: not of the expected form at 3:6
+an array is not a table ar: not of the expected form at 2:6
+reaching into an inline ta: not of the expected form at 2:6
+a table array over a table: not of the expected form at 2:6
+            a leading zero: not of the expected form at 1:6
+     a trailing underscore: not of the expected form at 1:7
+      a leading underscore: not of the expected form at 1:5
+      a doubled underscore: not of the expected form at 1:7
+      a signed hexadecimal: not of the expected form at 1:8
+   an integer out of range: outside the representable range at 1:15
+      the 30th of February: outside the representable range at 1:15
+             an hour of 25: outside the representable range at 1:13
+    an unterminated string: not of the expected form at 1:12
+     a newline in a string: not of the expected form at 1:9
+     two pairs on one line: not of the expected form at 1:7
+              a bare value: not of the expected form at 1:5
+           a missing value: not of the expected form at 1:4
+          a lone surrogate: not of the expected form at 1:12
+  a point with no fraction: not of the expected form at 1:7
+  a fraction with no point: not of the expected form at 1:5
+a newline in an inline tab: not of the expected form at 1:13
+   a trailing comma inline: not of the expected form at 1:14
+   a multi-line string key: not of the expected form at 1:1
+
+  a super-table afterwards: accepted
+two dotted keys, one table: accepted
+a table array then a table: accepted
+         an empty document: accepted
+  comments and blank lines: accepted
+     an empty inline table: accepted
+            an empty array: accepted
+   a quoted key with a dot: accepted
+      a bare key of digits: accepted
+                    maxint: accepted
+   a space before the time: accepted
+     a date then a comment: accepted

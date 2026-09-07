@@ -3904,12 +3904,18 @@ taken by the caller.
   lockstep, a walk that stops and resumes, and a range out of the middle. Not
   convenience — an `ElementAt` would have been that, and is refused.
 
-### A JSON number a person can read (`PasJson`, ADR-0309)
+### A number a person can read (`PasText.RealToStr`, ADR-0309, ADR-0359)
 
 **A real is written as the shortest decimal that reads back as the same
-value**, and `PasJson` converts nothing to get there: `ShortestReal` asks
+value**, and nothing converts anything to get there: the search asks
 `writestr` for the value at a precision, builds the spelling, hands it to
-`readstr`, and keeps the first one that returns what it started from. Until
+`readstr`, and keeps the first one that returns what it started from.
+
+**It lives in `lib/pastext.pas` beside `IntToStr` and it was `PasJson`'s until
+ADR-0359**, when `PasToml` became a second caller and a hundred-line search in
+two modules would have been a copy free to drift. What is format-specific
+stayed with the callers: JSON writes a whole number as `1` and TOML must write
+`1.0`, so the `.0` is `PasToml`'s and not the search's. Until
 ADR-0309 every real came out in §6.9.3.4.1's default floating-point form —
 `0.75` as `7.500000000000E-01`, which is a JSON number by RFC 8259 §6 and the
 form no reader wants. Three things carry it:
@@ -3926,13 +3932,74 @@ form no reader wants. Three things carry it:
   fixed when `-6 < n ≤ 21`, an exponent otherwise. `10` is `10`,
   `1e20` is its twenty-one digits, `1e-7` is `1E-7`.
 - **A whole number is untouched.** `whole` (ADR-0120) already carried "the
-  document wrote no fraction and no exponent", and that branch writes
-  `v^.inum:1`; a real that happens to be integral writes `3` and never `3.0`.
+  document wrote no fraction and no exponent", and that branch writes the
+  integer; a real that happens to be integral writes `3` and never `3.0`.
+- **The guard for a value with no decimal spelling asked a question this
+  processor answers `no` to twice** (ADR-0359). `(x <> x) or (abs(x) >
+  maxreal)` catches an infinity and could never catch a NaN: `<>` on reals
+  emits `fcmp one`, which is *ordered* not-equal and false when an operand is
+  unordered, so `nan <> nan` is FALSE. The scan below then looked for the `E`
+  in `NAN` and read past the end of the string — an index out of bounds
+  reported against a line of the library. It asks `not (x = x)` now. Whether
+  `<>` ought to be the negation of `=` for a value neither standard
+  contemplates is a question about the **compiler**, and it is open in
+  `doc/sop.md` §7.
 
 What this made visible and does not fix is the **reader**: `ParseNumberNode`
 scales a decade at a time, so `JsonParse` of `1E+300` is not `1e300`.
 `tests/dialect/lib_json_number.pas` prints that as a second column, so the day
 it is corrected the golden says so.
+
+### A TOML document (`PasToml`, ADR-0360)
+
+**The second format module, and the first written against a specification
+rather than against a client** — `PasJson` existed because every LSP message
+is a JSON object (ADR-0203's chapter), and this exists because a program reads
+its own configuration. It is TOML v1.0.0 whole and not a subset, on the
+argument that a configuration file is written by a person against the format
+and not against this parser.
+
+- **Nothing about it is JSON's shape twice.** The tree, the growable byte
+  buffer over `Vec(char)`, the `Fallible` result and the *bytes and not `utf8`*
+  decision are `PasJson`'s and are taken deliberately; what is different is
+  what TOML has and JSON has not.
+- **A date-time is §6.4.3.4's own `TimeStamp` and two fields beside it**, and
+  that is the one place the module asks another for something.
+  `PasTime.ParseStamp` already reads exactly three of TOML's four forms and
+  refuses the two things it has nowhere to put — a fractional second and a zone
+  offset — so `TomlStamp` adds a `nanosecond` and an `offset` and hands the
+  rest over. The calendar rules, the 29th of February included, are spelled
+  once in this tree. What is *not* borrowed is the **spelling**: §6.7.6.9 makes
+  `date(t)` implementation-defined, and TOML's form is RFC 3339's, so the
+  renderer pads its own digits.
+- **An integer is `integer`**, which is narrower than the format requires: one
+  outside -maxint..maxint is `errRange` at its own position, never a wrapped
+  number, and the overflow is detected *before* the multiplication that would
+  trap (ADR-0014). `int64` is not in the interface because
+  `lib/dialect/README.md`'s second rule keeps a boundary shape out of one, and
+  a document is not a boundary.
+- **The redefinition rules are four booleans on a table node**, not a
+  question about whether the table exists. `explicit` (a header defined it, or
+  it is inline), `closed` (inline, or inside a value array), `dotted` (an
+  intermediate of a dotted key) and `tabArray`. That is what makes `[a.b]` then
+  `[a]` legal and `a.b = 1` then `[a]` not, which is the half of TOML a lenient
+  reader gets wrong. `Descend` takes a `forHeader` flag and the two callers'
+  rules are mirror images: a header may pass through what another header made
+  and not through a dotted key's, and a dotted key the other way round.
+- **The renderer writes a document and not the document it was given.**
+  Comments are not in the tree and a string comes back as a basic string
+  however it was written. What it *does* guarantee is the round trip:
+  `tests/dialect/lib_toml.pas` parses its output and renders again, and the two
+  must be equal byte for byte — `format-check`'s third claim (ADR-0284) one
+  format over. A table's values are written before its sub-tables because TOML
+  requires it: after a `[header]` a bare key belongs to that header.
+- **A refusal carries a position, and `TomlPositionOf` is why it is a routine.**
+  The result carries the byte the parser stopped at; turning that into a line
+  and a column is a separate call, so a caller that never fails never pays for
+  it and a caller reporting a *warning* about a value it read gets the same
+  conversion. `tests/dialect/lib_toml_errors.pas` checks the line as well as
+  the code, and its second half is the documents that must go on being
+  accepted — without which the first half is satisfied by refusing everything.
 
 ### A compiler diagnostic in the protocol's shape (`PasLspDiag`)
 

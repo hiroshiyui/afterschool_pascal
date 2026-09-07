@@ -1,0 +1,12 @@
+adr: 0360
+file: lib/dialect/pastoml.pas
+kills: lib_toml_errors
+why: Descend stops refusing a header that passes through a table a dotted key created, so `a.b = 1` followed by `[a]` is accepted. That is TOML's one-definition rule read the lenient way, and it is the half of the format a parser is likeliest to get wrong: the rules turn on how a table came to exist and not on whether it exists. Two lines of the golden turn into ACCEPTED (should not be).
+--- old
+      else if forHeader and got^.dotted then begin
+        e := errSyntax;
+        cur := nil
+      end
+--- new
+      else if forHeader and got^.dotted then
+        cur := got

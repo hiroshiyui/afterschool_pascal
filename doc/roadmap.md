@@ -71,7 +71,7 @@ written by hand. **A cost cell is a report and not an estimate.**
 | --- | --- |
 | [Where development stands](#where-development-stands--2026-09-07) | the one-screen answer, dated: what is released, what is open and awaiting a decision, what is awaiting a program, and what is unavailable |
 | [The language](#the-language) | what the compiler accepts, and what it does not: the concurrency residue, the memory model measured against the goal it is named in, the object model whose middle increment is built and whose other two nobody has committed to, and the limitations a program meets |
-| [The standard library](#the-standard-library) | the thirty-two modules — and **nothing open**, which is a finding and not an omission |
+| [The standard library](#the-standard-library) | the thirty-three modules — and **nothing open**, which is a finding and not an omission |
 | [First-party utilities](#first-party-utilities) | everything outside the compiler: obtaining it, learning it, the editor's questions, packaging, and the platforms it runs on |
 | [Deferred](#deferred-insufficient-resources) | the two rows whose blocker is a resource this project does not have, at the lowest priority there is — with the admission test they had to pass, and the candidate that failed it |
 | [How this page is written](#how-this-page-is-written) | [the goal](#the-goal-adr-0109) and the test it sets, the rules for the next row somebody adds, where the ideas came from, the one structural risk no record can close, and the index of what this file used to carry |
@@ -716,7 +716,7 @@ instrument, and that entry says when the next is worth running.
 
 ## The standard library
 
-**Thirty-two modules, and nothing open.** That is the shortest part of this
+**Thirty-three modules, and nothing open.** That is the shortest part of this
 page and it is a finding rather than an omission: the chapter that listed
 library gaps struck the last of them at v3.2.0, and what replaced it is the
 lesson about how those rows got there.
@@ -773,8 +773,11 @@ the eight rows said why they were blocked and both reasons turned out to be
 wrong, and the two most carefully argued entries each hid something a probe
 found in an afternoon. A row here should be a report, not an estimate.
 
-**Thirty-two modules exist** — eight conforming and twenty-four dialect,
-listed by name in `README.md`'s module table.
+**Thirty-three modules exist** — eight conforming and twenty-five dialect,
+listed by name in `README.md`'s module table. The newest is `PasToml`
+(ADR-0360), and it is the shape the paragraph above describes: somebody wanted
+to read a configuration file, which is a thing a daily program does and this
+library could not.
 
 ### Writing a daily program
 
