@@ -169,13 +169,24 @@ add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 # is built the way anything else here is built: by the compiler this tree just
 # produced, through the driver, with the library on the import path.
 #
-# It is the first Pascal program CMake builds that is not the compiler, so two
-# things are worth saying. The output is removed first for the reason
+# It is the first Pascal program CMake builds that is not the compiler, so
+# three things are worth saying. The output is removed first for the reason
 # `pascalc`'s rule is -- a failed build must not leave the previous binary for
-# `ctest` to pass against. And the dependency list is every library source,
-# not the seven it imports: the glob is a configure-time list either way, and
+# `ctest` to pass against. The dependency list is every library source, not the
+# seven it imports: the glob is a configure-time list either way, and
 # over-depending costs one relink of a small program where under-depending
 # costs a reader built against a heading that has changed.
+#
+# **And it depends on the compiler as a *target*, never on `bin/pascalc` as a
+# file.** Listing another target's custom-command output in `DEPENDS` makes the
+# Makefile generator copy that rule into this target too, so `cmake --build -j`
+# assembles the seed and builds the compiler *twice at once*: `bin/pascalc-seed:
+# Text file busy` on one runner and `Permission denied` on another, from a build
+# that is green at `-j1` and green again on a tree where `bin/pascalc` is already
+# up to date. `add_dependencies` orders the two without duplicating the rule.
+# What that costs is the file dependency: a rebuilt compiler does not by itself
+# rebuild this, so the compiler's own three sources are listed below -- they are
+# ordinary files and copy nothing.
 file(GLOB APASCAL_LIB_SOURCES
      ${CMAKE_SOURCE_DIR}/lib/*.pas ${CMAKE_SOURCE_DIR}/lib/dialect/*.pas)
 set(APASCAL_APCONFIG ${CMAKE_BINARY_DIR}/bin/apconfig)
@@ -195,14 +206,16 @@ add_custom_command(
           --import-path ${CMAKE_SOURCE_DIR}/lib/dialect
           ${CMAKE_SOURCE_DIR}/tools/apconfig.pas
           -o ${APASCAL_APCONFIG}
-  DEPENDS ${APASCAL_PASCALC} pasrt
-          ${CMAKE_SOURCE_DIR}/tools/apconfig.pas
+  DEPENDS ${CMAKE_SOURCE_DIR}/tools/apconfig.pas
           ${CMAKE_SOURCE_DIR}/tools/pascalcc
+          ${APASCAL_SOURCES}
+          ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
           ${APASCAL_LIB_SOURCES}
   COMMENT "Building apconfig, the project-file reader, with pascalcc"
   VERBATIM
 )
 add_custom_target(apconfig ALL DEPENDS ${APASCAL_APCONFIG})
+add_dependencies(apconfig pascalc pasrt)
 
 # ---- Install ----
 #
