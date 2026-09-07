@@ -1,3 +1,5 @@
+![Afterschool Pascal](./doc/afterschool_pascal.jpeg)
+
 # Afterschool Pascal
 
 **Afterschool Pascal is a Pascal dialect** — in the sense Turbo Pascal and Free
