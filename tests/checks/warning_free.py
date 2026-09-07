@@ -61,7 +61,7 @@ from pathlib import Path
 # language that is not a test case. `tests/` is deliberately absent: a case
 # there is already governed by its `.warn` sidecar, in both directions, and
 # sweeping it here would be a second opinion free to drift from the first.
-ROOTS = ("selfhost", "lib", "lsp")
+ROOTS = ("selfhost", "lib", "lsp", "tools")
 
 # Where an `import` is looked for. Named rather than left to
 # AFTERSCHOOL_PASCAL_PATH so that what the gate compiles does not depend on

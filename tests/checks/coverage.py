@@ -130,6 +130,11 @@ def corpus(root):
         # sentence the dialect group above carries, met a second time. Its
         # `.components` sidecar is read by the branch below like any other.
         [root / "lsp" / "pasls.pas"],
+        # The project-file reader (ADR-0361), which no glob reaches for
+        # `pasls.pas`'s reason one directory over: it lives in tools/ because
+        # `pascalcc` has to find it beside itself. Its `.importpath` sidecar
+        # is read by the branch below, so it drives the resolver too.
+        [root / "tools" / "apconfig.pas"],
         # The examples (ADR-0295): a corpus of programs written to be read,
         # each also a case. They resolve their imports by `.importpath`
         # rather than `.components`, so this group is what drives the

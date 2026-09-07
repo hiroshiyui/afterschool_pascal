@@ -112,7 +112,56 @@ sed -i 's|^target.*|# target = ""|' afterschool-pascal.toml
 # restored a file the reader accepts rather than one it merely tolerated.
 "$driver" build >/dev/null || fail "the project stopped building after 6b"
 
-# --- 7. a subcommand is a position, not a word ------------------------------
+# --- 7. the reader is TOML, and not a subset of it (ADR-0361) --------------
+#
+# Every assertion here fails against the `awk` subset this replaced, which is
+# the point: two of them are documents it *accepted* and read wrongly, which
+# is worse than the ones it refused.
+#
+# A comma inside a quoted string. The old reader split an array on every
+# comma, so `-Wl,-rpath,/nosuchdir` was three malformed strings and the file
+# was rejected. Both directions, because a reader that dropped the key would
+# also link: the rpath must link, and a linker option that does not exist must
+# not -- which it can only do if the whole string arrived.
+# Two elements, so that dropping the second is as visible as splitting the
+# first.
+sed -i 's|^# ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-lm"]|' afterschool-pascal.toml
+"$driver" build >/dev/null || fail 'a comma inside a quoted ldflag did not link'
+sed -i 's|^ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-Wl,--no-such-linker-option,x"]|' \
+    afterschool-pascal.toml
+if "$driver" build >/dev/null 2>&1; then
+  fail 'the second element of an ldflags list never reached the link'
+fi
+sed -i 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
+
+# A `#` inside a quoted string. The old reader stripped from the first one
+# before looking at anything, so this silently built `build/demo` -- a wrong
+# answer with a zero exit status, which is the failure this whole tree is
+# written against.
+sed -i 's|^output .*|output      = "build/demo#1"|' afterschool-pascal.toml
+"$driver" build >/dev/null || fail 'a # inside a quoted output path did not build'
+[[ -x 'build/demo#1' ]] || fail 'the # in build/demo#1 was cut off the path'
+sed -i 's|^output .*|output      = "build/demo"|' afterschool-pascal.toml
+
+# A number where the driver wants a string. The old reader refused this
+# because `2` is not `"..."`; this one parses it happily as a TOML integer and
+# has to refuse it on the *schema* instead, which is a different check that
+# has to be there.
+sed -i 's|^opt .*|opt         = 2|' afterschool-pascal.toml
+if "$driver" build >/dev/null 2>&1; then fail 'build.opt = 2 was accepted'; fi
+sed -i 's|^opt .*|opt         = "-O2"|' afterschool-pascal.toml
+
+# And a refusal names a column as well as a line, which is the whole of what a
+# real parser has over a line-at-a-time one.
+cp afterschool-pascal.toml keep.toml
+printf '[build]\nopt = \n' > afterschool-pascal.toml
+msg=$("$driver" build 2>&1 || true)
+[[ $msg == *"afterschool-pascal.toml:2:7:"* ]] ||
+  fail "a syntax error did not name its line and column: $msg"
+cp keep.toml afterschool-pascal.toml && rm -f keep.toml
+"$driver" build >/dev/null || fail "the project stopped building after 7"
+
+# --- 8. a subcommand is a position, not a word ------------------------------
 #
 # ADR-0140's rule for a command line: `build.pas` is a source file and must go
 # on compiling, or the feature has taken a name away from every user.
@@ -123,4 +172,4 @@ cp demo/src/greet.pas greet.pas
 [[ $(./built) == "Hello, world!" ]] || fail "build.pas ran wrongly"
 
 echo "new-project: a generated project builds, runs and tests itself, and the" \
-     "reader refuses four malformed files"
+     "reader reads TOML rather than a subset of it"

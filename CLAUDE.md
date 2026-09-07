@@ -149,7 +149,15 @@ override where it looks for each, which is how CMake points the tests at their
 own build tree. **Two variables add flags and they are not interchangeable**:
 `AFTERSCHOOL_PASCAL_CFLAGS` reaches every `clang`, which is what a sanitizer
 needs, and `AFTERSCHOOL_PASCAL_LDFLAGS` reaches the final link alone, after the
-runtime, which is where a library a program *binds* belongs (ADR-0264).
+runtime, which is where a library a program *binds* belongs (ADR-0264). **Its
+project subcommands read `afterschool-pascal.toml` through `bin/apconfig`**
+(ADR-0361), a program in this language over `PasToml` that CMake builds with
+the compiler the tree just produced and installs beside `pascalc`; `APCONFIG`
+overrides where it is looked for, as `PASCALC` does. It writes `key=value` and
+the driver reads that with a `case` — nothing evaluates it — and the ten keys
+are checked in **both** halves, so no single-point mutation can reach that
+claim. It is the reason `tools/` is now a source root for `warning-free`,
+`format-check` and `variant-check`.
 
 ## Pipeline and its contracts
 
@@ -374,7 +382,7 @@ that proved it.
 | `fuzz` | `tests/checks/fuzz_bounds.err`, and input nobody wrote | does this compiler survive what a person would not have written? (ADR-0275) — every other corpus here is hand-written and so tests what someone thought of. Three families: **truncation**, every prefix of a real source; **the bounds**, one generated input per fixed buffer and per depth limit, each asserting the *message*, because ADR-0012's claim is not that a full buffer is survivable but that it is a diagnostic; and **mutation**. **The seed is fixed**, so what runs is a regression suite and not a search — `--long N` is the search, run by hand |
 | `format-check` | the corpus, through `pascalc --format` | does the formatter preserve the program it was given? (ADR-0279, ADR-0284) — and **it swept nothing on CI until ADR-0282**, having read an empty `git ls-files` answer without looking at the status. **The floor is what made it a failure rather than a silence** — a gate sweeping an empty list prints a number and passes. Three claims over every tracked source: the **token stream** unchanged but for positions, the parser seeing that and nothing else; the **comments** unchanged word for word and before the same tokens, the only claim that catches a dropped one; and formatting the output **again** returning it byte for byte, which is the claim about the *rules*. A fourth covers `--range=L:H`. What none says is that the output is *well* laid out — there is no oracle for that (ADR-0285) |
 | `heap-balance` | `tests/checks/heap_balance.txt` | did every `new` a corpus program makes still come back through `dispose`? (ADR-0183) — **the one oracle here that reads no output**; a leak prints nothing. The runtime tallies `pas_new` against `pas_dispose` and writes the balance at exit when `$PASHEAP_BALANCE` is set. A nonzero balance is **not** a defect — no standard obliges a program to dispose what it created — so it is a catalogue, failing in both directions. It counts no files and no handles, and takes the count at *exit* |
-| `warning-free` | this tree's own `selfhost/`, `lib/` and `lsp/` sources | does the compiler still have **nothing to say** about them? (ADR-0286) — a *test case* is held to the four warnings by its `.warn` sidecar and these have no sidecars, so a warning goes to a build log and nothing fails. Every implementation source must compile with **not one byte on either stream**, which covers every warning added after this one on the day it is written. Its **second** claim makes it fail in both directions: a source named as deliberately broken must still fail, so it cannot become a source that is skipped |
+| `warning-free` | this tree's own `selfhost/`, `lib/`, `lsp/` and `tools/` sources | does the compiler still have **nothing to say** about them? (ADR-0286) — a *test case* is held to the four warnings by its `.warn` sidecar and these have no sidecars, so a warning goes to a build log and nothing fails. Every implementation source must compile with **not one byte on either stream**, which covers every warning added after this one on the day it is written. Its **second** claim makes it fail in both directions: a source named as deliberately broken must still fail, so it cannot become a source that is skipped |
 | `export-unique` | every export-part under `lib/`, read from `--dump-tokens` | do any two library modules export one spelling? (ADR-0298) — the language has no overloading and §6.11.2 puts every imported name into one scope, so a collision costs every importer an `only` or a `qualified`. The rule is absolute and the less general side takes a prefix. It has a floor of modules and exports so that it cannot pass by sweeping nothing |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? — its *base resolution* is checked locally as `model-drift-base`, that half being a pure question about one repository and the half that has broken |
 

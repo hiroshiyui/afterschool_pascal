@@ -4001,6 +4001,36 @@ and not against this parser.
   the code, and its second half is the documents that must go on being
   accepted — without which the first half is satisfied by refusing everything.
 
+### The driver's own configuration (`apconfig`, ADR-0361)
+
+**`PasToml`'s first client that is not a test**, and the reason the module was
+written. `tools/pascalcc` is a shell script (ADR-0009) and `afterschool-pascal.toml`
+is TOML (ADR-0348), so the driver read its own configuration with 45 lines of
+`awk` implementing a declared subset. `tools/apconfig.pas` is that reader
+written in the language, built by CMake with the compiler the tree just
+produced and installed beside `pascalc` as `bin/apconfig`; the driver finds it
+by the three rules ADR-0244 gave it for finding the compiler.
+
+- **A declared subset still accepts documents.** The `awk` reader stripped from
+  the first `#` before looking at anything, so `output = "build/demo#1"` built
+  `build/demo` — a wrong answer with a zero exit status — and it split an array
+  on every comma, so `ldflags = ["-Wl,-rpath,/opt/lib"]` was rejected as three
+  malformed strings. `tests/checks/new_project.sh` §7 asserts both in both
+  directions, and the two mutants named for ADR-0361 put each defect back.
+- **`key=value`, one record per line, and nothing evaluates it.** The old reader
+  printed shell assignments for `eval`, which made somebody's build file the
+  driver's quoting problem; a `read` and a `case` cannot run anything. An array
+  is its key repeated once per element, in order.
+- **The schema is checked in both halves.** Ten keys in `apconfig`, which names
+  an unknown key or a mistyped value; and a final arm in the driver's `case`
+  that refuses a key `apconfig` knows and it does not. Neither half drops what
+  it does not recognise, which is why no single-point mutation reaches that
+  claim.
+- **A syntax error names a line and a column and a schema error names the key.**
+  `TomlPositionOf` converts the byte the parser stopped at; a node carries no
+  position, so the second cannot have one — and the key is the more useful half
+  of that answer.
+
 ### A compiler diagnostic in the protocol's shape (`PasLspDiag`)
 
 **What the language server needed and no module supplied** — the roadmap's

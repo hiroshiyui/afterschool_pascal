@@ -70,7 +70,7 @@ fi
 # The layout, named here rather than only in CMakeLists.txt: a file that stops
 # being installed is a claim that stopped being true, and the message should
 # say which file rather than that a program did not run.
-for f in bin/pascalc bin/pascalcc lib/libpasrt.a \
+for f in bin/pascalc bin/pascalcc bin/apconfig lib/libpasrt.a \
          lib/afterschool/pastext.pas lib/afterschool/dialect/paserror.pas; do
   if [[ ! -e $prefix/$f ]]; then
     echo "--- install-layout: $f was not installed ---" >&2

@@ -1,0 +1,10 @@
+adr: 0361
+file: tools/apconfig.pas
+kills: new-project
+why: Only the first element of an array is written out, so a project whose second link flag is what fails links anyway. It is the other half of what the `awk` subset got wrong about arrays -- that one split them on every comma, so the *pair* of claims in new_project.sh step 7 is what the reader has to satisfy, not either alone.
+--- old
+        for k := 1 to TomlCount(w) do
+          Emit(full, TomlAt(w, k))
+--- new
+        for k := 1 to 1 do
+          Emit(full, TomlAt(w, k))

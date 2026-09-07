@@ -65,7 +65,9 @@
 #   the program, where the executable goes, the optimisation level, the
 #   target, extra import paths and the link flags -- and deliberately **does
 #   not list your modules**: `import greet;` finds `src/greet.pas` by name,
-#   so adding a module is adding a file.
+#   so adding a module is adding a file. It is TOML v1.0.0, read by
+#   `apconfig` beside this script, which is a program written in this
+#   language against `lib/dialect/pastoml.pas` (ADR-0361).
 #
 #   AFTERSCHOOL_PASCAL_CFLAGS adds flags to every `clang` below, which is
 #   how a sanitizer reaches the link as well as the translations.
@@ -107,6 +109,17 @@ pascalc=${PASCALC:-}
 if [[ -z $pascalc ]]; then
   if [[ -x $self/pascalc ]]; then pascalc=$self/pascalc
   else pascalc=$root/build/bin/pascalc
+  fi
+fi
+# ...and the project-file reader, by the same three rules and for the same
+# reason (ADR-0361). It is only reached by `build`, `run` and `test`, so a tree
+# that has not built it still compiles a file; what it must not do is be found
+# on PATH, where a reader and a driver from different releases would be paired
+# by whatever order a user's PATH happens to have.
+apconfig=${APCONFIG:-}
+if [[ -z $apconfig ]]; then
+  if [[ -x $self/apconfig ]]; then apconfig=$self/apconfig
+  else apconfig=$root/build/bin/apconfig
   fi
 fi
 # Extra flags for every `clang` this script runs, word-split from
@@ -174,60 +187,52 @@ die() { echo "pascalcc: $*" >&2; exit 1; }
 
 proj_file=afterschool-pascal.toml
 
-# The TOML subset, and it is a subset on purpose: `[section]`, `key = "string"`,
-# `key = ["a", "b"]`, `#` to end of line, and nothing else. No integers, no
-# booleans, no nesting, no multi-line strings.
+# **The project file is TOML, and a TOML reader reads it** (ADR-0361). It was
+# 45 lines of `awk` implementing a subset -- `[section]`, `key = "string"`,
+# `key = ["a", "b"]` and `#` to the end of the line -- which was the honest
+# answer while this tree had no reader of its own. `lib/dialect/pastoml.pas`
+# is that reader (ADR-0360), and `tools/apconfig.pas` is the program between
+# the two: it reads the document, checks it against the ten keys below, and
+# writes `key=value`, one record per line, an array as its key repeated.
 #
-# **It refuses what it does not understand**, naming the line, because that is
-# this script's rule everywhere else -- a driver that silently ignored an
-# option would be a driver that lies about what it did. A misspelled key in a
-# build file is exactly the defect that is otherwise found by the build being
-# subtly wrong.
+# **Nothing here evaluates what it writes.** The old reader printed shell
+# assignments for `eval`, which made the quoting of somebody's build file into
+# this script's problem; a `read` and a `case` cannot run anything at all.
+#
+# What that buys is not tidiness. The subset was wrong about documents it
+# *accepted*: it stripped from the first `#` before looking at anything, so
+# `output = "build/demo#1"` became `build/demo` in silence, and it split an
+# array on every comma, so `ldflags = ["-Wl,-rpath,/opt/lib"]` was refused as
+# three malformed strings. Both are in `tests/checks/new_project.sh`.
 proj_read() {                     # proj_read <file>; sets proj_<key> variables
-  local file=$1 out
-  out=$(awk -v FS='' '
-    function die(msg) { printf("pascalcc: %s:%d: %s\n", FILENAME, NR, msg) > "/dev/stderr"; exit 1 }
-    { line = $0 }
-    { sub(/[ \t]*#.*$/, "", line); sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }
-    line == "" { next }
-    line ~ /^\[[a-z]+\]$/ {
-      section = substr(line, 2, length(line) - 2)
-      if (section != "project" && section != "build" && section != "test")
-        die("unknown section [" section "]")
-      next
-    }
-    {
-      if (section == "") die("a key outside any [section]")
-      eq = index(line, "=")
-      if (eq == 0) die("not a key = value line")
-      key = substr(line, 1, eq - 1); val = substr(line, eq + 1)
-      sub(/[ \t]+$/, "", key); sub(/^[ \t]+/, "", val)
-      full = section "." key
-      if (full != "project.name" && full != "project.version" &&
-          full != "build.program" && full != "build.output" &&
-          full != "build.opt" && full != "build.target" &&
-          full != "build.import-path" && full != "build.cflags" &&
-          full != "build.ldflags" && full != "test.expected")
-        die("unknown key " full)
-      gsub(/-/, "_", key)
-      name = "proj_" section "_" key
-      if (val ~ /^\[.*\]$/) {
-        inner = substr(val, 2, length(val) - 2)
-        n = split(inner, parts, ",")
-        printf("%s=()\n", name)
-        for (i = 1; i <= n; i++) {
-          p = parts[i]
-          sub(/^[ \t]+/, "", p); sub(/[ \t]+$/, "", p)
-          if (p == "") continue
-          if (p !~ /^".*"$/) die("an array holds quoted strings")
-          printf("%s+=(%s)\n", name, "\047" substr(p, 2, length(p) - 2) "\047")
-        }
-      } else if (val ~ /^".*"$/) {
-        printf("%s=%s\n", name, "\047" substr(val, 2, length(val) - 2) "\047")
-      } else die("a value is a quoted string or an array of them")
-    }
-  ' "$file") || exit 1
-  eval "$out"
+  local file=$1 out line key val
+  [[ -x $apconfig ]] ||
+    die "the project reader is missing at $apconfig; build it, or set APCONFIG"
+  # The whole answer first, and only then acted on: apconfig writes records as
+  # it walks the document, so a refusal half way through has already written
+  # the keys before it. A caller that piped this would act on a prefix of a
+  # file it was told to reject.
+  out=$("$apconfig" "$file") || exit 1
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    key=${line%%=*}; val=${line#*=}
+    case $key in
+      project.name)      proj_project_name=$val ;;
+      project.version)   proj_project_version=$val ;;
+      build.program)     proj_build_program=$val ;;
+      build.output)      proj_build_output=$val ;;
+      build.opt)         proj_build_opt=$val ;;
+      build.target)      proj_build_target=$val ;;
+      build.import-path) proj_build_import_path+=("$val") ;;
+      build.cflags)      proj_build_cflags+=("$val") ;;
+      build.ldflags)     proj_build_ldflags+=("$val") ;;
+      test.expected)     proj_test_expected=$val ;;
+      # The two halves have to agree about the key list, and this is what says
+      # so out loud rather than dropping a key the reader knows and this does
+      # not.
+      *) die "$file: the project reader wrote '$key', which this driver does not know" ;;
+    esac
+  done <<<"$out"
 }
 
 # Find the project file here or in an enclosing directory, and `cd` there, so

@@ -31,9 +31,21 @@ appears below in the release where it still existed.
   ADR-0360.
 - `PasText.RealToStr` — the shortest decimal that reads back as a given real,
   which was `PasJson`'s and is now where two formats can reach it. ADR-0359.
+- **`bin/apconfig`** — the project-file reader `pascalcc build`, `run` and
+  `test` call, written in this language over `PasToml` and installed beside
+  `pascalc`. `APCONFIG` overrides where the driver looks for it, as `PASCALC`
+  does for the compiler. ADR-0361.
 
 ### Fixed
 
+- **`afterschool-pascal.toml` is read as TOML.** The driver read it with a
+  declared subset written in `awk`, which got two kinds of legal document
+  wrong: a `#` inside a quoted string ended the value, so `output =
+  "build/demo#1"` silently built `build/demo`; and an array was split on every
+  comma, so `ldflags = ["-Wl,-rpath,/opt/lib"]` — one flag — was rejected as
+  three malformed strings. Both now read as TOML says, a syntax error names a
+  line *and a column*, and an unknown key or a value of the wrong shape is
+  still refused by name. ADR-0361.
 - **Writing a NaN through `PasJson` stopped the program.** The guard against a
   value with no decimal spelling asked `x <> x`, which is false for a NaN on
   this processor — `<>` on reals is *ordered* not-equal — so the guard never

@@ -126,6 +126,12 @@ using `PasTls` otherwise has to know to set `AFTERSCHOOL_PASCAL_LDFLAGS=-lssl
 -lcrypto`. It is looked for here and in each enclosing directory, as `git`
 looks for its own.
 
+It is **TOML v1.0.0**, read by `bin/apconfig` — a program written in this
+language over `lib/dialect/pastoml.pas` and installed beside the compiler
+(ADR-0361). So a `#` inside a quoted path is a `#`, `["-Wl,-rpath,/opt/lib"]`
+is one flag, and a mistake is reported with a line and a column. A key this
+driver does not know is an error and never a silent no-op.
+
 **It does not list your modules, and it never will.** `import greet;` finds
 `src/greet.pas` because the compiler looks in the importing source's own
 directory and then in each import path — so adding a module is adding a file,

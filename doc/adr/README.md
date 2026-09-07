@@ -369,3 +369,4 @@ the alternatives that were rejected and why.
 | [0358](0358-the-sanitizers-see-compiled-pascal.md) | The sanitizers see compiled Pascal | Accepted |
 | [0359](0359-a-nan-answers-no-to-both-questions.md) | A NaN answers no to both questions | Accepted |
 | [0360](0360-a-toml-document.md) | A TOML document | Accepted |
+| [0361](0361-a-subset-of-a-format-is-a-defect.md) | A subset of a format is a defect | Accepted |

@@ -94,7 +94,7 @@ def strip_positions(text, keep_from, squeeze=False):
 # The floor below is what turned it into a failure rather than a green gate
 # sweeping nothing, which is the whole reason a floor is there.
 #
-# The four roots are `variant_check.sh`'s, for its reason: what git *ignores*
+# The roots are `variant_check.sh`'s, for its reason: what git *ignores*
 # is not part of this, because the count is printed and has to mean the same
 # thing on every machine -- a checkout still holding the retired BSI suite
 # (ADR-0232 gitignored it) has 224 more sources on disk than a clean clone.
@@ -102,7 +102,7 @@ def strip_positions(text, keep_from, squeeze=False):
 # out, a background agent's worktree being a whole second copy of every source
 # inside the checkout. An untracked source that is not ignored stays in scope:
 # a case added and not yet staged is exactly what a sweep should reach.
-ROOTS = ("tests", "selfhost", "lib", "lsp", "examples")
+ROOTS = ("tests", "selfhost", "lib", "lsp", "examples", "tools")
 
 
 def pascal_sources(root: Path) -> list:

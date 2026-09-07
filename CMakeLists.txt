@@ -162,6 +162,48 @@ add_custom_command(
 )
 add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 
+# **The project-file reader** (ADR-0361). `tools/pascalcc` is a shell script
+# and a project file is TOML, so until `lib/dialect/pastoml.pas` existed the
+# driver read its own configuration with 45 lines of `awk` implementing a
+# subset. `tools/apconfig.pas` is that reader written in the language, and it
+# is built the way anything else here is built: by the compiler this tree just
+# produced, through the driver, with the library on the import path.
+#
+# It is the first Pascal program CMake builds that is not the compiler, so two
+# things are worth saying. The output is removed first for the reason
+# `pascalc`'s rule is -- a failed build must not leave the previous binary for
+# `ctest` to pass against. And the dependency list is every library source,
+# not the seven it imports: the glob is a configure-time list either way, and
+# over-depending costs one relink of a small program where under-depending
+# costs a reader built against a heading that has changed.
+file(GLOB APASCAL_LIB_SOURCES
+     ${CMAKE_SOURCE_DIR}/lib/*.pas ${CMAKE_SOURCE_DIR}/lib/dialect/*.pas)
+set(APASCAL_APCONFIG ${CMAKE_BINARY_DIR}/bin/apconfig)
+set(APASCAL_APCONFIG_LDFLAGS "")
+if(APASCAL_STATIC_PASCALC)
+  set(APASCAL_APCONFIG_LDFLAGS "-static")
+endif()
+add_custom_command(
+  OUTPUT ${APASCAL_APCONFIG}
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_APCONFIG}
+  COMMAND ${CMAKE_COMMAND} -E env
+          PASCALC=${APASCAL_PASCALC}
+          AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib
+          AFTERSCHOOL_PASCAL_LDFLAGS=${APASCAL_APCONFIG_LDFLAGS}
+          ${CMAKE_SOURCE_DIR}/tools/pascalcc
+          --import-path ${CMAKE_SOURCE_DIR}/lib
+          --import-path ${CMAKE_SOURCE_DIR}/lib/dialect
+          ${CMAKE_SOURCE_DIR}/tools/apconfig.pas
+          -o ${APASCAL_APCONFIG}
+  DEPENDS ${APASCAL_PASCALC} pasrt
+          ${CMAKE_SOURCE_DIR}/tools/apconfig.pas
+          ${CMAKE_SOURCE_DIR}/tools/pascalcc
+          ${APASCAL_LIB_SOURCES}
+  COMMENT "Building apconfig, the project-file reader, with pascalcc"
+  VERBATIM
+)
+add_custom_target(apconfig ALL DEPENDS ${APASCAL_APCONFIG})
+
 # ---- Install ----
 #
 # **The compiler can be put anywhere** (ADR-0244), and what makes that true is
@@ -174,6 +216,7 @@ add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 #
 #   <prefix>/bin/pascalc                 the compiler, which writes IR
 #   <prefix>/bin/pascalcc                the driver, which assembles and links
+#   <prefix>/bin/apconfig                the project-file reader it calls
 #   <prefix>/lib/libpasrt.a              the runtime
 #   <prefix>/lib/afterschool/*.pas       the library
 #   <prefix>/lib/afterschool/dialect/*.pas
@@ -186,6 +229,7 @@ add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 # slower than a library archive would be and is the whole of what is owed for
 # having no second artefact to keep in step.
 install(PROGRAMS ${APASCAL_PASCALC} ${CMAKE_SOURCE_DIR}/tools/pascalcc
+                ${APASCAL_APCONFIG}
         DESTINATION bin)
 install(TARGETS pasrt ARCHIVE DESTINATION lib)
 file(GLOB APASCAL_LIB ${CMAKE_SOURCE_DIR}/lib/*.pas)
@@ -203,6 +247,7 @@ enable_testing()
 # whatever happens to be in build/.
 set(APASCAL_TEST_ENV
     PASCALC=${APASCAL_PASCALC}
+    APCONFIG=${APASCAL_APCONFIG}
     AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib)
 
 # Every diagnostic the compiler can write is named by some golden (doc/sop.md
