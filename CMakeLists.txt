@@ -788,7 +788,8 @@ endif()
 # Skips without llc, as verify-lowering does without z3: llc is LLVM's, and
 # ADR-0085's claim is that the build needs nothing of LLVM's.
 add_test(NAME llc-second-backend
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.sh
+         COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.py
                  ${CMAKE_BINARY_DIR})
 set_tests_properties(llc-second-backend PROPERTIES
                      SKIP_RETURN_CODE 77

@@ -152,6 +152,15 @@ one — a mechanical edit repeated by hand goes wrong the same way every time �
 and the answer is the same as everywhere else here: count them rather than
 read them.
 
+**`llc-second-backend` is the eighth**, and the first whose *skip* is part of
+what was compared. Four arms: the real build, which assembles 158 modules and
+then builds two more compilers through `llc` at `-O0` and `-O2` and requires
+each to translate all three program-components to identical IR; `llc` absent,
+which is the skip with 77; `llc` absent with `LLC_REQUIRE` set, which is the
+refusal ADR-0330's convention exists for; and a build directory that is not
+there. A gate that can skip has to be shown skipping *and* refusing to skip,
+or half of it is untested by the conversion.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

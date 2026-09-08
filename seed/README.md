@@ -15,7 +15,7 @@ clang -Wno-override-module seed/*.ll build/lib/libpasrt.a -lm -o pascalc
 ```
 
 **How many files there are is the seed's business, and both CMake and
-`tests/checks/llc_check.sh` match them with a glob.** The compiler is three
+`tests/checks/llc_check.py` match them with a glob.** The compiler is three
 §6.13 program-components since ADR-0233, so a refreshed seed is three modules
 named after them — `aptypes.ll`, `apfront.ll`, `compiler.ll` — and
 `seed/refresh.sh` removes the old ones before writing them, since a module left

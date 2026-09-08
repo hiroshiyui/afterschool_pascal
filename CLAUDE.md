@@ -846,7 +846,7 @@ checked by *running* what it produces against the same `tests/*.out` and
 cannot see a miscompilation of the compiler**, both stages coming from *one
 binary*: a `clang` that got a corner of `compiler.pas` wrong would build a wrong
 compiler that reproduced itself exactly, and every golden would agree, having
-been written by it. `tests/checks/llc_check.sh` is what does — the compiler
+been written by it. `tests/checks/llc_check.py` is what does — the compiler
 built a second way, through `llc` at `-O0` and at `-O2`, required to translate
 `compiler.pas` to byte-identical IR. It **skips without `llc`**, as
 `verify-lowering` does without z3, because ADR-0085's claim is that the build
