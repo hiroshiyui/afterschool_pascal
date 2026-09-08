@@ -254,13 +254,12 @@ fi
 posix_used=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$posix_src" |
              sed 's/.*<\(.*\)>/\1/' | while read -r h; do
                base=${h%.h}
-               # Written out rather than on one line: bash 3.2, which is
-               # what macOS ships, cannot parse an empty command list before
-               # `;;` when the whole case is a single line.
-               case " $iso_headers " in
-                 *" $base "*) ;;
-                 *) echo "<$h>" ;;
-               esac
+               # An `if` and not a `case`, because this sits inside `$( )`:
+               # bash 3.2, which is what macOS ships, scans a command
+               # substitution by counting parentheses, so the `)` that closes
+               # a case pattern ends the substitution early and what follows
+               # is a syntax error. There is no paren here to miscount.
+               if [[ " $iso_headers " != *" $base "* ]]; then echo "<$h>"; fi
              done | sort -u)
 posix_named=$(grep -oE '^header: <[a-z0-9_/]+\.h>' "$list" |
               sed 's/^header: //' | sort -u)
@@ -343,11 +342,9 @@ fi
 uni_extra=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$uni_src" |
             sed 's/.*<\(.*\)>/\1/' | while read -r hh; do
               base=${hh%.h}
-              # One line per arm, for the reason the same shape above gives.
-              case " $iso_headers " in
-                *" $base "*) ;;
-                *) echo "<$hh>" ;;
-              esac
+              # An `if` and not a `case`, for the reason the same shape above
+              # gives: this is inside `$( )` and bash 3.2 counts parentheses.
+              if [[ " $iso_headers " != *" $base "* ]]; then echo "<$hh>"; fi
             done | sort -u)
 if [[ -n $uni_extra ]]; then
   echo "runtime-isoc: runtime/pasrt_unicode.c includes a non-ISO header:" >&2
@@ -390,10 +387,11 @@ task_extra=$(grep -oE '^[[:space:]]*#[[:space:]]*include[[:space:]]*<[^>]+>' \
              grep -oE '<[^>]+>' | tr -d '<>' | sort -u |
              while read -r hh; do
                base=${hh%.h}
-               case " $iso_headers $task_allowed " in
-                 *" $base "*) ;;
-                 *) echo "<$hh>" ;;
-               esac
+               # An `if` and not a `case`, for the reason the two above it
+               # give: this is inside `$( )` and bash 3.2 counts parentheses.
+               if [[ " $iso_headers $task_allowed " != *" $base "* ]]; then
+                 echo "<$hh>"
+               fi
              done)
 if [[ -n $task_extra ]]; then
   echo "runtime-isoc: runtime/pasrt_task.c includes a header outside ISO C" \
