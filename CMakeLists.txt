@@ -995,7 +995,7 @@ set_tests_properties(fpc-differential PROPERTIES
 # documented dependency; TLS_REQUIRE is how a CI job refuses to pass by
 # skipping. Slow, because it makes two RSA keys and builds the probe twice.
 add_test(NAME tls
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/tls.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/tls.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
 set_tests_properties(tls PROPERTIES
                      SKIP_RETURN_CODE 77

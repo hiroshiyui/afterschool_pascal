@@ -407,6 +407,40 @@ document** — feeding it the Free Pascal reference as `iso10206.pdf` yields 190
 "clauses", a bogus inventory and exit 0. That last is a property of
 `extract.py`, which no conversion touched, and it belongs in `doc/sop.md` §7.
 
+**`runtime-isoc` is the twenty-sixth**, 22 arms: both directions of
+`nonstandard_c.txt`, the emitted half of the harvest, the skip, and every one
+of the five strict compiles made to fail. Two arms diverge for this record's
+own reason — bash reports a missing command in the operator's locale, naming
+its own line number. It also found that the **fifth** strict compile spells
+`clang` literally where the other four honour `APASCAL_CLANG`, so on a machine
+where the two differ that pass answers about another compiler; preserved with
+a comment and filed in `doc/sop.md` §7.
+
+**`tls` is the twenty-seventh, and it was reporting its findings to nowhere.**
+`exec 3<>"/dev/tcp/127.0.0.1/$p" 2>/dev/null` — `exec` with no command makes
+its redirections **permanent for the shell**, so from the first *successful*
+port probe, which is every ordinary run, fd 2 was `/dev/null` for the rest of
+the script. Six diagnostics were swallowed: the probe that would not build,
+the probe that exited non-zero, both "did not print what was expected" diffs,
+the sanitizer's finding, and the probe failing under it. The gate still exited
+1, so it failed correctly and printed **nothing to read**. The redirection is
+backwards in the other direction too: when the connect fails, fd 3 fails
+first, `2>/dev/null` is never applied, and bash's own `connect:` message leaks
+in the operator's locale.
+
+That is why five of its arms could not be compared against the shell as
+written — the shell writes nothing. Each was compared twice: stdout and exit
+status against the real script, then everything against a scratch copy with
+that one line corrected, where all five are byte-identical. **The conversion
+has no such construct and prints what the shell intended.** Twenty arms
+besides, including the gate's own historical mutation — `SSL_VERIFY_PEER` set
+to 0, which ADR-0264 names as the defect that fails quietly — and its
+eight-constant floor, which turns out to be unreachable: the row-count check
+sits below a `diff` that fires first on any change to the row count.
+
+**Nothing here detects a harness whose diagnostics go nowhere**, which is the
+general form of that defect and is now a row in `doc/sop.md` §7.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

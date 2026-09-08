@@ -56,7 +56,7 @@ breakdown, so a regression names the file that moved.
     so never reach the runtime at all, and the 12 that want file names on
     their command line, which is `sanitize.sh`'s own documented limit;
   - `tests/dumps/`, `lsp/`, `tests/spec/` and `selfhost/`, which have harnesses
-    of their own that this does not drive, and the gate harnesses -- `tls.sh`
+    of their own that this does not drive, and the gate harnesses -- `tls.py`
     most of all -- for `lib_coverage.txt`'s reason: a number that moves with
     whether a machine has libssl is not a ratchet;
   - a program killed by a signal, the profile being written by an `atexit`
@@ -231,7 +231,7 @@ def main():
             "# name: it is the sockets, the directory walk, the process and",
             "# the clock, and their error paths ask what a corpus running on a",
             "# working machine cannot arrange -- a failed bind, a directory",
-            "# that vanished mid-walk. tests/checks/tls.sh drives more of it",
+            "# that vanished mid-walk. tests/checks/tls.py drives more of it",
             "# and is not swept here, for lib_coverage.txt's reason: a number",
             "# that moves with whether a machine has libssl is not a ratchet.",
             "#",

@@ -4795,7 +4795,7 @@ declaration can reach — `SSL_CTRL_SET_TLSEXT_HOSTNAME`,
 `TLS1_2_VERSION`, `SSL_VERIFY_PEER`, `X509_V_OK` — so the source holds copies.
 A wrong copy does not fail loudly: `SSL_VERIFY_PEER` written as 0 is
 `SSL_VERIFY_NONE`, verification is off, and every behavioural case stays green.
-`tests/checks/tls.sh` compiles a C program against the real headers and diffs
+`tests/checks/tls.py` compiles a C program against the real headers and diffs
 the numbers, which is ADR-0185's `foreign-layout` shape applied to values
 rather than to offsets, and it counts the rows so a renamed constant is a
 constant the check stops looking at.

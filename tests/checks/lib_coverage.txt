@@ -8,10 +8,10 @@
 # the modules that moved rather than only a number.
 #
 # **Two modules read 0 and are not uncovered.** PasTls and
-# PasHttps are exercised by tests/checks/tls.sh, which is a gate
+# PasHttps are exercised by tests/checks/tls.py, which is a gate
 # harness and not a corpus case, so this sweep never links them.
 # Driving it from here was rejected for the reason ADR-0346
-# learned the same day: tls.sh skips without libssl, so the number
+# learned the same day: tls.py skips without libssl, so the number
 # would move with whether a machine has a package, and a ratchet
 # whose answer depends on the toolchain is not a ratchet. What
 # covers them is `tls`, with TLS_REQUIRE and a CI job refusing to
