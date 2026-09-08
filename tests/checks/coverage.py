@@ -220,7 +220,7 @@ def corpus(root):
     # That is doc/sop.md §7's "coverage.py sees the sources, not the harnesses"
     # closed for the one harness whose flags this file could mirror -- and the
     # row stays for the shell harnesses that build compilers of their own:
-    # irtest.py, producttest.sh and verify.py are invisible here.
+    # irtest.py, producttest.py and verify.py are invisible here.
     for job in list(jobs):
         src, flags = job[0], job[1]
         if src is not None and not any(f.startswith("--dump") for f in flags):
@@ -256,11 +256,11 @@ def corpus(root):
 
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.py,
-    # producttest.sh, verify.py -- drive the compiler in ways no glob finds.
+    # producttest.py, verify.py -- drive the compiler in ways no glob finds.
     # That is a limitation of the instrument and is recorded in doc/sop.md §7;
     # these two are added rather than left to misreport, because
-    # `--version` *is* asserted (producttest.sh compares it against
-    # CMakeLists.txt) and `-h` is too (producttest.sh checks it documents every
+    # `--version` *is* asserted (producttest.py compares it against
+    # CMakeLists.txt) and `-h` is too (producttest.py checks it documents every
     # flag ParseArgs accepts). Running them here claims only what is true: some
     # case enters these procedures.
     hello = str(root / "tests" / "hello.pas")
@@ -301,7 +301,7 @@ def corpus(root):
     # ordinary program because what it changes is two lines of the module the
     # code generator writes; the refusing arm is a driver message, which
     # diagnostic_coverage.py filters out as not being about a program, so
-    # nothing but this reaches it. selfhost/producttest.sh is what asserts both.
+    # nothing but this reaches it. selfhost/producttest.py is what asserts both.
     jobs.append((hello, ["--target=aarch64-linux-gnu"]))
     # ADR-0364: the emitter writes a slice's count at the target's pointer
     # width, so it has an arm only an ILP32 target takes -- at the argument
@@ -314,7 +314,7 @@ def corpus(root):
     jobs.append((None, ["--target=riscv64-linux-gnu", hello]))
 
     # The command-line error paths, for the same reason and with the same
-    # caveat: producttest.sh is what asserts each message and its non-zero
+    # caveat: producttest.py is what asserts each message and its non-zero
     # exit. They are here because nothing else drives them --
     # diagnostic_coverage.py filters `pascalc: ` messages out as driver output,
     # so the gate that counts messages is blind to these by construction, and
@@ -327,7 +327,7 @@ def corpus(root):
     # was raised. The filler is a repeated `--dump-limits`
     # because it is a flag that is a no-op when written twice: what is being
     # exercised is the *position*, not the option. It was `--std=iso7185`
-    # until ADR-0232 removed the modes, and producttest.sh fills its own
+    # until ADR-0232 removed the modes, and producttest.py fills its own
     # copy of this check the same way.
     filler = ["--dump-limits"] * 69          # + source + -o + name = argMax
     jobs.append((hello, list(filler)))

@@ -138,7 +138,7 @@ When landing a change, always follow these steps:
    ctest --test-dir build -j"$(nproc)" --output-on-failure   # 795 cases, 86 s
    python3 verify/verify.py --pascalc tools/pascalcc --crosscheck
    selfhost/irtest.py build/bin/pascalc            # stage 2 = stage 3
-   selfhost/producttest.sh build/bin/pascalc build/lib
+   selfhost/producttest.py build/bin/pascalc build/lib
    ```
 
    If a gate's catalogue moved — `line_coverage.txt`, `heap_balance.txt`,

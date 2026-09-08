@@ -1943,7 +1943,7 @@ able to make.
     conforming program contains one; what is extended is the processor, in the
     dimension where a run-time error has always exited 1 with no clause saying
     so. It exists because `pascalc` has to be able to report failure, and
-    **`selfhost/producttest.sh` is the only thing that checks it does** —
+    **`selfhost/producttest.py` is the only thing that checks it does** —
     deleting the compiler's own `halt(1)` passed the whole suite as it then
     stood, goldens comparing what a program wrote and never how it stopped.
   - **A builtin's enumerator has to be placed, not written where it reads
@@ -2598,7 +2598,7 @@ able to make.
   over. The cost is literal — 48 more declarations and 48 more arms of `Arg`'s
   case-statement — because a program-parameter is a name and not a subscript.
   Two harnesses count in terms of the bound and moved with it:
-  `selfhost/producttest.sh` builds a command line of `argMax` words and one of
+  `selfhost/producttest.py` builds a command line of `argMax` words and one of
   `argMax + 1`, and `tests/checks/coverage.py` fills one to exactly `argMax` so
   that every arm of `Arg` is reached. Without the second, 48 arms would have
   been reported unreached — `line-coverage`'s ratchet doing its job.
@@ -3254,7 +3254,7 @@ than at each of the several messages beneath it, so one added later inherits
 the answer. **The corpus cannot reach this**: `run_test.py` translates every
 `.components` entry separately and first and gives up if one fails, so no case
 can hand `--import` a component that does not translate alone. The probe is in
-`selfhost/producttest.sh` over `tests/checks/importdiag/`, it fails in both
+`selfhost/producttest.py` over `tests/checks/importdiag/`, it fails in both
 directions — a fix naming the component for *everything* passes the first half
 and fails the second — and
 `0210-import-diagnostic-names-the-client.mut` puts the defect back and is

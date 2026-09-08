@@ -1092,7 +1092,7 @@ set_tests_properties(selfhost-codegen PROPERTIES TIMEOUT 1800)
 # with every other test still green — what this checks is the build wiring, not
 # the compiler.
 add_test(NAME pascalc-product
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/producttest.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/selfhost/producttest.py
                  ${APASCAL_PASCALC} ${CMAKE_BINARY_DIR}/lib)
 set_tests_properties(pascalc-product PROPERTIES TIMEOUT 300)
 

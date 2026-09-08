@@ -495,6 +495,34 @@ now keep a final line that has no newline, where bash's `read` dropped it. No
 sidecar in the tree lacks one, so no case means two things today — but the two
 agree with each other, which is what the rule asks.
 
+**`selfhost/producttest` is the thirty-first and the last.** Every tracked
+shell script under test is now Python; `tools/pascalcc` remains one by the
+decision of 2026-09-07, and this harness is the thing that reads it. Twelve
+arms compared: the real run of 29 checks; no arguments and one argument; a
+compiler that is not executable; a named file with no `.out`; one that will
+not translate; a compiler that exits 0 and writes no IR; a `-h` that writes
+nothing; a version that disagrees and a `CMakeLists.txt` naming none; a flag
+the parser knows and the help text does not; a driver option and a subcommand
+dropped from the help text; and a driver that mangles a dump instead of
+passing it through.
+
+Two things stay shell's own and should. `tools/pascalcc` is a shell script, so
+the checks that derive its options and subcommands parse *its* text — the
+`while` loop's case arms and the `case ${1:-}` dispatch — and the SSE2 check
+traces it with `bash -x`, because what is asserted is the command line the
+driver builds and not anything in the IR. What did go is `timeout`: a
+subprocess deadline is an argument to `subprocess.run` and needs no coreutils,
+which is what the shell's three-way `timeout`/`gtimeout`/nothing fallback for
+macOS was working around.
+
+**One arm exposed a weakness in the check itself.** Deleting `-c`'s own line
+from the driver's help text leaves both versions passing, because the token
+still occurs in another line's prose — "an object to link, from a component
+compiled with `-c`". The shell's comment says the token test was what fixed
+this class; it narrowed it and did not close it. Removing both mentions does
+fire. Recorded in `doc/sop.md` §7, not fixed: the two versions agree, so this
+is a fact about the check and not about the conversion.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

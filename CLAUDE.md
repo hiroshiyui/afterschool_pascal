@@ -67,7 +67,7 @@ ctest --test-dir build -j"$(nproc)" --output-on-failure   # 86 s; 290 s without 
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
 tests/run_test.py tools/pascalcc tests/control.pas   # without ctest
 selfhost/irtest.py build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
-selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
+selfhost/producttest.py build/bin/pascalc build/lib   # the built pascalc itself
 cmake --install build --prefix /opt/apascal  # bin/, lib/, lib/afterschool/
 seed/refresh.py                             # regenerate the seed (release only)
 tests/checks/seed_current.py                # is the committed seed this source's? (release only)
@@ -391,7 +391,7 @@ that proved it.
 All but `model-drift` are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is the corpus being enumerated
 by glob, so the harnesses that build a compiler of their own — `irtest.py`,
-`producttest.sh`, `verify.py` — are invisible to it; that is a row in
+`producttest.py`, `verify.py` — are invisible to it; that is a row in
 `doc/sop.md` §7. The *flags* half of it is closed: the coverage corpus sweeps
 `--dump-all` over every source, worth 195 statements reported unreached while an
 oracle reached them on every run, and since ADR-0274 it sweeps `--coverage` too,
@@ -713,7 +713,7 @@ lexer → the node kinds and the parser → Sema → CodeGen → a `tests/` pair
 **The bootstrap closes**: the compiler compiles itself and stage 2 equals
 stage 3 — in **every** module since ADR-0233, because comparing only the
 program's would let a change in ApTypes or ApFront reproduce itself unnoticed.
-`selfhost/producttest.sh` is what checks the built artefact; the other three
+`selfhost/producttest.py` is what checks the built artefact; the other three
 harnesses build a stage-1 compiler of their own in a temporary directory, so
 `build/bin/pascalc` could be missing or stale with every one of them green.
 

@@ -779,7 +779,7 @@ jobs:
     #
     # What is known to differ, from reading rather than from a run: there is
     # no `-static` and no `ldd` (`tools/release.py` allows for both), no
-    # `timeout` (`irtest.py` and `producttest.sh` fall back), BSD `sed -i`
+    # `timeout` (`irtest.py` and `producttest.py` fall back), BSD `sed -i`
     # (the four harnesses that edit in place go through a temporary), no
     # LeakSanitizer on arm64 (`sanitize.py` asks for it on Linux only), and
     # ld64 spells an undefined symbol with a leading underscore (`pascalcc`

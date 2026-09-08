@@ -1,6 +1,6 @@
 # `tests/checks/importdiag/` — a diagnostic about an imported component
 
-Two sources for one probe in `selfhost/producttest.sh`, and they are here
+Two sources for one probe in `selfhost/producttest.py`, and they are here
 rather than under `tests/` for the same reason `stdannot/` is: **the ordinary
 harness cannot express this case.**
 
