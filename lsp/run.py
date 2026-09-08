@@ -104,6 +104,31 @@ os.execvp(%r, [%r] + sys.argv[1:])
 """
 
 
+def read_exact(p):
+    """A golden, byte for byte.
+
+    `Path.read_text()` translates newlines: it turns `\r\n` into `\n`, so a
+    golden holding LSP framing compares equal to output that has lost its
+    carriage returns -- which is precisely the claim these goldens exist to
+    make. Read with translation off.
+    """
+    with open(p, 'r', encoding='utf-8', errors='surrogateescape',
+              newline='') as f:
+        return f.read()
+
+
+def split_lines(text):
+    """Lines as `diff` counts them: broken at `\n` and nowhere else.
+    `str.splitlines` also breaks at a bare carriage return, and every golden
+    here is LSP framing."""
+    out = text.split('\n')
+    tail = out.pop()
+    lines = [ln + '\n' for ln in out]
+    if tail:
+        lines.append(tail)
+    return lines
+
+
 def gnu_date(p):
     ns = p.stat().st_mtime_ns
     t = time.localtime(ns // 10**9)
@@ -114,8 +139,7 @@ def gnu_date(p):
 def diff_u(a, b):
     """`diff -u a b`, printed where the shell printed it -- standard output."""
     d = difflib.unified_diff(
-        a.read_text(errors='surrogateescape').splitlines(keepends=True),
-        b.read_text(errors='surrogateescape').splitlines(keepends=True),
+        split_lines(read_exact(a)), split_lines(read_exact(b)),
         str(a), str(b), gnu_date(a), gnu_date(b))
     lines = list(d)
     if not lines:
@@ -281,15 +305,15 @@ def replay(pascalcc, pascalc, work):
         # majority.
         actual, note_actual = out_path, note_path
         if Path(stem + '.workspace').is_file():
-            norm = out_path.read_text(errors='surrogateescape')
+            norm = read_exact(out_path)
             norm = norm.replace(root, '%ROOT%')
             norm = re.sub(r'Content-Length: [0-9]*', 'Content-Length: -', norm)
             actual = work / (name + '.norm')
-            actual.write_text(norm, errors='surrogateescape')
+            actual.write_bytes(norm.encode('utf-8', 'surrogateescape'))
             note_actual = work / (name + '.note.norm')
-            note_actual.write_text(
-                note_path.read_text(errors='surrogateescape').replace(
-                    root, '%ROOT%'), errors='surrogateescape')
+            note_actual.write_bytes(
+                read_exact(note_path).replace(root, '%ROOT%').encode(
+                    'utf-8', 'surrogateescape'))
 
         if diff_u(expected_out, actual):
             print('--- %s: the session differs (expected vs actual above) ---'

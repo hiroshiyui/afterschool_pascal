@@ -74,6 +74,30 @@ from pathlib import Path
 sys.stdout.reconfigure(line_buffering=True)
 
 
+def read_exact(p):
+    """A golden, byte for byte.
+
+    `Path.read_text()` translates newlines: it turns `\r\n` into `\n`, so a
+    golden holding LSP framing compares equal to output that has lost its
+    carriage returns -- which is precisely the claim these goldens exist to
+    make. Read with translation off.
+    """
+    with open(p, 'r', encoding='utf-8', errors='surrogateescape',
+              newline='') as f:
+        return f.read()
+
+
+def split_lines(text):
+    """Lines as `diff` counts them: broken at `\n` and nowhere else.
+    `str.splitlines` also breaks at a bare carriage return."""
+    out = text.split('\n')
+    tail = out.pop()
+    lines = [ln + '\n' for ln in out]
+    if tail:
+        lines.append(tail)
+    return lines
+
+
 def gnu_date(p):
     ns = p.stat().st_mtime_ns
     t = time.localtime(ns // 10**9)
@@ -158,9 +182,9 @@ def compare(pascalc, source, src, name, expected, flags, imports,
     rewritten = actual.replace(source, '<source>')
     rewritten = rewritten.replace(os.path.dirname(source) + '/', '<dir>/')
     got = work / 'actual'
-    got.write_text(rewritten)
-    a = expected.read_text().splitlines(keepends=True)
-    b = rewritten.splitlines(keepends=True)
+    got.write_bytes(rewritten.encode('utf-8', 'surrogateescape'))
+    a = split_lines(read_exact(expected))
+    b = split_lines(rewritten)
     if a != b:
         sys.stdout.writelines(difflib.unified_diff(
             a, b, str(expected), '/dev/fd/63',

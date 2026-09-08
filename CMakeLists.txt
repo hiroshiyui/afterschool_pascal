@@ -859,7 +859,7 @@ set_tests_properties(predicate-kinds-like PROPERTIES
 # Skips (77) on a C library that declares POSIX even under __STRICT_ANSI__,
 # because there the question cannot be asked at all.
 add_test(NAME runtime-isoc
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/runtime_isoc.sh)
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/runtime_isoc.py)
 set_tests_properties(runtime-isoc PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600

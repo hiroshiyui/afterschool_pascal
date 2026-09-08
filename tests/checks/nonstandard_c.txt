@@ -6,7 +6,7 @@
 # doc/roadmap.md's cross-platform chapter, where this replaced the claim that
 # "the file model is a POSIX assumption".
 #
-# tests/checks/runtime_isoc.sh reads this file and fails in both directions: a
+# tests/checks/runtime_isoc.py reads this file and fails in both directions: a
 # fifth dependency appearing, and one of these four going away while the
 # entry stays. Add a name only with the argument for why ISO C could not do it.
 #

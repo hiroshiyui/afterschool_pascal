@@ -3672,7 +3672,7 @@ silences. All four earlier dependencies happened to be functions.
   loses library routines and not the language: `pascalc` still builds, still
   compiles itself, and every conforming program still runs. That is what makes
   the split safe rather than tidy.
-  `tests/checks/runtime_isoc.sh` fails on `#include <dirent.h>` there, and on a
+  `tests/checks/runtime_isoc.py` fails on `#include <dirent.h>` there, and on a
   `pas_` name defined in that file.
 
 **A foreign answer of a record is a copy** (ADR-0187, AP 6.7.7.8). The last row
