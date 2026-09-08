@@ -1,4 +1,4 @@
-# What `tests/checks/sanitize.sh` finds and this tree has argued for
+# What `tests/checks/sanitize.py` finds and this tree has argued for
 # (ADR-0261). One case per line, then the argument.
 #
 # It fails in both directions, as every catalogue here does: a case that

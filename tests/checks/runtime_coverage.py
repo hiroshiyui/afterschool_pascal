@@ -31,7 +31,7 @@ source-based coverage instruments at the same place for the same reason, which
 makes this number the *denominator* those two gates were missing: an
 uninstrumented line is a line ASan, UBSan, LSan and TSan looked at zero times.
 
-**It is a mode of `sanitize.sh` and not a second harness.** That script already
+**It is a mode of `sanitize.py` and not a second harness.** That script already
 builds a second `libpasrt.a` with extra flags and links every case against it,
 reading each case's `.components`, `.importpath`, `.importenv`, `.opt` and
 `.in` sidecars -- 120 lines that took 47 silently unlinked cases out of this
@@ -54,7 +54,7 @@ breakdown, so a regression names the file that moved.
   - compiled Pascal, deliberately -- that is the other two gates' question;
   - the 195 cases with no `.out`, which are meant to fail at compile time and
     so never reach the runtime at all, and the 12 that want file names on
-    their command line, which is `sanitize.sh`'s own documented limit;
+    their command line, which is `sanitize.py`'s own documented limit;
   - `tests/dumps/`, `lsp/`, `tests/spec/` and `selfhost/`, which have harnesses
     of their own that this does not drive, and the gate harnesses -- `tls.py`
     most of all -- for `lib_coverage.txt`'s reason: a number that moves with
@@ -113,7 +113,7 @@ def main():
 
     # llvm-profdata and llvm-cov are a separate package from clang on most
     # distributions, exactly as compiler-rt is -- so this is asked the way
-    # `sanitize.sh` asks for its checker, before anything is built.
+    # `sanitize.py` asks for its checker, before anything is built.
     for tool in ("llvm-profdata", "llvm-cov", "clang", "ar"):
         if shutil.which(tool) is None:
             return skip("no %s" % tool, require)
@@ -131,7 +131,7 @@ def main():
         # `%p` and not a fixed name: 377 programs run in one directory and each
         # would otherwise overwrite the last, which is a sweep reporting the
         # coverage of whichever case happened to be alphabetically final. The
-        # path is absolute because `sanitize.sh` runs each program with its own
+        # path is absolute because `sanitize.py` runs each program with its own
         # working directory.
         env["LLVM_PROFILE_FILE"] = os.path.join(raw, "%p.profraw")
         env["PASCALC"] = pascalc
@@ -142,10 +142,10 @@ def main():
             env["SANITIZE_REQUIRE"] = require
 
         run = subprocess.run(
-            [str(root / "tests" / "checks" / "sanitize.sh"), pascalcc, pascalc],
+            [str(root / "tests" / "checks" / "sanitize.py"), pascalcc, pascalc],
             env=env)
         if run.returncode == 77:
-            return skip("sanitize.sh has nothing to run under", require)
+            return skip("sanitize.py has nothing to run under", require)
         if run.returncode != 0:
             sys.stderr.write("runtime-coverage: the corpus sweep failed\n")
             return 1

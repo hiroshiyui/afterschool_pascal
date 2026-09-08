@@ -25,7 +25,7 @@ heap_balance.py drives this without being told twice where the compiler is.
 
 A session needs its own harness, and the reason is the same one tests/dumps/
 has: what is compared here is not what a compiled program printed but what a
-*protocol* did, and the two differ in three ways tests/run_test.sh has no
+*protocol* did, and the two differ in three ways tests/run_test.py has no
 sidecar for.
 
   * The input is framed. `Content-Length: N<CR><LF><CR><LF>` and then exactly
@@ -212,7 +212,7 @@ def replay(pascalcc, pascalc, work):
     # then invokes `pascalc` once per document. Both are Pascal programs on
     # the same runtime, so an inherited PASHEAP_BALANCE would have them count
     # their own allocations into the same file -- which is
-    # `tests/run_test.sh`'s hazard, met twice over. It is taken out of the
+    # `tests/run_test.py`'s hazard, met twice over. It is taken out of the
     # environment here, put back only around the server, and stripped again
     # from what the server starts.
     heap_balance = os.environ.pop('PASHEAP_BALANCE', '')

@@ -235,7 +235,7 @@ own exception and compare by length instead.
 
 **And since ADR-0293 the message says where.** `runtime error: array index
 out of bounds (1..3) at prog.pas:18:17` -- the position after the message,
-because five readers recognise a trap by the prefix and `sanitize.sh` tells it
+because five readers recognise a trap by the prefix and `sanitize.py` tells it
 from UBSan's by UBSan's position coming *first*; the file as it was named to
 the compiler, one constant per module, never through the 255-character
 message buffer; the column the construct's own. Two classes, two routes. An
@@ -425,7 +425,7 @@ reference, and what makes a recursive type possible. `resolvePointer` records a
 compiler*: codegen alloca's `PAS_FILE_SIZE` bytes in the frame and only ever
 passes their address, and `struct pas_file` is private to `runtime/pasrt.c`.
 The size lives in `runtime/pasrt.h` as `PAS_FILE_SIZE` and in the compiler as
-`fileSize`, in two files that cannot include one another — `selfhost/irtest.sh`
+`fileSize`, in two files that cannot include one another — `selfhost/irtest.py`
 checks they agree, which is the same arrangement the version number has. A
 `_Static_assert` fails the build if the struct outgrows it.
 
@@ -1980,7 +1980,7 @@ able to make.
     another. It is deliberately not on ADR-0032's open-file list — the program
     does not contain it, so no block exit is responsible for it.
   - `PAS_FILE_SIZE` went 96 → 112, and `fileSize` in the Pascal compiler with
-    it; `irtest.sh` is what checks the two still agree.
+    it; `irtest.py` is what checks the two still agree.
   - Both are parsed *by name*, as `read` and `write` are, because the parser
     has no scope. That was a stated **deviation** — a program could not declare
     its own, where §6.7.5.5 makes them required identifiers — until ADR-0087
@@ -2202,8 +2202,8 @@ able to make.
     machine's zone. §6.7.5.8 makes the meaning implementation-defined, and this
     is the only definition under which the eight fields can be checked at all:
     no program knows what day it is except by asking the same function, so an
-    off-by-one is true of almost every moment. `tests/run_test.sh` and
-    `selfhost/irtest.sh` each export it from a `name.epoch` file, beside the
+    off-by-one is true of almost every moment. `tests/run_test.py` and
+    `selfhost/irtest.py` each export it from a `name.epoch` file, beside the
     `name.in` convention they already had, and each **unsets** it otherwise so
     an inherited one cannot replace the clock in the case that is testing the
     clock. `tests/extended/timestamp_fixed.pas` is the golden that names a
@@ -2686,7 +2686,7 @@ conformance modes, and §6.11's module makes `--std=iso7185` unreachable here
 anyway. `tools/pascalcc` translates the resulting link error, which otherwise
 names the mode the *program* wanted rather than the one the object has.
 `tests/checks/mixed_mode_link.sh` was the case, and it was a `ctest` case
-because `run_test.sh` compiled every component of a case under one `--std` and
+because `run_test.py` compiled every component of a case under one `--std` and
 could not express a mixture at all. ADR-0232 removed the modes, so there is no
 mixture to express: every translation writes one tag, and the gate, its corpus
 and the sidecar's second field are all gone.
@@ -3251,7 +3251,7 @@ records `mdFileIdx` — 0 for the source on the command line, *k* for the *k*'th
 known; `CheckModule` saves `curFile`, sets it from the node and puts it back.
 Asked once at the top of the subtree that is entirely about one file rather
 than at each of the several messages beneath it, so one added later inherits
-the answer. **The corpus cannot reach this**: `run_test.sh` translates every
+the answer. **The corpus cannot reach this**: `run_test.py` translates every
 `.components` entry separately and first and gives up if one fails, so no case
 can hand `--import` a component that does not translate alone. The probe is in
 `selfhost/producttest.sh` over `tests/checks/importdiag/`, it fails in both
@@ -4180,7 +4180,7 @@ bindable file cannot cross a parameter**, §6.4.1 making `bindable` part of a
 variable-declaration rather than of a type-denoter, so `var f: text` compiles
 and `bind(f, b)` inside is refused. The obvious helper was unwritable.
 `tests/dialect/binding_writable.pas` is the case, and it is written to be
-idempotent because `irtest.sh` runs it twice.
+idempotent because `irtest.py` runs it twice.
 
 ### A second transport over one program (`pasls --mcp`)
 
@@ -4341,8 +4341,8 @@ nothing else. What it would lose, mechanism by mechanism:
   temporary directory and thrown away; a server has to be a binary someone can
   point an editor at, which is what makes the protocol's external authority
   real rather than theoretical. `lsp/build.py` produces one and reads
-  `lsp/pasls.components` — the sidecar convention `tests/run_test.sh` and
-  `selfhost/irtest.sh` already read, so the build order is written down once. A
+  `lsp/pasls.components` — the sidecar convention `tests/run_test.py` and
+  `selfhost/irtest.py` already read, so the build order is written down once. A
   script and not a CMake target, because nothing here installs anything;
   `tools/pascalcc` is the precedent.
 - **A session is its own kind of golden**, which is why `lsp/run.py` exists
@@ -4390,8 +4390,8 @@ nothing else. What it would lose, mechanism by mechanism:
   paid where it does not matter; it would be the wrong shape for a feature that
   reported many.
 - **It reads `.components` to find a file's imports** (ADR-0238), and that file
-  is this tree's build description — already read by `run_test.sh`,
-  `irtest.sh`, CMake, `build.py` and four gates. Without it the compiler is
+  is this tree's build description — already read by `run_test.py`,
+  `irtest.py`, CMake, `build.py` and four gates. Without it the compiler is
   handed a module alone and fails on every name it imports: 48 diagnostics for
   `lib/dialect/pasjson.pas` and **21 171** for `selfhost/apfront.pas`, so the
   server worked on `hello.pas` and on nothing in the repository it was written

@@ -21,7 +21,7 @@ against OpenSSL's own headers (ADR-0264).
 **Why this is a check and not a case under `tests/dialect/`.** Two things
 have to be present and neither is a documented dependency of this
 repository: libssl to link against, and the `openssl` program to be the far
-end. `tests/run_test.sh` cannot skip -- it compiles and compares, so a
+end. `tests/run_test.py` cannot skip -- it compiles and compares, so a
 machine without either would report a compilation failure and read as a
 defect in the compiler. This decides instead, and skips 77. `TLS_REQUIRE` is
 how a CI job refuses to pass by skipping, as TARGET_SIZES_REQUIRE and
@@ -304,7 +304,7 @@ int main(void) {
         return 1
 
     # The golden is `.expected` and not `.out` deliberately:
-    # `selfhost/irtest.sh` sweeps every `.pas` under `tests/` and runs the ones
+    # `selfhost/irtest.py` sweeps every `.pas` under `tests/` and runs the ones
     # that have an `.out` or an `.err`, which this one cannot be -- it needs
     # two servers and a library nothing else here links. A source with neither
     # is skipped there, which is how `target_layout.pas` and

@@ -20,7 +20,7 @@
 #   producttest.sh <path-to-pascalc> <runtime-dir> [files...]
 #
 # `pascalc` is `selfhost/compiler.pas` translated by the seed and linked by
-# CMake, and until this existed nothing tested that artefact. `irtest.sh` looks
+# CMake, and until this existed nothing tested that artefact. `irtest.py` looks
 # thorough enough to cover it and does not: it builds a stage-1 compiler of its
 # own in a temporary directory, so the binary in `build/bin` could be missing,
 # stale or built from the wrong source and every test would stay green. What is
@@ -364,7 +364,7 @@ fi
 
 # ADR-0210: a diagnostic about an imported component names *that component*.
 # Nothing under tests/ can assert this, and for a sharp reason:
-# run_test.sh translates every .components entry separately and
+# run_test.py translates every .components entry separately and
 # first, and gives up if one fails -- so no case can reach a component that
 # does not translate on its own being handed to --import anyway. A person
 # reaches it by typing it. tests/checks/importdiag/ has the two sources.

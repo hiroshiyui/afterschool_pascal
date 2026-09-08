@@ -441,6 +441,60 @@ sits below a `diff` that fires first on any change to the row count.
 **Nothing here detects a harness whose diagnostics go nowhere**, which is the
 general form of that defect and is now a row in `doc/sop.md` §7.
 
+**`selfhost/irtest` is the twenty-eighth**, fourteen arms, and the artefact
+compares: 408 programs built and run under both compilers, 189 rejected as
+their `.err` says, 70 sources carrying no expectation, and stage 2 = stage 3 —
+byte-identical stdout, stderr and status. The arms that had to be staged are
+the ones that matter: the fixed point broken by a `clang` shim stamping each
+`.ll` with a serial, a `PAS_FILE_SIZE` disagreement in both directions, an IR
+that will not assemble, and both self-compile failures. One arm could not be
+forced — `stage 2 emitted N modules and stage 3 M` needs a compiler resolving a
+different number of program-components on two passes over one source, which
+nothing here is; it is named rather than claimed.
+
+**`tests/run_test` is the twenty-ninth and the one roughly 850 ctest cases run
+through**, so the differential was the whole corpus: 597 sources, plus twelve
+failure arms staged one at a time — no expectation at all, a golden that no
+longer matches, a program that will not compile with and without a `.err`, a
+component that will not translate, a runtime message that differs, a program
+that succeeds where a failure was expected, ADR-0272's load-bearing half (a
+warning with no `.warn`), a `.warn` that says something else, a correct one,
+and an `.opt` sidecar.
+
+**The corpus caught a defect of mine, and it reached back into two conversions
+already pushed.** One case of 597 differed: `lib_lsp`. `Path.read_text()`
+performs universal-newline translation, so a golden holding `\r\n` compares
+equal to output that has lost its carriage returns. `lsp/run`'s own header says
+its goldens hold the real carriage returns and the real byte counts, and the
+twentieth conversion had quietly stopped holding that half — **both** sides
+were translated, so no difference could appear. Proved by turning one CRLF into
+LF in a session golden: byte-unequal, equal after translation, and the gate now
+reports it where before it passed. All three harnesses now read a golden with
+`newline=''` and split lines at `\n` alone, `str.splitlines` also breaking at a
+bare carriage return.
+
+**`tests/checks/sanitize` is the thirtieth**, and its four modes are four
+sweeps: address, thread, valgrind and coverage, each byte-identical on the real
+corpus, plus the mode refusal, both `SANITIZE_REQUIRE` arms, both
+`VALGRIND_REQUIRE` arms, a flagged case, a catalogued one, the floor, and both
+halves of ADR-0358's probe — the probe that will not build, and the probe that
+builds and reports nothing, which is the state ADR-0342 describes. That last
+one caught a defect of mine: `head` over a captured stream printed the empty
+fragment after the final newline as a line, which `head -n` over a file does
+not.
+
+Two of the shell version's awkwardnesses are simply gone, both written for bash
+3.2: the newline-delimited string standing in for `declare -A`, and the hoisted
+`asan_options` that existed so `uname` was not forked five hundred times. What
+each was working around is kept in a comment, because the reason is still worth
+knowing.
+
+**One question crossed two conversions and is settled here.** CLAUDE.md
+requires `run_test` and `irtest` to read a `.components` file the same way. Both
+now keep a final line that has no newline, where bash's `read` dropped it. No
+sidecar in the tree lacks one, so no case means two things today — but the two
+agree with each other, which is what the rule asks.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

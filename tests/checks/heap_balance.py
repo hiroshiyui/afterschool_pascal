@@ -47,7 +47,7 @@ NEW_CALL = re.compile(r"\bnew\s*\(", re.IGNORECASE)
 
 
 def components_of(source):
-    """The other program-components, as run_test.sh reads them."""
+    """The other program-components, as run_test.py reads them."""
     sidecar = source.with_suffix(".components")
     if not sidecar.exists():
         return []
@@ -79,8 +79,8 @@ def uses_heap(source):
 # because a server has to be a binary an editor can be pointed at rather than
 # one compiled into a temporary directory (ADR-0236). It has no `.out` and
 # cannot have one -- what it produces is a protocol conversation -- so
-# run_test.sh cannot drive it and its own harness does. That harness reads the
-# same PASHEAP_BALANCE and takes the same care run_test.sh does, twice over:
+# run_test.py cannot drive it and its own harness does. That harness reads the
+# same PASHEAP_BALANCE and takes the same care run_test.py does, twice over:
 # `pascalcc` builds the server and the server then starts `pascalc` once per
 # document, and both are Pascal programs on this runtime whose allocations are
 # not the server's. Four sessions in four processes append four lines, which
@@ -105,7 +105,7 @@ def cases():
 
 
 def balance(source, pascalcc, work):
-    """Run one case through run_test.sh and read what the runtime wrote.
+    """Run one case through run_test.py and read what the runtime wrote.
 
     Through the harness rather than around it: a case may carry components, a
     fixed epoch, standard input or an optimisation level, and a second reader
@@ -119,7 +119,7 @@ def balance(source, pascalcc, work):
     if source == LSP:
         harness = [str(ROOT / "lsp" / "run.py"), pascalcc]
     else:
-        harness = [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source)]
+        harness = [str(ROOT / "tests" / "run_test.py"), pascalcc, str(source)]
     done = subprocess.run(
         harness, cwd=ROOT, env=env, capture_output=True, text=True)
     if done.returncode != 0:

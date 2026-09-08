@@ -147,7 +147,7 @@ def corpus(root):
                 continue
             flags = []
             env = {}
-            # ADR-0244's two sidecars, read the way tests/run_test.sh reads
+            # ADR-0244's two sidecars, read the way tests/run_test.py reads
             # them. A case with either resolves an import name to a file
             # *itself*, so the sweep reaches the resolver -- and the second
             # is an environment rather than a flag, which is the only way the
@@ -220,7 +220,7 @@ def corpus(root):
     # That is doc/sop.md §7's "coverage.py sees the sources, not the harnesses"
     # closed for the one harness whose flags this file could mirror -- and the
     # row stays for the shell harnesses that build compilers of their own:
-    # irtest.sh, producttest.sh and verify.py are invisible here.
+    # irtest.py, producttest.sh and verify.py are invisible here.
     for job in list(jobs):
         src, flags = job[0], job[1]
         if src is not None and not any(f.startswith("--dump") for f in flags):
@@ -255,7 +255,7 @@ def corpus(root):
             jobs.append((src, flags + ["--format", "--range=2:40"], extra))
 
     # Two invocations that compile nothing. They are here because this harness
-    # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
+    # can only run what it can enumerate, and the shell harnesses -- irtest.py,
     # producttest.sh, verify.py -- drive the compiler in ways no glob finds.
     # That is a limitation of the instrument and is recorded in doc/sop.md §7;
     # these two are added rather than left to misreport, because

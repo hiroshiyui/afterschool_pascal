@@ -135,7 +135,7 @@ jobs:
         run: |
           tools/pascalcc tests/hello.pas -o /tmp/hello
           /tmp/hello
-        # The suite drives pascalcc through run_test.sh with a build tree's
+        # The suite drives pascalcc through run_test.py with a build tree's
         # paths in the environment. This is the plain invocation a reader gets
         # from README.md, with nothing set.
 
@@ -305,7 +305,7 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
       - name: Run the sanitizer sweep
-        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        run: tests/checks/sanitize.py tools/pascalcc build/bin/pascalc
         env:
           # The comment above this job named this variable for as long as the
           # job existed and nothing read it -- the step refused a skip by
@@ -316,7 +316,7 @@ jobs:
           SANITIZE_REQUIRE: '1'
 
       - name: Run the thread sweep, and refuse to pass by skipping
-        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        run: tests/checks/sanitize.py tools/pascalcc build/bin/pascalc
         env:
           # ADR-0327 landed this gate with no job requiring it, which is the
           # shape `doc/sop.md` §7 already records for `fpc-differential` and
@@ -329,7 +329,7 @@ jobs:
         run: apt-get install -y --no-install-recommends valgrind
 
       - name: The corpus under Valgrind, and refuse to pass by skipping
-        run: tests/checks/sanitize.sh tools/pascalcc build/bin/pascalc
+        run: tests/checks/sanitize.py tools/pascalcc build/bin/pascalc
         env:
           # The fourth mode of the same harness (ADR-0353), and the only one
           # that instruments nothing. It belongs in this job because it asks
@@ -374,7 +374,7 @@ jobs:
     # the *other* cannot see what it is testing, and a sweep must not undo
     # that.
     #
-    # **`the same suite` was not true until ADR-0335.** `sanitize.sh` compiled
+    # **`the same suite` was not true until ADR-0335.** `sanitize.py` compiled
     # its 383 programs at a level it chose itself and read the variable not at
     # all, so this job made the claim above on every push with two of its cases
     # -- `sanitizers` and `thread-sanitizer` -- quietly at -O1. It honours it
@@ -504,7 +504,7 @@ jobs:
 
   second-backend:
     # Is the compiler *binary* miscompiled? Nothing else here can ask.
-    # `selfhost/irtest.sh` compiles the compiler with itself twice and requires
+    # `selfhost/irtest.py` compiles the compiler with itself twice and requires
     # stage 2 to equal stage 3 -- but both stages come from one binary, so a
     # clang that got a corner of selfhost/compiler.pas wrong would build a wrong
     # compiler that reproduced itself exactly, and every golden would agree
@@ -576,7 +576,7 @@ jobs:
     # only an aarch64 backend produces has nothing looking for it*. The
     # `aarch64` job builds and runs the whole corpus there, which catches a
     # compiler that is wrong -- and cannot catch one that is wrong *and*
-    # reproduces itself, because both stages of `irtest.sh` come from one
+    # reproduces itself, because both stages of `irtest.py` come from one
     # binary and every golden was written by it.
     #
     # It was filed as a resource problem and it is not one. The objection in
@@ -779,9 +779,9 @@ jobs:
     #
     # What is known to differ, from reading rather than from a run: there is
     # no `-static` and no `ldd` (`tools/release.py` allows for both), no
-    # `timeout` (`irtest.sh` and `producttest.sh` fall back), BSD `sed -i`
+    # `timeout` (`irtest.py` and `producttest.sh` fall back), BSD `sed -i`
     # (the four harnesses that edit in place go through a temporary), no
-    # LeakSanitizer on arm64 (`sanitize.sh` asks for it on Linux only), and
+    # LeakSanitizer on arm64 (`sanitize.py` asks for it on Linux only), and
     # ld64 spells an undefined symbol with a leading underscore (`pascalcc`
     # reads both). What is *not* known is everything a run finds.
     #

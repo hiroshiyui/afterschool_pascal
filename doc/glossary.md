@@ -841,7 +841,7 @@ parser's equivalent, and it is a *directory* because the parser stops at its
 first error, so one file can carry only one message.
 
 **Behavioural test (of a port).** What replaces a differential test when the
-two implementations cannot produce comparable output. `selfhost/irtest.sh`
+two implementations cannot produce comparable output. `selfhost/irtest.py`
 compiles every case in `tests/` with the Pascal compiler, links the IR with
 `clang`, runs it, and compares against the *same* `.out`/`.err` every other
 harness is held to. LLVM's own printer is not a specification, so the assembler
@@ -852,7 +852,7 @@ differential test never compared.
 **Fixed point.** Stage 2 equals stage 3 — the compiler built by the seed and
 the compiler built by *that* one are the same. Compared as IR rather than as
 binaries, because IR is what the compiler emits. Checked by
-`selfhost/irtest.sh` under `ctest`, together with the golden suite, because a
+`selfhost/irtest.py` under `ctest`, together with the golden suite, because a
 compiler that reproduced itself and nothing else would pass the comparison
 alone. What the claim rests on never depended on which compiler started the
 chain, which is why replacing stage 0 with a committed seed cost it nothing

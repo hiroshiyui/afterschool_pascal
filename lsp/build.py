@@ -21,7 +21,7 @@
 
 `pasls.components` lists ISO/IEC 10206:1991 6.13's other program-components,
 one path per line relative to this directory and in dependency order -- the
-same sidecar convention `tests/run_test.sh` and `selfhost/irtest.sh` read,
+same sidecar convention `tests/run_test.py` and `selfhost/irtest.py` read,
 and read here for the same reason: the build order is written down once.
 
 This is not a CMake target. Nothing in this tree installs a library or a

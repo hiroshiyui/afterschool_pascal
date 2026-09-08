@@ -65,8 +65,8 @@ cmake --build build -j
 
 ctest --test-dir build -j"$(nproc)" --output-on-failure   # 86 s; 290 s without -j
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
-tests/run_test.sh tools/pascalcc tests/control.pas   # without ctest
-selfhost/irtest.sh build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
+tests/run_test.py tools/pascalcc tests/control.pas   # without ctest
+selfhost/irtest.py build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
 selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
 cmake --install build --prefix /opt/apascal  # bin/, lib/, lib/afterschool/
 seed/refresh.py                             # regenerate the seed (release only)
@@ -96,8 +96,8 @@ exists only to bootstrap: what ships is always built from the source in the tree
 (ADR-0085).
 
 **The compiler's own build is an ordinary `.components` case.**
-`selfhost/compiler.components` is the same sidecar `tests/run_test.sh` and
-`selfhost/irtest.sh` read for a test case, and CMake, `seed/refresh.py`,
+`selfhost/compiler.components` is the same sidecar `tests/run_test.py` and
+`selfhost/irtest.py` read for a test case, and CMake, `seed/refresh.py`,
 `tests/checks/*.py` and the CI seed job all read that one file — the build order
 is written down once (ADR-0233).
 
@@ -108,8 +108,8 @@ globbed separately. The split no longer says which standard a case is compiled
 under (ADR-0232); it says which names the ctest cases have, and buys
 `tests/dialect/` and `examples/` the per-case `TIMEOUT` a program that opens a
 socket needs. The sweeps that enumerate Pascal by root (`format_check.py`,
-`variant_check.py`, `coverage.py`, `heap_balance.py`, `fuzz.py`, `sanitize.sh`,
-`irtest.sh`) name all four.
+`variant_check.py`, `coverage.py`, `heap_balance.py`, `fuzz.py`, `sanitize.py`,
+`irtest.py`) name all four.
 
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and a
 non-zero exit is then required), `foo.warn` (expected *warnings*, for a program
@@ -139,7 +139,7 @@ says what it answers and from which dump; `doc/design-digest.md` holds the
 mechanism. Two things about it are this file's business: the corpus sweeps reach
 it through a **second root** rather than through the glob (`coverage.py` names
 it, `variant_check.py` finds it, `build.py` honours `AFTERSCHOOL_PASCAL_OPT`),
-and `heap-balance` drives `lsp/run.py` instead of `run_test.sh`, which has to
+and `heap-balance` drives `lsp/run.py` instead of `run_test.py`, which has to
 take `PASHEAP_BALANCE` out of the environment **twice**, `pascalcc` building the
 server and the server starting `pascalc` once per document.
 
@@ -364,7 +364,7 @@ that proved it.
 | `stale-component` | a component's source, edited between two links | is an object built from an older module-heading refused? (ADR-0245, AP 6.13.2) — it cost a **wrong answer with a zero exit status** and no diagnostic from compiler, driver or linker. It is a shell harness because **no test case can edit its own source between two compilations**, and it fails in both directions: a comment or a reflow must still link |
 | `require-consistency` | the `*_REQUIRE` variables, and the workflows | does every gate that can skip have a job that refuses to let it? (ADR-0330) — ctest reads 77 as success, so a skipped gate and a clean one print the same bar, and the `*_REQUIRE` convention that closes it had shipped broken **four** times. Both directions: a variable a check reads and no job sets is a gate answering only where its author was, and one a workflow sets and no check reads is a comment describing a mechanism that is not there. It matches a **mapping key** and not a mention, its own mutation having caught it passing on a name left in a comment |
 | `lib-coverage` | `tests/checks/lib_coverage.txt` | how much of `lib/` does the corpus run? (ADR-0350) — `line-coverage` measures the compiler's three components and nothing else, so 11 160 lines across 32 modules were measured by nothing; every module *is* imported by a case, which is `procedure-coverage`'s question and not this one. Same attribution trick: **one module instrumented per link**, because `$PASCOV_LINES` is bare line numbers and a program linking six modules otherwise yields six sources' lines in one heap. A **generic** module cannot be measured here at all — AP 6.7.3.5 emits its body in the *client's* translation — so it reports a denominator of 0 and the run names it, that meaning *nothing to measure* and never *all covered* |
-| `runtime-coverage` | `tests/checks/runtime_coverage.txt` | how much of `runtime/*.c` does the corpus run? (ADR-0351) — the runtime is the only C here, every compiled program links it, and `gcov` left with the C++ implementation (ADR-0232) with nothing to replace it. **It is the denominator the sanitizers were missing**: ADR-0342 established that AddressSanitizer never instruments compiled Pascal, so `runtime/*.c` is the whole of what ASan, UBSan, LSan and TSan watch, and an uncovered line here is a line all four looked at zero times. A third **mode** of `sanitize.sh` for ADR-0327's reason — the 120 lines that link a case's components are what must not be copied — with two floors, on programs run and on profiles written, because a sweep can build every case and run none. **Gated per unit, and two of the four are only reported** (ADR-0354): `pasrt_task.c` and `pasrt_posix.c` each hold a wait with a deadline, and the `ETIMEDOUT` arm of `select` runs only when the deadline beats the receive — three lines that never run on a fast idle machine and do on CI, reproduced here on one core under a busy loop. A line whose coverage is a property of how loaded the machine is cannot be held by a ratchet in *either* direction, so those two units print their delta and `pasrt.c`/`pasrt_unicode.c` fail both ways like `lib-coverage`; the deterministic claim is checked against the source, so a `poll()` added to `pasrt.c` fails with a message rather than becoming a flaky number |
+| `runtime-coverage` | `tests/checks/runtime_coverage.txt` | how much of `runtime/*.c` does the corpus run? (ADR-0351) — the runtime is the only C here, every compiled program links it, and `gcov` left with the C++ implementation (ADR-0232) with nothing to replace it. **It is the denominator the sanitizers were missing**: ADR-0342 established that AddressSanitizer never instruments compiled Pascal, so `runtime/*.c` is the whole of what ASan, UBSan, LSan and TSan watch, and an uncovered line here is a line all four looked at zero times. A third **mode** of `sanitize.py` for ADR-0327's reason — the 120 lines that link a case's components are what must not be copied — with two floors, on programs run and on profiles written, because a sweep can build every case and run none. **Gated per unit, and two of the four are only reported** (ADR-0354): `pasrt_task.c` and `pasrt_posix.c` each hold a wait with a deadline, and the `ETIMEDOUT` arm of `select` runs only when the deadline beats the receive — three lines that never run on a fast idle machine and do on CI, reproduced here on one core under a busy loop. A line whose coverage is a property of how loaded the machine is cannot be held by a ratchet in *either* direction, so those two units print their delta and `pasrt.c`/`pasrt_unicode.c` fail both ways like `lib-coverage`; the deterministic claim is checked against the source, so a `poll()` added to `pasrt.c` fails with a message rather than becoming a flaky number |
 | `seed-portable` | every module under `seed/` | does the committed seed name the machine that made it? (ADR-0347) — ADR-0293 puts a trap's own source path into the emitted module, and `seed/refresh.py` was handing the compiler an absolute one, so the artefact held a stranger's home directory and `seed_current.py` could pass only in the directory that generated it. That check asks the whole question and **cannot be a ctest case** — the seed is legitimately stale between releases — so it answered eight releases late, in the tag job. This half holds on every push, and is ADR-0366's first conversion from shell to Python |
 | `markdown-tables` | every Markdown table in the tree | is every row the width of its header? — the cheapest gate here and the one whose absence damaged the most-read file (`doc/sop.md` §7). Nothing else here can see it: every other oracle reads Pascal, C or a golden. It checks two structural shapes only — a row that is not one line, and a row whose cell count differs from its header's — and does **not** reach a cell whose code span holds an escaped pipe |
 | `install-layout` | the install prefix, and `PATH` | can this compiler be put somewhere and found there? (ADR-0244) — every other harness drives the compiler out of the build tree, exactly the configuration an installed copy does not have. **The claim the convention rests on**: the search is `<directory>/<interface name>.pas` and nothing opens a file to find out what it declares, so one `import <name>;` program per installed module must *compile* rather than merely resolve |
@@ -377,7 +377,7 @@ that proved it.
 | `target32` | the corpus, and a runtime built for i386 | does a program built with those numbers *behave* when a pointer is four bytes? (ADR-0325) — the row above asks about arithmetic, and both defects the i386 port found were in neither a layout rule nor a frame: the runtime indexed an array by `sizeof` where the compiler strides a constant, and the compiler wrote a field at an offset only an LP64 target has. It passed with `select` segfaulting. `tests/checks/target32_known.txt` fails in both directions and holds **one** row — a 2 GB allocation with nowhere to go in a 32-bit address space; the five that waited on ADR-0129's foreign boundary closed with ADR-0328's `clong`/`csize`, and a sixth, invisible at `-O2`, closed with ADR-0334's second optimisation level. Skips 77 without a 32-bit libc; `TARGET32_REQUIRE` refuses to pass by skipping, at **both** levels since ADR-0334 |
 | `clause-citations` | `tests/checks/nonexistent_clauses.txt` | does every clause number this tree writes down name a clause of *some* standard? (ADR-0164) — a wrong number compiles, runs, passes every golden and is proved correct by `verify/`. It asks the **cheap half** and says so: whether the number names a clause at all, never whether it names the right one. **A clause number written in this tree is a citation** — the gate cannot tell a mention from a claim, so a document discussing a wrong number either avoids spelling it or takes an entry |
 | `spec-clause-traceability` | `tests/spec/clauses/triage.tsv` and `pending.txt` | is every clause a scenario cites still cited, and does every citation name a clause the triage calls testable? (ADR-0106) — the second half keeps the *triage* honest. A clause that **starts** being cited does not fail; it asks for `--write-pending`, a gate that punished progress being one people learn to avoid |
-| `valgrind-corpus` | the corpus, run under Valgrind | does a compiled program touch memory it should not? (ADR-0353) — **the first oracle here for that class, and for one day the only one**: ADR-0342 established that clang's sanitizer passes act on functions carrying an attribute and this emitter wrote none until ADR-0358, so `new(p); q := p; dispose(p); q^ := 5` printed 5 and exited 0 under a fully ASan-linked binary. Valgrind instruments nothing and reads the binary, which is what still earns it its place beside ASan: it needs no cooperation from the emitter, and it sees an uninitialised read, which ASan does not. A **fourth mode** of `sanitize.sh` for `thread-sanitizer`'s reason, and its detector needed a third vocabulary — the existing arms match `==pid==ERROR:` and `runtime error:`, and Valgrind writes `Invalid write of size 4`, so without an arm for it the mode would sweep 377 programs and call them all clean. 377 clean, 0 flagged; **the slowest gate here at 170 s**, and it sets the wall clock |
+| `valgrind-corpus` | the corpus, run under Valgrind | does a compiled program touch memory it should not? (ADR-0353) — **the first oracle here for that class, and for one day the only one**: ADR-0342 established that clang's sanitizer passes act on functions carrying an attribute and this emitter wrote none until ADR-0358, so `new(p); q := p; dispose(p); q^ := 5` printed 5 and exited 0 under a fully ASan-linked binary. Valgrind instruments nothing and reads the binary, which is what still earns it its place beside ASan: it needs no cooperation from the emitter, and it sees an uninitialised read, which ASan does not. A **fourth mode** of `sanitize.py` for `thread-sanitizer`'s reason, and its detector needed a third vocabulary — the existing arms match `==pid==ERROR:` and `runtime error:`, and Valgrind writes `Invalid write of size 4`, so without an arm for it the mode would sweep 377 programs and call them all clean. 377 clean, 0 flagged; **the slowest gate here at 170 s**, and it sets the wall clock |
 | `thread-sanitizer` | the programs with two threads of control | is the concurrency construct free of races? (ADR-0327) — the same harness in a second mode, because ASan and TSan cannot be combined and the 120 lines that link a case's components are what must not be duplicated. **The corpus selects itself** from what each source writes, so a concurrent program added later is swept without this row moving; eleven qualify. Unlocking the store in `pas_chan_send` flags five of them. It was `doc/sop.md` §7's longest-lived row and the one thing CLAUDE.md asked to be run by hand. **Since ADR-0358 it sees the Pascal**: every emitted function carries `sanitize_thread`, so two tasks incrementing a global through a procedure (AP 6.7.8.2 NOTE 3) are a reported race and not a wrong number, and the mode refuses to sweep until a probe of exactly that shape is reported |
 | `sanitizers` | the corpus, and `tests/checks/heap_balance.txt` | does a program survive the suite — its own loads and stores since ADR-0358, the runtime's C from the start (ADR-0261)? — the corpus run again under ASan, UBSan and LSan over a second `libpasrt.a` built with the same flags, because ASan's runtime arrives at the **link**. `heap-balance` counts *calls*, so a write past an allocation, a read of a freed block or a signed overflow is invisible to it. It is not a fuzzer: it generates no input, which is `fuzz`'s half of the gap. It compiles the corpus at `-O1` — the level a sanitizer build wants — and **honours `AFTERSCHOOL_PASCAL_OPT` since ADR-0335**, having read it not at all before, so an `-O0` sweep of the suite reported these 383 programs green at a level it had not asked for. **It refuses to sweep until its instrument is proved on** (ADR-0358): a use-after-free compiled through the same driver must be reported first, because for the whole of the gate's life before that the emitter wrote no `sanitize_address`, and 377 programs were clean of a class the tool had never been asked about (ADR-0342) |
 | `tls` | OpenSSL's headers, and two servers | are the numbers `lib/dialect/pastls.pas` copied out of OpenSSL still what OpenSSL says? (ADR-0264) — some are macros no `external` declaration can reach, so the module holds a transcription and **a wrong one fails quietly**: `SSL_VERIFY_PEER` written as 0 turns verification off and every behavioural case stays green. The behavioural half needs **two** servers, the second's chain verifying perfectly under the wrong name. A third half drives `PasHttps` (ADR-0265), the **only place a second transport is driven at all**. Skips 77 without libssl or `openssl`; `TLS_REQUIRE` refuses to pass by skipping |
@@ -390,7 +390,7 @@ that proved it.
 
 All but `model-drift` are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is the corpus being enumerated
-by glob, so the harnesses that build a compiler of their own — `irtest.sh`,
+by glob, so the harnesses that build a compiler of their own — `irtest.py`,
 `producttest.sh`, `verify.py` — are invisible to it; that is a row in
 `doc/sop.md` §7. The *flags* half of it is closed: the coverage corpus sweeps
 `--dump-all` over every source, worth 195 statements reported unreached while an
@@ -494,8 +494,8 @@ What survives of the split is worth knowing, because the tree is laid out by it:
 - **`tests/extended/components/` holds §6.13's separately translated
   components**, and the subdirectory is load-bearing: the CMake glob is not
   recursive, so a source declaring no program is never registered as a case that
-  fails to run. **`run_test.sh` and `irtest.sh` must read a `.components` file
-  the same way, or a case means two things**; `irtest.sh` skips a source with
+  fails to run. **`run_test.py` and `irtest.py` must read a `.components` file
+  the same way, or a case means two things**; `irtest.py` skips a source with
   **no `.out` and no `.err`**, which keeps a component from being run as a
   program.
 - **Every word-symbol is reserved.** §6.1.2 adds ten to ISO 7185's 35, and
@@ -555,7 +555,7 @@ where the one the end of a block performs drops the reference and does not,
 because a worker that has finished must not close what its colleagues are
 draining. All three spellings close: `release(c)`, `c := nil`, `c := take(d)`.
 **ThreadSanitizer is the oracle this construct rests on and `thread-sanitizer`
-is the gate** (ADR-0327) — a *mode* of `sanitize.sh`, because ASan and TSan
+is the gate** (ADR-0327) — a *mode* of `sanitize.py`, because ASan and TSan
 cannot be combined and the harness's component-linking is the half that must
 not be copied. It sweeps what each source **writes** rather than a list, so a
 concurrent program added later is covered without the gate being edited.
@@ -884,7 +884,7 @@ Five things about the emitter are true of every change to it; the rest is in
 - The layout rules are written out (`LlSize`/`LlAlign`) — **in ApFront since
   ADR-0287** — because there is no `DataLayout` to ask, and are needed in
   exactly two places: a whole-variable copy's length and the size `new`
-  allocates. `fileSize` must equal `PAS_FILE_SIZE`; `irtest.sh` checks it,
+  allocates. `fileSize` must equal `PAS_FILE_SIZE`; `irtest.py` checks it,
   because the two files cannot include one another. **The module states its
   `target datalayout`** so the assembler lays things out the way those two say
   it does; it did not, until a set in a record segfaulted (ADR-0028). Don't drop

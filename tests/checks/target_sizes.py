@@ -20,7 +20,7 @@
 `PAS_FILE_SIZE` and `PAS_JUMP_SIZE` are the sizes of two C structs, written
 down in runtime/pasrt.h and again as `fileSize` and `jumpSize` in
 selfhost/compiler.pas, which is what allocates the bytes. The two files cannot
-include one another, so selfhost/irtest.sh checks that the four numbers agree.
+include one another, so selfhost/irtest.py checks that the four numbers agree.
 
 **Agreeing is not the same as being right.** Both numbers were measurements of
 x86-64 presented as constants, and `struct pas_jump` embeds a `jmp_buf` --
@@ -87,7 +87,7 @@ FAILED_MSG = """
 runtime/pasrt.c did not compile for a target above. If it is one of the two
 _Static_asserts, the size is a measurement of some other machine: raise both
 PAS_JUMP_SIZE (or PAS_FILE_SIZE) in runtime/pasrt.h and jumpSize (or fileSize)
-in selfhost/compiler.pas, which selfhost/irtest.sh requires to agree. The cost
+in selfhost/compiler.pas, which selfhost/irtest.py requires to agree. The cost
 of the jump record is paid only by a block that is the target of a non-local
 goto. See ADR-0155 and doc/roadmap.md's cross-platform chapter.
 """

@@ -19,7 +19,7 @@ When landing a change, always follow these steps:
    - **B — Language rule.** Sema accepts or refuses something new; a new
      diagnostic.
    - **C — Runtime.** `runtime/pasrt.c`.
-   - **D — Harness / build.** `tests/run_test.sh`, `CMakeLists.txt`, CI, `seed/`.
+   - **D — Harness / build.** `tests/run_test.py`, `CMakeLists.txt`, CI, `seed/`.
    - **E — Documentation.** ADRs, README, CLAUDE.md, comments.
 
    Say the class out loud in your first message about the change. A change is
@@ -137,7 +137,7 @@ When landing a change, always follow these steps:
    ```sh
    ctest --test-dir build -j"$(nproc)" --output-on-failure   # 795 cases, 86 s
    python3 verify/verify.py --pascalc tools/pascalcc --crosscheck
-   selfhost/irtest.sh build/bin/pascalc            # stage 2 = stage 3
+   selfhost/irtest.py build/bin/pascalc            # stage 2 = stage 3
    selfhost/producttest.sh build/bin/pascalc build/lib
    ```
 

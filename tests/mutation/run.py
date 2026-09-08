@@ -107,7 +107,7 @@ def die(message):
 def run(cmd, timeout=None, limit_file_size=False):
     """Run a command, and on a timeout kill *everything it started*.
 
-    The child here is ctest, which starts run_test.sh, which starts the
+    The child here is ctest, which starts run_test.py, which starts the
     compiled program -- and several mutations in this catalogue are killed
     precisely by making that program loop for ever. `subprocess.run(timeout=)`
     kills the direct child and nothing beneath it, so the looping binary was

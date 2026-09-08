@@ -4413,7 +4413,7 @@ conformance surface, so `selfhost/difftest.sh` skipped a dialect source and
 counted the skip; the surface was withdrawn and both were deleted. The entry is
 therefore stronger than when it was written: what was true of the dialect alone
 is now true of the whole front end. The oracles that do reach a dialect source
-are the goldens in `tests/dialect/`, `selfhost/irtest.sh`, and `verify/` for
+are the goldens in `tests/dialect/`, `selfhost/irtest.py`, and `verify/` for
 any lowering with a rule (ADR-0117, ADR-0232).
 
 **C.6 No third-party corpus reaches it, and no third-party processor either.**

@@ -34,7 +34,7 @@ three sources that came after it.
 A seed is never committed on the strength of having been generated. This
 builds a compiler *from the candidate*, has that compiler translate the
 source again, and requires the two results to be identical -- the same fixed
-point selfhost/irtest.sh requires, asked of the artefact about to be trusted.
+point selfhost/irtest.py requires, asked of the artefact about to be trusted.
 
 Converted from shell under ADR-0366, together with
 `tests/checks/seed_current.py`, which imports `components`, `translate` and

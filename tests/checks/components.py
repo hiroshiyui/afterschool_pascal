@@ -39,7 +39,7 @@ def _read():
     """The list, from the sidecar the harnesses already read.
 
     `selfhost/compiler.components` is an ordinary 6.13 component list -- the
-    same file `tests/run_test.sh` and `selfhost/irtest.sh` read for a test case
+    same file `tests/run_test.py` and `selfhost/irtest.py` read for a test case
     -- so the build order is written down once and the compiler's own build is
     not a special case of anything. CMake reads it too."""
     names = [line.split()[0] for line in _LIST.read_text().splitlines()

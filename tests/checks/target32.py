@@ -45,7 +45,7 @@ distributions. `TARGET32_REQUIRE=1` refuses to pass by skipping, which is how
 CI asks for the real answer.
 
 **It has a second axis and honours it** (ADR-0334): `AFTERSCHOOL_PASCAL_OPT`
-reaches `run_test.sh` from the environment, and the answer is not the same at
+reaches `run_test.py` from the environment, and the answer is not the same at
 both levels. `tests/dialect/int64_foreign.pas` declared C's `labs` as taking
 an `int64` -- a wrong ABI on every ILP32 target -- and passed here for two
 weeks because at -O2 the optimiser folded the call away. The `thirty-two-bit`
@@ -169,7 +169,7 @@ def sweep(pascalcc, work):
         for src in sorted((ROOT / d).glob('*.pas')):
             rel = str(src.relative_to(ROOT))
             total += 1
-            ok = subprocess.run([str(ROOT / 'tests' / 'run_test.sh'),
+            ok = subprocess.run([str(ROOT / 'tests' / 'run_test.py'),
                                  pascalcc, str(src)],
                                 env=env, capture_output=True).returncode == 0
             if ok:

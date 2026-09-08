@@ -88,8 +88,8 @@ target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 set(APASCAL_SEED_CC ${CMAKE_BINARY_DIR}/bin/pascalc-seed)
 set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
 # The order is `selfhost/compiler.components`, which is an ordinary 6.13
-# component list -- the same sidecar `tests/run_test.sh` and
-# `selfhost/irtest.sh` read for a test case, so the compiler's own build is not
+# component list -- the same sidecar `tests/run_test.py` and
+# `selfhost/irtest.py` read for a test case, so the compiler's own build is not
 # a special case of anything and the order is written down once.
 file(STRINGS ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
      APASCAL_COMPONENTS)
@@ -756,7 +756,7 @@ endif()
 # The --dump flags. Their walkers were entered by no case at all until
 # procedure-coverage found it: four documented flags and nothing checking they
 # did not crash. A dump case compares what the *compiler* writes to standard
-# output, which is why it cannot be a tests/run_test.sh sidecar -- every case
+# output, which is why it cannot be a tests/run_test.py sidecar -- every case
 # there compares what the compiled *program* writes.
 file(GLOB APASCAL_DUMP_TESTS ${CMAKE_SOURCE_DIR}/tests/dumps/*.pas)
 foreach(t ${APASCAL_DUMP_TESTS})
@@ -876,7 +876,7 @@ set_tests_properties(runtime-isoc PROPERTIES
 # a generous timeout. Skips with 77 where clang or ar is missing, as the two
 # checks above do.
 add_test(NAME sanitizers
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
 set_tests_properties(sanitizers PROPERTIES
                      SKIP_RETURN_CODE 77
@@ -892,7 +892,7 @@ set_tests_properties(sanitizers PROPERTIES
 # writes rather than from a list, so a concurrent program added later is
 # covered without this file being edited.
 add_test(NAME thread-sanitizer
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
 set_tests_properties(thread-sanitizer PROPERTIES
                      SKIP_RETURN_CODE 77
@@ -912,7 +912,7 @@ set_tests_properties(thread-sanitizer PROPERTIES
 # It is the slowest gate here and sets the suite's wall clock, which is the
 # price of the only oracle this tree has ever had for that class.
 add_test(NAME valgrind-corpus
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/sanitize.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
 set_tests_properties(valgrind-corpus PROPERTIES
                      SKIP_RETURN_CODE 77
@@ -931,7 +931,7 @@ set_tests_properties(valgrind-corpus PROPERTIES
 # instruments at the same place, and an uncovered line here is a line all four
 # checkers looked at zero times.
 #
-# It drives sanitize.sh rather than repeating its 120 lines of component
+# It drives sanitize.py rather than repeating its 120 lines of component
 # linking, which is ADR-0327's argument reused, and skips 77 without
 # llvm-profdata or llvm-cov -- a separate package from clang on most
 # distributions. `RUNTIME_COVERAGE_REQUIRE` refuses to pass by skipping.
@@ -1084,10 +1084,10 @@ set_tests_properties(target32 PROPERTIES
 # identical. That last comparison is the point of the whole bootstrap
 # (ADR-0004, ADR-0025).
 add_test(NAME selfhost-codegen
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/irtest.sh ${APASCAL_SEED_CC})
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/selfhost/irtest.py ${APASCAL_SEED_CC})
 set_tests_properties(selfhost-codegen PROPERTIES TIMEOUT 1800)
 
-# The product itself. `irtest.sh` builds a stage-1 compiler of its own in a
+# The product itself. `irtest.py` builds a stage-1 compiler of its own in a
 # temporary directory, so the binary in build/bin could be missing or stale
 # with every other test still green — what this checks is the build wiring, not
 # the compiler.
@@ -1115,7 +1115,7 @@ file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
@@ -1144,7 +1144,7 @@ foreach(dir badparse badsema)
   foreach(t ${APASCAL_${dir}_TESTS})
     get_filename_component(name ${t} NAME_WE)
     add_test(NAME ${dir}-${name}
-             COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                      ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
     set_tests_properties(${dir}-${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
   endforeach()
@@ -1153,7 +1153,7 @@ endforeach()
 # The lexer's own corpus: deliberately not a valid program, carrying the
 # lexical corner cases a valid one never reaches.
 add_test(NAME torture
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc
                  ${CMAKE_SOURCE_DIR}/selfhost/torture.pas)
 set_tests_properties(torture PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
@@ -1162,7 +1162,7 @@ file(GLOB APASCAL_EXTENDED_TESTS ${CMAKE_SOURCE_DIR}/tests/extended/*.pas)
 foreach(t ${APASCAL_EXTENDED_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
@@ -1174,7 +1174,7 @@ file(GLOB APASCAL_DIALECT_TESTS ${CMAKE_SOURCE_DIR}/tests/dialect/*.pas)
 foreach(t ${APASCAL_DIALECT_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   # A timeout, which the other two corpora do not need and this one does: a
   # dialect case may open a socket (ADR-0203), and a readiness defect makes a
@@ -1196,7 +1196,7 @@ file(GLOB APASCAL_EXAMPLES ${CMAKE_SOURCE_DIR}/examples/*.pas)
 foreach(t ${APASCAL_EXAMPLES})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME example-${name}
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_test.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   set_tests_properties(example-${name} PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}" TIMEOUT 300)

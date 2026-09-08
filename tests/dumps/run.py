@@ -19,7 +19,7 @@
 
   run.py <path-to-pascalc> <path-to-test.pas>
 
-A case here needs its own harness rather than a sidecar on tests/run_test.sh,
+A case here needs its own harness rather than a sidecar on tests/run_test.py,
 because the thing under test is what the *compiler* writes to standard
 output, where every case there compares what the compiled *program* writes.
 The two never meet: a dump case is not run, and an ordinary case never passes
@@ -33,7 +33,7 @@ a --dump flag.
                reported `unknown option --format--range=15:21`.
   name.components  section 6.13's other program-components, one path per line
                relative to this directory, each passed as an --import. It
-               is the same sidecar tests/run_test.sh and irtest.sh read and
+               is the same sidecar tests/run_test.py and irtest.py read and
                it means less here: a dump is not linked, so what these
                supply is the *declarations* a name can resolve to. They
                live in components/, which this corpus's glob does not
@@ -45,7 +45,7 @@ a --dump flag.
                what would make it unwritable (ADR-0246)
 
 The case's own directory is rewritten to <dir>/ in what is compared, which
-tests/run_test.sh does to a diagnostic for the same reason: --dump-imports
+tests/run_test.py does to a diagnostic for the same reason: --dump-imports
 answers with *paths*, and a path that begins at the checkout cannot be
 written down once (ADR-0244). No other dump names a file, so this changes
 nothing for the rest.
@@ -178,7 +178,7 @@ def compare(pascalc, source, src, name, expected, flags, imports,
         return 1
 
     # The source path is rewritten so a golden does not depend on where the
-    # checkout lives, exactly as tests/run_test.sh does it.
+    # checkout lives, exactly as tests/run_test.py does it.
     rewritten = actual.replace(source, '<source>')
     rewritten = rewritten.replace(os.path.dirname(source) + '/', '<dir>/')
     got = work / 'actual'

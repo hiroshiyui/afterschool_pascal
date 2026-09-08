@@ -106,7 +106,7 @@ def build_guarded(cc, root, work):
 
     A failure here is not a skip -- the source this repository ships must
     compile with the binary this repository built, or the fixed point
-    irtest.sh proves is about something else.
+    irtest.py proves is about something else.
 
     Three program-components since ADR-0233, in the order
     selfhost/compiler.components gives, each translated with the ones before

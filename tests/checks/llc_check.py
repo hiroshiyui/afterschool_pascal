@@ -19,7 +19,7 @@
 # A second backend configuration, and the one question it can answer that
 # nothing else here can: **is the compiler binary itself miscompiled?**
 #
-# `selfhost/irtest.sh` compiles the compiler with itself twice and requires
+# `selfhost/irtest.py` compiles the compiler with itself twice and requires
 # stage 2 to equal stage 3. That is the bootstrap's own check and it is a strong
 # one, but both stages are produced by *the same binary* -- so a code generator
 # in `clang` that got one corner of `selfhost/compiler.pas` wrong would produce a

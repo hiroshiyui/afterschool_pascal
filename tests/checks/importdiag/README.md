@@ -4,7 +4,7 @@ Two sources for one probe in `selfhost/producttest.sh`, and they are here
 rather than under `tests/` for the same reason `stdannot/` is: **the ordinary
 harness cannot express this case.**
 
-`run_test.sh` translates every `name.components` entry *separately, first*, and
+`run_test.py` translates every `name.components` entry *separately, first*, and
 gives up if one of them fails — which is right, and which means a case can
 never reach the state this probe needs: a component that does **not** translate
 on its own, handed to `--import` anyway.

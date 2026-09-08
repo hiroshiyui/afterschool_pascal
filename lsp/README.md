@@ -21,7 +21,7 @@ PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \
 
 `pasls.components` lists ISO/IEC 10206:1991 §6.13's other program-components,
 one path per line in dependency order — the same sidecar convention
-`tests/run_test.sh` and `selfhost/irtest.sh` read. There is no CMake target,
+`tests/run_test.py` and `selfhost/irtest.py` read. There is no CMake target,
 because nothing in this tree installs anything; `tools/pascalcc` is the
 precedent.
 
@@ -37,7 +37,7 @@ that sets no environment still works:
 | `PASLS_SCRATCH` | the file the current document is written to before it is compiled. Default: `doc.pas` inside a directory of the server's own, `$TMPDIR/pasls-XXXXXX` made by `mkdtemp` and removed at `exit` (ADR-0363), with `/tmp` where `TMPDIR` is unset. Where no such directory can be made the default is `/dev/null/doc.pas`, a path nothing can create, and the server says so per document |
 
 It finds a file's **imports** by reading `.components`, which is this tree's
-build description — the same sidecar `tests/run_test.sh`, `selfhost/irtest.sh`,
+build description — the same sidecar `tests/run_test.py`, `selfhost/irtest.py`,
 CMake and `build.py` read, a path per line in dependency order. The rule is one
 sentence: *take the entries before this file*. A sidecar beside the file and
 named after it answers first; otherwise the workspace the client named at
