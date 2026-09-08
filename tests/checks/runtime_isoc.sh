@@ -254,7 +254,13 @@ fi
 posix_used=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$posix_src" |
              sed 's/.*<\(.*\)>/\1/' | while read -r h; do
                base=${h%.h}
-               case " $iso_headers " in *" $base "*) ;; *) echo "<$h>" ;; esac
+               # Written out rather than on one line: bash 3.2, which is
+               # what macOS ships, cannot parse an empty command list before
+               # `;;` when the whole case is a single line.
+               case " $iso_headers " in
+                 *" $base "*) ;;
+                 *) echo "<$h>" ;;
+               esac
              done | sort -u)
 posix_named=$(grep -oE '^header: <[a-z0-9_/]+\.h>' "$list" |
               sed 's/^header: //' | sort -u)
@@ -337,7 +343,11 @@ fi
 uni_extra=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$uni_src" |
             sed 's/.*<\(.*\)>/\1/' | while read -r hh; do
               base=${hh%.h}
-              case " $iso_headers " in *" $base "*) ;; *) echo "<$hh>" ;; esac
+              # One line per arm, for the reason the same shape above gives.
+              case " $iso_headers " in
+                *" $base "*) ;;
+                *) echo "<$hh>" ;;
+              esac
             done | sort -u)
 if [[ -n $uni_extra ]]; then
   echo "runtime-isoc: runtime/pasrt_unicode.c includes a non-ISO header:" >&2

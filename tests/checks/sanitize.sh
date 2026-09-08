@@ -226,11 +226,19 @@ if [[ -n $want ]]; then
 fi
 
 # Every case the catalogue says ends with something outstanding. Read once.
-declare -A outstanding=()
+#
+# A newline-delimited string and not `declare -A`, which is bash 4: macOS
+# ships bash 3.2, where that declaration fails and every later subscript is
+# evaluated as *arithmetic* -- a name that is not a number is 0, so every
+# lookup would answer with whatever the last case wrote at index 0, and the
+# suppression list would silently apply to everything. The gate would have
+# gone on passing, which is the reason this is worth the awkwardness.
+outstanding=$'\n'
 while read -r name n; do
   [[ $name == \#* || -z $name ]] && continue
-  [[ ${n:-0} -gt 0 ]] && outstanding[$name]=$n
+  [[ ${n:-0} -gt 0 ]] && outstanding="$outstanding$name"$'\n'
 done <"$root/tests/checks/heap_balance.txt"
+is_outstanding() { case "$outstanding" in *$'\n'"$1"$'\n'*) return 0 ;; esac; return 1; }
 
 # **Three reasons to skip, and they are not the same news.** For as long as
 # this gate existed the tally said `233 skipped` and a reader could not tell a
@@ -436,7 +444,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
     if grep -qE '^==[0-9]+==ERROR: LeakSanitizer' "$work/err.txt" &&
        ! grep -qE '^==[0-9]+==ERROR: AddressSanitizer' "$work/err.txt" &&
        ! grep -qE ':[0-9]+:[0-9]+: runtime error: ' "$work/err.txt" &&
-       [[ -n ${outstanding[$name]:-} ]]; then
+       is_outstanding "$name"; then
       clean=$((clean + 1)); continue
     fi
     # A finding this tree already knows about and has argued for.

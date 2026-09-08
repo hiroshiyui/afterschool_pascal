@@ -52,8 +52,11 @@ trap 'rm -rf "$work"' EXIT
 
 # The components, in the order selfhost/compiler.components gives, with the
 # program last -- the same list CMake and every harness reads.
-mapfile -t components < <(grep -v '^[[:space:]]*$' \
-                              "$root/selfhost/compiler.components")
+# A read loop and not `mapfile`, which is bash 4: macOS ships bash 3.2, where
+# the array would stay empty and this would reseed from the program alone.
+components=()
+while IFS= read -r line; do components+=("$line"); done \
+  < <(grep -v '^[[:space:]]*$' "$root/selfhost/compiler.components")
 components+=(compiler.pas)
 
 # Translated from `$root` with a **relative** source path, and that is not a
