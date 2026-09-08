@@ -116,6 +116,20 @@ handed an empty pattern file, where POSIX says an empty pattern set matches
 nothing — a BSD grep could have emptied the corpus and left the floor to report
 it.
 
+**`bare-source-name` and `long-path` are the fourth and fifth**, both small
+leaves and both compared on every arm: the real driver, a driver path that is
+not executable, and a driver that refuses everything, which makes each claim
+fail in turn and prints the per-claim notes. `long-path`'s only difference is
+the number inside its own message — `mkdtemp` names a directory three
+characters shorter than `mktemp -d` does, so it builds a 298-character path
+where the shell built 301, and the claim is that it passes 255.
+
+Both lost one line of noise, and every remaining script with a required
+argument has it: `${1:?usage: …}` makes bash print its own `<script>: line 42:
+1:` in front of the usage text, naming a line number and a positional
+parameter that mean nothing to a reader. The usage line is printed plainly.
+Every arm that states a claim is byte for byte what the shell wrote.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,
