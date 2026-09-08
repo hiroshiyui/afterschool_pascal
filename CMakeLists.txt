@@ -474,7 +474,7 @@ if(Python3_FOUND)
   # payload that runs is the defect, and a payload path that stops working is
   # the other half, which is what quoting more cleverly would fail.
   add_test(NAME command-injection
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/command_injection.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/command_injection.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
   set_tests_properties(command-injection PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}" TIMEOUT 300)
@@ -1070,7 +1070,7 @@ endif()
 # links every case against it, so it is the slowest thing here and the one that
 # most wants the other cores. Skips 77 without a 32-bit libc.
 add_test(NAME target32
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/target32.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/target32.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc)
 set_tests_properties(target32 PROPERTIES
                      TIMEOUT 1800

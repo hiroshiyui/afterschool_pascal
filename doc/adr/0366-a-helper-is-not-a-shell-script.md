@@ -215,6 +215,43 @@ made the output stop being a diff `patch` can read, so the conversion supplies
 one in `diff -u`'s own format; what is compared is then everything but that
 line.
 
+**`command-injection` is the thirteenth**, and the one whose mutation had to
+be a *rebuilt language server*. Nine arms: this tree; ADR-0362's own defect
+restored in a copied `lsp/` and `lib/`, the source path wrapped in apostrophes
+and handed to `Run`, which both tools report; ADR-0363's private-directory
+claim, its `pasls-` prefix changed to `shared-`; its scratch cleanup removed;
+the arm the chr(0) refusal rests on; a server that does not build; and no
+arguments at all.
+
+Two things it taught. **The chr(0) claim does not rest where its record
+suggests**: mutating `HoldsNul` to answer no leaves the gate green, the
+refusal coming from the tool handler's empty-`path` arm — the JSON reader
+hands it nothing for a `\u0000` string. Both versions agreed either way, so
+this is a fact about the claim and not about the conversion, and it is written
+here because the next person to mutate that gate will reach for `HoldsNul`
+first, as I did. And **the no-argument arm is the one place byte-identity is
+neither possible nor wanted**: bash's `${1:?...}` names its own line number
+and is translated into the operator's locale, so what the conversion writes
+instead is a plain `usage:` line.
+
+Two things the shell version needed are gone rather than translated, and
+neither is part of the question: the `sed` that spliced the payload path into
+a JSON line, which built invalid JSON for any path holding a quote or a
+backslash, and is now `json.dumps` with the real path; and the `sed -i`
+portability wrapper written for it. The spy compiler is Python for the same
+reason the gate is.
+
+**`target32` is the fourteenth**, and the first sweep rather than a
+single-question gate: 597 sources built and run for `i386-pc-linux-gnu`
+against a runtime the gate builds itself. Seven arms, byte-identical
+throughout, including both directions of `target32_known.txt` — a row added
+for a case that passes, and the one real row removed — the floor, proved on a
+symlinked tree holding three sources, the two `TARGET32_REQUIRE` arms, and a
+runtime that will not compile for the target. **The sweep stays serial.** What
+is compared is one list of failures in one order, and that order is the one
+the catalogue was written against; making it parallel is a separate change
+with its own argument, not a thing to do in passing while converting.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,
