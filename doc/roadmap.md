@@ -249,40 +249,47 @@ aarch64 job establishes that the port *works*, not that every oracle has run
 there — `llc-second-backend` and `benchmark` abstain on it (`doc/sop.md` §7);
 and the layout gate sees frames and nothing else.
 
-### What a harness is written in
+### What a helper is written in
 
-**A new harness is written in Python 3; a shell one is converted when it is
-being substantially edited anyway, and not otherwise.** Python is already the
-house language here rather than the proposal — on 2026-09-08 it was 11 844
-lines across 38 files against 5 949 across 31, and 27 of the gate cases
-against 20 (`git ls-files '*.py' | xargs wc -l`, and the same for `*.sh`;
-recount rather than quoting, both move).
+Decided in [ADR-0366](adr/0366-a-helper-is-not-a-shell-script.md), and the
+short form is three sentences.
 
-**There is no wholesale rewrite, and that is the decided half.** These scripts
-*are* this project's evidence, so rewriting one is the single change with no
-oracle to check it — a rewritten gate that quietly asks a different question
-looks exactly like one that works. `tools/pascalcc` is excluded outright, by
-the decision of 2026-09-07 that new driver logic goes in a helper like
-`bin/apconfig` instead.
+**The portability boundary is the set of external programs a helper invokes,
+not the language.** A Python script that runs `nm` is exactly as unportable as
+a shell script that runs `sed`, which is what two of the nine macOS failures
+were. So: a harness is Python 3, *and* it reaches for the standard library
+rather than a subprocess — `pathlib`, `tempfile`, `difflib`, `re` in place of
+`find`, `mktemp`, `diff`, `sed`. Invoking the toolchain is not what that
+forbids; invoking a general-purpose Unix utility to do what the language can
+do is.
 
-**The reason the rule is not stronger than that** is what the first macOS run
-measured, and it is worth carrying: of its nine failures, **four** were bash
-or GNU-utility specific and Python would have removed them outright —
-`mapfile`, `declare -A`, a `case` inside `$( )` that bash 3.2 mis-parses by
-counting parentheses, and `\|` in a BSD sed regex. **Two were already in
-Python** and it did not help, the assumption being about the platform rather
-than the language: `nm --defined-only` with a non-PIE link, and a resource
-limit Darwin defines and refuses. **Three were in neither** — a Linux-only
-path in three sources, an `errno` read after a call POSIX lets clobber it, and
-a socket written to exactly twice because that is Linux's answer. So the
-language buys under half of it, and *assuming a platform* is the larger half
-and available in every language.
+**A helper that ships to a user is written in Afterschool Pascal; a gate is
+written in Python.** A gate must be able to fail *because the compiler is
+broken*, so it cannot be written in the language under test. A shipped helper
+has the opposite constraint, and the one thing present on the user's machine
+is the compiler and runtime just installed there — `bin/apconfig` is the
+precedent (ADR-0361).
 
-**The lever this points at is a gate and not a rewrite.** Each of those four
-cost a full CI round trip to find, one at a time, because each hid the next; a
-lint over every tracked script — the constructs bash 3.2 lacks, the GNU-only
-flags on the utilities in use — would have found all four on the first push
-with no Mac at all. Not built, and it is the cheapest thing on this page.
+**Nothing is converted wholesale, and a conversion is checkable.** These
+scripts *are* this project's evidence, so a rewrite lands with two things and
+neither is a green suite: byte-identical output from both versions on the
+current tree, and that gate's own historical mutation re-run against the new
+version, failing the same way.
+
+**Why it is a decision and not a preference**: macOS was a platform where a
+shell script *runs* and differs in detail. Windows is one where there is no
+bash, no `sed`, no `nm` and no `#!` line, so all 31 scripts do not run at all —
+each is a blocker rather than a bug, and a rule that converts them only when
+they are being edited never reaches the stable ones. The driver is the
+collision the record names and leaves open: `tools/pascalcc` is the product
+rather than a harness, and the decision that it stays a shell script cannot
+stand beside the Windows row.
+
+**The lever nobody has pulled** is a lint over every tracked script — the
+constructs bash 3.2 lacks, the GNU-only flags, a subprocess a stdlib call
+would do. Each of the four bash defects cost a full CI round trip because each
+hid the next; a lint would have found all four on the first push with no Mac.
+Not built, and the cheapest thing on this page.
 
 ---
 

@@ -374,3 +374,4 @@ the alternatives that were rejected and why.
 | [0363](0363-a-boundary-answers-it-does-not-stop.md) | A boundary answers; it does not stop | Accepted |
 | [0364](0364-a-foreign-scalar-is-the-targets-width.md) | A foreign scalar is the target's width | Accepted |
 | [0365](0365-the-concurrency-clauses-audited.md) | The concurrency clauses, audited | Accepted |
+| [0366](0366-a-helper-is-not-a-shell-script.md) | A helper is not a shell script | Accepted |
