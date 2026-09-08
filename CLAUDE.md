@@ -132,14 +132,14 @@ the `--dump` flags write to standard output, so what a case there compares is
 what the *compiler* wrote and not what a program did (ADR-0103). **`lsp/` is a
 second one** — `lsp/pasls.pas`, a language server written in the dialect, built
 by `lsp/build.py` into a binary an editor can be pointed at, checked by
-`lsp/run.sh` replaying
+`lsp/run.py` replaying
 `lsp/sessions/*.jsonl` as a *conversation* compared byte for byte (ADR-0236),
 and speaking MCP as well as LSP from the one binary (ADR-0241). `lsp/README.md`
 says what it answers and from which dump; `doc/design-digest.md` holds the
 mechanism. Two things about it are this file's business: the corpus sweeps reach
 it through a **second root** rather than through the glob (`coverage.py` names
 it, `variant_check.py` finds it, `build.py` honours `AFTERSCHOOL_PASCAL_OPT`),
-and `heap-balance` drives `lsp/run.sh` instead of `run_test.sh`, which has to
+and `heap-balance` drives `lsp/run.py` instead of `run_test.sh`, which has to
 take `PASHEAP_BALANCE` out of the environment **twice**, `pascalcc` building the
 server and the server starting `pascalc` once per document.
 

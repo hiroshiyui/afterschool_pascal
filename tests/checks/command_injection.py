@@ -14,7 +14,7 @@ carried as words and no shell reads them.
 **It needs a harness of its own** for `long-path`'s reason met a fourth time:
 no test case can choose how it is *named*, every case here being compiled
 where it sits under a name a glob found. And it is a gate rather than a
-session because `lsp/run.sh` compares a conversation byte for byte and a
+session because `lsp/run.py` compares a conversation byte for byte and a
 workspace file with a semicolon in its name would have to be quoted by every
 sweep that walks the tree.
 

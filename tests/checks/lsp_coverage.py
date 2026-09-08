@@ -25,7 +25,7 @@ program in the tree -- and 32 recorded sessions replay against it byte for byte
 question. A golden says the answers are right; it says nothing about how much
 of the server was asked.
 
-**The replay is not reimplemented, and that is the point.** `lsp/run.sh` frames
+**The replay is not reimplemented, and that is the point.** `lsp/run.py` frames
 a session, honours its `.mcp`, `.workspace`, `.scratch` and `.tmpdir` sidecars,
 picks a scratch path per session and takes `PASHEAP_BALANCE` out of the
 environment twice -- 120 lines that mean something only when they are one copy.
@@ -81,7 +81,7 @@ HIT = re.compile(r"call void @pas_cov_hit\(i32 (\d+)\)")
 # The comment ADR-0103 put in front of every emitted routine: its name, folded,
 # and the line its declaration begins on.
 MARK = re.compile(r"^; ([a-z_][a-z_0-9]*) (\d+)$")
-# `pasls: N session(s), M failed` -- run.sh's own summary, and the only place
+# `pasls: N session(s), M failed` -- run.py's own summary, and the only place
 # that knows how many conversations were actually held.
 SUMMARY = re.compile(r"^pasls: (\d+) session\(s\), (\d+) failed$", re.M)
 RATCHET = "lsp_coverage.txt"
@@ -162,7 +162,7 @@ def replay(root, pascalc, build_dir, work):
     # inherited path would have the server append to a file nothing reads.
     env.pop("PASCOV_BRANCHES", None)
     try:
-        r = subprocess.run([str(root / "lsp" / "run.sh"),
+        r = subprocess.run([str(root / "lsp" / "run.py"),
                             str(root / "tools" / "pascalcc"), str(pascalc)],
                            capture_output=True, text=True, timeout=900,
                            cwd=str(root), env=env)
@@ -179,7 +179,7 @@ def replay(root, pascalc, build_dir, work):
         return None
     m = SUMMARY.search(r.stdout)
     if not m:
-        print("lsp-coverage: lsp/run.sh printed no summary line",
+        print("lsp-coverage: lsp/run.py printed no summary line",
               file=sys.stderr)
         return None
     if not ir.exists():
@@ -280,7 +280,7 @@ def main():
 
     body = "\n".join([
         "# Statement coverage of lsp/pasls.pas, over the sessions",
-        "# lsp/run.sh replays against it (ADR-0236, ADR-0241).",
+        "# lsp/run.py replays against it (ADR-0236, ADR-0241).",
         "#",
         "# A ratchet, as tests/checks/line_coverage.txt is and with its",
         "# weakness: it fails when the number rises, and a line that stops",

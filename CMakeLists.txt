@@ -400,7 +400,7 @@ if(Python3_FOUND)
   # sessions are goldens compared byte for byte (ADR-0236, ADR-0241), and a
   # golden says the answers are right without saying how much of the 3814-line
   # server was ever asked -- which is ADR-0350's finding one directory over.
-  # It drives lsp/run.sh rather than reimplementing the framing, the sidecars
+  # It drives lsp/run.py rather than reimplementing the framing, the sidecars
   # and the scratch paths, for `thread-sanitizer`'s reason; so it fails when a
   # session fails too, a coverage number taken from a conversation that went
   # wrong measuring nothing.
@@ -1106,7 +1106,7 @@ set_tests_properties(pascalc-product PROPERTIES TIMEOUT 300)
 # again for each. The timeout is tests/dialect/'s and for its reason: a server
 # with a readiness defect blocks rather than printing the wrong thing.
 add_test(NAME lsp-server
-         COMMAND ${CMAKE_SOURCE_DIR}/lsp/run.sh
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/lsp/run.py
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
 set_tests_properties(lsp-server PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
                      TIMEOUT 300)

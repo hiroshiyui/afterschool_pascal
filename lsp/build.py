@@ -27,7 +27,7 @@ and read here for the same reason: the build order is written down once.
 This is not a CMake target. Nothing in this tree installs a library or a
 second program, and a server needs a binary a *user* can point an editor at
 rather than one buried in a build tree -- so it is a script, as
-`tools/pascalcc` is. `lsp/run.sh` calls it, and so can anyone.
+`tools/pascalcc` is. `lsp/run.py` calls it, and so can anyone.
 
 Converted from shell under ADR-0366; the shell version's binary is what this
 was required to reproduce, and the comparison is the emitted IR of every
@@ -47,7 +47,16 @@ HERE = Path(__file__).resolve().parent
 
 
 def run(argv):
-    r = subprocess.run(argv)
+    """Run a compilation, and stop where `set -e` did.
+
+    A command that cannot be started is 127 and a message, as a shell reports
+    it: this is handed a `pascalcc` by its caller and a wrong one must say so
+    rather than raise."""
+    try:
+        r = subprocess.run(argv)
+    except OSError as e:
+        print('build.py: %s: %s' % (argv[0], e.strerror), file=sys.stderr)
+        sys.exit(127)
     if r.returncode != 0:
         sys.exit(r.returncode)
 
@@ -104,7 +113,7 @@ def build(pascalcc, out, work):
     # executable (ADR-0104).
     #
     # An env var and not a flag, for AFTERSCHOOL_PASCAL_OPT's reason above:
-    # what builds the server is `lsp/run.sh`, which passes this script its two
+    # what builds the server is `lsp/run.py`, which passes this script its two
     # arguments and has no third to spare.
     covflag = []
     if os.environ.get('PASLS_COVERAGE_IR'):

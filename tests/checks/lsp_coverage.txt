@@ -1,5 +1,5 @@
 # Statement coverage of lsp/pasls.pas, over the sessions
-# lsp/run.sh replays against it (ADR-0236, ADR-0241).
+# lsp/run.py replays against it (ADR-0236, ADR-0241).
 #
 # A ratchet, as tests/checks/line_coverage.txt is and with its
 # weakness: it fails when the number rises, and a line that stops

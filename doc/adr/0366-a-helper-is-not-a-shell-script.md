@@ -315,6 +315,28 @@ compares that name's mtime — an argmax used to compute a max, which Python
 takes directly. **`.mcp.json` names this script**, so the MCP server for this
 checkout must be restarted before an agent sees the converted launcher.
 
+**`lsp/run` is the twentieth**, the largest so far, and the one where the
+subject is a *protocol*: 33 recorded sessions replayed byte for byte, framing
+and carriage returns and `Content-Length` counts included. All 33 identical,
+plus nine arms — a session with no golden, a `.note` that no longer matches,
+a `.note` removed so the server's own words are unaccounted for, no sessions
+at all, a server that will not build, no arguments, a server made to exit 3,
+and ADR-0363's two claims restaged through *this* harness: the private
+directory's prefix changed, and its cleanup removed.
+
+**Three shell defects surfaced, and all three are this record's own
+argument.** With no `*.jsonl` to match, bash leaves the pattern in the loop
+variable — no `nullglob` — so the shell reports a session literally named `*`
+before saying none were replayed. `[[ $p == */* ]] && p=$(cd $(dirname $p) &&
+pwd)/$(basename $p)` yields **`/pascalcc`** when the directory does not exist,
+turning "no such directory" into a complaint about a file at the root. And
+`lsp/build` printed a Python traceback where the shell printed a shell's
+`command not found`; it now answers 127 and a line, which is what a caller
+handed a wrong `pascalcc` needs to read.
+
+One thing was dropped rather than translated: the shell wrote the server's pid
+to `$work/$name.pid` and nothing ever read it.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

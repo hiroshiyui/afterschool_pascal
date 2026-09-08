@@ -117,7 +117,7 @@ def balance(source, pascalcc, work):
     env = dict(os.environ)
     env["PASHEAP_BALANCE"] = str(out)
     if source == LSP:
-        harness = [str(ROOT / "lsp" / "run.sh"), pascalcc]
+        harness = [str(ROOT / "lsp" / "run.py"), pascalcc]
     else:
         harness = [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source)]
     done = subprocess.run(

@@ -4213,7 +4213,7 @@ Two smaller asymmetries worth knowing. The MCP side has **no document store
 and no scratch copy**, the unit being a file that is already on disk. And it
 takes its **workspace from the directory it was started in**, MCP's `roots`
 being a client capability reached by a request this server does not issue —
-which is why `lsp/run.sh` runs the server in the checkout and resolves the
+which is why `lsp/run.py` runs the server in the checkout and resolves the
 compiler paths it is handed to absolute ones.
 
 **JSON escaping is what makes the newline framing safe.** MCP forbids an
@@ -4345,7 +4345,7 @@ nothing else. What it would lose, mechanism by mechanism:
   `selfhost/irtest.sh` already read, so the build order is written down once. A
   script and not a CMake target, because nothing here installs anything;
   `tools/pascalcc` is the precedent.
-- **A session is its own kind of golden**, which is why `lsp/run.sh` exists
+- **A session is its own kind of golden**, which is why `lsp/run.py` exists
   beside `tests/dumps/run.py` for the same reason: what is compared is neither
   a compiled program's output nor a compiler's but a *conversation*. The input
   is `sessions/name.jsonl`, one JSON-RPC message per line with `#` comments,
@@ -4411,7 +4411,7 @@ nothing else. What it would lose, mechanism by mechanism:
   `lsp/` to its `find`, and `build.py` honours `AFTERSCHOOL_PASCAL_OPT` so the
   corpus-wide `-O0` sweep reaches a program whose whole shape is a loop
   (ADR-0102). `heap-balance` needed more: the server has no `.out` and cannot
-  have one, so it drives `lsp/run.sh` — and that harness has to take
+  have one, so it drives `lsp/run.py` — and that harness has to take
   `PASHEAP_BALANCE` out of the environment **twice**, since `pascalcc` builds
   the server and the server then starts `pascalc` once per document, both being
   Pascal programs on this runtime whose allocations are not the server's.

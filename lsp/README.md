@@ -356,7 +356,7 @@ dump a tool asks for and requires the compiler to survive — a crash sweep and
 not a golden, because what a dump *says* is `tests/dumps/`'s business.
 
 ```sh
-lsp/run.sh tools/pascalcc build/bin/pascalc
+lsp/run.py tools/pascalcc build/bin/pascalc
 ```
 
 A session is up to seven files, of which the first two are required:
