@@ -68,11 +68,13 @@
 #
 # Usage:  tests/checks/llc_check.py <build-dir>
 
+import difflib
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 SKIP = 77
@@ -83,6 +85,25 @@ SKIP = 77
 # argument to llc. `clang` compiling the .ll chooses the model itself, which is
 # why nothing else here has ever met this.
 LLC_FLAGS = ["-relocation-model=pic"]
+
+
+def unified(a, b):
+    """`diff -u a b`, in the library rather than through the program.
+
+    GNU `diff` writes its own text in the operator's locale, so a finding this
+    gate printed was partly a fact about whose machine ran it -- and ADR-0366's
+    rule is that a helper reaches for the standard library rather than a
+    general-purpose utility. The timestamps are supplied so what this prints
+    is still a diff `patch` can read."""
+    def when(p):
+        ns = p.stat().st_mtime_ns
+        t = time.localtime(ns // 10**9)
+        return "%s.%09d %s" % (time.strftime("%Y-%m-%d %H:%M:%S", t),
+                               ns % 10**9, time.strftime("%z", t))
+    return "".join(difflib.unified_diff(
+        a.read_text(errors="surrogateescape").splitlines(keepends=True),
+        b.read_text(errors="surrogateescape").splitlines(keepends=True),
+        str(a), str(b), when(a), when(b)))
 
 
 def run(cmd, **kw):
@@ -233,7 +254,7 @@ def main():
                           "what the", file=sys.stderr)
                     print("  source means,", file=sys.stderr)
                     print("  so one of them is miscompiled.", file=sys.stderr)
-                    d = run(["diff", "-u", str(ref), str(out)]).stdout
+                    d = unified(ref, out)
                     print(head(d, 40), file=sys.stderr)
                     return 1
 

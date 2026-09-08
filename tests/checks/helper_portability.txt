@@ -1,0 +1,53 @@
+# What this tree's helpers may rely on, and what runs them (ADR-0367).
+#
+# `tests/checks/helper_portability.py` reads this file and fails in **both**
+# directions: an uncatalogued shell script or subprocess is a failure, and a
+# row naming something that is no longer there is as loud, because a stale
+# allowance is a rule that has quietly stopped applying.
+#
+# Three kinds of row.
+#
+#   shell: <path>       a tracked file that is a shell script. ADR-0366 made
+#                       Python the language of a helper here, so this list is
+#                       the exception list and it is meant to stay at one.
+#
+#   bash4: <construct>  a construct bash 3.2 lacks. macOS ships 3.2 and will
+#                       not ship another, GPLv3 being the reason, so what is
+#                       written here is what a `shell:` file may not contain.
+#
+#   <program> <file>    a general-purpose Unix utility a Python helper starts,
+#                       with the file that starts it. The rule is not "no
+#                       subprocess": invoking the *toolchain* is the job. It
+#                       is that a helper must not start a general-purpose
+#                       utility to do what the standard library does, because
+#                       the portability boundary is the set of external
+#                       programs a helper invokes and not the language it is
+#                       written in -- two of the nine macOS failures were a
+#                       Python script running `nm`.
+
+# ---- the shell that is left --------------------------------------------
+# `tools/pascalcc` is the product and not a harness: it is what a user runs,
+# and the decision that it stays a shell script was taken on 2026-09-07 with
+# the driver rewrite declined. It is the one file the constructs below are
+# checked against, and the Windows row on doc/roadmap.md is the standing
+# argument against this line.
+shell: tools/pascalcc
+
+# ---- what bash 3.2 does not have ---------------------------------------
+# Each cost a CI round trip on the first macOS run, and each hid the next
+# (ADR-0366). `case` inside `$( )` is the one that is not a name: bash 3.2
+# scans a command substitution by counting parentheses, so the `)` that closes
+# a case pattern ends the substitution instead.
+bash4: mapfile
+bash4: readarray
+bash4: declare -A
+bash4: local -A
+bash4: ${parameter^^}
+bash4: ${parameter,,}
+bash4: &>>
+bash4: |&
+bash4: case-inside-command-substitution
+
+# ---- the utilities a Python helper may still start ---------------------
+# One row each, and each says why the standard library will not do.
+nm       tests/checks/coverage.py

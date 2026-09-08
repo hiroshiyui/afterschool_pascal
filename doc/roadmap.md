@@ -285,11 +285,15 @@ collision the record names and leaves open: `tools/pascalcc` is the product
 rather than a harness, and the decision that it stays a shell script cannot
 stand beside the Windows row.
 
-**The lever nobody has pulled** is a lint over every tracked script — the
-constructs bash 3.2 lacks, the GNU-only flags, a subprocess a stdlib call
-would do. Each of the four bash defects cost a full CI round trip because each
-hid the next; a lint would have found all four on the first push with no Mac.
-Not built, and the cheapest thing on this page.
+**The lint is built** ([ADR-0367](adr/0367-the-rule-about-helpers-is-enforced.md)):
+`helper-portability` is a `ctest` case, and what it watches has moved with the
+tree. There is no longer a script to lint for GNU-only flags — every harness
+is Python — so the three claims are that **no tracked shell script the
+catalogue does not name** appears, that the one it does name holds none of the
+constructs bash 3.2 lacks, and that **no Python helper starts a
+general-purpose utility** to do what the standard library does. All three fail
+in both directions, and the catalogue is one line of shell: `tools/pascalcc`,
+which the Windows row above is the standing argument against.
 
 ---
 

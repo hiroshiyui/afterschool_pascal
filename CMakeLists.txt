@@ -1063,6 +1063,20 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/require_consistency.py)
 endif()
 
+# Is ADR-0366's rule still true of this tree? (ADR-0367) That decision made a
+# helper here Python 3 reaching for the standard library, and thirty-one
+# conversions carried it out -- leaving a rule that nothing enforced, which is
+# the shape the gate above exists because of. Three claims, all in both
+# directions: no tracked shell script the catalogue does not name, none of the
+# constructs bash 3.2 lacks in the one it does, and no Python helper starting a
+# general-purpose utility to do what the library does. It reads no Pascal and
+# needs nothing installed.
+if(Python3_FOUND)
+  add_test(NAME helper-portability
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/helper_portability.py)
+endif()
+
 # ...and whether a program built with those numbers behaves (ADR-0325). The
 # row above asks about arithmetic; both defects the i386 port found were in
 # neither a layout rule nor a frame, so it passed with a segfaulting select.

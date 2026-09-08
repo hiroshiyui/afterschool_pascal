@@ -111,7 +111,8 @@ def check(build, pascalc, work):
     if len(archives) != 1 or not archives[0].is_file():
         print('--- release-archive: expected one archive under %s/dist ---'
               % work, file=sys.stderr)
-        subprocess.run(['ls', '-l', str(work / 'dist')], stdout=sys.stderr)
+        for q in sorted((work / 'dist').iterdir()):
+            print('%10d %s' % (q.stat().st_size, q.name), file=sys.stderr)
         return 1
     archive = archives[0]
 
