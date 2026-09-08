@@ -664,7 +664,13 @@ cat "$work/link.txt" >&2
 # program was compiled against -- which is the stale-object hazard
 # doc/implementation-defined.md 2.5 recorded as detected by nothing, and which
 # silently produced a wrong answer rather than a diagnostic.
-mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\([0-9a-f]*\)\.\(init\|fini\).*/\1 \2 \3/p" \
+# Two spellings of one report: GNU ld and lld write `undefined reference to
+# 'm.x.afterschool.d.init'`, and macOS's ld64 writes `"_m.x.afterschool.d.init",
+# referenced from:` under `Undefined symbols for architecture`, with the
+# Mach-O underscore in front. Both are read, so the diagnosis below is not
+# lost on the one platform whose linker spells it the second way.
+mismatch=$(sed -n -e "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\([0-9a-f]*\)\.\(init\|fini\).*/\1 \2 \3/p" \
+              -e "s/.*\"_m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\([0-9a-f]*\)\.\(init\|fini\)\".*/\1 \2 \3/p" \
            "$work/link.txt" | head -1)
 if [[ -n $mismatch ]]; then
   set -- $mismatch
@@ -677,7 +683,8 @@ if [[ -n $mismatch ]]; then
   echo "pascalcc: wrong answer (ADR-0245)." >&2
   echo "pascalcc: recompile '$1'." >&2
 else
-  mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\).*/\1 \2/p" \
+  mismatch=$(sed -n -e "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\).*/\1 \2/p" \
+                -e "s/.*\"_m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\)\".*/\1 \2/p" \
              "$work/link.txt" | head -1)
   if [[ -n $mismatch ]]; then
     set -- $mismatch

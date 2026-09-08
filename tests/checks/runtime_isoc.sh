@@ -58,6 +58,11 @@ root=$(cd "$here/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# BSD sed's `-i` takes a mandatory suffix and GNU's an optional one, so the one
+# spelling that means "in place" on both is no `-i` at all: a temporary and a
+# rename. One expression, one file.
+edit() { sed "$1" "$2" > "$2.edit" && mv "$2.edit" "$2"; }
+
 cc=${APASCAL_CLANG:-clang}
 src=$root/runtime/pasrt.c
 list=$here/nonstandard_c.txt
@@ -81,7 +86,7 @@ cp "$src" "$stripped"
 for h in $(grep -oE '^#include <[a-z0-9_/]+\.h>' "$src" | sed 's/.*<\(.*\)\.h>/\1/'); do
   case " $iso_headers " in
     *" $h "*) ;;
-    *) sed -i "s|^#include <$h\.h>|/* <$h.h> is not ISO C: removed by runtime_isoc.sh */|" "$stripped" ;;
+    *) edit "s|^#include <$h\.h>|/* <$h.h> is not ISO C: removed by runtime_isoc.sh */|" "$stripped" ;;
   esac
 done
 

@@ -38,6 +38,11 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work"
 
+# BSD sed's `-i` takes a mandatory suffix and GNU's an optional one, so the one
+# spelling that means "in place" on both is no `-i` at all: a temporary and a
+# rename. One expression, one file.
+edit() { sed "$1" "$2" > "$2.edit" && mv "$2.edit" "$2"; }
+
 fail() { echo "new-project: $*" >&2; exit 1; }
 
 # --- 1. the skeleton is written, and it is the layout that was decided ------
@@ -86,11 +91,11 @@ cp keep.toml afterschool-pascal.toml && rm -f keep.toml
 #
 # Both directions, because a key nothing acts on is decoration: `-lm` links and
 # a library that does not exist must not.
-sed -i 's|^# ldflags.*|ldflags = ["-lm"]|' afterschool-pascal.toml
+edit 's|^# ldflags.*|ldflags = ["-lm"]|' afterschool-pascal.toml
 "$driver" build >/dev/null || fail "ldflags = [\"-lm\"] did not link"
-sed -i 's|^ldflags.*|ldflags = ["-lnosuchlibraryanywhere"]|' afterschool-pascal.toml
+edit 's|^ldflags.*|ldflags = ["-lnosuchlibraryanywhere"]|' afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then fail "a bogus ldflag still linked"; fi
-sed -i 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
+edit 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
 
 # --- 6b. and so do the other two keys that reach a tool -------------------
 #
@@ -100,13 +105,13 @@ sed -i 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
 # effect, because that is what needs no toolchain -- a valid cross target needs
 # a sysroot this machine may not have, and a flag clang accepts proves only
 # that clang tolerated it.
-sed -i 's|^# cflags.*|cflags = ["-nosuchclangflaganywhere"]|' afterschool-pascal.toml
+edit 's|^# cflags.*|cflags = ["-nosuchclangflaganywhere"]|' afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then fail "a bogus cflag still compiled"; fi
-sed -i 's|^cflags.*|# cflags = []|' afterschool-pascal.toml
+edit 's|^cflags.*|# cflags = []|' afterschool-pascal.toml
 
-sed -i 's|^# target.*|target = "nosucharch-unknown-none"|' afterschool-pascal.toml
+edit 's|^# target.*|target = "nosucharch-unknown-none"|' afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then fail "a bogus target still built"; fi
-sed -i 's|^target.*|# target = ""|' afterschool-pascal.toml
+edit 's|^target.*|# target = ""|' afterschool-pascal.toml
 
 # ...and the project still builds with both back as comments, so the sed above
 # restored a file the reader accepts rather than one it merely tolerated.
@@ -125,31 +130,31 @@ sed -i 's|^target.*|# target = ""|' afterschool-pascal.toml
 # not -- which it can only do if the whole string arrived.
 # Two elements, so that dropping the second is as visible as splitting the
 # first.
-sed -i 's|^# ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-lm"]|' afterschool-pascal.toml
+edit 's|^# ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-lm"]|' afterschool-pascal.toml
 "$driver" build >/dev/null || fail 'a comma inside a quoted ldflag did not link'
-sed -i 's|^ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-Wl,--no-such-linker-option,x"]|' \
+edit 's|^ldflags.*|ldflags = ["-Wl,-rpath,/nosuchdir", "-Wl,--no-such-linker-option,x"]|' \
     afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then
   fail 'the second element of an ldflags list never reached the link'
 fi
-sed -i 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
+edit 's|^ldflags.*|# ldflags = []|' afterschool-pascal.toml
 
 # A `#` inside a quoted string. The old reader stripped from the first one
 # before looking at anything, so this silently built `build/demo` -- a wrong
 # answer with a zero exit status, which is the failure this whole tree is
 # written against.
-sed -i 's|^output .*|output      = "build/demo#1"|' afterschool-pascal.toml
+edit 's|^output .*|output      = "build/demo#1"|' afterschool-pascal.toml
 "$driver" build >/dev/null || fail 'a # inside a quoted output path did not build'
 [[ -x 'build/demo#1' ]] || fail 'the # in build/demo#1 was cut off the path'
-sed -i 's|^output .*|output      = "build/demo"|' afterschool-pascal.toml
+edit 's|^output .*|output      = "build/demo"|' afterschool-pascal.toml
 
 # A number where the driver wants a string. The old reader refused this
 # because `2` is not `"..."`; this one parses it happily as a TOML integer and
 # has to refuse it on the *schema* instead, which is a different check that
 # has to be there.
-sed -i 's|^opt .*|opt         = 2|' afterschool-pascal.toml
+edit 's|^opt .*|opt         = 2|' afterschool-pascal.toml
 if "$driver" build >/dev/null 2>&1; then fail 'build.opt = 2 was accepted'; fi
-sed -i 's|^opt .*|opt         = "-O2"|' afterschool-pascal.toml
+edit 's|^opt .*|opt         = "-O2"|' afterschool-pascal.toml
 
 # And a refusal names a column as well as a line, which is the whole of what a
 # real parser has over a line-at-a-time one.

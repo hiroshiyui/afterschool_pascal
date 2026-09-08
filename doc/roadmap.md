@@ -27,7 +27,7 @@ green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** has never been tried and is the cheapest unknown here; **Windows** needs two `FILE*`-over-memory functions, `_access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** is read for but never run, and its first CI job is advisory ([below](#cross-platform-support)); **Windows** needs two `FILE*`-over-memory functions, `_access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
@@ -240,7 +240,7 @@ target measurement is
 
 | Target | What it needs |
 | --- | --- |
-| **macOS** | nothing known — the runtime's five non-ISO names are all there — and nobody has tried it. The cheapest unknown on this page |
+| **macOS** | **read for, never run.** Every header `pasrt_posix.c` includes and every non-ISO name the runtime uses is in libSystem, and nothing under `lib/` binds `errno`, `environ` or a struct by name — the three that would have broken. Four harness-level assumptions reading found are closed: GNU `sed -i`, coreutils `timeout`, LeakSanitizer on arm64, and GNU ld's wording in the stale-object diagnosis. Two are open and named: `coverage.py` symbolises through a non-PIE link and unprefixed `nm` output, both ELF-shaped, so the three coverage gates are the ones to expect red; and `--target=` admits no Darwin triple, so the emitted header is overridden by clang rather than believed. `macos-experiment` in CI is the first run, advisory until green — promote it, then the release matrix, in that order |
 | **Windows** | `fmemopen` and `open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two `FILE*`-over-memory functions; `access` is `_access`; MSVC lacks the `_Complex` §6.7.6.2's functions are written in |
 | **s390x** | aligns `tySet`'s `i256` to 8 where every other target says 16 — thirteen offsets, and `target-layout`'s second claim would catch it |
 

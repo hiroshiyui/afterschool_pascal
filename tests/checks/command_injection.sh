@@ -34,6 +34,11 @@ work=$(mktemp -d)
 work=$(cd "$work" && pwd)
 trap 'rm -rf "$work"' EXIT
 fails=0
+
+# BSD sed's `-i` takes a mandatory suffix and GNU's an optional one, so the one
+# spelling that means "in place" on both is no `-i` at all: a temporary and a
+# rename. One expression, one file.
+edit() { sed "$1" "$2" > "$2.edit" && mv "$2.edit" "$2"; }
 fail() { echo "command-injection: $*" >&2; fails=$((fails + 1)); }
 
 if ! "$root/lsp/build.sh" "$pascalcc" "$work/pasls" >"$work/build.log" 2>&1; then
@@ -106,7 +111,7 @@ print(json.dumps({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protoc
 print(json.dumps({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"outline","arguments":{"path":"/tmp/x" + nul + "y.pas"}}}))
 print(json.dumps({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"outline","arguments":{"path":"$PAYLOAD"}}}))
 PEOF
-sed -i "s|\$PAYLOAD|$work/$payload|" "$work/nul.jsonl"
+edit "s|\$PAYLOAD|$work/$payload|" "$work/nul.jsonl"
 out=$(PASLS_COMPILER=$pascalc PASLS_SCRATCH=$work/scratch "$work/pasls" --mcp < "$work/nul.jsonl" 2>&1)
 case $out in
   *'"id":3'*'program Payload'*) ;;

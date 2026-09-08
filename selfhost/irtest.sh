@@ -53,6 +53,15 @@ root=$(dirname "$here")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# `timeout` is coreutils and not POSIX: macOS has none unless Homebrew's
+# coreutils is installed, where it is `gtimeout`. Without either the compiler
+# runs unbounded, which is what this harness did before the limit was added.
+if ! command -v timeout >/dev/null 2>&1; then
+  if command -v gtimeout >/dev/null 2>&1; then timeout() { gtimeout "$@"; }
+  else timeout() { shift; "$@"; }
+  fi
+fi
+
 runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-}
 if [[ -z $runtime ]]; then
   runtime=$(dirname "$seedcc")/../lib/libpasrt.a

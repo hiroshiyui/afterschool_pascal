@@ -241,6 +241,14 @@ done <"$root/tests/checks/heap_balance.txt"
 # something it used to watch.
 clean=0; failed=0; known=0; reported=0
 noout=0; needsargs=0; unbuilt=0; notconc=0
+# LeakSanitizer is Linux's: on macOS/arm64 an ASan program started with
+# `detect_leaks=1` refuses to run at all ("detect_leaks is not supported on
+# this platform"), which would flag every case as a finding. On Linux the
+# option is the default and this changes nothing. Decided once: the sweep runs
+# this many hundred times and `uname` is a fork.
+asan_options=
+[[ $(uname -s) == Linux ]] && asan_options=detect_leaks=1
+
 for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
            "$root"/tests/dialect/*.pas "$root"/examples/*.pas; do
   [[ -f $src ]] || continue
@@ -360,7 +368,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas \
   vg=()
   [[ $mode == valgrind ]] &&
     vg=(valgrind -q --error-exitcode=0 --errors-for-leak-kinds=none)
-  ( cd "$work" && ASAN_OPTIONS=detect_leaks=1 \
+  ( cd "$work" && ASAN_OPTIONS=$asan_options \
       TSAN_OPTIONS="halt_on_error=0 exitcode=0" \
       ${vg[@]+"${vg[@]}"} ./prog ) \
     >"$work/out.txt" 2>"$work/err.txt" <"$in"

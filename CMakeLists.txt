@@ -122,8 +122,8 @@ list(SORT APASCAL_SEED_LL)
 # only; the seed compiler is not shipped, and `libpasrt.a` is an archive of
 # objects already, linked by the user's own clang against the user's own C
 # library. `-static` is a glibc affair and does not exist on macOS, which is
-# one of the reasons that platform is a disabled matrix entry rather than a
-# job.
+# one of the reasons that platform is a disabled entry in the release matrix
+# and, on every push, only an advisory job (`macos-experiment`).
 option(APASCAL_STATIC_PASCALC
        "Link bin/pascalc with -static, for a release archive (ADR-0296)" OFF)
 set(APASCAL_PASCALC_LINK)

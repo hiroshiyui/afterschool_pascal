@@ -52,6 +52,11 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work" || exit 1
 
+# BSD sed's `-i` takes a mandatory suffix and GNU's an optional one, so the one
+# spelling that means "in place" on both is no `-i` at all: a temporary and a
+# rename. One expression, one file.
+edit() { sed "$1" "$2" > "$2.edit" && mv "$2.edit" "$2"; }
+
 # The heading, in the two versions that differ. `tag` goes in *front* of the
 # two fields the program uses, so a stale object disagrees about an offset and
 # not merely about a size -- which is what makes the wrong answer wrong in a
@@ -142,7 +147,7 @@ got=$(./prog4)
 [[ $got == "a=11 b=22" ]] || fail "after a comment change it printed [$got]"
 
 # 3. The module's own block, which no client can see.
-sed -i 's/kept/held/g' store.pas
+edit 's/kept/held/g' store.pas
 "$pascalcc" prog.pas --import store.pas store.o -o prog5 >log 2>&1 ||
   { cat log >&2; fail "a change to the module block forced a relink"; }
 got=$(./prog5)

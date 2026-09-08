@@ -764,6 +764,65 @@ jobs:
         # every ILP32 target, and at -O2 the optimiser folded the call away.
         # The gate is the same gate; what was missing was one of its two axes.
 
+  macos-experiment:
+    # **An experiment, and it cannot turn main red.** macOS has never been
+    # tried (doc/roadmap.md, "What is left"), and this job is the first run of
+    # the port rather than a claim about it: `continue-on-error` makes its
+    # result advisory, so a failure here is a finding to read and not a
+    # broken build. It sets no `*_REQUIRE` variable on purpose -- every gate
+    # that needs a tool this runner lacks (valgrind, llc, fpc, a 32-bit libc,
+    # cross compilers, the Unicode database) skips with 77 and is reported as
+    # a pass, which is the right answer while the question is whether the
+    # *rest* works. Promote it to a job that fails, and to the release matrix,
+    # only once it is green here; the package job's comment says why that is
+    # the order.
+    #
+    # What is known to differ, from reading rather than from a run: there is
+    # no `-static` and no `ldd` (`tools/release.sh` allows for both), no
+    # `timeout` (`irtest.sh` and `producttest.sh` fall back), BSD `sed -i`
+    # (the four harnesses that edit in place go through a temporary), no
+    # LeakSanitizer on arm64 (`sanitize.sh` asks for it on Linux only), and
+    # ld64 spells an undefined symbol with a leading underscore (`pascalcc`
+    # reads both). What is *not* known is everything a run finds.
+    #
+    # The compiler emits an x86-64 Linux header (`--target=` admits no Darwin
+    # triple yet); clang overrides it when it assembles, as the aarch64 job
+    # relies on, so a program links -- and `target-layout`'s second claim,
+    # which asks clang about each *admitted* target, is unaffected.
+    name: 'experiment: macOS (advisory, may fail)'
+    runs-on: macos-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record which toolchain tried it
+        run: |
+          uname -a
+          clang --version
+          cmake --version | head -1
+          python3 --version
+          # z3 for verify/, as the Linux jobs install it; a failure here is
+          # reported and the proofs skip rather than the job stopping.
+          python3 -m pip install --user z3-solver || true
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(sysctl -n hw.ncpu)"
+        # No *_REQUIRE here, deliberately -- see the job comment. `CI` is set
+        # by GitHub, so `benchmark` abstains (ADR-0282).
+
+      - name: Compile a program by hand
+        if: always()
+        run: |
+          tools/pascalcc tests/hello.pas -o "$RUNNER_TEMP/hello"
+          "$RUNNER_TEMP/hello"
+
   model-drift:
     # doc/sop.md gate A1, made mechanical: verify/lowering.py is a model of the
     # code generator, and the rules prove that model against a statement of the
@@ -899,7 +958,8 @@ jobs:
           # OFF and RELEASE_REQUIRE_STATIC unset, and there is no `ldd`, so
           # `--check` reports the link kind as unknown -- and what else
           # differs is exactly what a first run would find. Enable it as a
-          # push job first, then here.
+          # push job first, then here -- `macos-experiment` above is that
+          # push job, advisory until it is green.
           #
           # - runner: macos-latest
           #   arch: arm64-darwin
