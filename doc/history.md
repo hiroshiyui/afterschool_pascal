@@ -44,6 +44,8 @@ part that never changes was the first 2,000 lines a reader met.
 | [The 32-bit port, and the width it left](#the-32-bit-port-and-the-width-it-left) | the two struck rows of the cross-platform chapter, moved whole, and the third time a foreign width was wrong — found by a register nobody could have found it with |
 | [After v3.6.0](#after-v360-a-configuration-file-and-the-boundary-audited) | six records in one day: a TOML library, a project reader that read all of it, and a command injection found, closed, audited and audited again |
 | [The blind-spot register](#the-blind-spot-register-the-audits-and-what-closed) | `doc/sop.md` §7's five audits and every row struck as closed, moved whole when the register was compacted to what is open |
+| [The concurrency clauses, audited](#the-concurrency-clauses-audited) | four readers given the behaviour and not the reasoning found seven defects in a surface every gate here called green |
+| [The first macOS run](#the-first-macos-run) | nine failures, five runs, and not one of them in the compiler — what a suite learns the first time it is run somewhere else |
 | [The roadmap as it stood](#the-roadmap-as-it-stood-on-2026-09-07) | the whole page, verbatim, the moment before it was compacted to what is open |
 
 If you are here for **what the language accepts today**, this is the wrong
@@ -8646,6 +8648,114 @@ ordinary array bound written in the source does not have this property at all.
 The two look identical in the source and differ in who evaluates them, so the
 test to apply by hand, until something can apply it, is: **does this constant
 shape a type this compiler synthesises and also declares a variable of?**
+
+## The concurrency clauses, audited
+
+On 2026-09-08 `langspec-audit` was run over AP 6.4.16, 6.7.8, 6.9.3.11 and
+6.9.3.12 — the newest surface here, and the one whose records most often say a
+limitation is *recorded as a shape rather than an omission*. Four readers were
+launched into the sandbox ADR-0228 builds, each given the behaviour and not
+the reasoning, and told to hunt for a legal program wrongly refused. The
+disclosure question was asked of a throwaway reader in the sandbox and of one
+in the repository: the sandbox reader saw nothing and the repository reader
+listed the git log, so ADR-0107's isolation still holds.
+
+Seven defects, in a surface every gate here called green throughout.
+
+**The first is the one a working programmer hits immediately.** AP 6.7.8.2
+admits a variable declared "in that task-declaration **or in a block within
+it**", and the check compared a variable's owner with the task. So a procedure
+declared inside a task was refused its own parameter and its own local, and a
+task with a helper — which is to say a task of any size, and recursion in one
+— could not be written. Three of the four readers reached it independently and
+one reached it while auditing a different clause, which is the shape of
+evidence a single reader cannot produce.
+
+Two more were the same rule read from the other side. A task declared inside a
+task **cleared** the rule rather than restoring it, so every statement of the
+outer body after the inner declaration could name a global — the exact data
+race NOTE 1 says the clause exists to refuse. And `writeln(output, x)` was
+refused inside a task while `writeln(x)`, which writes the same variable, was
+not: a rule about a spelling rather than about storage.
+
+`forward` was accepted where the clause admits no directive at all. A
+task-declaration was a syntax error in a module-block, so a library module
+could not own its workers, and the diagnostic named nothing the programmer had
+done.
+
+**The sixth is where two clauses of this document contradicted each other.**
+AP 6.9.3.12.1 requires every activation to be complete "before any variable of
+that block is released" and its NOTE 2 names the block's deferred statements;
+AP 6.9.3.11.2 a) executes an armed statement when its statement-sequence
+completes, which for the block's own statement-part is *before* the epilogue
+where the join stood. So `defer c := nil` beside a `spawn` closed a channel
+the task was still sending on and the program died. The join now also happens
+at that sequence's completion. A defer in a *nested* sequence is deliberately
+not covered, and AP 6.9.3.11.2 NOTE 4 says so: it runs inside the block, and a
+release written there is the release the program wrote where it wrote it.
+
+**The seventh made the compiler emit a module LLVM refused.** Sema admits an
+integer where a channel's component or a task's formal is real, and CodeGen
+stored the value at the destination's type — so `send(c, 1)` on a channel of
+real was accepted by the front end and refused by the assembler, with a
+message about a file nobody wrote. 6.4.6 c)'s conversion had never been
+emitted in either position, and no corpus program had ever written one.
+
+Six cases and ten scenarios landed with the fixes; each case passes and fails
+under the seed compiler, and the three riskiest fixes were mutated one at a
+time with a named case killing each. Four readings came back genuinely
+unsettled and took no scenario, a scenario asserting one of two defensible
+readings being a coin-flip laundered into a citation. ADR-0365 has them.
+
+## The first macOS run
+
+`doc/roadmap.md` had called macOS the cheapest unknown here for as long as it
+had a platform row, and the row said nobody had tried it. On 2026-09-08 an
+advisory CI job tried it. **902 of 911 passed on the first attempt**, the
+compiler built itself there, and five runs later the whole suite was green.
+
+**Not one of the nine failures was in the compiler.** Every one was this tree
+assuming Linux somewhere no oracle here could ask about, because every oracle
+here had only ever run on Linux. That is the finding, and it is worth more
+than the port.
+
+Four were bash or GNU-utility specific. Three harnesses read a list with
+`mapfile`, which is bash 4 — macOS ships bash 3.2, where it is not a command
+at all and the array stays empty, so one gate reported a corpus of four
+invocations rather than a missing builtin. `sanitize.sh` built its suppression
+list with `declare -A`, and without associative arrays every later subscript
+is evaluated as *arithmetic*: a name that is not a number is 0, so the list
+would have applied to every case and the gate would have gone on passing. A
+`case` inside `$( )` is mis-parsed by bash 3.2, which scans a command
+substitution by counting parentheses, so the `)` closing a case pattern ends
+the substitution early — three of those, and the first two hid the third. And
+the stale-object diagnosis in the driver used `\|`, a GNU extension, so the
+pattern added for ld64's spelling could not run on the platform it was for.
+
+**Two were already in Python, which is why the lesson is not "use Python".**
+`coverage.py` symbolised through `nm --defined-only` and a non-PIE link, and
+arm64 macOS has neither; the shim now reports every address less its own
+reference symbol, so a load slide cancels on both sides. `fuzz.py` set three
+resource limits in one `preexec_fn`, and macOS defines the address-space limit
+and refuses to set it — an exception there killed the sweep before it compiled
+anything.
+
+Three were in neither: a Linux-only path in three sources, which made two
+handle-factory scenarios report an empty handle — a correct answer to a
+question they did not mean to ask; an `errno` read after asking `strerror`
+about a number it does not know, which POSIX lets set `errno` and macOS does;
+and a socket written to exactly twice, two being Linux's answer read as though
+it were every kernel's.
+
+One failure was not a portability defect at all but a header convention:
+`mkdtemp` and `O_NOFOLLOW` are both POSIX.1-2008, and Darwin still gates them
+as the BSD extensions they were before 2008, so asking for exactly the
+standard they belong to is what hid them.
+
+**What it cost to learn was five CI round trips, one per hidden failure**, and
+that is what `doc/roadmap.md`'s harness-language section points at: a lint over
+every tracked script would have found the four bash ones on the first push
+with no Mac at all. It is not built.
 
 ## The roadmap as it stood on 2026-09-07
 

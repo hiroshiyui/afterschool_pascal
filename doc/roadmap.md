@@ -240,7 +240,7 @@ target measurement is
 
 | Target | What it needs |
 | --- | --- |
-| **macOS** | **read for, never run.** Every header `pasrt_posix.c` includes and every non-ISO name the runtime uses is in libSystem, and nothing under `lib/` binds `errno`, `environ` or a struct by name — the three that would have broken. Four harness-level assumptions reading found are closed: GNU `sed -i`, coreutils `timeout`, LeakSanitizer on arm64, and GNU ld's wording in the stale-object diagnosis. Two are open and named: `coverage.py` symbolises through a non-PIE link and unprefixed `nm` output, both ELF-shaped, so the three coverage gates are the ones to expect red; and `--target=` admits no Darwin triple, so the emitted header is overridden by clang rather than believed. `macos-experiment` in CI is the first run, advisory until green — promote it, then the release matrix, in that order |
+| **macOS** | **green on arm64, and the job is still advisory.** The whole suite passes there. What is left is the promotion: `macos-experiment` sets no `*_REQUIRE`, so its skips pass silently and it cannot fail the build — make it a job that fails, then enable the release-matrix entry, in that order. One thing is open rather than done: `--target=` admits no Darwin triple, so a program builds because clang overrides the module's header and nothing there may believe it (`doc/sop.md` §7). Nine failures got it there and **not one was in the compiler** — every one was a harness assuming Linux ([history](history.md#the-first-macos-run)) |
 | **Windows** | `fmemopen` and `open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two `FILE*`-over-memory functions; `access` is `_access`; MSVC lacks the `_Complex` §6.7.6.2's functions are written in |
 | **s390x** | aligns `tySet`'s `i256` to 8 where every other target says 16 — thirteen offsets, and `target-layout`'s second claim would catch it |
 
@@ -248,6 +248,41 @@ target measurement is
 aarch64 job establishes that the port *works*, not that every oracle has run
 there — `llc-second-backend` and `benchmark` abstain on it (`doc/sop.md` §7);
 and the layout gate sees frames and nothing else.
+
+### What a harness is written in
+
+**A new harness is written in Python 3; a shell one is converted when it is
+being substantially edited anyway, and not otherwise.** Python is already the
+house language here rather than the proposal — on 2026-09-08 it was 11 844
+lines across 38 files against 5 949 across 31, and 27 of the gate cases
+against 20 (`git ls-files '*.py' | xargs wc -l`, and the same for `*.sh`;
+recount rather than quoting, both move).
+
+**There is no wholesale rewrite, and that is the decided half.** These scripts
+*are* this project's evidence, so rewriting one is the single change with no
+oracle to check it — a rewritten gate that quietly asks a different question
+looks exactly like one that works. `tools/pascalcc` is excluded outright, by
+the decision of 2026-09-07 that new driver logic goes in a helper like
+`bin/apconfig` instead.
+
+**The reason the rule is not stronger than that** is what the first macOS run
+measured, and it is worth carrying: of its nine failures, **four** were bash
+or GNU-utility specific and Python would have removed them outright —
+`mapfile`, `declare -A`, a `case` inside `$( )` that bash 3.2 mis-parses by
+counting parentheses, and `\|` in a BSD sed regex. **Two were already in
+Python** and it did not help, the assumption being about the platform rather
+than the language: `nm --defined-only` with a non-PIE link, and a resource
+limit Darwin defines and refuses. **Three were in neither** — a Linux-only
+path in three sources, an `errno` read after a call POSIX lets clobber it, and
+a socket written to exactly twice because that is Linux's answer. So the
+language buys under half of it, and *assuming a platform* is the larger half
+and available in every language.
+
+**The lever this points at is a gate and not a rewrite.** Each of those four
+cost a full CI round trip to find, one at a time, because each hid the next; a
+lint over every tracked script — the constructs bash 3.2 lacks, the GNU-only
+flags on the utilities in use — would have found all four on the first push
+with no Mac at all. Not built, and it is the cheapest thing on this page.
 
 ---
 
