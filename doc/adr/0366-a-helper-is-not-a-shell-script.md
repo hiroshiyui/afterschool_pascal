@@ -74,6 +74,25 @@ precedent and the proof — a program in this language, compiled by the compiler
 the tree just built, installed beside `pascalc` and found by the same three
 rules ADR-0244 gave the driver (ADR-0361).
 
+**The pilot is `seed-portable`, converted with this record** (2026-09-08). It
+was chosen as the smallest gate here — 73 lines, a leaf nothing else invokes,
+with its own mutation named in ADR-0347 — so that what it proves is the
+*method* and not the port. Both checks were run before the shell version was
+deleted: byte-identical output on the current tree and on five constructed
+trees covering every branch the real one cannot show (a clean sweep, an
+absolute path present, below the floor, no modules at all, and both faults at
+once), and then the gate's own mutation applied to the **real** committed seed,
+where both versions refused it in the same words and the artefact was restored
+byte for byte. `tests/checks/tool_dumps.sh` is the intended second, its shape —
+drive the compiler over a corpus, compare against goldens — being the one about
+ten other gates share.
+
+A conversion may fix something, and this one did: the shell version wrote its
+matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
+file in the tree it measures. That is not a licence to redesign — the question,
+the wording, the floor and the exit status are unchanged, which is what made
+the differential possible at all.
+
 ## Consequences
 
 **The driver is a collision this record names and does not resolve.**

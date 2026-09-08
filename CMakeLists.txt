@@ -441,10 +441,13 @@ if(Python3_FOUND)
   # string constant in the emitted module, and `seed/refresh.sh` was handing
   # the compiler an absolute one. `tests/checks/seed_current.sh` asks the whole
   # question and can only run at a tag -- the seed is legitimately stale
-  # between releases -- so it found this eight releases late. This half costs a
-  # grep and holds on every push.
+  # between releases -- so it found this eight releases late. This half is
+  # cheap and holds on every push. It is ADR-0366's first conversion: it was
+  # a shell script until 2026-09-08, and both versions were run against the
+  # current tree and against this gate's own mutation before the old one went.
   add_test(NAME seed-portable
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/seed_portable.sh)
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/seed_portable.py)
 
   # ADR-0245: is an object built from an older module-heading refused? §6.11.1
   # makes the heading the interface, and until this nothing noticed that an
