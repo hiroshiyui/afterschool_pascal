@@ -130,6 +130,28 @@ argument has it: `${1:?usage: …}` makes bash print its own `<script>: line 42:
 parameter that mean nothing to a reader. The usage line is printed plainly.
 Every arm that states a claim is byte for byte what the shell wrote.
 
+**`stale-component` and `new-project` are the sixth and seventh.** The first
+edits a source between two compilations and reads the driver's diagnosis, and
+was compared on all four claims plus the arms that make each fail: a driver
+that translates nothing and dumps its log, one that links anything so a stale
+object is accepted, and one that refuses the stale link without saying why.
+The second drives eight sections of `new-project`, `build`, `run` and `test`
+over a generated skeleton and fourteen rewrites of its project file, and was
+compared on the real driver, one that refuses everything, and one whose reader
+accepts a misspelled key. Both shed the `edit()` helper that existed only
+because BSD sed's `-i` takes a mandatory suffix: a substitution over a string
+needs no temporary file and no rename.
+
+**A conversion can also introduce a defect, and three of these did.** The
+prose of a shell script was spliced in below a licence header the script
+already carried, so `bare-source-name`, `long-path` and `stale-component` were
+pushed with the licence in them twice. Nothing here reads a licence header, so
+no gate could have said so; it was found by counting the blocks across all
+seven files after the eighth splice put in a third. The lesson is the ordinary
+one — a mechanical edit repeated by hand goes wrong the same way every time —
+and the answer is the same as everywhere else here: count them rather than
+read them.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

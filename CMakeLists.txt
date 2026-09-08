@@ -433,7 +433,8 @@ if(Python3_FOUND)
   # module was wrong once (`end.` where a module's routine ends `end;`), which
   # reading the generator did not catch and one run did.
   add_test(NAME new-project
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/new_project.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/new_project.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc)
   set_tests_properties(new-project PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
@@ -458,7 +459,8 @@ if(Python3_FOUND)
   # needs a harness of its own because no test case can edit its own source
   # between two compilations.
   add_test(NAME stale-component
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/stale_component.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/stale_component.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc)
   set_tests_properties(stale-component PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
