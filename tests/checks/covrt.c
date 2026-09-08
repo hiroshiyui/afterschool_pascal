@@ -37,6 +37,16 @@
  *                which is the *denominator* and must not depend on what ran
  *   PASCOV_OUT   the addresses this process reached, appended -- so a corpus
  *                of many runs accumulates into one file
+ *
+ * Both hold an address **less this file's own**, and that is what makes the
+ * numbers comparable at all. A position-independent executable is loaded at a
+ * different base every run, so a raw address means nothing across two of them
+ * and nothing against what `nm` printed; arm64 macOS has no non-PIE mode to
+ * ask for, so `-no-pie` cannot be the answer. The difference between an
+ * instrumented address and a symbol in this file is fixed at link time, so
+ * subtracting it here and subtracting the same symbol's link-time value in
+ * coverage.py leaves both sides talking about the same offsets -- on a PIE
+ * and a non-PIE alike.
  */
 
 #include <stdint.h>
@@ -46,6 +56,16 @@
 static const uintptr_t *g_pcs;
 static size_t g_npcs;
 static uint8_t *g_hit;
+
+/* The reference. Its address at run time, less its value in the symbol table,
+ * is the load slide; coverage.py knows it by this name. It must be a defined
+ * function of this translation unit and it must not be inlined away. */
+void pascov_base(void);
+void pascov_base(void) { }
+
+static size_t pascov_off(uintptr_t pc) {
+  return (size_t)(pc - (uintptr_t)(void *)&pascov_base);
+}
 
 /* Called once per instrumented module before main. The guards start zeroed and
  * are numbered from 1, because 0 is how the callback recognises a guard that
@@ -87,7 +107,8 @@ __attribute__((destructor)) static void pascov_dump(void) {
     f = fopen(tab, "w");
     if (f) {
       for (i = 0; i < g_npcs; i++)
-        fprintf(f, "%zx %d\n", (size_t)g_pcs[2 * i], (int)(g_pcs[2 * i + 1] & 1));
+        fprintf(f, "%zx %d\n", pascov_off(g_pcs[2 * i]),
+                (int)(g_pcs[2 * i + 1] & 1));
       fclose(f);
     }
   }
@@ -95,6 +116,6 @@ __attribute__((destructor)) static void pascov_dump(void) {
   f = fopen(out, "a");
   if (!f) return;
   for (i = 0; i < g_npcs; i++)
-    if (g_hit[i + 1]) fprintf(f, "%zx\n", (size_t)g_pcs[2 * i]);
+    if (g_hit[i + 1]) fprintf(f, "%zx\n", pascov_off(g_pcs[2 * i]));
   fclose(f);
 }

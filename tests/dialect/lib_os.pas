@@ -54,14 +54,21 @@ begin
   writeln('code          = ', ErrorText(e));
   writeln('why           = ', LastErrorText);
 
+  { And the number a caller reports is the one it reads, not one this module
+    remembered: nothing here caches it.
+
+    Asked *before* the unknown-number probe below, and the order is the whole
+    point. `strerror` of a number it does not know is allowed to set `errno`
+    itself, and macOS does where glibc does not -- so with the probe first,
+    what this line reported was the probe's own EINVAL rather than the rmdir's
+    reason. Nothing caches the number, which is what this asserts, and that is
+    exactly why an intervening call can change it. }
+  writeln('same twice    = ', ErrorNumberText(LastErrorNumber));
+
   { strerror is specified to answer a sentence for every number, including one
     it does not know. The text of that one is libc's business, so what is
     asserted here is that there is some. }
   yes('unknown has a = ', length(ErrorNumberText(31337)) > 0);
-
-  { And the number a caller reports is the one it reads, not one this module
-    remembered: nothing here caches it. }
-  writeln('same twice    = ', ErrorNumberText(LastErrorNumber));
 
   { The code and the sentence are different vocabularies on purpose. This one
     is the closed set a `case` can cover (6.4.3.3 with ADR-0096); the other is

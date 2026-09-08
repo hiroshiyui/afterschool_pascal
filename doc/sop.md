@@ -278,7 +278,12 @@ never evaluated. Audits so far, each written up in history: 2026-08-25
 numbers, and three records no document knew of), 2026-09-06 (a closing
 condition met by a release), 2026-09-07 (a premise falsified by a new target),
 2026-09-08 (`langspec-audit` over the concurrency clauses: seven defects, four
-readings left unsettled, ADR-0365).
+readings left unsettled, ADR-0365), 2026-09-08 (the first macOS run: nine
+failures, and **five of them were this tree assuming Linux in a place nothing
+had ever asked about** — three `mapfile` uses, a GNU-only regex alternation, a
+Linux-only path in three test programs, an `errno` a `strerror` call may
+clobber, and a socket that refuses a write after a number of tries the kernel
+picks).
 
 **Verified on each audit rather than assumed**: the string-arena producer
 count — **eight** `strTemps := strTemps + 1` in `selfhost/compiler.pas` — and
@@ -327,7 +332,6 @@ the `-O1`/`-O3` row, still a judgement.
 | Nothing checks that every string-arena producer is **counted** | The end-of-statement release is driven by a counter its producers bump; a ninth producer would have nothing looking for it, and a bump removed from a producer sharing its statement with another is invisible, which is why the pinning loops compare rather than assign | ADR-0111, ADR-0197 |
 | Nothing checks an `external` declaration against the function it names | The call site is the whole of the ABI: LLVM does not check a direct call against the declaration under opaque pointers, so a wrong arity, type or function is undefined behaviour with no diagnostic. **One property is held** (ADR-0364): a scalar's *width*, every `int64` in an `external` catalogued as a C type that is 64 bits everywhere — a claim a person wrote, not a header read | ADR-0121, ADR-0129, ADR-0364 |
 | **Four readings of the concurrency clauses are unsettled** | A `goto` out of a task's block compiles and hangs with no diagnostic; a `send` arm on a closed channel raises its error only when the select's rotation reaches that arm, where an *empty* channel-variable is an error every time; `after` refuses an `int64`; a trailing `;` before a select's `end` is accepted. Each admits two readings, so none takes a scenario | ADR-0365 |
-| **The coverage gates are ELF-shaped** | `coverage.py` symbolises through a `-no-pie` link and `nm` output with no name prefix, so `procedure-coverage`, `line-coverage` and `lib-coverage` measure nothing on a Mach-O target, where arm64 refuses non-PIE and `nm` prefixes every C name. Read for and not run; `macos-experiment` is what will say | ADR-0103, ADR-0104, ADR-0350 |
 | **`--target=` admits no Darwin triple** | A program still builds on macOS, clang overriding the module's header as it does for the aarch64 job — but nothing there may *believe* the header, so `llc-second-backend` and any `--dump-layout` claim are about a machine the module does not name | ADR-0156, ADR-0325 |
 | A task's ban on non-local variables is **not transitive** | AP 6.7.8.2 refuses a non-local in a task's own block; a task may call a procedure declared outside it that names a global. Closing it needs the call graph across component boundaries, which is why the clause states the limit | ADR-0201, ADR-0268 |
 | **A `verify/` precondition stricter than the compiler's own check passes in silence** | Narrowing a hypothesis only makes a proof easier; `index_span_is_representable` said `<` where Sema said `>=`, both agreed, and `array [0..maxint]` was refused for eleven increments. A precondition must carry the sentence it restates so the two can be compared by eye | ADR-0013, ADR-0289 |

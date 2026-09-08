@@ -177,6 +177,25 @@ if [[ -n $extra ]]; then
   echo "        the argument for why ISO C could not do it, or use ISO C." >&2
   status=1
 fi
+# A catalogued name the strict compile did not report has two causes, and only
+# one of them is this gate's finding. Either pasrt.c no longer uses it -- the
+# stale catalogue -- or it uses it and *this* C library declared it anyway, so
+# no diagnostic could name it. macOS declares `_longjmp`, `fmemopen` and
+# `open_memstream` regardless of __STRICT_ANSI__, which is the same reason the
+# all-or-nothing skip above exists, met one name at a time instead of all of
+# them. The source is what tells the two apart, and it is the same source
+# everywhere: a name pasrt.c still writes is not a name it no longer uses.
+declared=""
+still=""
+for n in $missing; do
+  if grep -qw -- "$n" "$src"; then declared="$declared $n"; else still="$still $n"; fi
+done
+if [[ -n $declared ]]; then
+  echo "runtime-isoc: this C library declares these even under" \
+       "__STRICT_ANSI__, so the strict compile could not name them, and" \
+       "runtime/pasrt.c still uses each --$declared"
+fi
+missing=$still
 if [[ -n $missing ]]; then
   echo "runtime-isoc: the catalogue names an identifier runtime/pasrt.c no" \
        "longer uses:" >&2

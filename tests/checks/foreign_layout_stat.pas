@@ -52,6 +52,6 @@ function ExtStat(path: string; var buf: StatBuf): integer; external 'stat';
 var buf: StatBuf;
 
 begin
-  if ExtStat('/etc/hostname', buf) = 0 then
+  if ExtStat('/etc/hosts', buf) = 0 then
     writeln(buf.size:1)
 end.

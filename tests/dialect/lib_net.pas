@@ -32,7 +32,7 @@ var
   line: NetLine;
   short: string(4);
   e: ErrorCode;
-  i: integer;
+  i, tries: integer;
 
 begin
   { A socket listening on whatever port is free. }
@@ -82,13 +82,23 @@ begin
     that is a decision rather than a given: the default disposition of SIGPIPE
     ends the process without a diagnostic, which is not an outcome a routine
     answering a code can report, so the runtime ignores the signal where a
-    socket is first made. Two writes, because the first goes into the kernel's
-    buffer and it is the peer's reset that makes the second fail. }
+    socket is first made.
+
+    Written until it is refused rather than exactly twice. The first write
+    goes into the kernel's buffer and it is the peer's reset that makes a
+    later one fail -- but *how many* later is the kernel's business, and two
+    was Linux's answer read as though it were every kernel's: on macOS the
+    second still succeeded and this reported no error at all. The bound is
+    what keeps a failure a failure, so a connection that never refuses ends
+    the loop with the last code it gave. }
   e := NetConnect(cli, 'localhost', port);
   e := NetAccept(srv, conn);
   conn := nil;
-  e := NetWriteLine(cli, 'into a closed connection');
-  e := NetWriteLine(cli, 'and again');
+  tries := 0;
+  repeat
+    e := NetWriteLine(cli, 'into a closed connection');
+    tries := tries + 1
+  until Failed(e) or (tries >= 100);
   writeln('write to closed: ', ErrorText(e));
   cli := nil;
 

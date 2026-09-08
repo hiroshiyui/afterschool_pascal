@@ -79,9 +79,21 @@ TIMEOUT = 30
 
 
 def limits():
-    resource.setrlimit(resource.RLIMIT_FSIZE, (FSIZE, FSIZE))
-    resource.setrlimit(resource.RLIMIT_AS, (ADDRESS, ADDRESS))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    """Each limit separately, and an unsupported one is skipped.
+
+    macOS defines RLIMIT_AS and refuses to set it, and an exception raised
+    here is not a limit that did not apply -- `preexec_fn` turns it into
+    `SubprocessError: Exception occurred in preexec_fn`, so the whole sweep
+    died before compiling anything. The file-size limit is the one that
+    matters most and it is set first: a looping mutant wrote 38 GB before
+    anything noticed, and that is what this exists for."""
+    for what, value in ((resource.RLIMIT_FSIZE, FSIZE),
+                        (resource.RLIMIT_AS, ADDRESS),
+                        (resource.RLIMIT_CORE, 0)):
+        try:
+            resource.setrlimit(what, (value, value))
+        except (ValueError, OSError):
+            pass
 
 
 def survived(pascalc, src, out, flags=()):

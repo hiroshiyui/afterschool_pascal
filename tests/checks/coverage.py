@@ -409,8 +409,11 @@ def build_instrumented(root, build, work):
         ("the callback shim", ("clang", "-c", "-O1",
                                str(root / "tests" / "checks" / "covrt.c"),
                                "-o", str(shim))),
-        # -no-pie so a reported address is the one `nm` prints, with no load
-        # base to subtract and no chance of subtracting the wrong one.
+        # -no-pie where the linker has it. It is no longer what makes the
+        # numbers line up -- covrt.c reports every address less its own
+        # `pascov_base`, so a load slide cancels on both sides -- but a fixed
+        # base is still one less thing moving. arm64 macOS ignores the flag,
+        # which is why the subtraction had to exist.
         ("linking", ("clang", "-no-pie", *[str(o) for o in covos], str(shim),
                      str(pasrt), "-lm", "-o", str(exe))),
     ]
@@ -444,14 +447,36 @@ def procedures(irs, root):
     return out
 
 
+MASK = (1 << 64) - 1
+
+
 def symbols(exe):
-    """Every pNNN in the binary, sorted by address, for mapping a PC back."""
-    r = run("nm", "--defined-only", str(exe))
-    syms = []
+    """Every pNNN in the binary, sorted, as an offset from `pascov_base`.
+
+    An *offset* and not an address, because covrt.c reports one: a
+    position-independent executable moves every run, and arm64 macOS has no
+    non-PIE mode to ask for. Subtracting the same symbol on both sides leaves
+    the fixed link-time distance, and the mask is what makes Python's
+    unbounded integers agree with the C that wrapped.
+
+    Plain `nm` rather than `--defined-only`: BSD nm has no such flag, and an
+    undefined symbol prints without an address on both, so the three-field
+    test already excludes it. Mach-O prefixes a C name with an underscore,
+    which is stripped -- the compiler's own `pNNN` names carry none."""
+    r = run("nm", str(exe))
+    found, base = [], None
     for line in r.stdout.splitlines():
         parts = line.split()
-        if len(parts) == 3 and parts[1] in "tT" and re.fullmatch(r"p\d+", parts[2]):
-            syms.append((int(parts[0], 16), parts[2]))
+        if len(parts) != 3 or parts[1] not in "tT":
+            continue
+        name = parts[2][1:] if parts[2].startswith("_") else parts[2]
+        if name == "pascov_base":
+            base = int(parts[0], 16)
+        elif re.fullmatch(r"p\d+", name):
+            found.append((int(parts[0], 16), name))
+    if base is None:
+        return []
+    syms = [((a - base) & MASK, n) for a, n in found]
     syms.sort()
     return syms
 

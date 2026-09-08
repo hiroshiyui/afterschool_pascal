@@ -78,7 +78,13 @@ if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
     mv "$work/kept.txt" "$sources"
   fi
 fi
-mapfile -t sources < "$sources"
+# `mapfile` is bash 4; macOS ships bash 3.2, where it is not a command at all
+# and the array stays empty -- which this script then reported as a corpus of
+# four invocations rather than as the missing builtin it was. Read the lines
+# instead: portable to every bash, and to a path with a space in it.
+sources_file=$sources
+sources=()
+while IFS= read -r line; do sources+=("$line"); done < "$sources_file"
 
 swept=0; crashed=0
 for src in "${sources[@]}"; do

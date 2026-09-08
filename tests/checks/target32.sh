@@ -119,7 +119,11 @@ export AFTERSCHOOL_PASCAL_RUNTIME=$work/rt
 export AFTERSCHOOL_PASCAL_TARGET=$target
 export PASCALC=${PASCALC:-$root/build/bin/pascalc}
 
-mapfile -t known < <(grep -v '^\s*#' "$catalogue" | grep -v '^\s*$' | awk '{print $1}')
+# `mapfile` is bash 4 and macOS ships bash 3.2; an empty catalogue there would
+# report every known row as newly fixed, which fails in the wrong direction.
+known=()
+while IFS= read -r line; do known+=("$line"); done \
+  < <(grep -v '^\s*#' "$catalogue" | grep -v '^\s*$' | awk '{print $1}')
 is_known() { local n; for n in "${known[@]}"; do [[ $n == "$1" ]] && return 0; done; return 1; }
 
 total=0; ran=0; unexpected=(); fixed=()

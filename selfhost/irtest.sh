@@ -215,7 +215,11 @@ else
   # ...and the examples (ADR-0295), which are cases with goldens like any
   # under tests/ and would otherwise be the one corpus the fixed point's
   # compiler never ran.
-  mapfile -t files < <(find "$root/tests" "$root/examples" -name '*.pas' | sort)
+  # `mapfile` is bash 4 and macOS ships bash 3.2, where the array would stay
+  # empty and this harness would report a fixed point over no programs.
+  files=()
+  while IFS= read -r line; do files+=("$line"); done \
+    < <(find "$root/tests" "$root/examples" -name '*.pas' | sort)
 fi
 
 # --- the golden suite, run against what a given stage-1 compiler produces ---

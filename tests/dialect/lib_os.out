@@ -5,6 +5,6 @@ number set    = yes
 rmdir failed  = yes
 code          = the operation was refused
 why           = Not a directory
-unknown has a = yes
 same twice    = Not a directory
+unknown has a = yes
 branched      = errIO

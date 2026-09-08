@@ -189,7 +189,7 @@ Feature: Fallible-types
       begin
         q := Open('');
         writeln(q.ok, ' ', q.cause = nopath);
-        q := Open('/etc/hostname');
+        q := Open('/etc/hosts');
         writeln(q.ok)
       end.
       """

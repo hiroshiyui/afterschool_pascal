@@ -240,6 +240,10 @@ Feature: Handle-types
       nothing else has a closer to answer for it
       """
 
+  # `/etc/hosts` and not `/etc/hostname`: the second is Linux's alone, so on
+  # macOS these two scenarios opened nothing and reported an empty handle --
+  # a correct answer to a question the scenario did not mean to ask.
+  #
   # AP 6.4.12.6 (ADR-0255): a function of this program may answer a handle, so
   # a library can hand a caller an open stream instead of making the caller
   # declare a variable and pass it as a `var` parameter. The value is born in
@@ -257,7 +261,7 @@ Feature: Handle-types
       begin Open := ExtFopen(path, 'r') end;
       var h: f;
       begin
-        h := Open('/etc/hostname');
+        h := Open('/etc/hosts');
         if h = nil then writeln('empty') else writeln('open')
       end.
       """
@@ -282,7 +286,7 @@ Feature: Handle-types
       begin Outer := Inner(path) end;
       var h: f;
       begin
-        h := Outer('/etc/hostname');
+        h := Outer('/etc/hosts');
         if h = nil then writeln('empty') else writeln('open')
       end.
       """
