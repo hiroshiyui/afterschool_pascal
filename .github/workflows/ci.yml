@@ -271,14 +271,14 @@ jobs:
           cmake --build build -j"$(nproc)"
 
       - name: Regenerate and compare
-        # tests/checks/seed_current.sh is the whole of the check, and it is a
+        # tests/checks/seed_current.py is the whole of the check, and it is a
         # script so that a release can run the same text by hand before it
         # tags -- this job runs only at a tag, so anything living here has
         # nowhere to be exercised first, and twice now something written here
         # has failed for that reason alone. A `run:` block in a container is
         # `sh -e {0}`, which is the sharper half of it: the bash this file's
         # steps look like they are written in is not what runs them.
-        run: tests/checks/seed_current.sh
+        run: tests/checks/seed_current.py
 
   # The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
   # LeakSanitizer (ADR-0261). It is a `ctest` case and so runs in the job above

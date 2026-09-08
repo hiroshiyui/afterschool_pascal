@@ -252,6 +252,43 @@ is compared is one list of failures in one order, and that order is the one
 the catalogue was written against; making it parallel is a separate change
 with its own argument, not a thing to do in passing while converting.
 
+**`seed_current` and `seed/refresh` are the fifteenth and sixteenth, and they
+had to be converted together.** ADR-0347's whole point is that the two
+translate the same way — from the root, with a relative source path, because
+ADR-0293 puts the source's own path into the emitted module — and in shell
+that claim was two copies of one loop. Converting one alone would have put it
+across two languages, which is strictly worse than two copies in one.
+`seed_current.py` now imports `components`, `translate` and `unified` from
+`refresh.py`: one loop, one claim.
+
+The evidence is stronger than a differential usually gets, because the
+artefact itself can be compared. Two staged trees, one reseeded by each
+version: **identical console output and byte-identical seed modules**, all
+three of them, 318 423 lines. Then `seed_current` run against each freshly
+seeded tree, where it passes — the state this repository is only in at a
+release commit, and which the stale-seed differential cannot reach. Nine arms
+in all: the stale tree, the fresh tree, no compiler, no runtime, an extra
+module in `seed/`, one missing, a candidate that does not reproduce, a
+compiler that gets `hello.pas` wrong, and one that cannot compile it.
+
+**Two defects of my own, and both are the kind a green run would have
+hidden.** A *missing* seed module crashed the Python where the shell carried
+on: `cmp` merely fails, and the set check below still had its own half to say.
+The shell reached that by letting `diff` print the C library's message **in
+the operator's locale**, which is one of the two reasons ADR-0366 exists, so
+the conversion says it in the gate's own words instead. And the
+`candidate-does-not-reproduce` arm caught **stdout buffering**: Python
+block-buffers a redirected stdout where `echo` does not, so the compiler's
+diagnostics landed before this script's own lines. Both scripts now set
+`line_buffering`. Every harness here that prints around a subprocess it does
+not capture has that hazard, and it is invisible on a terminal.
+
+The forcing of that arm is worth recording: a candidate that fails to
+reproduce needs a *non-deterministic* compiler, which nothing in the tree is.
+Staging one — a wrapper appending a comment to each `.ll`, so the candidate
+pass differs from the pass by the compiler built from it — is what made the
+arm reachable at all.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

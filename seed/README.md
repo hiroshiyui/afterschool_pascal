@@ -18,7 +18,7 @@ clang -Wno-override-module seed/*.ll build/lib/libpasrt.a -lm -o pascalc
 `tests/checks/llc_check.py` match them with a glob.** The compiler is three
 §6.13 program-components since ADR-0233, so a refreshed seed is three modules
 named after them — `aptypes.ll`, `apfront.ll`, `compiler.ll` — and
-`seed/refresh.sh` removes the old ones before writing them, since a module left
+`seed/refresh.py` removes the old ones before writing them, since a module left
 behind from a build with more components would be linked in beside the new ones
 and two definitions of the same program is a link error about a file nobody
 wrote.
@@ -182,10 +182,10 @@ the time this happened, and argues why a policy about rewrite noise should not
 become a policy about capability.
 
 ```sh
-seed/refresh.sh          # regenerate from the current source, then verify
+seed/refresh.py          # regenerate from the current source, then verify
 ```
 
-`refresh.sh` does not just regenerate: it rebuilds the compiler from the new
+`refresh.py` does not just regenerate: it rebuilds the compiler from the new
 seed and requires the result to reach a fixed point, so a seed is never
 committed without evidence that it reproduces itself.
 
@@ -194,7 +194,7 @@ and that is load-bearing** (ADR-0347). Since ADR-0293 every trap carries its
 own position, so the source's path is a string constant in the emitted module —
 `@at.file`. Handing the compiler an absolute path put the *machine that
 reseeded* into this committed artefact, and made
-`tests/checks/seed_current.sh` — *is the committed seed the one this source
+`tests/checks/seed_current.py` — *is the committed seed the one this source
 produces?* — answer about the directory: it could pass only where the reseed
 had happened, and reported everywhere else, correctly, that the seed is not
 this source's. It failed in the v3.5.0 tag job, which is the one place that
@@ -204,5 +204,5 @@ Two things follow for anyone touching either script. They must go on
 translating the same way; they are one claim, and a difference between them is
 a seed that reproduces nowhere. And `seed-portable` is the `ctest` gate that
 asks the cheap half on every push — no string constant in a seed module begins
-with `/` — because `seed_current.sh` cannot be a `ctest` case at all: the seed
+with `/` — because `seed_current.py` cannot be a `ctest` case at all: the seed
 is legitimately stale between releases, so it would fail on every commit.

@@ -147,7 +147,7 @@ def main() -> int:
                 f"{100 * THRESHOLD:.0f}% mark.\n"
                 f"  Raising {const} alone does not help: seed/*.ll carries the\n"
                 "  old bound and it is the seed that translates this source. Raise it\n"
-                "  on a tree that still builds, then seed/refresh.sh, as ADR-0095 and\n"
+                "  on a tree that still builds, then seed/refresh.py, as ADR-0095 and\n"
                 "  ADR-0126 each did -- and say so in the commit, because it rewrites\n"
                 "  6 MB."
             )

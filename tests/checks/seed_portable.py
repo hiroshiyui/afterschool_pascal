@@ -19,19 +19,19 @@
 #
 # Since ADR-0293 every trap the compiler emits carries its own position, and
 # the source's path is therefore a string constant *in the emitted module* --
-# `@at.file`. `seed/refresh.sh` translated with an absolute path, so the seed
+# `@at.file`. `seed/refresh.py` translated with an absolute path, so the seed
 # committed for v3.5.0 held
 #
 #     @at.file = ... c"/home/<user>/<...>/selfhost/compiler.pas\00"
 #
-# and `tests/checks/seed_current.sh` could then pass only in the directory that
+# and `tests/checks/seed_current.py` could then pass only in the directory that
 # generated it. It failed in the tag job, which is the **one place it runs** --
 # the seed is legitimately stale between releases, so that check cannot be a
 # ctest case and a release is the first time anybody asks.
 #
 # This half can be asked on every push, and it is the half that was wrong: a
 # committed artefact must not name the machine that built it. It is a much
-# weaker question than `seed_current.sh`'s -- it says nothing about whether the
+# weaker question than `seed_current.py`'s -- it says nothing about whether the
 # seed is *this* source's -- and that is the point. It would have caught this
 # on the commit that introduced the positions rather than eight releases later.
 #
@@ -90,9 +90,9 @@ def main():
                 print(one, file=sys.stderr)
             print("  The seed names the machine that generated it, so",
                   file=sys.stderr)
-            print("  tests/checks/seed_current.sh can pass only there.",
+            print("  tests/checks/seed_current.py can pass only there.",
                   file=sys.stderr)
-            print("  seed/refresh.sh translates from the root with a relative",
+            print("  seed/refresh.py translates from the root with a relative",
                   file=sys.stderr)
             print("  source path; reseed with it (ADR-0347).", file=sys.stderr)
             status = 1

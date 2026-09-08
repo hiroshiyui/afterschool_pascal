@@ -22,7 +22,7 @@
 
 `tools/release.sh` runs at a tag and nowhere else if nothing drives it
 between tags, and this tree has learned twice what happens to shell that
-only a tag exercises (ADR-0233's seed_current.sh, ADR-0282). So this is the
+only a tag exercises (ADR-0233's seed_current.py, ADR-0282). So this is the
 `ctest` case that drives both halves on every run: build an archive from
 the build tree under the version the compiler prints, then check it the way
 the tag job will -- digest, one directory, licences, and every question

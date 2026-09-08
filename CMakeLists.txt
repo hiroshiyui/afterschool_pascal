@@ -441,8 +441,8 @@ if(Python3_FOUND)
 
   # ADR-0347: does the committed seed name the machine that generated it?
   # Since ADR-0293 a trap carries its own position, so the source's path is a
-  # string constant in the emitted module, and `seed/refresh.sh` was handing
-  # the compiler an absolute one. `tests/checks/seed_current.sh` asks the whole
+  # string constant in the emitted module, and `seed/refresh.py` was handing
+  # the compiler an absolute one. `tests/checks/seed_current.py` asks the whole
   # question and can only run at a tag -- the seed is legitimately stale
   # between releases -- so it found this eight releases late. This half is
   # cheap and holds on every push. It is ADR-0366's first conversion: it was
@@ -521,7 +521,7 @@ if(Python3_FOUND)
   # ADR-0296: does `tools/release.sh` still produce an archive that checks
   # out? The script runs at a tag and nowhere else if nothing drives it
   # between tags, and this tree has learned twice what happens to shell only a
-  # tag exercises (seed_current.sh, ADR-0282). So every run builds an archive
+  # tag exercises (seed_current.py, ADR-0282). So every run builds an archive
   # from this tree under the version the compiler prints and checks it the
   # way the tag job will: the digest, one directory, the licences, and every
   # question install-layout asks of a prefix.
