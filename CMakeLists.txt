@@ -526,7 +526,7 @@ if(Python3_FOUND)
   # way the tag job will: the digest, one directory, the licences, and every
   # question install-layout asks of a prefix.
   add_test(NAME release-archive
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/release_archive.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/release_archive.py
                    ${CMAKE_BINARY_DIR})
 
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
@@ -959,7 +959,7 @@ endif()
 # (runtime/unicode/fetch.sh). UNICODE_CONFORMANCE_REQUIRE is how CI refuses to
 # pass by skipping, as TARGET_SIZES_REQUIRE does.
 add_test(NAME unicode-conformance
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/unicode_conformance.sh)
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/unicode_conformance.py)
 set_tests_properties(unicode-conformance PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)

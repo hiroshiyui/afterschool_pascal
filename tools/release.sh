@@ -54,7 +54,7 @@
 # nowhere else if it lives in the workflow, and twice now something written
 # there failed for want of anywhere to be exercised first (ADR-0233's
 # `seed_current.sh`, ADR-0282). So this is a script, `tests/checks/
-# release_archive.sh` drives `--archive` and `--check` as a `ctest` case on
+# release_archive.py` drives `--archive` and `--check` as a `ctest` case on
 # every run, and the workflow calls the same text with the tag's name.
 #
 # **The tag has to be the version.** `pascalc --version` prints what

@@ -186,6 +186,35 @@ message and does; and the floor of twenty modules, which had to be staged with
 the layout list intact, the first attempt at it having been caught one check
 earlier.
 
+**`release-archive` is the eleventh**, and the first that converts a gate
+while leaving the script it drives in shell: `tools/release.sh` is unchanged,
+which is what keeps this a conversion rather than a redesign. Seven arms, and
+the three ADR-0296 says fail separately were made to fail one at a time by
+mutating `release.sh` in a copied tree — the version refusal removed, the
+version refusal reworded, the digest comparison removed — plus a build
+directory with no compiler in it, an archive built without `lib/afterschool/`,
+which fails through `install_layout.py --prefix` and names `pastext.pas` in
+its message, and the no-argument form.
+
+**`unicode-conformance` is the twelfth**, ten arms, and the widest spread so
+far: the database absent, and again under `UNICODE_CONFORMANCE_REQUIRE`; no C
+compiler, and again under it; `runtime/pasrt_unicode.c` given a GNU statement
+expression, which is the `-pedantic-errors` build refusing; `NormalizationTest.txt`
+present but unreadable, which is the driver's exit 2 and the one arm the shell
+version carries a comment about, `$?` inside `if ! cmd` being the negation's
+status; a file the driver does not open removed, which is `generate.py`
+failing; `python3` off `PATH`, which is the half-checked exit 0; the committed
+header edited by hand; and — the question the gate exists for — canonical
+ordering made non-stable in `u_ccc`, which the database catches at U+1E14.
+
+One arm here cannot be byte-identical and the reason is worth naming: the
+header-drift arm prints a unified diff whose `+++` line names a **fresh
+temporary file**, so its path and mtime differ between any two runs of
+anything. `difflib` writes no timestamp at all by default, which would have
+made the output stop being a diff `patch` can read, so the conversion supplies
+one in `diff -u`'s own format; what is compared is then everything but that
+line.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,
