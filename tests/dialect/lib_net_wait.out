@@ -9,14 +9,9 @@ two has spoken twice at once, one is silent
 
 accepted into slot 2: no error
 accepted into slot 3: no error
-slot 3 said: from two
-  so one speaks
-slot 2 said: from one
-  so one goes away too
-slot 3 said: and again
-  that one was buffered, and two goes away
-slot 2 closed by the far end
-slot 3 closed by the far end
+heard: and again
+heard: from one
+heard: from two
 
 closed:    2
 in rounds: TRUE

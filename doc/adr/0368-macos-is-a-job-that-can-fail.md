@@ -59,6 +59,18 @@ cost. The platform is a second reader of every harness, and the first run
 after this record is where that is proved — this decision could not be tested
 locally, and saying so is part of it.
 
+**Its first required run found something, and it was a test.**
+`tests/dialect/lib_net_wait` failed on macOS with two blocks of output
+transposed. The case had passed there twice and failed the third time with no
+relevant change between, so it is nondeterministic rather than platform-wrong:
+its golden pinned an *arrival order* — which of a line buffered in the runtime
+and a reply still on a socket a round finds ready — and that is the operating
+system's answer, not the program's. The case now collects what it heard and
+prints it sorted, which is what it was always asserting; ADR-0205's own
+mutation, a buffered line no longer reported ready, is still caught, and now
+three ways rather than one. **This is the class of defect a second platform is
+for**, and no Linux run in the case's life had shown it.
+
 **Reverting is one line.** `continue-on-error: true` goes back and the job is
 advisory again. That is the property that made it reasonable to take the step
 without a Mac to try it on.

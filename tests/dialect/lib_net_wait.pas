@@ -43,6 +43,24 @@ var
   quiet: array [1..2] of boolean;
   clock: TimeStamp;
   before, after, elapsed: integer;
+  { **What was heard, and not when.** The golden used to hold the narration in
+    arrival order, and arrival order is not this program's to decide: the
+    second line client two wrote is in the runtime's buffer, the reply to
+    client one is on a socket, and which of the two a round finds ready is the
+    operating system's answer and not the same one twice. It passed here and
+    on aarch64 for as long as it existed and failed on macOS the third time
+    that platform ran it (ADR-0368's first finding), which is what a golden
+    pinning an interleaving is worth.
+
+    So the lines are collected and sorted, and what is asserted is what this
+    test is *for*: that all three were read -- the buffered one included, which
+    nothing but `NetWait` can find -- that both connections closed, and that it
+    took a bounded number of rounds. Which slot heard which, and in what order,
+    was never the claim; the comment at the top says the claim is that a wrong
+    `NetWait` **hangs**. }
+  heard: array [1..4] of NetLine;
+  heardN, i, j: integer;
+  swap: NetLine;
 
 begin
   { **The timeout is a wait and not a poll**, which nothing else here can see:
@@ -85,6 +103,7 @@ begin
 
   closed := 0;
   round := 0;
+  heardN := 0;
   while (closed < 2) and (round < Rounds) do begin
     round := round + 1;
     e := NetWait(watch, Patience, ready);
@@ -110,29 +129,40 @@ begin
         if ready[k] then begin
           e := NetReadLine(watch[k], line);
           if e = errAbsent then begin
-            writeln('slot ', k:1, ' closed by the far end');
+            { Which of the two closes first is the same question as above,
+              and the count below is the assertion. }
             watch[k] := nil;
             closed := closed + 1
           end
           else begin
-            writeln('slot ', k:1, ' said: ', line);
-            { The other half of the conversation, driven by what was heard. }
-            if line = 'from two' then begin
-              e := NetWriteLine(cli[1], 'from one');
-              writeln('  so one speaks')
-            end
-            else if line = 'and again' then begin
-              cli[2] := nil;
-              writeln('  that one was buffered, and two goes away')
-            end
-            else if line = 'from one' then begin
-              cli[1] := nil;
-              writeln('  so one goes away too')
-            end
+            if heardN < 4 then begin
+              heardN := heardN + 1;
+              heard[heardN] := line
+            end;
+            { The other half of the conversation, driven by what was heard.
+              The actions stay where they were -- it is only the narration
+              that moved, the reply to client one being what makes the next
+              round's readiness a race. }
+            if line = 'from two' then
+              e := NetWriteLine(cli[1], 'from one')
+            else if line = 'and again' then
+              cli[2] := nil
+            else if line = 'from one' then
+              cli[1] := nil
           end
         end
     end
   end;
+
+  { Sorted, so what is printed is the set and not the schedule. }
+  for i := 1 to heardN - 1 do
+    for j := 1 to heardN - i do
+      if heard[j] > heard[j + 1] then begin
+        swap := heard[j];
+        heard[j] := heard[j + 1];
+        heard[j + 1] := swap
+      end;
+  for i := 1 to heardN do writeln('heard: ', heard[i]);
 
   writeln;
   writeln('closed:    ', closed:1);
