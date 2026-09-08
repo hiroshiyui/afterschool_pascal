@@ -289,6 +289,32 @@ Staging one — a wrapper appending a comment to each `.ll`, so the candidate
 pass differs from the pass by the compiler built from it — is what made the
 arm reachable at all.
 
+**`tests/dumps/run` is the seventeenth**, and the first per-case harness: it
+is not one gate but thirty-five ctest cases, so the differential is the whole
+corpus rather than a run. All thirty-five byte-identical, plus six arms — a
+golden that no longer matches, no golden at all, a status the case did not
+ask for, that case again with a `.status` sidecar, a compiler that writes to
+the second stream, and a `.flags` naming an option the compiler refuses,
+which is ADR-0284's own failure shape.
+
+One detail had to be copied rather than reasoned about. The shell compared
+with `diff -u expected <(...)`, so the `+++` line of a failing case names
+**`/dev/fd/63`** — bash's process substitution — and a golden's failure output
+has been read by people in that form. The conversion writes the same name.
+
+**`lsp/build` and `lsp/mcp` are the eighteenth and nineteenth**, and here the
+artefact settles it: the server binary built by each is **byte-identical**, at
+the default level, at `-O0`, and under `PASLS_COVERAGE_IR`, where the emitted
+coverage IR matches too. Then the launcher: a first start that builds, a
+second that does not, a library source touched so that it does again, no
+compiler anywhere, and a component that will not compile.
+
+`lsp/mcp`'s freshness test is the one thing that had to be written rather than
+translated. `ls -t … | head -1` picks the newest *name* and `-nt` then
+compares that name's mtime — an argmax used to compute a max, which Python
+takes directly. **`.mcp.json` names this script**, so the MCP server for this
+checkout must be restarted before an agent sees the converted launcher.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

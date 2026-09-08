@@ -762,7 +762,7 @@ file(GLOB APASCAL_DUMP_TESTS ${CMAKE_SOURCE_DIR}/tests/dumps/*.pas)
 foreach(t ${APASCAL_DUMP_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME dump-${name}
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/dumps/run.sh ${APASCAL_PASCALC} ${t})
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/dumps/run.py ${APASCAL_PASCALC} ${t})
 endforeach()
 
 # Formal verification of the lowering rules (verify/). Skips rather than fails

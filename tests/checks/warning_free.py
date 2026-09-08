@@ -22,7 +22,7 @@ four of them now. A **test case** is held to them by a sidecar: a case with a
 `name.warn` must produce those warnings and a case without one must produce
 none, which is the half that stops a warning added later from appearing on
 dozens of green cases. `selfhost/`, `lib/` and `lsp/` have no sidecars. They
-are compiled by CMake, by four harnesses and by `lsp/build.sh`, all of which
+are compiled by CMake, by four harnesses and by `lsp/build.py`, all of which
 read the exit status and none of which reads what the compiler *said* -- so a
 warning here is written to a build log and nothing fails.
 

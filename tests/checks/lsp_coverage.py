@@ -36,7 +36,7 @@ this gate also fails when a golden fails, which is a feature -- a coverage
 number taken from a conversation that went wrong measures nothing.
 
 **Attribution, and the same answer as the two gates above.** `$PASCOV_LINES`
-records a bare line number with no file, so `lsp/build.sh` is asked (through
+records a bare line number with no file, so `lsp/build.py` is asked (through
 `PASLS_COVERAGE_IR`) to instrument `pasls.pas` and none of its thirteen
 components: a line is then unambiguously the server's. The *denominator* is the
 `pas_cov_hit` sites of the very IR that build wrote, so nothing here keeps a
@@ -183,7 +183,7 @@ def replay(root, pascalc, build_dir, work):
               file=sys.stderr)
         return None
     if not ir.exists():
-        print(f"lsp-coverage: lsp/build.sh wrote no IR to {ir} -- does it "
+        print(f"lsp-coverage: lsp/build.py wrote no IR to {ir} -- does it "
               f"still honour PASLS_COVERAGE_IR?", file=sys.stderr)
         return None
     reached = set()

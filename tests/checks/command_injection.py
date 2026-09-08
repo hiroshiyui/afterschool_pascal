@@ -101,7 +101,7 @@ def check(pascalcc, pascalc, work):
         print('command-injection: ' + msg, file=sys.stderr)
         fails.append(msg)
 
-    r = subprocess.run([str(ROOT / 'lsp' / 'build.sh'), pascalcc,
+    r = subprocess.run([str(ROOT / 'lsp' / 'build.py'), pascalcc,
                         str(work / 'pasls')], capture_output=True, text=True)
     if r.returncode != 0:
         print('--- the language server did not build ---', file=sys.stderr)

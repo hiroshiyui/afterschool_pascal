@@ -99,7 +99,7 @@ trap 'rm -rf "$work"' EXIT
 heap_balance="${PASHEAP_BALANCE:-}"
 unset PASHEAP_BALANCE
 
-if ! "$here/build.sh" "$pascalcc" "$work/pasls" >"$work/build.log" 2>&1; then
+if ! "$here/build.py" "$pascalcc" "$work/pasls" >"$work/build.log" 2>&1; then
   echo "--- the language server did not build ---" >&2
   cat "$work/build.log" >&2
   exit 1

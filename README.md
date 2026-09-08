@@ -475,7 +475,7 @@ nobody would ever see the answer.
 
 ```sh
 PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \
-  lsp/build.sh tools/pascalcc ~/bin/pasls
+  lsp/build.py tools/pascalcc ~/bin/pasls
 ```
 
 Point your editor at the binary for Pascal files. It talks over standard input

@@ -566,7 +566,7 @@ it once and point your editor at the binary for Pascal files; it needs no
 arguments and talks over standard input and output.
 
 ```sh
-lsp/build.sh tools/pascalcc ~/bin/pasls
+lsp/build.py tools/pascalcc ~/bin/pasls
 ```
 
 It publishes diagnostics as you type — you do not have to save — and answers

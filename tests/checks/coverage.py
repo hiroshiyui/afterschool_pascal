@@ -194,9 +194,10 @@ def corpus(root):
         # two flags contributed nothing and reported as nothing: `--range`'s
         # own two cases had never been run here at all, and the ratchet was
         # carrying their lines as unreached while `format-check` reached them
-        # on every run. `tests/dumps/run.sh` has always read the file with
-        # `read -r -a`, so the harness and the sweep now read it the same way
-        # -- which is the property the two must have (ADR-0325).
+        # on every run. `tests/dumps/run.py` has always split the file into
+        # words -- `read -r -a` while it was shell -- so the harness and the
+        # sweep read it the same way, which is the property the two must have
+        # (ADR-0325).
         argv += (flags.read_text().split() if flags.exists()
                  else ["--dump-all"])
         jobs.append((f, argv))

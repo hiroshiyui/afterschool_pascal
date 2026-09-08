@@ -4340,13 +4340,13 @@ nothing else. What it would lose, mechanism by mechanism:
 - **It lives in `lsp/` and not in `tests/`.** A test case is compiled into a
   temporary directory and thrown away; a server has to be a binary someone can
   point an editor at, which is what makes the protocol's external authority
-  real rather than theoretical. `lsp/build.sh` produces one and reads
+  real rather than theoretical. `lsp/build.py` produces one and reads
   `lsp/pasls.components` — the sidecar convention `tests/run_test.sh` and
   `selfhost/irtest.sh` already read, so the build order is written down once. A
   script and not a CMake target, because nothing here installs anything;
   `tools/pascalcc` is the precedent.
 - **A session is its own kind of golden**, which is why `lsp/run.sh` exists
-  beside `tests/dumps/run.sh` for the same reason: what is compared is neither
+  beside `tests/dumps/run.py` for the same reason: what is compared is neither
   a compiled program's output nor a compiler's but a *conversation*. The input
   is `sessions/name.jsonl`, one JSON-RPC message per line with `#` comments,
   and the harness computes the `Content-Length` frames — a `.in` file would
@@ -4391,7 +4391,7 @@ nothing else. What it would lose, mechanism by mechanism:
   reported many.
 - **It reads `.components` to find a file's imports** (ADR-0238), and that file
   is this tree's build description — already read by `run_test.sh`,
-  `irtest.sh`, CMake, `build.sh` and four gates. Without it the compiler is
+  `irtest.sh`, CMake, `build.py` and four gates. Without it the compiler is
   handed a module alone and fails on every name it imports: 48 diagnostics for
   `lib/dialect/pasjson.pas` and **21 171** for `selfhost/apfront.pas`, so the
   server worked on `hello.pas` and on nothing in the repository it was written
@@ -4408,7 +4408,7 @@ nothing else. What it would lose, mechanism by mechanism:
   which is `README.md`'s standing gap and the compiler's to answer.
 - **The corpus sweeps reach it through a second root**, not through the glob.
   `coverage.py` names `lsp/pasls.pas` as a group, `variant_check.py` adds
-  `lsp/` to its `find`, and `build.sh` honours `AFTERSCHOOL_PASCAL_OPT` so the
+  `lsp/` to its `find`, and `build.py` honours `AFTERSCHOOL_PASCAL_OPT` so the
   corpus-wide `-O0` sweep reaches a program whose whole shape is a loop
   (ADR-0102). `heap-balance` needed more: the server has no `.out` and cannot
   have one, so it drives `lsp/run.sh` — and that harness has to take

@@ -16,7 +16,7 @@ the compiler answers, in the compiler's own words, through a flag.
 
 ```sh
 PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \
-  lsp/build.sh tools/pascalcc /somewhere/pasls
+  lsp/build.py tools/pascalcc /somewhere/pasls
 ```
 
 `pasls.components` lists ISO/IEC 10206:1991 §6.13's other program-components,
@@ -38,7 +38,7 @@ that sets no environment still works:
 
 It finds a file's **imports** by reading `.components`, which is this tree's
 build description — the same sidecar `tests/run_test.sh`, `selfhost/irtest.sh`,
-CMake and `build.sh` read, a path per line in dependency order. The rule is one
+CMake and `build.py` read, a path per line in dependency order. The rule is one
 sentence: *take the entries before this file*. A sidecar beside the file and
 named after it answers first; otherwise the workspace the client named at
 `initialize` is searched for one that names the file. Without this the compiler
@@ -288,11 +288,11 @@ does not do is abandon a compile already in flight; that costs one compilation
 at the end of a burst, and the record says what the cheapest route to it would
 cost instead.
 
-`lsp/mcp.sh` is the **MCP launcher**, named by `.mcp.json` at the top of the
+`lsp/mcp.py` is the **MCP launcher**, named by `.mcp.json` at the top of the
 checkout so that an agent working on this repository has `outline` and
 `diagnostics` as tools. It finds a compiler in the build tree or on `PATH`,
 builds the server when the binary is missing or older than its sources, and
-execs it with `--mcp`. `build.sh` stays what it is — a server wants a binary a
+execs it with `--mcp`. `build.py` stays what it is — a server wants a binary a
 user can point an editor at — and this is the stable *command* an agent needs
 beside it.
 
@@ -325,7 +325,7 @@ JSON-RPC error, which is the distinction the specification draws and the one
 most easily got backwards.
 
 ```sh
-lsp/build.sh tools/pascalcc pasls
+lsp/build.py tools/pascalcc pasls
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"outline","arguments":{"path":"tests/hello.pas"}}}' \
   | PASLS_COMPILER=build/bin/pascalc ./pasls --mcp
 ```

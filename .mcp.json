@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "afterschool-pascal": {
-      "command": "./lsp/mcp.sh",
+      "command": "./lsp/mcp.py",
       "args": [],
       "env": {}
     }
