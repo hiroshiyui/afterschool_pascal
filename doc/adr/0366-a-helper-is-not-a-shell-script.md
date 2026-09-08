@@ -102,6 +102,20 @@ A missing root directory is the one behaviour that changed: `find` wrote a
 diagnostic and carried on, and the walk is simply empty. The floor is what
 guards that, which is what a floor is for (ADR-0282).
 
+**`variant-check` is the third**, and it is the one that shows the check has
+teeth on a gate with real machinery: it builds a compiler out of three
+components, counts the guards in it, links it and sweeps 901 sources with it.
+Six arms compared — the real run, a compiler path that does not exist, a
+compiler that cannot compile the components (where `head -20` over *two* files
+writes `==>` headers and a blank line between them, and the reproduction had
+to match that), a build carrying no guards, a build whose IR does not link,
+and no `clang` at all, which is the skip. Only the temporary directory's name
+differed, which differs between any two runs. It shed the same locale-dependent
+`sort`, and one more: the git filter leaned on GNU grep keeping every line when
+handed an empty pattern file, where POSIX says an empty pattern set matches
+nothing — a BSD grep could have emptied the corpus and left the floor to report
+it.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

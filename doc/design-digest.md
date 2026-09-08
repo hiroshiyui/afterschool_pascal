@@ -4407,7 +4407,7 @@ nothing else. What it would lose, mechanism by mechanism:
   two strings. What it does **not** do is resolve an interface name to a file,
   which is `README.md`'s standing gap and the compiler's to answer.
 - **The corpus sweeps reach it through a second root**, not through the glob.
-  `coverage.py` names `lsp/pasls.pas` as a group, `variant_check.sh` adds
+  `coverage.py` names `lsp/pasls.pas` as a group, `variant_check.py` adds
   `lsp/` to its `find`, and `build.sh` honours `AFTERSCHOOL_PASCAL_OPT` so the
   corpus-wide `-O0` sweep reaches a program whose whole shape is a loop
   (ADR-0102). `heap-balance` needed more: the server has no `.out` and cannot

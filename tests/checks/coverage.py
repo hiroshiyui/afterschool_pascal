@@ -506,7 +506,7 @@ def sweep(exe, jobs, work, crashes=None):
         is the runtime's own wording on the runtime's own stream. Matching it
         anywhere would match a dump of the compiler's own source, whose
         emitter carries that literal and prints it to standard *output* --
-        variant_check.sh met exactly this on its first run.
+        variant_check.py met exactly this on its first run.
 
     A timeout stays a warning rather than a crash. It is the one signal a
     loaded machine can produce by itself, and 300 seconds on a corpus source

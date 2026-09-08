@@ -65,7 +65,7 @@ FLOOR = 1000
 def enumerate_sources(root):
     """Every `.pas` under the roots, minus what git ignores.
 
-    A walk with git as an *optional filter* -- `variant_check.sh`'s shape, and
+    A walk with git as an *optional filter* -- `variant_check.py`'s shape, and
     it is the shape for the reason that gate learned: a checkout may have a
     retired corpus or a second build tree on disk, and what is gitignored is
     not a source this project ships.

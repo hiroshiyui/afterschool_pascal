@@ -108,7 +108,7 @@ globbed separately. The split no longer says which standard a case is compiled
 under (ADR-0232); it says which names the ctest cases have, and buys
 `tests/dialect/` and `examples/` the per-case `TIMEOUT` a program that opens a
 socket needs. The sweeps that enumerate Pascal by root (`format_check.py`,
-`variant_check.sh`, `coverage.py`, `heap_balance.py`, `fuzz.py`, `sanitize.sh`,
+`variant_check.py`, `coverage.py`, `heap_balance.py`, `fuzz.py`, `sanitize.sh`,
 `irtest.sh`) name all four.
 
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and a
@@ -138,7 +138,7 @@ and speaking MCP as well as LSP from the one binary (ADR-0241). `lsp/README.md`
 says what it answers and from which dump; `doc/design-digest.md` holds the
 mechanism. Two things about it are this file's business: the corpus sweeps reach
 it through a **second root** rather than through the glob (`coverage.py` names
-it, `variant_check.sh` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`),
+it, `variant_check.py` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`),
 and `heap-balance` drives `lsp/run.sh` instead of `run_test.sh`, which has to
 take `PASHEAP_BALANCE` out of the environment **twice**, `pascalcc` building the
 server and the server starting `pascalc` once per document.

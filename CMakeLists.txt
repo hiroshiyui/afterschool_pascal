@@ -365,7 +365,8 @@ if(Python3_FOUND)
   # left is the sweep -- compile the compiler with itself, then read the corpus
   # with the result.
   add_test(NAME variant-check
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/variant_check.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/variant_check.py
                    ${CMAKE_BINARY_DIR}/bin/pascalc
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
