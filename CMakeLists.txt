@@ -484,7 +484,8 @@ if(Python3_FOUND)
   # own path**: every case is compiled where it sits, and every path a harness
   # passes is short -- stale-component's argument met a second time.
   add_test(NAME long-path
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/long_path.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/long_path.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc)
   set_tests_properties(long-path PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
@@ -497,7 +498,8 @@ if(Python3_FOUND)
   # case can choose how it is named, every case here being compiled where it
   # sits by a harness that passes a path.
   add_test(NAME bare-source-name
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/bare_source_name.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/bare_source_name.py
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc)
   set_tests_properties(bare-source-name PROPERTIES
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
