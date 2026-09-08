@@ -94,6 +94,19 @@ saying which file. That is the shape every catalogue here has, and the reverse
 check is what keeps the reason attached to the call: remove the call and the
 row fails.
 
+**It walks the tree and filters through git, rather than asking `git
+ls-files`.** The first version asked, and `git` exits 128 in a container whose
+checkout it calls dubiously owned — so the gate turned four CI jobs red on the
+push after it landed. **This tree had written that down twice already**, in
+`clause_citations.py`'s comment and then in `format_check.py`'s, and neither
+was read. Two things follow. The walk starts at the top rather than from a
+list of roots, because the question is whether a shell script exists
+*anywhere* and a root list is the one blind spot such a question cannot have;
+`.git`, a background agent's worktree and the build trees are excluded by
+name, so the answer does not change when git will not speak. And the walk
+reaches a file that is **not yet staged**, which `git ls-files` would not — a
+helper added and not committed is exactly what this should refuse.
+
 **It cannot see a utility named by a variable.** `run(prog, ...)` where `prog`
 was computed is invisible, as is `shutil.which('sed')`. That is the ordinary
 limit of reading source rather than running it, it is the same limit

@@ -105,13 +105,55 @@ BASH4 = {
 }
 
 
+# Walked, and then filtered through git only if git answers. `git ls-files`
+# outright is what this check did until it reached CI, where it exits 128 in a
+# container whose checkout git calls dubiously owned -- and this tree had
+# written that down twice before, in `clause_citations.py`'s comment and then
+# in `format_check.py`'s, which is where the pattern below comes from. Reading
+# the answer instead of the trap cost a red build.
+#
+# **Walked from the top, not from a list of roots.** `format_check.py` and
+# `variant_check.py` name theirs because they count Pascal sources and the
+# count has to mean the same thing on every machine. This one is asking
+# whether a shell script *exists anywhere*, and a list of roots is exactly the
+# blind spot such a question cannot have -- a script in a directory nobody
+# thought to name is the one it would miss.
+#
+# So the exclusions are named instead, and they are three: git's own
+# directory, a background agent's worktree (a whole second copy of the
+# checkout inside it), and the build trees. The last is what `check-ignore`
+# below would drop anyway; it is spelled out as well because when git will not
+# speak, nothing is dropped, and `build/bin/pascalc` is an executable this
+# check has no business reading.
+SKIP_DIRS = ('.git', '.claude/worktrees')
+SKIP_TOP = re.compile(r'^build($|[-.])')
+
+
 def tracked():
-    out = subprocess.run(['git', '-C', str(ROOT), 'ls-files'],
-                         capture_output=True, text=True)
-    if out.returncode != 0:
-        print('helper-portability: git ls-files failed', file=sys.stderr)
-        sys.exit(1)
-    return [ln for ln in out.stdout.split('\n') if ln]
+    found = []
+    for p in ROOT.rglob('*'):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(ROOT)
+        parts = rel.parts
+        if parts[0] == '.git' or SKIP_TOP.match(parts[0]):
+            continue
+        if len(parts) > 1 and parts[0] == '.claude' and parts[1] == 'worktrees':
+            continue
+        found.append(str(rel))
+    found.sort()
+    if not found:
+        return found
+    ignored = subprocess.run(
+        ['git', '-C', str(ROOT), 'check-ignore', '--stdin'],
+        input='\n'.join(found), capture_output=True, text=True)
+    # check-ignore exits 1 when nothing matched, which is the ordinary case,
+    # and 128 where git will not speak for this checkout at all. Only the
+    # first is a list to subtract.
+    if ignored.returncode in (0, 1):
+        drop = set(ignored.stdout.split())
+        found = [f for f in found if f not in drop]
+    return found
 
 
 def is_shell(path):
