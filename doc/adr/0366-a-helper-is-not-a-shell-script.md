@@ -83,9 +83,24 @@ trees covering every branch the real one cannot show (a clean sweep, an
 absolute path present, below the floor, no modules at all, and both faults at
 once), and then the gate's own mutation applied to the **real** committed seed,
 where both versions refused it in the same words and the artefact was restored
-byte for byte. `tests/checks/tool_dumps.sh` is the intended second, its shape —
-drive the compiler over a corpus, compare against goldens — being the one about
-ten other gates share.
+byte for byte.
+
+**`tool-dumps` is the second, converted the same day, and it is the one that
+matters** — its shape, enumerate a corpus and run the compiler over every
+member of it, is what about ten gates here do, so what it settles is the
+template rather than one gate. Six comparisons: the real tree, all 3 600
+invocations, byte for byte; a stub compiler crashing one source by the runtime
+message and another by exit status, which pins both detectors, the two-line
+report, the two-space indent, the empty-output arm and the order 900 sources
+are swept in; a compiler path that is not executable; a corpus below the floor;
+an empty corpus; and a source the git filter removes. It gained no temporary
+file to clean up and it enumerates by **byte order** rather than piping `find`
+into `sort`, whose collation follows `LANG` — the same names in a different
+order on a differently configured machine.
+
+A missing root directory is the one behaviour that changed: `find` wrote a
+diagnostic and carried on, and the walk is simply empty. The floor is what
+guards that, which is what a floor is for (ADR-0282).
 
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a

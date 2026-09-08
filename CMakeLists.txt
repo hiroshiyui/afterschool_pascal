@@ -421,7 +421,8 @@ if(Python3_FOUND)
   # A crash sweep and not a golden: what a dump *says* is tests/dumps/'s
   # business and this asks only that the compiler is still running.
   add_test(NAME tool-dumps
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/tool_dumps.sh
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/tool_dumps.py
                    ${CMAKE_BINARY_DIR}/bin/pascalc)
 
   # ADR-0348: does a generated project build, run and test itself? No test case
