@@ -376,3 +376,4 @@ the alternatives that were rejected and why.
 | [0365](0365-the-concurrency-clauses-audited.md) | The concurrency clauses, audited | Accepted |
 | [0366](0366-a-helper-is-not-a-shell-script.md) | A helper is not a shell script | Accepted |
 | [0367](0367-the-rule-about-helpers-is-enforced.md) | The rule about helpers is enforced | Accepted |
+| [0368](0368-macos-is-a-job-that-can-fail.md) | macOS is a job that can fail | Accepted |

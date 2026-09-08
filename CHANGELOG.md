@@ -13,6 +13,23 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **macOS is a job that can fail** (ADR-0368). It was advisory from the first
+  run of the port; 901 of 911 cases run and pass on arm64, so
+  `continue-on-error` is gone and a macOS failure now stops the build.
+  `SANITIZE_REQUIRE` is set — those two gates already ran there — and the
+  other nine name tools the runner has not got. The ten gates that still skip
+  are listed in the job with the reason for each. The release-matrix leg stays
+  disabled: a platform is run before it is shipped.
+- **Every helper is Python 3, and a gate keeps it that way** (ADR-0366,
+  ADR-0367). The thirty-one shell scripts under test were converted one at a
+  time, each proved by byte-identical output from both versions on this tree
+  and by its own historical mutation re-run; `tools/pascalcc` is the one that
+  remains, by decision. `helper-portability` refuses a new shell script, the
+  constructs bash 3.2 lacks in the one that is catalogued, and a Python helper
+  starting a general-purpose utility to do what the standard library does.
+
 ### Fixed
 
 - **A task may have helper routines.** AP 6.7.8.2 admits a variable declared

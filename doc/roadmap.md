@@ -27,7 +27,7 @@ green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** is read for but never run, and its first CI job is advisory ([below](#cross-platform-support)); **Windows** needs two `FILE*`-over-memory functions, `_access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with ten skips listed and a release leg still disabled; **Windows** needs two `FILE*`-over-memory functions, `_access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
@@ -240,7 +240,7 @@ target measurement is
 
 | Target | What it needs |
 | --- | --- |
-| **macOS** | **green on arm64, and the job is still advisory.** The whole suite passes there. What is left is the promotion: `macos-experiment` sets no `*_REQUIRE`, so its skips pass silently and it cannot fail the build — make it a job that fails, then enable the release-matrix entry, in that order. One thing is open rather than done: `--target=` admits no Darwin triple, so a program builds because clang overrides the module's header and nothing there may believe it (`doc/sop.md` §7). Nine failures got it there and **not one was in the compiler** — every one was a harness assuming Linux ([history](history.md#the-first-macos-run)) |
+| **macOS** | **a job that can fail, since [ADR-0368](adr/0368-macos-is-a-job-that-can-fail.md).** 901 of 911 cases run and pass on arm64; `SANITIZE_REQUIRE` is set, the other nine variables name tools the runner has not got. **Ten skips remain and the job's comment lists them with the reason for each** — the cheapest is `unicode-conformance`, which skips only because that job does not fetch the database. Two things are open rather than done: `--target=` admits no Darwin triple, so a program builds because clang overrides the module's header and nothing there may believe it (`doc/sop.md` §7); and the release-matrix leg is still disabled, which is three decisions rather than a run finding anything — the `package` job's comment names them. Nine failures got it there and **not one was in the compiler** — every one was a harness assuming Linux ([history](history.md#the-first-macos-run)) |
 | **Windows** | `fmemopen` and `open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two `FILE*`-over-memory functions; `access` is `_access`; MSVC lacks the `_Complex` §6.7.6.2's functions are written in |
 | **s390x** | aligns `tySet`'s `i256` to 8 where every other target says 16 — thirteen offsets, and `target-layout`'s second claim would catch it |
 

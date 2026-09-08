@@ -764,34 +764,54 @@ jobs:
         # every ILP32 target, and at -O2 the optimiser folded the call away.
         # The gate is the same gate; what was missing was one of its two axes.
 
-  macos-experiment:
-    # **An experiment, and it cannot turn main red.** macOS has never been
-    # tried (doc/roadmap.md, "What is left"), and this job is the first run of
-    # the port rather than a claim about it: `continue-on-error` makes its
-    # result advisory, so a failure here is a finding to read and not a
-    # broken build. It sets no `*_REQUIRE` variable on purpose -- every gate
-    # that needs a tool this runner lacks (valgrind, llc, fpc, a 32-bit libc,
-    # cross compilers, the Unicode database) skips with 77 and is reported as
-    # a pass, which is the right answer while the question is whether the
-    # *rest* works. Promote it to a job that fails, and to the release matrix,
-    # only once it is green here; the package job's comment says why that is
-    # the order.
+  macos:
+    # **macOS is a job that can fail** (ADR-0368). It was `macos-experiment`,
+    # advisory, from the first run of the port until this: the question then
+    # was whether the *rest* worked, and `continue-on-error` was the right
+    # answer to it. It is answered -- 901 of 911 cases run and pass here, and
+    # every one of the nine failures that got it there was a harness assuming
+    # Linux and not one was in the compiler.
     #
-    # What is known to differ, from reading rather than from a run: there is
-    # no `-static` and no `ldd` (`tools/release.py` allows for both), no
-    # `timeout` (`irtest.py` and `producttest.py` fall back), BSD `sed -i`
-    # (the four harnesses that edit in place go through a temporary), no
-    # LeakSanitizer on arm64 (`sanitize.py` asks for it on Linux only), and
-    # ld64 spells an undefined symbol with a leading underscore (`pascalcc`
-    # reads both). What is *not* known is everything a run finds.
+    # **What still skips, and it is ten** -- read off the run at a84659a
+    # rather than predicted:
+    #
+    #   benchmark          abstains where $CI is set, by design (ADR-0282)
+    #   verify-lowering    z3 is installed with `|| true` above and did not
+    #   llc-second-backend no llc; Homebrew's llvm has one
+    #   target-sizes       reached the host and no cross compiler, so it
+    #                      skipped for the reason it exists to report
+    #   valgrind-corpus    no valgrind on arm64
+    #   runtime-coverage   no llvm-profdata and no llvm-cov
+    #   unicode-conformance the database is fetched, never committed, and this
+    #                      job does not fetch it -- the cheapest of the ten to
+    #                      close, and deliberately not closed in the same
+    #                      change as the promotion: it makes the runtime
+    #                      compile under `-pedantic-errors -Werror` on a
+    #                      compiler nothing here has tried, which is a second
+    #                      question and belongs in its own commit
+    #   fpc-differential   no fpc
+    #   tls                no OpenSSL headers; the system `openssl` is
+    #                      LibreSSL, which is a different transcription
+    #   target32           no 32-bit libc
+    #
+    # **`SANITIZE_REQUIRE` is set and the other nine variables are not.**
+    # `sanitizers` and `thread-sanitizer` already run here and pass, so the
+    # variable pins what is true rather than demanding something new; the
+    # rest name tools this runner has not got, and a job that fails because a
+    # tool is absent reports the runner and not the port (ADR-0330).
+    # `VALGRIND_REQUIRE` and `RUNTIME_COVERAGE_REQUIRE` guard their own skips,
+    # so setting this one does not reach them.
     #
     # The compiler emits an x86-64 Linux header (`--target=` admits no Darwin
     # triple yet); clang overrides it when it assembles, as the aarch64 job
     # relies on, so a program links -- and `target-layout`'s second claim,
     # which asks clang about each *admitted* target, is unaffected.
-    name: 'experiment: macOS (advisory, may fail)'
+    #
+    # The release-matrix leg stays disabled: a platform is run before it is
+    # shipped, and this job is the running. The `package` job's comment says
+    # what is left before the leg can be enabled.
+    name: macOS (arm64)
     runs-on: macos-latest
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -803,7 +823,10 @@ jobs:
           cmake --version | head -1
           python3 --version
           # z3 for verify/, as the Linux jobs install it; a failure here is
-          # reported and the proofs skip rather than the job stopping.
+          # reported and the proofs skip rather than the job stopping. It has
+          # been failing, which is why `verify-lowering` is in the skip list
+          # above; the proofs are a property of the model and not of this
+          # platform, so it is the least urgent of the ten.
           python3 -m pip install --user z3-solver || true
 
       - name: Configure
@@ -813,9 +836,10 @@ jobs:
         run: cmake --build build -j"$(sysctl -n hw.ncpu)"
 
       - name: Test
+        env:
+          SANITIZE_REQUIRE: '1'
         run: ctest --test-dir build --output-on-failure -j"$(sysctl -n hw.ncpu)"
-        # No *_REQUIRE here, deliberately -- see the job comment. `CI` is set
-        # by GitHub, so `benchmark` abstains (ADR-0282).
+        # `CI` is set by GitHub, so `benchmark` abstains (ADR-0282).
 
       - name: Compile a program by hand
         if: always()
@@ -958,8 +982,15 @@ jobs:
           # OFF and RELEASE_REQUIRE_STATIC unset, and there is no `ldd`, so
           # `--check` reports the link kind as unknown -- and what else
           # differs is exactly what a first run would find. Enable it as a
-          # push job first, then here -- `macos-experiment` above is that
-          # push job, advisory until it is green.
+          # push job first, then here -- the `macos` job above is that push
+          # job, and since ADR-0368 it is one that can fail. What is left
+          # before this leg: APASCAL_STATIC_PASCALC OFF and
+          # RELEASE_REQUIRE_STATIC unset, because there is no `-static`; a
+          # `--check` that reports the link kind as unknown, because there is
+          # no `ldd`; and an `arch` for an archive whose compiler writes an
+          # x86-64 header, `--target=` admitting no Darwin triple (ADR-0156).
+          # None of the three is a run finding anything -- they are three
+          # decisions, and they belong to whoever takes them.
           #
           # - runner: macos-latest
           #   arch: arm64-darwin
