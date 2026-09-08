@@ -74,7 +74,7 @@ When performing a language-specification audit, always follow these steps:
    reader's first turn and none could decline.
 
    ```sh
-   SANDBOX=$(.claude/skills/langspec-audit/sandbox.sh)     # prints the path
+   SANDBOX=$(.claude/skills/langspec-audit/sandbox.py)     # prints the path
    ```
 
    It builds a directory **outside the repository** holding the two standards,

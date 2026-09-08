@@ -22,7 +22,7 @@
 
 The second form skips the `cmake --install` and asks every other question of
 a prefix something else laid out -- a release archive, unpacked
-(`tools/release.sh --check`, ADR-0296). One script for both, so a file added
+(`tools/release.py --check`, ADR-0296). One script for both, so a file added
 to the layout is added to one list.
 
 Every other harness here drives the compiler out of the build tree, with

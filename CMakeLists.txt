@@ -518,7 +518,7 @@ if(Python3_FOUND)
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/install_layout.py
                    ${CMAKE_BINARY_DIR})
 
-  # ADR-0296: does `tools/release.sh` still produce an archive that checks
+  # ADR-0296: does `tools/release.py` still produce an archive that checks
   # out? The script runs at a tag and nowhere else if nothing drives it
   # between tags, and this tree has learned twice what happens to shell only a
   # tag exercises (seed_current.py, ADR-0282). So every run builds an archive
@@ -956,7 +956,7 @@ endif()
 # the header cannot drift from the version it claims.
 #
 # Skips (77) when the database is absent; it is fetched, never committed
-# (runtime/unicode/fetch.sh). UNICODE_CONFORMANCE_REQUIRE is how CI refuses to
+# (runtime/unicode/fetch.py). UNICODE_CONFORMANCE_REQUIRE is how CI refuses to
 # pass by skipping, as TARGET_SIZES_REQUIRE does.
 add_test(NAME unicode-conformance
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/unicode_conformance.py)

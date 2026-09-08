@@ -8,7 +8,7 @@
 # starts being a clause fails, and so does a path that no longer cites it.
 #
 # Before adding an entry, check the standard itself. The inventories are
-# generated (tests/spec/clauses/extract.sh) and have been wrong -- ADR-0152
+# generated (tests/spec/clauses/extract_pdfs.py) and have been wrong -- ADR-0152
 # found 37 real clauses in none of them, because the extractor read only lines
 # carrying a title. An entry here is a claim that the *standard* lacks the
 # clause, which is a much stronger thing than the inventory lacking it.

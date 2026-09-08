@@ -20,7 +20,7 @@ glossed the same way in every one of them; ADR-0164 says which and what it
 should have been. Spelling it here would be a citation of it: this gate cannot
 tell a mention from a claim, and that is its rule rather than its limitation.
 
-**The inventories are the authority and they are generated** (clauses/extract.sh
+**The inventories are the authority and they are generated** (clauses/extract_pdfs.py
 from the standards, extract_afterschool.py from the dialect spec), so a citation
 this reports may be the *inventory's* defect rather than the citation's --
 ADR-0152 found 37 real clauses in no inventory because the extractor read only
@@ -76,7 +76,7 @@ SKIP = {
                         # headers cite clauses in BSI's numbering ("TEST
                         # 6.4.3.5-4"), which is not ours to correct.
     "runtime/unicode/ucd",  # the Unicode Character Database, fetched and never
-                        # committed (runtime/unicode/fetch.sh). Its files
+                        # committed (runtime/unicode/fetch.py). Its files
                         # record, against each property, the Unicode *version*
                         # that introduced it -- three numbers separated by
                         # points, in exactly the shape this gate reads a clause

@@ -17,7 +17,7 @@ yet.
 ## The three clause tables
 
 `clauses/iso7185.tsv` and `clauses/iso10206.tsv` are extracted from PDFs that
-are **not** in this repository and may not be — `clauses/extract.sh` needs
+are **not** in this repository and may not be — `clauses/extract_pdfs.py` needs
 `pdftotext` and the documents, and does nothing without them.
 
 Two things about that extraction are worth knowing before trusting it. **A
@@ -103,7 +103,7 @@ from it.
 What *is* committed is `clauses/*.tsv`: clause numbers and their headings. A
 clause number is a citation, and a suite meant to be traceable to a standard
 cannot work without one — the same position CLAUDE.md has always taken by
-citing §6.8.3.9 throughout. Regenerate with `clauses/extract.sh`, which needs `pdftotext` and
+citing §6.8.3.9 throughout. Regenerate with `clauses/extract_pdfs.py`, which needs `pdftotext` and
 the PDFs and does nothing without them.
 
 Each scenario paraphrases its requirement **in this project's own words**. If

@@ -20,7 +20,7 @@
 
   release_archive.py <build-directory>
 
-`tools/release.sh` runs at a tag and nowhere else if nothing drives it
+`tools/release.py` runs at a tag and nowhere else if nothing drives it
 between tags, and this tree has learned twice what happens to shell that
 only a tag exercises (ADR-0233's seed_current.py, ADR-0282). So this is the
 `ctest` case that drives both halves on every run: build an archive from
@@ -37,7 +37,7 @@ archive missing `lib/afterschool/` -- that last through `install_layout.py
 Not RELEASE_REQUIRE_STATIC: a developer's tree links dynamically and this
 case runs in one. The tag job sets it, having configured the static link.
 
-`tools/release.sh` is what this drives and is still shell: converting the
+`tools/release.py` is what this drives and is still shell: converting the
 gate is what ADR-0366's rule asks for, and the script it exercises is
 unchanged, which is what keeps this a conversion rather than a redesign.
 
@@ -54,7 +54,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-RELEASE = ROOT / 'tools' / 'release.sh'
+RELEASE = ROOT / 'tools' / 'release.py'
 
 
 def run(cmd, log, **kw):

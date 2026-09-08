@@ -252,7 +252,7 @@ answer in one place, whichever document required it.
 
 | Clause | Feature | This processor |
 |---|---|---|
-| AP 6.4.15.12 | the version of the Unicode Standard and of ISO/IEC 10646 determining Normalization Form C and the extent of an extended grapheme cluster | **Unicode 17.0.0** (2025-08-15). `pas_text_unicode_version()` reports it, `runtime/unicode/fetch.sh` pins it, and `runtime/pasrt_unicode_data.h` is generated from that version's database. |
+| AP 6.4.15.12 | the version of the Unicode Standard and of ISO/IEC 10646 determining Normalization Form C and the extent of an extended grapheme cluster | **Unicode 17.0.0** (2025-08-15). `pas_text_unicode_version()` reports it, `runtime/unicode/fetch.py` pins it, and `runtime/pasrt_unicode_data.h` is generated from that version's database. |
 
 **This is the one answer in this document that moves for a reason outside this
 repository**, and AP 6.4.15.12's NOTE is why it has to be stated at all: which

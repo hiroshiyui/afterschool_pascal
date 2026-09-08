@@ -18,7 +18,7 @@
 """The dialect's clause numbers and headings, from the specification itself.
 
 The two ISO tables beside this one are extracted from PDFs that are not in this
-repository and may not be (clauses/extract.sh). This one has the opposite
+repository and may not be (clauses/extract_pdfs.py). This one has the opposite
 problem and the opposite solution: the document *is* here, so the table is
 generated from it rather than transcribed, and the two cannot drift.
 

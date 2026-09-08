@@ -33,7 +33,7 @@ conformance run would keep passing, because it exercises the header rather
 than the database.
 
 Skips (77) when the database is absent -- it is fetched, never committed
-(runtime/unicode/fetch.sh), as tests/bsi/ is. Set UNICODE_CONFORMANCE_REQUIRE
+(runtime/unicode/fetch.py), as tests/bsi/ is. Set UNICODE_CONFORMANCE_REQUIRE
 to refuse to pass by skipping, which is what CI does.
 
 The `python3` this looks for is the interpreter that runs generate.py, and the
@@ -76,10 +76,10 @@ def main():
         if require:
             print('unicode-conformance: UNICODE_CONFORMANCE_REQUIRE is set '
                   'and the database is not in %s -- run '
-                  'runtime/unicode/fetch.sh' % UCD, file=sys.stderr)
+                  'runtime/unicode/fetch.py' % UCD, file=sys.stderr)
             return 1
         print('unicode-conformance: skipped, no Unicode Character Database in '
-              '%s (runtime/unicode/fetch.sh)' % UCD)
+              '%s (runtime/unicode/fetch.py)' % UCD)
         return 77
 
     if shutil.which(cc) is None:
@@ -125,7 +125,7 @@ def check(cc, work):
     if status != 0:
         if status == 2:
             print('unicode-conformance: the database is incomplete -- re-run '
-                  'runtime/unicode/fetch.sh', file=sys.stderr)
+                  'runtime/unicode/fetch.py', file=sys.stderr)
         return 1
 
     # The other half: is the committed header what the database says?
@@ -160,7 +160,7 @@ def check(cc, work):
         print('unicode-conformance: runtime/pasrt_unicode_data.h is not what '
               'runtime/unicode/generate.py makes of the database in %s. '
               'Either the header was edited by hand, or the fetched version '
-              'is not the pinned one -- runtime/unicode/fetch.sh has the pin.'
+              'is not the pinned one -- runtime/unicode/fetch.py has the pin.'
               % UCD, file=sys.stderr)
         return 1
 

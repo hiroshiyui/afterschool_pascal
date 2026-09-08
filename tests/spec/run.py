@@ -412,7 +412,7 @@ def check_clauses(scenarios):
                 problems.append(
                     f"{std} §{clause} is triaged in clauses/triage.tsv and is "
                     "not in the clause inventory -- regenerate it "
-                    "(clauses/extract.sh, or extract_afterschool.py), and if "
+                    "(clauses/extract_pdfs.py, or extract_afterschool.py), and if "
                     "it does not come back the extractor has lost a clause")
         for clause in sorted(known):
             if clause not in rows:

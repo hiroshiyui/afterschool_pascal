@@ -116,11 +116,11 @@ When performing release engineering, always follow these steps:
    README/ADR updates together and commit as `chore: release vX.Y.Z`.
 
 8. **Rehearse the archive before tagging** (ADR-0296). The tag job runs
-   `tools/release.sh`, and the same text runs here:
+   `tools/release.py`, and the same text runs here:
    ```sh
-   tools/release.sh --notes vX.Y.Z              # the CHANGELOG section, or a refusal
-   tools/release.sh --archive build-rel vX.Y.Z  # refuses a tag that is not --version
-   tools/release.sh --check afterschool-pascal-vX.Y.Z-x86_64-linux.tar.gz
+   tools/release.py --notes vX.Y.Z              # the CHANGELOG section, or a refusal
+   tools/release.py --archive build-rel vX.Y.Z  # refuses a tag that is not --version
+   tools/release.py --check afterschool-pascal-vX.Y.Z-x86_64-linux.tar.gz
    ```
    `--notes` refusing means step 6 was skipped; `--archive` refusing means
    step 5 was. `--check` is what the job runs against the archive it is about

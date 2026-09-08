@@ -46,14 +46,14 @@ repository's own history and nothing else — but that is a claim about a chain,
 not something a reader can check by inspection, which is the trusting-trust
 problem in its ordinary form. Tag `v0.1.0` is the last commit where a C++
 compiler in this repository could reproduce a compiler from source alone;
-`src/` itself was deleted at version 3 (ADR-0232), and `ddc.sh` takes its copy
+`src/` itself was deleted at version 3 (ADR-0232), and `ddc.py` takes its copy
 from that tag rather than from the working tree.
 
 ## That chain has been checked once, by diverse double-compiling
 
 **2026-08-18, at commit `ef49570`, against LLVM 21.1.8 — PASS.**
 
-David A. Wheeler's diverse double-compiling, run by `seed/ddc.sh`:
+David A. Wheeler's diverse double-compiling, run by `seed/ddc.py`:
 
 1. build the `v0.1.0` C++ compiler, whose code generator is LLVM's;
 2. have it translate today's `selfhost/compiler.pas`, and link that — **A**;
@@ -73,7 +73,7 @@ here.
 **The window closed at ADR-0233 and will not reopen.** `v0.1.0` has no
 `--import`: handed a compiler that is three program-components it reports
 `no interface named 'aptypes' has been exported` and stops, and it cannot link
-them separately either. `ddc.sh` now runs, says THE WINDOW HAS CLOSED, and
+them separately either. `ddc.py` now runs, says THE WINDOW HAS CLOSED, and
 exits 0. The result above is the only one that will ever be obtained, which is
 why it is dated here rather than left in a log. `doc/sop.md` §7 carries the gap
 that leaves.
@@ -91,7 +91,7 @@ repository was rewritten — also PASS**, at 7,074,541 bytes and sha256
 differ from the first run because `selfhost/compiler.pas` has changed since;
 each line above is a statement about the source at the commit it names, not a
 constant. It is recorded because the rewrite moved tag `v0.1.0`, which
-`ddc.sh` resolves by name, and a check that silently stopped resolving its own
+`ddc.py` resolves by name, and a check that silently stopped resolving its own
 starting point would have reported nothing.
 
 **The window closes on its own and nothing will announce it.** The check works
@@ -100,7 +100,7 @@ every feature the compiler starts *using* risks ending that. Version 3 did not
 close it — `--std=extended` is still what the v0.1.0 binary is given, that one
 being a v2 compiler; what changed is that *today's* compiler is handed no flag,
 which is the shape this check has always had (an old implementation reading a
-new source). `ddc.sh` says so in
+new source). `ddc.py` says so in
 as many words when it happens, and reports it as a skip rather than a failure —
 there would be nothing to fix. The dated line above is what survives; the
 ability to repeat it is not guaranteed.

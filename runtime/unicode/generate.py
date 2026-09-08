@@ -22,7 +22,7 @@ the database that defines them: the canonical decomposition and combining
 class that Normalization Form C is computed from (6.4.15.2), and the
 Grapheme_Cluster_Break value that says where one element ends (6.4.15.3).
 
-    runtime/unicode/fetch.sh            get the pinned database
+    runtime/unicode/fetch.py            get the pinned database
     python3 runtime/unicode/generate.py rewrite the header
     ctest -R unicode-conformance        check it against Unicode's own answers
 
@@ -34,7 +34,7 @@ entry. A property this script had an opinion about would be a property with no
 oracle, which is the whole thing ADR-0189 chose this model to avoid.
 
 The output is committed. It is the artefact a build needs, and the database is
-what a *refresh* needs; runtime/unicode/fetch.sh has why the second is not in
+what a *refresh* needs; runtime/unicode/fetch.py has why the second is not in
 the tree.
 """
 
@@ -73,7 +73,7 @@ def die(msg):
 def lines(name):
     p = UCD / name
     if not p.exists():
-        die(f"no {p} -- run runtime/unicode/fetch.sh first")
+        die(f"no {p} -- run runtime/unicode/fetch.py first")
     for raw in p.read_text(encoding="utf-8").splitlines():
         text = raw.split("#", 1)[0].strip()
         if text:

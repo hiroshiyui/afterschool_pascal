@@ -164,7 +164,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch the pinned Unicode Character Database
-        run: runtime/unicode/fetch.sh
+        run: runtime/unicode/fetch.py
         # The version is pinned in that script and moving it is a decision
         # (AP 6.4.15.12): which code points make one element, and whether two
         # values are equal, both change with it. The directory it writes is
@@ -778,7 +778,7 @@ jobs:
     # the order.
     #
     # What is known to differ, from reading rather than from a run: there is
-    # no `-static` and no `ldd` (`tools/release.sh` allows for both), no
+    # no `-static` and no `ldd` (`tools/release.py` allows for both), no
     # `timeout` (`irtest.sh` and `producttest.sh` fall back), BSD `sed -i`
     # (the four harnesses that edit in place go through a temporary), no
     # LeakSanitizer on arm64 (`sanitize.sh` asks for it on Linux only), and
@@ -867,7 +867,7 @@ jobs:
   # exactly the layout `install-layout` checks, attached to the GitHub release
   # for the tag.
   #
-  # **The logic is in `tools/release.sh` and not here**, for the reason
+  # **The logic is in `tools/release.py` and not here**, for the reason
   # `seed-is-current` gives above: a `run:` block at a tag runs nowhere else,
   # and twice now shell living in this file has failed for want of anywhere to
   # be exercised first. `--archive` and `--check` are driven on every push by
@@ -908,7 +908,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG exists already; it will gain assets and nothing else"
           else
-            tools/release.sh --notes "$TAG" >notes.md
+            tools/release.py --notes "$TAG" >notes.md
             gh release create "$TAG" --draft --title "$TAG" --notes-file notes.md
           fi
         # `--notes` refuses a tag with no CHANGELOG.md section, so a release
@@ -998,13 +998,13 @@ jobs:
         # and linked dynamically, and this one is what goes into the archive.
 
       - name: Archive
-        run: tools/release.sh --archive build "${{ github.ref_name }}" "${{ matrix.arch }}" dist
+        run: tools/release.py --archive build "${{ github.ref_name }}" "${{ matrix.arch }}" dist
         # Refuses a tag that is not the version `pascalc --version` prints.
 
       - name: Check the archive, the way install-layout checks a prefix
         env:
           RELEASE_REQUIRE_STATIC: '1'
-        run: tools/release.sh --check "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz"
+        run: tools/release.py --check "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz"
         # RELEASE_REQUIRE_STATIC turns the link-kind report into a failure:
         # a job that configured -static and shipped a dynamic binary would
         # otherwise pass with one line in a log saying so.
