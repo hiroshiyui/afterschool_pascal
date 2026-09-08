@@ -285,7 +285,18 @@ fi
 
 # It still has to be *clean* C -- POSIX rather than ISO, which is what the
 # feature macro selects, and nothing warned about at all.
-if ! "$cc" -std=c11 -D_POSIX_C_SOURCE=200809L -pedantic-errors \
+#
+# `_DARWIN_C_SOURCE` beside it on Darwin, and the reason is a fact about that
+# C library's headers rather than about this runtime. `mkdtemp` and
+# `O_NOFOLLOW` are both POSIX.1-2008, and Darwin still gates them as the BSD
+# extensions they were before 2008 -- so asking for exactly the standard the
+# names belong to is what hides them. Defining it asks Darwin for its full
+# set, which makes this pass weaker *there* and not anywhere else: the strict
+# question is answered on a C library whose gating follows the standard it
+# names, and this pass still refuses a warning and a non-POSIX call on both.
+posix_std=(-std=c11 -D_POSIX_C_SOURCE=200809L)
+[[ $(uname -s) == Darwin ]] && posix_std+=(-D_DARWIN_C_SOURCE)
+if ! "$cc" "${posix_std[@]}" -pedantic-errors \
      -Wall -Wextra -Werror -I"$root/runtime" \
      -c "$posix_src" -o "$work/posix.o" >"$work/p3.txt" 2>&1; then
   echo "runtime-isoc: runtime/pasrt_posix.c is not clean POSIX C11:" >&2
