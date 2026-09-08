@@ -515,7 +515,7 @@ if(Python3_FOUND)
   # here, and compiles a program that imports two library modules from a third
   # directory.
   add_test(NAME install-layout
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/install_layout.sh
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/install_layout.py
                    ${CMAKE_BINARY_DIR})
 
   # ADR-0296: does `tools/release.sh` still produce an archive that checks
@@ -801,7 +801,7 @@ set_tests_properties(llc-second-backend PROPERTIES
 # does without its corpus and verify-lowering does without z3 -- the question it
 # exists for cannot be asked with one target.
 add_test(NAME target-sizes
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/target_sizes.sh)
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/target_sizes.py)
 set_tests_properties(target-sizes PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)

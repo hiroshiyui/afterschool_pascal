@@ -31,7 +31,7 @@
 # Three claims fail separately, and each has been made to: `--archive`
 # refuses a tag that is not the compiler's version, `--check` refuses an
 # archive whose `.sha256` says something else, and `--check` refuses an
-# archive missing `lib/afterschool/` -- that last through `install_layout.sh
+# archive missing `lib/afterschool/` -- that last through `install_layout.py
 # --prefix`, whose file list names `lib/afterschool/pastext.pas`.
 #
 # Not RELEASE_REQUIRE_STATIC: a developer's tree links dynamically and this

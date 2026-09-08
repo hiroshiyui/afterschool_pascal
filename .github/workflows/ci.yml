@@ -75,7 +75,7 @@ jobs:
           # --no-install-recommends the driver arrives alone: it then runs,
           # fails to find <setjmp.h>, and the first version of this job read
           # that as the size being too small. The compiler is on PATH and
-          # cannot compile anything, which is the state target_sizes.sh now
+          # cannot compile anything, which is the state target_sizes.py now
           # tells apart from both "absent" and "wrong".
           apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu libc6-dev-arm64-cross \

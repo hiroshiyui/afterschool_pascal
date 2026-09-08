@@ -161,6 +161,31 @@ refusal ADR-0330's convention exists for; and a build directory that is not
 there. A gate that can skip has to be shown skipping *and* refusing to skip,
 or half of it is untested by the conversion.
 
+**`target-sizes` is the ninth**, and the first with five arms rather than
+four, because a gate answering about *other machines* has more ways of not
+answering than of answering. Compared byte for byte: the real run, which
+compiles `runtime/pasrt.c` and `runtime/pasrt_task.c` for the five targets a
+cross compiler is installed for here; a `PATH` holding no triple-prefixed
+compiler at all, which reaches the host through `cc` and skips with 77;
+`TARGET_SIZES_REQUIRE` naming a target with no compiler, which is the refusal;
+a shim compiler that runs and cannot find `<setjmp.h>`, which is the
+*incomplete* arm the shell version exists to tell apart from both others, and
+that arm again under `TARGET_SIZES_REQUIRE`; and ADR-0155's own defect
+restaged in a copied tree — `PAS_JUMP_SIZE` back at 256, which flags aarch64
+and both arms while x86-64 and i686 pass, exactly the shape that motivated the
+gate.
+
+**`install-layout` is the tenth**, and it has two entry forms rather than one:
+`--prefix` is what `tools/release.sh --check` drives (ADR-0296), so a
+conversion that got only the build form right would have broken the tag job
+and nothing before the tag would have said so. Eight arms: both forms on this
+tree; a prefix and a build directory that are not there; a file dropped from
+the layout list; ADR-0244's own claim mutated, a library module renamed away
+from the interface it exports, which must fail with the module's *name* in the
+message and does; and the floor of twenty modules, which had to be staged with
+the layout list intact, the first attempt at it having been caught one check
+earlier.
+
 A conversion may fix something, and this one did: the shell version wrote its
 matches to `.seed-portable.tmp` **in the repository root**, a harness leaving a
 file in the tree it measures. That is not a licence to redesign — the question,

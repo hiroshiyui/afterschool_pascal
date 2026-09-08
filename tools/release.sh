@@ -33,7 +33,7 @@
 #
 # `--check` is the half that fails. It reads the `.sha256` back and requires
 # it to match, unpacks the archive into a fresh directory, and then hands the
-# result to `tests/checks/install_layout.sh --prefix`, which is the gate that
+# result to `tests/checks/install_layout.py --prefix`, which is the gate that
 # already knows what an installed compiler has to be able to do: PATH holding
 # its bin and nothing else, every variable that could point back at a checkout
 # unset, a program importing two library modules compiled and run from a third
@@ -209,7 +209,7 @@ check() {
   # The layout, and everything an installed compiler has to be able to do,
   # asked by the gate that already asks it (ADR-0244). Its own message names
   # the file or the step that failed.
-  "$root/tests/checks/install_layout.sh" --prefix "$prefix" || exit 1
+  "$root/tests/checks/install_layout.py" --prefix "$prefix" || exit 1
 
   local kind
   kind=$(link_kind "$prefix/bin/pascalc")
