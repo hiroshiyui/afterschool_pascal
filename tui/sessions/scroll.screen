@@ -1,0 +1,43 @@
++------------+
+|one         |
+|two         |
+|three       |
+|four        |
+|            |
+|long.pas 1:1|
++------------+
+cursor 1,1
++------------+
+|two         |
+|three       |
+|four        |
+|five        |
+|            |
+|long.pas 5:1|
++------------+
+cursor 4,1
++------------+
+|three       |
+|four        |
+|five        |
+|six         |
+|            |
+|long.pas 6:1|
++------------+
+cursor 4,1
++------------+
+|one         |
+|two         |
+|three       |
+|four        |
+|            |
+|long.pas 1:1|
++------------+
+cursor 1,1
+lines 6 dirty FALSE
+  1: [one]
+  2: [two]
+  3: [three]
+  4: [four]
+  5: [five]
+  6: [six]

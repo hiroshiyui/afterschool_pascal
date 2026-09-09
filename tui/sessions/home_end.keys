@@ -1,0 +1,15 @@
+# Home and End, in both of the spellings a terminal sends them in: `ESC [ H`
+# and `ESC [ 1 ~` are the same key on different terminals, and an editor
+# that knew only one would be wrong on half the machines it runs on.
+name ends.pas
+size 6 20
+push the quick brown
+draw
+esc F
+draw
+esc H
+draw
+esc 4~
+draw
+esc 1~
+draw

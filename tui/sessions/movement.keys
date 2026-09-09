@@ -1,0 +1,21 @@
+# The six ways to move, and what each does at an edge. Left at the start of
+# a line goes to the end of the one above rather than stopping, which is
+# what makes a document feel like text and not like a grid; Right at the end
+# of the last line has nowhere to go and stays.
+name move.pas
+size 8 20
+push alpha
+push be
+push gamma
+draw
+esc B
+esc C
+esc C
+draw
+esc C
+esc C
+draw
+esc D
+draw
+esc A
+draw

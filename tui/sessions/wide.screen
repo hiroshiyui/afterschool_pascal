@@ -1,0 +1,18 @@
++------------+
+|abcdefghijkl|
+|~           |
+|~           |
+|            |
+|wide.pas 1:1|
++------------+
+cursor 1,1
++------------+
+|abcdefghijkl|
+|~           |
+|~           |
+|            |
+|wide.pas1:27|
++------------+
+cursor 1,12
+lines 1 dirty FALSE
+  1: [abcdefghijklmnopqrstuvwxyz]

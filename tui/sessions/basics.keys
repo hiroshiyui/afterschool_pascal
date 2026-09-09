@@ -1,0 +1,12 @@
+# What an editor is: a document on screen, a status line saying where the
+# cursor is, and typing that changes both. The status line's `*` is the
+# claim a person acts on -- it is the difference between quitting and
+# losing work.
+name hello.pas
+size 8 24
+push program hello(output);
+push begin
+push end.
+draw
+keys X
+draw

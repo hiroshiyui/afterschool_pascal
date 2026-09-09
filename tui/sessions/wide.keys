@@ -1,0 +1,12 @@
+# A line wider than the window, which milestone one cuts rather than scrolls
+# sideways (ADR-0381). Two things are claimed: what is drawn stops at the
+# window's width, and the *cursor* stops with it -- the status line goes on
+# counting in the document, so a person can see that the cursor is at column
+# 30 while the drawing stops at 12. That disagreement is the limitation
+# showing itself, and it is better than a cursor that vanishes.
+name wide.pas
+size 5 12
+push abcdefghijklmnopqrstuvwxyz
+draw
+esc F
+draw

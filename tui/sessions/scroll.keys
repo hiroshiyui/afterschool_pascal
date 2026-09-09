@@ -1,0 +1,29 @@
+# A document taller than the window. What is drawn is a window onto it, and
+# where that window sits is a property of the last drawing rather than of the
+# document -- which is why the editor is a `var` parameter of a routine that
+# only draws. Moving down past the last drawn line scrolls by one; moving
+# back up scrolls the other way, and the first line comes back.
+#
+# The `~` rows are how a person tells a short document from a blank one.
+name long.pas
+size 6 12
+push one
+push two
+push three
+push four
+push five
+push six
+draw
+esc B
+esc B
+esc B
+esc B
+draw
+esc B
+draw
+esc A
+esc A
+esc A
+esc A
+esc A
+draw

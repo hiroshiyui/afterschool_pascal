@@ -130,6 +130,12 @@ def corpus(root):
         # sentence the dialect group above carries, met a second time. Its
         # `.components` sidecar is read by the branch below like any other.
         [root / "lsp" / "pasls.pas"],
+        # The editor (ADR-0381), which no glob reaches for the same reason
+        # one directory over -- and it is *two* programs over one model, so
+        # both are named: the shell a person runs and the session driver a
+        # golden compares. Each reads its own `.components` sidecar through
+        # the branch below.
+        [root / "tui" / "session.pas"],
         # The project-file reader (ADR-0361), which no glob reaches for
         # `pasls.pas`'s reason one directory over: it lives in tools/ because
         # `pascalcc` has to find it beside itself. Its `.importpath` sidecar

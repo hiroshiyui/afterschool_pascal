@@ -1,0 +1,22 @@
+# Enter splits a line at the cursor and Backspace at column 1 puts it back,
+# which is the property that makes them a pair: the second undoes the first,
+# and the cursor lands where the join is because that is where the person was
+# looking. Delete at the end of a line is the same join from the other side.
+#
+# Enter arrives as carriage return and Backspace as ^H, which is what a
+# terminal sends -- the editor takes 13, 10, 8 and 127 for the two of them.
+name split.pas
+size 8 20
+push abcdef
+push ghi
+draw
+esc C
+esc C
+esc C
+ctrl M
+draw
+ctrl H
+draw
+esc F
+esc 3~
+draw

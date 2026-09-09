@@ -1181,6 +1181,23 @@ add_test(NAME lsp-server
 set_tests_properties(lsp-server PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
                      TIMEOUT 300)
 
+# The editor, replayed (ADR-0381). `ctest` has no terminal and this case needs
+# none: `tui/apedit.pas` turns keys into a *screen* -- rows by columns of
+# characters and a cursor cell -- and `tui/session.pas` feeds it a script and
+# prints what it drew, so what is compared is what a person would have seen.
+# ADR-0262 declined a pseudo-terminal binding on the grounds that a case
+# needing one becomes a test of the binding; this is the shape that avoids
+# needing one at all.
+#
+# One case for every session, `lsp-server`'s arrangement and its reason: the
+# harness builds the program once and three program-components is most of the
+# cost.
+add_test(NAME tui-sessions
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/run.py
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(tui-sessions PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
+                     TIMEOUT 300)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

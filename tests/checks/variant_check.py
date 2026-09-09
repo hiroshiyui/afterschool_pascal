@@ -70,7 +70,7 @@ from pathlib import Path
 
 GUARD = "variant: the tag selects another arm"
 TRAP = "runtime error: variant:"
-ROOTS = ("tests", "selfhost", "lib", "lsp", "examples", "tools")
+ROOTS = ("tests", "selfhost", "lib", "lsp", "tui", "examples", "tools")
 
 # It refuses to pass by asking nothing, in both directions: too few guards in
 # the built compiler, and too few sources swept by it.

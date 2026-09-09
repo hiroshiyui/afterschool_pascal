@@ -21,7 +21,8 @@ ADR-0272 gave the compiler a diagnostic that is not an error, and there are
 four of them now. A **test case** is held to them by a sidecar: a case with a
 `name.warn` must produce those warnings and a case without one must produce
 none, which is the half that stops a warning added later from appearing on
-dozens of green cases. `selfhost/`, `lib/` and `lsp/` have no sidecars. They
+dozens of green cases. `selfhost/`, `lib/`, `lsp/` and `tui/` have no
+sidecars. They
 are compiled by CMake, by four harnesses and by `lsp/build.py`, all of which
 read the exit status and none of which reads what the compiler *said* -- so a
 warning here is written to a build log and nothing fails.
@@ -61,12 +62,12 @@ from pathlib import Path
 # language that is not a test case. `tests/` is deliberately absent: a case
 # there is already governed by its `.warn` sidecar, in both directions, and
 # sweeping it here would be a second opinion free to drift from the first.
-ROOTS = ("selfhost", "lib", "lsp", "tools")
+ROOTS = ("selfhost", "lib", "lsp", "tui", "tools")
 
 # Where an `import` is looked for. Named rather than left to
 # AFTERSCHOOL_PASCAL_PATH so that what the gate compiles does not depend on
 # the environment it is run from.
-IMPORT_PATHS = ("lib", "lib/dialect", "selfhost", "lsp")
+IMPORT_PATHS = ("lib", "lib/dialect", "selfhost", "lsp", "tui")
 
 # The three things here that are *meant* not to compile, and the reason each
 # is written down rather than detected: a sweep that skipped whatever failed
@@ -180,7 +181,7 @@ def main() -> int:
             print(f"    {line}", file=sys.stderr)
         if len(noisy) > 20:
             print(f"    ... and {len(noisy) - 20} more", file=sys.stderr)
-        print("\n  Every source in selfhost/, lib/ and lsp/ must compile with "
+        print("\n  Every source in selfhost/, lib/, lsp/ and tui/ must compile with "
               "nothing to say.\n  A warning here is written to a build log and "
               "nothing else fails (ADR-0286).", file=sys.stderr)
         return 1

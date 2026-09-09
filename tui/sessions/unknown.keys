@@ -1,0 +1,17 @@
+# A sequence this editor does not know, and a control byte it does not bind.
+# Both say so on the message line rather than doing nothing: a key that does
+# nothing and a key that was misread look the same to a person, and only one
+# of them is a defect here.
+#
+# `esc Z` is a real escape sequence with an ending nothing binds; `ctrl A` is
+# a control byte below 32 that is not one of the four the editor takes.
+name keys.pas
+size 6 20
+push text
+draw
+esc Z
+draw
+keys .
+draw
+ctrl A
+draw

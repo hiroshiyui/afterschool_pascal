@@ -143,6 +143,21 @@ and `heap-balance` drives `lsp/run.py` instead of `run_test.py`, which has to
 take `PASHEAP_BALANCE` out of the environment **twice**, `pascalcc` building the
 server and the server starting `pascalc` once per document.
 
+**`tui/` is a third** (ADR-0381) — a text-mode editor in Turbo Pascal's mould,
+and the first program here whose whole shape is a screen. `tui/apedit.pas`
+decides what a key does and what the screen looks like **with no terminal in
+it**: a key arrives as a value and a *screen* comes out, rows by columns with
+the cursor's cell, so `tui/session.pas` can replay a script and `tui/run.py`
+compare what it drew frame by frame. That is the whole reason it is testable —
+`ctest` has no terminal, and ADR-0262 declined a pseudo-terminal binding
+because a case needing one becomes a test of the binding. What stays outside
+is the shell that reads `PasTerm.ReadKey` and writes `CursorTo`, and that is a
+`doc/sop.md` §7 row rather than a silence. Like `lsp/` it is reached by being
+**named** as a root — `format-check`, `variant-check`, `warning-free` and
+`coverage.py` all name it — and by no glob, and `tui/build.py` honours
+`AFTERSCHOOL_PASCAL_OPT` for `lsp/build.py`'s reason: an editor's whole shape
+is a loop.
+
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009) and finds
 `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and `PASCALC`
 override where it looks for each, which is how CMake points the tests at their
