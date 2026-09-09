@@ -315,6 +315,14 @@ def corpus(root):
     # -- which is how this job came to exist.
     jobs.append((root / "tests" / "goto_nonlocal.pas",
                  ["--target=x86_64-w64-mingw32"]))
+
+    # ...and ADR-0372's two, which reach `TargetIndex`, `TargetName` and the
+    # datalayout writer and nothing further: both are LP64 and neither changes
+    # a byte the code generator emits, so an ordinary program is enough, as it
+    # is for aarch64 above. `line-coverage` reported five statements never run
+    # when they were admitted without these.
+    jobs.append((hello, ["--target=arm64-apple-macosx"]))
+    jobs.append((hello, ["--target=x86_64-apple-darwin"]))
     # ADR-0364: the emitter writes a slice's count at the target's pointer
     # width, so it has an arm only an ILP32 target takes -- at the argument
     # and at the declaration. `hello` reaches neither; a module whose slice

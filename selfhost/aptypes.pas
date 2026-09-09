@@ -46,7 +46,8 @@ export ApTypes = (
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, reqProcCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
-  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtWin64, targetIx, PtrSize,
+  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtWin64, tgtDarwinArm64,
+  tgtDarwinX86, targetIx, PtrSize,
   WordAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
@@ -324,7 +325,7 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 4;
+  tgtCount = 6;
   tgtX86 = 1;
   tgtAarch64 = 2;
   { ADR-0325's third, and the first that is not LP64. What made it admissible
@@ -347,6 +348,19 @@ const
     compiler's arithmetic against LLVM's for every admitted target, and `llc`
     assembles the result, neither of which needs a Windows to run on. }
   tgtWin64 = 4;
+  { ADR-0372's fifth and sixth, and the first for a platform this tree
+    **runs**. macOS is a job that can fail (ADR-0368) and every module built
+    there said `x86_64-pc-linux-gnu`: clang overrides the header when it
+    assembles, as the aarch64 job also relies on, so a program links and runs
+    -- but nothing may *believe* the header, which was a row in doc/sop.md 7.
+    Two, because a Mac is either, and `target-layout` compares each against
+    clang's own arithmetic.
+
+    Both are LP64, so `PtrSize`, `WordAlign` and `CLongSize` are untouched;
+    what differs from the Linux targets of the same word size is `m:o`, the
+    Mach-O symbol mangling, which is not a size. }
+  tgtDarwinArm64 = 5;
+  tgtDarwinX86 = 6;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.

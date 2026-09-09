@@ -511,6 +511,16 @@ begin
           EQ(name, 'x86_64-w64-windows-gnu') or
           EQ(name, 'x86_64-pc-windows-gnu') or
           EQ(name, 'x86_64-pc-mingw32') then TargetIndex := tgtWin64
+  { ADR-0372's two. `arm64` and `aarch64` name one machine to clang and both
+    are written by people, as `i386` and `i686` are above; `darwin` and
+    `macosx` are the two spellings of the system, and a version suffix --
+    `arm64-apple-macosx14.0` -- is what clang itself prints, so it is read
+    and the canonical unsuffixed name is what the module states. }
+  else if EQ(name, 'arm64-apple-macosx') or EQ(name, 'arm64-apple-darwin') or
+          EQ(name, 'aarch64-apple-macosx') or
+          EQ(name, 'aarch64-apple-darwin') then TargetIndex := tgtDarwinArm64
+  else if EQ(name, 'x86_64-apple-macosx') or
+          EQ(name, 'x86_64-apple-darwin') then TargetIndex := tgtDarwinX86
   else TargetIndex := 0
 end;
 
@@ -520,7 +530,9 @@ begin
     tgtX86: name := 'x86_64-pc-linux-gnu';
     tgtAarch64: name := 'aarch64-linux-gnu';
     tgtI386: name := 'i386-pc-linux-gnu';
-    tgtWin64: name := 'x86_64-w64-windows-gnu'
+    tgtWin64: name := 'x86_64-w64-windows-gnu';
+    tgtDarwinArm64: name := 'arm64-apple-macosx';
+    tgtDarwinX86: name := 'x86_64-apple-macosx'
   end
 end;
 
@@ -12172,6 +12184,21 @@ begin
       writeln(ircode, 'target datalayout = "e-m:w-p270:32:32-p271:32:32-',
                       'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
       writeln(ircode, 'target triple = "x86_64-w64-windows-gnu"')
+    end;
+    { ADR-0372, and clang's own lines for `arm64-apple-macosx` and
+      `x86_64-apple-macosx`. Each differs from the Linux target of the same
+      word size in one field -- `m:o`, Mach-O mangling -- and in nothing that
+      is a size or an alignment, which is what makes `target-layout`'s first
+      claim true of them by construction. }
+    tgtDarwinArm64: begin
+      writeln(ircode, 'target datalayout = "e-m:o-p270:32:32-p271:32:32-',
+                      'p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"');
+      writeln(ircode, 'target triple = "arm64-apple-macosx"')
+    end;
+    tgtDarwinX86: begin
+      writeln(ircode, 'target datalayout = "e-m:o-p270:32:32-p271:32:32-',
+                      'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
+      writeln(ircode, 'target triple = "x86_64-apple-macosx"')
     end
   end;
   writeln(ircode);

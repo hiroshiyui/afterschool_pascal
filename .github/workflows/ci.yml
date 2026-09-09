@@ -846,7 +846,7 @@ jobs:
     # every one of the nine failures that got it there was a harness assuming
     # Linux and not one was in the compiler.
     #
-    # **What still skips, and it is ten.** The promotion left ten, read off
+    # **What still skips, and it is nine.** The promotion left ten, read off
     # the run at a84659a; two of them were skipping because this job did not
     # ask and this change asks, and ADR-0369 then added a gate that wants a
     # cross compiler this runner has not got:
@@ -859,19 +859,12 @@ jobs:
     #   runtime-coverage   no llvm-profdata and no llvm-cov
     #   runtime-nonposix   no mingw-w64; the `non-posix` job is where that one
     #                      is required to answer (ADR-0369)
-    #   setjmp-arity       every admitted target is a Linux or a Windows
-    #                      triple and Apple clang has a sysroot for neither,
-    #                      so it can compare none of them (ADR-0371). The
-    #                      container job is where it is required. This is the
-    #                      one skip here that a change to *this* compiler
-    #                      would close: a Darwin triple would make the host
-    #                      target comparable (`doc/sop.md` §7)
     #   fpc-differential   no fpc
     #   tls                no OpenSSL headers; the system `openssl` is
     #                      LibreSSL, which is a different transcription
     #   target32           no 32-bit libc
     #
-    # **Nine of the ten name a tool this runner has not got**, which is
+    # **Every one of the nine names a tool this runner has not got**, which is
     # the property the two that closed did not have: `verify-lowering` skipped
     # because z3 was installed with a flag Homebrew's Python refuses and the
     # failure was swallowed by `|| true`, and `unicode-conformance` skipped
@@ -893,10 +886,14 @@ jobs:
     # step below imports z3 and fails if it cannot, which is the arrangement
     # the two container jobs use.
     #
-    # The compiler emits an x86-64 Linux header (`--target=` admits no Darwin
-    # triple yet); clang overrides it when it assembles, as the aarch64 job
-    # relies on, so a program links -- and `target-layout`'s second claim,
-    # which asks clang about each *admitted* target, is unaffected.
+    # **`--target=` admits both Darwin triples since ADR-0372**, so a module
+    # built here names the machine it is for. It did not: it said
+    # `x86_64-pc-linux-gnu` and clang overrode the header when it assembled,
+    # as the aarch64 job still relies on. That also took `setjmp-arity` off
+    # this list -- it had nothing to compare here, every admitted target being
+    # a Linux or a Windows triple with no Apple sysroot, and the host target
+    # is comparable now. It was the only skip on this list that a change to
+    # the compiler could close, and this is the change.
     #
     # The release-matrix leg stays disabled: a platform is run before it is
     # shipped, and this job is the running. The `package` job's comment says
