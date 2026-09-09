@@ -485,15 +485,21 @@ if task_extra:
     err("        <pthread.h> is the whole of what a port has to have for the",
         "concurrency construct. Adding a second is a decision for an ADR.")
     finish(1)
-# `clang` and not `$cc`: the shell version spells this one compile literally,
-# so APASCAL_CLANG does not reach it. Kept as it was, the conversion being a
-# conversion.
+# `cc`, which is APASCAL_CLANG or `clang`. The shell version spelled this one
+# compile literally and the conversion kept it, the conversion being a
+# conversion; that left four of the five strict compiles answering about the
+# compiler the operator chose and the fifth answering about whatever `clang`
+# is on PATH. With APASCAL_CLANG pointing at a wrapper the wrapper was
+# invoked four times and never once for pasrt_task.c, so on a machine where
+# the two differ this pass reported a compiler nobody asked for -- a green
+# bar meaning `<pthread.h> alone` had been checked by the wrong reader.
 task_err = work / "task.err"
 sys.stdout.flush()
-if run_capture(["clang", "-std=c11", "-Wall", "-Wextra", "-Werror",
+if run_capture([cc, "-std=c11", "-Wall", "-Wextra", "-Werror",
                 "-c", str(task_src), "-I" + str(root / "runtime"),
                 "-o", str(work / "task.o")], task_err, stdout=False) != 0:
-    err("runtime-isoc: runtime/pasrt_task.c is not clean POSIX C11:")
+    err("runtime-isoc: runtime/pasrt_task.c is not clean POSIX C11 under",
+        "%s:" % cc)
     head20(task_err)
     finish(1)
 
