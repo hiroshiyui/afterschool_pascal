@@ -80,16 +80,6 @@ jobs:
           apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
             gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
-          # ...and mingw-w64, for `setjmp-arity` and nothing else (ADR-0371).
-          # That gate compares the arity of the `_setjmp` this compiler emits
-          # against what clang emits for ISO C's `setjmp`, on every target the
-          # compiler admits -- and a target can only be compared where clang
-          # has its headers. Without this package the three Linux targets are
-          # compared, all agree, and the comparison proves nothing about the
-          # *target-dependence* it exists to check. It is here rather than in
-          # the `non-posix` job because the Pascal probe has to be compiled by
-          # the compiler under test, and that job deliberately builds nothing.
-          apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
           # z3 for verify/, from pip, which is what verify/README.md documents.
           # --break-system-packages because Debian and Ubuntu both mark their
           # Python installations externally managed (PEP 668).
@@ -138,11 +128,6 @@ jobs:
           # arrangement as `second-backend`, which installs llc and refuses to
           # pass by skipping.
           TARGET_SIZES_REQUIRE: aarch64-linux-gnu arm-linux-gnueabihf
-          # This job installed mingw-w64 above, so `setjmp-arity` must reach
-          # it: without this it compares the three Linux targets, finds them
-          # in agreement and passes, which is a green run that asked nothing
-          # about target-dependence (ADR-0330, ADR-0371).
-          SETJMP_ARITY_REQUIRE: '1'
         # 435 cases: the two corpora, the 157 error-path sources, the SMT
         # rules, the stage-2/stage-3 fixed point, and the product check.
 
@@ -223,8 +208,19 @@ jobs:
     # it is here so that "the runtime stopped compiling for Windows" is a job
     # name and not a line inside the suite.
     #
-    # No build, no ctest: the check compiles C and nothing else, so the
-    # compiler this repository produces is not needed to answer it.
+    # **It builds, since ADR-0371.** It did not, and the comment here said so:
+    # `runtime_nonposix.py` compiles C and nothing else. `setjmp_arity.py` is
+    # the second question about this platform and it needs the compiler under
+    # test, half of what it compares being a Pascal probe -- so the build
+    # arrives with it rather than the toolchain being spread to a job that had
+    # no use for it.
+    #
+    # **That spreading is what this job exists to prevent, and it was tried
+    # the other way first.** Installing mingw-w64 in the container matrix job
+    # made `runtime-nonposix` run there too, against a *different* mingw-w64 --
+    # and Ubuntu 24.04's has `_longjmp` where Debian trixie's has not, so the
+    # catalogue's `blocked` row for `runtime/pasrt.c` was true on one image and
+    # false on the other. One question, one toolchain, one image.
     name: the runtime on a target that is not POSIX
     runs-on: ubuntu-latest
     container: 'debian:trixie'
@@ -234,7 +230,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates git python3 gcc-mingw-w64-x86-64
+            ca-certificates cmake make clang libclang-rt-dev git python3 \
+            gcc-mingw-w64-x86-64
           # The cross compiler *and* its headers. `target-sizes` learned this
           # the hard way -- Debian ships a driver and its C library
           # separately, and with --no-install-recommends the driver can arrive
@@ -252,6 +249,23 @@ jobs:
         env:
           NONPOSIX_REQUIRE: '1'
         run: python3 tests/checks/runtime_nonposix.py
+
+      - name: Build, for the second question
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: ...and the one call whose shape is the target's
+        env:
+          SETJMP_ARITY_REQUIRE: '1'
+        run: python3 tests/checks/setjmp_arity.py
+        # ADR-0371. `setjmp-arity` runs as a ctest case everywhere and
+        # compares what the local clang has headers for; without a mingw-w64
+        # sysroot that is the Linux targets alone, which all want one
+        # argument, so the comparison is true and says nothing about
+        # *target-dependence*. This is the job with the cross toolchain, so it
+        # is the job that can demand two arities among whatever was compared
+        # (ADR-0330).
 
   fpc-differential:
     # The other oracle nobody here wrote (ADR-0234), and the only one that is a

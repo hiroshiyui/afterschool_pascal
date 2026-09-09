@@ -1,6 +1,21 @@
 # What the runtime asks of a target that is not POSIX, measured against
 # mingw-w64 (ADR-0369).
 #
+# **The answers here are a toolchain's as well as this source's, and that was
+# learned the hard way.** `runtime-nonposix` runs wherever a mingw-w64 cross
+# compiler is installed, and for one commit that included the container matrix
+# job -- where Ubuntu 24.04's mingw-w64 reported `runtime/pasrt.c` as
+# *compiling* while Debian trixie's and this developer's (GCC 14-win32 and
+# 16-win32) report it blocked on `_longjmp`. One row cannot be true of both.
+#
+# So the toolchain is pinned the way ADR-0189 pins a Unicode version: an
+# oracle that changes under you is not one. The `non-posix` CI job is the only
+# place mingw-w64 is installed, it is a single Debian image, and it is where
+# NONPOSIX_REQUIRE is set. A checkout with a different mingw-w64 may
+# legitimately disagree with a row below, and what that means is that the
+# blocker is that toolchain's and not this runtime's -- doc/roadmap.md's
+# Windows row is where such a difference gets written down.
+#
 # `runtime-isoc` bounds each translation unit by the headers it may include;
 # this asks the question that one cannot: **are those headers there on a
 # platform that is not POSIX**, and does the unit compile once they are. Every
@@ -52,10 +67,14 @@ unit  pasrt_unicode.c    compiles
 # is names inside those headers, which is a different claim and is not this
 # file's.
 #
-# For `pasrt.c` that is `_setjmp`/`_longjmp` -- ADR-0370 removed `fmemopen`
-# and `open_memstream`, so it is one name from compiling here, and that name
-# is an *arity* and not a spelling: `setjmp(x)` expands to `_setjmp(x)` on
-# glibc and `_setjmp((x), frame)` on mingw, Win64 unwinding through SEH.
+# For `pasrt.c` that is `_longjmp` -- ADR-0370 removed `fmemopen` and
+# `open_memstream`, so it is one name from compiling here. The *emitter's*
+# half of the non-local goto is closed (ADR-0371): `_setjmp` is an arity and
+# not a spelling, `setjmp(x)` expanding to `_setjmp(x)` on glibc and
+# `_setjmp((x), frame)` on mingw, and the compiler now writes whichever its
+# target wants. What is left is the runtime's call, and **the name it needs is
+# present in some mingw-w64 builds and not others**, which is the pinning
+# above.
 #
 # For `pasrt_task.c` it was `timespec_get`/`TIME_UTC`, and measurement settled
 # it: both are `#ifdef _UCRT` in mingw's own <time.h>, and the unit compiles
