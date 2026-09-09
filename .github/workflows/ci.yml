@@ -1078,33 +1078,39 @@ jobs:
           - runner: ubuntu-latest
             arch: x86_64-linux
             target: x86_64-pc-linux-gnu
+            static: 'ON'
+            require_static: '1'
           - runner: ubuntu-24.04-arm
             arch: aarch64-linux
             target: aarch64-linux-gnu
-          # macOS is **disabled, deliberately, and untried**. The roadmap says
-          # it is the cheapest unknown in the tree -- the runtime's five
-          # non-ISO names are all there -- and nobody has ever built this
-          # compiler on one, so a leg here would be the first run of the port
-          # and a release archive at the same time, which is the wrong order:
-          # a platform is run before it is shipped. Two things are known to
-          # differ and the script already allows for both -- there is no
-          # `-static` on macOS, so APASCAL_STATIC_PASCALC would have to be
-          # OFF and RELEASE_REQUIRE_STATIC unset, and there is no `ldd`, so
-          # `--check` reports the link kind as unknown -- and what else
-          # differs is exactly what a first run would find. Enable it as a
-          # push job first, then here -- the `macos` job above is that push
-          # job, and since ADR-0368 it is one that can fail. What is left
-          # before this leg: APASCAL_STATIC_PASCALC OFF and
-          # RELEASE_REQUIRE_STATIC unset, because there is no `-static`; a
-          # `--check` that reports the link kind as unknown, because there is
-          # no `ldd`; and an `arch` for an archive whose compiler writes an
-          # x86-64 header, `--target=` admitting no Darwin triple (ADR-0156).
-          # None of the three is a run finding anything -- they are three
-          # decisions, and they belong to whoever takes them.
+            static: 'ON'
+            require_static: '1'
+          # **macOS, enabled by ADR-0375.** The comment above named three
+          # things left before this leg. One was a change and it landed first:
+          # `--target=` admits `arm64-apple-macosx` since ADR-0372, so an
+          # archive built here names the machine it is for instead of relying
+          # on clang to override an x86-64 Linux header.
           #
-          # - runner: macos-latest
-          #   arch: arm64-darwin
-          #   target: ''            # no darwin target admitted yet (ADR-0156)
+          # The other two are the keys below, per-leg rather than dropped.
+          # **Apple ships no static libc**, so `-static` is not a thing and
+          # RELEASE_REQUIRE_STATIC asks for what the platform cannot do. What
+          # replaces it is a claim macOS *can* answer -- that the binary
+          # depends on nothing outside the base system -- which `--check`
+          # makes wherever `otool` is, with no variable to set, because there
+          # is no configuration in which shipping a Homebrew dylib is right
+          # and every hosted runner has Homebrew on it (ADR-0375).
+          - runner: macos-latest
+            arch: arm64-darwin
+            target: arm64-apple-macosx
+            static: 'OFF'
+            require_static: ''
+          # **The comment that stood here is in doc/history.md**, struck.
+          # It said macOS was disabled, deliberately and untried, and that a
+          # platform is run before it is shipped -- which was right, and the
+          # `macos` push job above is that running. It has been green on every
+          # push since ADR-0368 and can fail. Its own list of what was left
+          # before this leg is now two decisions taken above and one change
+          # landed (ADR-0372, ADR-0375).
 
     steps:
       - uses: actions/checkout@v4
@@ -1121,18 +1127,26 @@ jobs:
           clang --version | head -1
           cmake --version | head -1
 
-      - name: Configure, with the compiler linked statically
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAPASCAL_STATIC_PASCALC=ON
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DAPASCAL_STATIC_PASCALC=${{ matrix.static }}
+        # ON everywhere but macOS, which has no static libc to link against.
         # -static reaches bin/pascalc alone. The runtime the archive ships is
         # an archive of objects the user's own clang links against the user's
         # own C library, so the one thing a static link changes is that the
         # compiler binary no longer requires this runner's glibc or newer.
 
       - name: Build
-        run: cmake --build build -j"$(nproc)"
+        run: cmake --build build -j"$(getconf _NPROCESSORS_ONLN)"
+        # `getconf` rather than `nproc`, which macOS has not got. The push
+        # jobs each spell it their own way because each knows its platform;
+        # this one is a matrix over both.
 
       - name: Test the compiler that will be shipped
-        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        run: |
+          ctest --test-dir build --output-on-failure \
+            -j"$(getconf _NPROCESSORS_ONLN)"
         env:
           AFTERSCHOOL_PASCAL_TARGET: ${{ matrix.target }}
         # Not a repeat of `test`: that job's binary was built in a container
@@ -1144,7 +1158,7 @@ jobs:
 
       - name: Check the archive, the way install-layout checks a prefix
         env:
-          RELEASE_REQUIRE_STATIC: '1'
+          RELEASE_REQUIRE_STATIC: ${{ matrix.require_static }}
         run: tools/release.py --check "dist/afterschool-pascal-${{ github.ref_name }}-${{ matrix.arch }}.tar.gz"
         # RELEASE_REQUIRE_STATIC turns the link-kind report into a failure:
         # a job that configured -static and shipped a dynamic binary would

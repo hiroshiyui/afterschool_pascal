@@ -109,23 +109,64 @@ def sha256_of(path):
 
 # `ldd` says "not a dynamic executable" of a static binary and lists the
 # libraries of a dynamic one; LC_ALL=C because it says so in the machine's
-# language otherwise. Where there is no `ldd` (macOS) the answer is unknown,
-# and reported as that rather than as either of the other two.
+# language otherwise.
 #
 # Captured and not piped: `ldd` exits 1 on a static binary, and under
 # pipefail that status is the pipeline's whatever grep found, so the first
 # version of this reported the static binary it was written for as dynamic.
+#
+# **Where there is no `ldd` the answer used to be "unknown", and on macOS it
+# need not be** (ADR-0375): `otool -L` is that platform's answer and it always
+# lists something, because Apple ships no static libc and a fully static
+# executable is not a thing there. So the kind is *known* and it is `dynamic`,
+# which is why `RELEASE_REQUIRE_STATIC` is set for the Linux legs and not for
+# the macOS one -- the variable asks for something that platform cannot do.
 def link_kind(path):
-    if shutil.which("ldd") is None:
-        return "unknown"
-    env = dict(os.environ)
-    env["LC_ALL"] = "C"
-    said = subprocess.run(["ldd", path], stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, env=env).stdout
+    if shutil.which("ldd") is not None:
+        env = dict(os.environ)
+        env["LC_ALL"] = "C"
+        said = subprocess.run(["ldd", path], stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, env=env).stdout
+        said = said.decode("utf-8", "replace")
+        if "not a dynamic executable" in said:
+            return "static"
+        return "dynamic"
+    if shutil.which("otool") is not None:
+        return "dynamic"
+    return "unknown"
+
+
+# **What a shipped binary may depend on, where the platform can say.**
+#
+# `RELEASE_REQUIRE_STATIC` exists because a Linux archive that links libc
+# dynamically runs on the machine that built it and not necessarily on the one
+# that unpacks it. macOS cannot satisfy it, so the claim there has to be the
+# other half of the same worry: **nothing outside the base system**. A binary
+# depending only on `/usr/lib` and `/System` runs on any macOS of its
+# architecture; one that picked up a Homebrew dylib -- and Homebrew is on
+# every hosted runner, with its own clang, libssl and more -- runs on the
+# builder's machine alone.
+#
+# Unconditional where `otool` is, and no variable: there is no configuration
+# in which shipping a Homebrew dependency is right, so there is nothing for a
+# job to decide (ADR-0375).
+SYSTEM_PREFIXES = ("/usr/lib/", "/System/Library/", "@rpath/", "@loader_path/")
+
+
+def foreign_libs(path):
+    if shutil.which("otool") is None:
+        return None
+    said = subprocess.run(["otool", "-L", path], stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT).stdout
     said = said.decode("utf-8", "replace")
-    if "not a dynamic executable" in said:
-        return "static"
-    return "dynamic"
+    out = []
+    for line in said.splitlines()[1:]:      # the first line names the file
+        dep = line.strip().split(" (")[0].strip()
+        if not dep or dep.endswith(":"):
+            continue
+        if not dep.startswith(SYSTEM_PREFIXES):
+            out.append(dep)
+    return out
 
 
 def version_of(path):
@@ -313,9 +354,21 @@ def check(tarball):
         elif kind == "dynamic":
             print("release: bin/pascalc is dynamically linked")
         else:
-            print("release: no ldd here, so how bin/pascalc is linked is unknown")
+            print("release: neither ldd nor otool here, so how bin/pascalc is "
+                  "linked is unknown")
         if os.environ.get("RELEASE_REQUIRE_STATIC") and kind != "static":
             die("RELEASE_REQUIRE_STATIC is set and bin/pascalc is %s" % kind)
+
+        # ...and where the platform links dynamically because it can do
+        # nothing else, what it links against is the claim instead.
+        foreign = foreign_libs(os.path.join(prefix, "bin", "pascalc"))
+        if foreign is not None:
+            if foreign:
+                die("bin/pascalc depends on %d library/libraries outside the "
+                    "base system, so it runs where it was built and not where "
+                    "it is unpacked: %s" % (len(foreign), ", ".join(foreign)))
+            print("release: bin/pascalc depends on nothing outside the base "
+                  "system")
         print("release: %s checks out" % base)
     finally:
         shutil.rmtree(work, ignore_errors=True)

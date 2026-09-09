@@ -30,8 +30,9 @@ evening. This page is the reference beneath it.
 ## Building
 
 **Getting a binary.** Every release from v3.5.0 carries
-`afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an `aarch64-linux` one,
-each with a `.sha256` beside it (ADR-0296). Unpack it anywhere, put its `bin`
+`afterschool-pascal-<tag>-x86_64-linux.tar.gz` and an `aarch64-linux` one, and
+since ADR-0375 an `arm64-darwin` one for macOS, each with a `.sha256` beside
+it (ADR-0296). Unpack it anywhere, put its `bin`
 on `PATH`, and compile:
 
 ```sh
@@ -43,7 +44,10 @@ pascalcc hello.pas -o hello
 You still need **`clang`** (15 or later): `pascalc` writes LLVM IR and links
 nothing (ADR-0009, ADR-0085), and `pascalcc` is what hands the IR to `clang`
 and links `lib/libpasrt.a` beside it. The compiler binary itself is linked
-statically, so it runs on any Linux of its architecture. The aarch64 archive
+statically, so it runs on any Linux of its architecture. The macOS archive
+cannot be — Apple ships no static libc — so what is checked there instead is
+that it depends on nothing outside `/usr/lib` and `/System`, which is the same
+worry answered the way that platform can answer it. The aarch64 archive
 is built and tested on an arm64 runner from the x86-64 seed; it writes an
 x86-64 header unless told otherwise, and `clang` overrides that when it
 assembles, so a program is right and a `pascalcc -S` file names the wrong
