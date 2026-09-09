@@ -12,6 +12,12 @@ clear:       <27>[2J
 clear line:  <27>[2K
 hide:        <27>[?25l
 show:        <27>[?25h
+alt on:      <27>[?1049h
+alt off:     <27>[?1049l
+red on blue: <27>[31;44m
+default fg:  <27>[39;40m
+both default:<27>[39;49m
+reset:       <27>[0m
 key 1:       no error [h]
 key 2:       no error [i]
 key 3:       not present [0]

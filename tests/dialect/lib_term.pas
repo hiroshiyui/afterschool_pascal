@@ -100,6 +100,19 @@ begin
   writeln('hide:        ', Shown(HideCursor));
   writeln('show:        ', Shown(ShowCursor));
 
+  { The three ADR-0381 added for the editor, and they are strings in the same
+    way. `SetColour` is where a wrong byte would be *invisible* without this:
+    the constants are SGR offsets, so an arithmetic slip writes a sequence the
+    terminal still understands and acts on differently -- 30+9 is the default
+    foreground and 30+7 is white, and on a light background those look alike
+    to a person and are not the same instruction. }
+  writeln('alt on:      ', Shown(EnterScreen));
+  writeln('alt off:     ', Shown(LeaveScreen));
+  writeln('red on blue: ', Shown(SetColour(clRed, clBlue)));
+  writeln('default fg:  ', Shown(SetColour(clDefault, clBlack)));
+  writeln('both default:', Shown(SetColour(clDefault, clDefault)));
+  writeln('reset:       ', Shown(ResetColour));
+
   { A byte off the redirected input. Outside raw mode this is what `read`
     would have got, one character at a time and unbuffered -- so the file
     holds two characters and the third answer is the end of it.

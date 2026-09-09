@@ -48,17 +48,29 @@
   **What is not here.** No terminfo, so a terminal that does not understand the
   sequences above is neither detected nor accommodated -- every terminal
   emulator in use understands them, and reading a compiled database is a
-  library and not a module. No colour, which is the same sequences and can be
-  added when a program needs one. No `tcsendbreak`, no modem control, and no
+  library and not a module. No `tcsendbreak`, no modem control, and no
   notification that the window was resized: that is `SIGWINCH`, and a signal
-  has no shape in this language. A caller that redraws asks `TermSize` again. }
+  has no shape in this language. A caller that redraws asks `TermSize` again.
+  No mouse, and no display *width*: AP 6.4.15 NOTE 14 says plainly that the
+  number of columns a value occupies is a property of the Unicode Character
+  Database this language does not provide, so a program drawing East Asian
+  text lays it out with a table of its own or draws in bytes and says so.
+
+  **Colour and the alternate screen arrived with ADR-0381**, and they are the
+  same kind of thing as the five above: sequences a caller writes. What made
+  them worth adding is a program that wants them -- the editor -- rather than
+  symmetry; the module said colour "can be added when a program needs one" and
+  one does. }
 
 module PasTerm;
 
-export PasTerm = (SeqMax, TermSeq,
+export PasTerm = (SeqMax, TermSeq, Colour,
+                  clDefault, clBlack, clRed, clGreen, clYellow,
+                  clBlue, clMagenta, clCyan, clWhite,
                   IsTerminal, TermSize, EnterRaw, LeaveRaw, RawActive,
                   ReadKey,
-                  CursorTo, ClearScreen, ClearLine, HideCursor, ShowCursor);
+                  CursorTo, ClearScreen, ClearLine, HideCursor, ShowCursor,
+                  EnterScreen, LeaveScreen, SetColour, ResetColour);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part.
   `PasIO` supplies the descriptors and the one read: a key is a byte off a
@@ -73,8 +85,43 @@ const
     whatever a caller concatenates onto one. }
   SeqMax = 24;
 
+  { The eight ANSI colours and a ninth that is not one: `clDefault` means
+    *whatever this terminal started with*, which is what SGR 39 and 49 select
+    and is not the same as `clWhite` or `clBlack` -- a terminal with a light
+    background has a dark default foreground, and a program that wrote
+    `clBlack` there would be right by accident on half the machines it runs
+    on.
+
+    Constants and not an enumeration, because a caller writes them into a
+    record or a table of its own and an enumerated type would give it no way
+    to write one down as a number.
+
+    **`clDefault` is 8 and the sequence wants 9**, which is the one place this
+    module does arithmetic a reader should not guess at. SGR numbers the eight
+    colours 30..37 and puts *the terminal's own* at 39; 38 is the introducer
+    for an extended colour and takes further parameters. So a subrange running
+    to 9 would admit 8, and a caller passing it would emit a sequence the
+    terminal reads as the beginning of something longer -- it would swallow
+    whatever was written next. Numbering the ninth colour 8 makes the subrange
+    exactly the nine values that are colours, and `SetColour` maps it. }
+  clDefault = 8;
+  clBlack = 0;
+  clRed = 1;
+  clGreen = 2;
+  clYellow = 3;
+  clBlue = 4;
+  clMagenta = 5;
+  clCyan = 6;
+  clWhite = 7;
+
 type
   TermSeq = string(SeqMax);
+
+  { A subrange, so a caller handing `SetColour` a number that is not a colour
+    is refused where it is written rather than producing a sequence the
+    terminal reads as something else. 6.4.2.4's own mechanism, and the trap it
+    carries is this module's whole validation of the argument. }
+  Colour = clBlack..clDefault;
 
 { Whether this descriptor is a terminal. A question about the world, and so a
   `boolean` (lib/dialect/README.md): `isatty` fails exactly when the answer is
@@ -166,6 +213,42 @@ function ClearLine = s: TermSeq;
   position. }
 function HideCursor = s: TermSeq;
 function ShowCursor = s: TermSeq;
+
+{ The **alternate screen**: a second, empty buffer the terminal keeps beside
+  the one the shell has been writing to. A full-screen program enters it on
+  the way in and leaves it on the way out, and what the user had on screen
+  before comes back untouched -- which is the behaviour a person expects of
+  an editor and cannot get by clearing, since clearing destroys the scrollback
+  it was clearing.
+
+  It pairs with `EnterRaw`/`LeaveRaw` and is *not* the same thing: raw mode is
+  a property of the terminal that the runtime restores at exit (ADR-0262),
+  and this is a byte a program writes. A program that exits without writing
+  `LeaveScreen` leaves the user in the alternate buffer, which no `atexit`
+  here can undo -- the runtime knows nothing about it. }
+function EnterScreen = s: TermSeq;
+function LeaveScreen = s: TermSeq;
+
+{ **Colour**, as the eight ANSI ones and a ninth meaning *whatever this
+  terminal started with*. `SetColour` takes a foreground and a background so a
+  caller writes one sequence rather than two, and `clDefault` in either
+  position means that half is left as the terminal's own.
+
+  Eight and not 256, and no bold, italic or underline: what a program needs to
+  tell one region of a screen from another is a small palette every terminal
+  has had since the 1970s, and the wider ones are a caller's `writestr` away
+  from this module's shape without being in its interface. }
+function SetColour(fg: Colour; bg: Colour) = s: TermSeq;
+
+{ Back to how the terminal was, which a program writes at the end of every
+  region it coloured.
+
+  It is SGR 0 and **not** `SetColour(clDefault, clDefault)`, which is SGR
+  39;49: the two differ where a caller has written an attribute this module
+  does not offer -- bold, reverse, underline -- straight to the stream, and
+  only this one turns those off. The wider palette is deliberately a caller's
+  `writestr` away (above), so the reset that covers it belongs here. }
+function ResetColour = s: TermSeq;
 
 end;
 
@@ -291,6 +374,44 @@ end;
 function ShowCursor;
 begin
   writestr(s, chr(Esc), '[?25h')
+end;
+
+{ 1049 rather than 47: the older sequence switches buffers and the newer one
+  also saves and restores the cursor, which is what a caller would otherwise
+  have to do around it. Every terminal emulator in use understands it, which
+  is the same bargain the five sequences above make. }
+function EnterScreen;
+begin
+  writestr(s, chr(Esc), '[?1049h')
+end;
+
+function LeaveScreen;
+begin
+  writestr(s, chr(Esc), '[?1049l')
+end;
+
+{ The SGR number for one colour against a base -- 30 for a foreground, 40 for
+  a background. Not exported: it is this module's spelling of the table and
+  not a service, and the `clDefault` step is the whole of it (see the constants
+  above, where 8 is a colour and 38 is not). }
+function Sgr(base: integer; c: Colour): integer;
+begin
+  if c = clDefault then Sgr := base + 9 else Sgr := base + c
+end;
+
+function SetColour;
+begin
+  { One sequence with two parameters rather than two sequences, because a
+    caller writing them separately would write twice as many bytes for the
+    same result and a redraw writes one of these per region. }
+  writestr(s, chr(Esc), '[', Sgr(30, fg):1, ';', Sgr(40, bg):1, 'm')
+end;
+
+function ResetColour;
+begin
+  { SGR 0, which clears every attribute and not only the two colours -- see
+    the heading. }
+  writestr(s, chr(Esc), '[0m')
 end;
 
 end.
