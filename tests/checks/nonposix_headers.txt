@@ -18,8 +18,15 @@
 #
 # Two claims, both directions each:
 #
-#   unit:    <name>  compiles | blocked
+#   unit:    <name>  compiles | blocked | crt <MACRO>
 #   header:  <name>  <header>        one row per header the target lacks
+#
+# **`crt` is a third answer because two were hiding one.** A unit that does not
+# compile as the toolchain is configured, and does compile once the target's
+# modern C runtime is selected, wants no change to this source at all -- it is
+# not in the position of one that names a header nobody has. It is checked in
+# *both* directions: the unit must fail without the macro and compile with it,
+# so the row cannot become a way to excuse a unit that is simply broken.
 #
 # A unit that stops compiling, one that starts, a header that goes missing and
 # a header that arrives are four failures and not one -- the KNOWN_GAP rule
@@ -36,17 +43,26 @@
 # a port gets for free, and it is measured here rather than hoped for.
 unit  pasrt.c            blocked
 unit  pasrt_posix.c      blocked
-unit  pasrt_task.c       blocked
+unit  pasrt_task.c       crt _UCRT
 unit  pasrt_unicode.c    compiles
 
 # --- the headers the target has not got -----------------------------------
 #
 # `pasrt.c` and `pasrt_task.c` have every header they name; what blocks them
 # is names inside those headers, which is a different claim and is not this
-# file's (doc/roadmap.md's Windows row states them: `_longjmp`, `fmemopen`
-# and `open_memstream` for the first, `timespec_get`/`TIME_UTC` for the
-# second, and the second pair is `#ifdef _UCRT` in mingw's own <time.h>, so a
-# CRT choice rather than a gap).
+# file's.
+#
+# For `pasrt.c` that is `_setjmp`/`_longjmp` -- ADR-0370 removed `fmemopen`
+# and `open_memstream`, so it is one name from compiling here, and that name
+# is an *arity* and not a spelling: `setjmp(x)` expands to `_setjmp(x)` on
+# glibc and `_setjmp((x), frame)` on mingw, Win64 unwinding through SEH.
+#
+# For `pasrt_task.c` it was `timespec_get`/`TIME_UTC`, and measurement settled
+# it: both are `#ifdef _UCRT` in mingw's own <time.h>, and the unit compiles
+# clean under `-D_UCRT`. So it is a CRT selection and not a gap, which is what
+# the `crt` row above says and what the gate now proves on every run. Debian's
+# packaged toolchain here is msvcrt-based (`-win32` and `-posix` are threading
+# variants, both msvcrt), which is why the default compile still fails.
 #
 # **Seven, and the shape of them is the finding.** `pasrt_posix.c` names ten
 # headers that ARE there -- dirent.h, errno.h, fcntl.h, signal.h, stdio.h,

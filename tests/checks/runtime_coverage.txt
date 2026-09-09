@@ -36,14 +36,26 @@
 # compared, and pasrt.c and pasrt_unicode.c, which hold none,
 # fail in both directions like lib_coverage.txt does.
 #
+# **The two totals below are over the *gated* units only**, and
+# they are compared in both directions. They used to be over all
+# four and were read only to check that a total was there -- so
+# they sat at the head of this file looking like its headline
+# number and drifted, saying 431 of 2778 while the run measured
+# 504 of 3116. They cannot be gated over all four: two units
+# hold a wait with a deadline and their coverage is a property
+# of how loaded the machine is. Over the other two the sum is as
+# deterministic as its parts, and it catches what a per-unit row
+# cannot -- a line moving between two gated units while both
+# counts stay put.
+#
 # Regenerate with:
 #   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 504
-instrumented 3116
+uncovered 295
+instrumented 2192
 
 runtime/pasrt.c 246/1778
-runtime/pasrt_posix.c 111/353
+runtime/pasrt_posix.c 171/633
 runtime/pasrt_task.c 28/291
 runtime/pasrt_unicode.c 49/414

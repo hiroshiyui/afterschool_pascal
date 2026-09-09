@@ -98,6 +98,13 @@ def skip(message, require):
     return 77
 
 
+# The units whose coverage is a property of how loaded the machine is, and so
+# are reported rather than gated (ADR-0354). Written down rather than derived,
+# so a stray match in a comment cannot quietly ungate one; the *deterministic*
+# claim is checked against the source further down.
+TIMED = {"runtime/pasrt_posix.c", "runtime/pasrt_task.c"}
+
+
 def main():
     ap = argparse.ArgumentParser(add_help=True)
     ap.add_argument("pascalcc", nargs="?")
@@ -200,6 +207,22 @@ def main():
     total = data["totals"]["lines"]
     total_unc = total["count"] - total["covered"]
     total_ins = total["count"]
+
+    # **The two totals are over the *gated* units, and that is what makes
+    # them a claim.** They used to be over all four and were read only to
+    # check that a total was there -- so they sat at the head of the file
+    # looking like its headline number and drifted, saying 431 of 2778 while
+    # the run measured 504 of 3116, for as long as nobody looked
+    # (`doc/sop.md` §7). They cannot be gated over all four either:
+    # pasrt_posix.c and pasrt_task.c each hold a wait with a deadline, so
+    # which of their lines run is a property of how loaded the machine is,
+    # which is exactly why those two are reported and not compared (ADR-0354).
+    # Over the other two the sum is as deterministic as its parts, so it is
+    # compared in both directions like they are -- and it catches the one
+    # thing the per-unit rows cannot: a line moving *between* two gated units
+    # while both counts stay put.
+    gated_unc = sum(u for n, u, i in rows if n not in TIMED)
+    gated_ins = sum(i for n, u, i in rows if n not in TIMED)
     branches = data["totals"]["branches"]
 
     if len(rows) != len(UNITS):
@@ -248,12 +271,24 @@ def main():
             "# compared, and pasrt.c and pasrt_unicode.c, which hold none,",
             "# fail in both directions like lib_coverage.txt does.",
             "#",
+            "# **The two totals below are over the *gated* units only**, and",
+            "# they are compared in both directions. They used to be over all",
+            "# four and were read only to check that a total was there -- so",
+            "# they sat at the head of this file looking like its headline",
+            "# number and drifted, saying 431 of 2778 while the run measured",
+            "# 504 of 3116. They cannot be gated over all four: two units",
+            "# hold a wait with a deadline and their coverage is a property",
+            "# of how loaded the machine is. Over the other two the sum is as",
+            "# deterministic as its parts, and it catches what a per-unit row",
+            "# cannot -- a line moving between two gated units while both",
+            "# counts stay put.",
+            "#",
             "# Regenerate with:",
             "#   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet",
             "# Doing so is a decision to argue for in the commit message.",
             "",
-            "uncovered %d" % total_unc,
-            "instrumented %d" % total_ins,
+            "uncovered %d" % gated_unc,
+            "instrumented %d" % gated_ins,
             ""]
     for name, unc, ins in rows:
         text.append("%s %d/%d" % (name, unc, ins))
@@ -262,8 +297,10 @@ def main():
     path = root / "tests" / "checks" / RATCHET
     if args.write_ratchet:
         path.write_text(body)
-        print("runtime-coverage: wrote %s: %d uncovered of %d"
-              % (path.relative_to(root), total_unc, total_ins))
+        print("runtime-coverage: wrote %s: %d uncovered of %d over the "
+              "gated units (%d of %d over all four)"
+              % (path.relative_to(root), gated_unc, gated_ins,
+                 total_unc, total_ins))
         return 0
 
     if not path.exists():
@@ -273,14 +310,21 @@ def main():
 
     was = {}
     prev_unc = None
+    prev_ins = None
     for line in path.read_text().splitlines():
         if line.startswith("uncovered "):
             prev_unc = int(line.split()[1])
+        elif line.startswith("instrumented "):
+            prev_ins = int(line.split()[1])
         elif line and not line.startswith("#") and "/" in line:
             n, r = line.rsplit(" ", 1)
             was[n] = int(r.split("/")[0])
     if prev_unc is None:
         sys.stderr.write("runtime-coverage: the ratchet names no total\n")
+        return 1
+    if prev_ins is None:
+        sys.stderr.write("runtime-coverage: the ratchet names no instrumented "
+                         "count\n")
         return 1
 
     # **Gated per unit, and two of the four are only reported** (ADR-0354).
@@ -303,7 +347,6 @@ def main():
     # checked against the source in the one direction that matters: a unit
     # held both ways must contain no such wait, or someone added one and this
     # file has to be told.
-    TIMED = {"runtime/pasrt_posix.c", "runtime/pasrt_task.c"}
     DEADLINE = re.compile(
         r"pthread_cond_timedwait|\bpoll\(|\bselect\(|SO_RCVTIMEO|nanosleep")
     for name, unc, ins in rows:
@@ -331,6 +374,22 @@ def main():
             lost.append((name, old, unc, ins))
         elif unc < old:
             fewer.append((name, old, unc, ins))
+
+    # The totals, in both directions, over the gated units only. A per-unit
+    # row cannot see a line that moved *between* two gated units while both
+    # counts stayed put; this can, and it is the reason these two lines are a
+    # claim now rather than a decoration nothing read.
+    if gated_unc != prev_unc or gated_ins != prev_ins:
+        sys.stderr.write(
+            "runtime-coverage: the gated units total %d uncovered of %d "
+            "instrumented and %s says %d of %d. %s\n"
+            % (gated_unc, gated_ins, RATCHET, prev_unc, prev_ins,
+               "Fewer uncovered is progress and is recorded the same way: "
+               "re-run with --write-ratchet and say so in the commit message."
+               if gated_unc < prev_unc else
+               "Lines of the runtime stopped running, or the instrumented "
+               "count moved under them."))
+        return 1
 
     for name, old, unc, ins in moved:
         # Information and not a verdict: see TIMED above.

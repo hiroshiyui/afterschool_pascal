@@ -85,6 +85,13 @@ PROBE_FLOOR = 20
 
 INCLUDE = re.compile(r"(?m)^[ \t]*#[ \t]*include[ \t]*<([^>]+)>")
 
+# Macros that select a target's *modern* C runtime rather than its historic
+# one. A unit catalogued `blocked` that compiles with one of these is not
+# blocked by this source, and saying `blocked` about it is true and less than
+# the truth -- so the catalogue is made to say which. Written down rather than
+# guessed at, and one entry is not a list yet: mingw-w64's `_UCRT`.
+CRT_MACROS = ("_UCRT",)
+
 # The compiler is asked in the C locale so that a *failure* here is the same
 # failure everywhere. Nothing below parses its words, but a reader is shown
 # them, and a report half in Japanese was one of ADR-0366's findings.
@@ -101,7 +108,15 @@ def read_catalogue():
             continue
         f = line.split()
         if len(f) == 3 and f[0] == "unit" and f[2] in ("compiles", "blocked"):
-            units[f[1]] = f[2]
+            units[f[1]] = (f[2], None)
+        elif len(f) == 4 and f[0] == "unit" and f[2] == "crt":
+            # **A third answer, because two were hiding one.** A unit that
+            # does not compile as the toolchain is configured, and does
+            # compile once the target's modern C runtime is selected, is not
+            # in the same position as one that wants a header nobody has --
+            # it wants no change at all. Checked in *both* directions below,
+            # so the row cannot quietly become either of the other two.
+            units[f[1]] = ("crt", f[3])
         elif len(f) == 3 and f[0] == "header":
             headers.setdefault(f[1], set()).add(f[2])
         else:
@@ -220,8 +235,34 @@ def check(cc, work):
 
     # --- both directions, on both claims ---
     for name in sorted(set(status_found) | set(units)):
-        want = units.get(name)
+        row = units.get(name)
+        want = row[0] if row else None
+        macro = row[1] if row else None
         got = status_found.get(name)
+        if want == "crt":
+            # Both halves, and the first is the one that stops this becoming
+            # a way to excuse a unit that simply does not compile.
+            if got == "compiles":
+                fails.append("runtime/%s is catalogued as wanting -D%s and "
+                             "compiles without it -- the toolchain's default "
+                             "changed, or the need went away; make the row "
+                             "`compiles`" % (name, macro))
+            else:
+                ok, err = compiles(cc, ROOT / "runtime" / name,
+                                   ["-I", str(ROOT / "runtime"), "-O2",
+                                    "-D" + macro])
+                if not ok:
+                    fails.append("runtime/%s is catalogued as compiling with "
+                                 "-D%s and does not -- it is blocked by "
+                                 "something else as well, and the row is "
+                                 "describing a runtime that is not this one"
+                                 % (name, macro))
+                else:
+                    print("runtime-nonposix: %s compiles once -D%s selects "
+                          "the target's modern C runtime, so what blocks it "
+                          "is a build configuration and not this source"
+                          % (name, macro))
+            continue
         if want is None:
             fails.append("runtime/%s is a translation unit the catalogue does "
                          "not name -- add a `unit` row saying whether it "
@@ -239,6 +280,21 @@ def check(cc, work):
                 fails.append("runtime/%s is catalogued `compiles` and no "
                              "longer does under %s -- the port went backwards"
                              % (name, cc))
+        elif want == "blocked":
+            # The third direction, and the one a plain pair of statuses could
+            # not see: `blocked` is true of a unit that only wants a different
+            # C runtime, and it is less than the truth. Demoting a `crt` row
+            # to `blocked` would otherwise be a silent loss.
+            for macro in CRT_MACROS:
+                ok, _ = compiles(cc, ROOT / "runtime" / name,
+                                 ["-I", str(ROOT / "runtime"), "-O2",
+                                  "-D" + macro])
+                if ok:
+                    fails.append("runtime/%s is catalogued `blocked` and "
+                                 "compiles under -D%s, so what stops it is a "
+                                 "build configuration and not this source -- "
+                                 "the row is `crt %s`" % (name, macro, macro))
+                    break
 
     for name in sorted(set(missing_found) | set(headers)):
         want = headers.get(name, set())
@@ -260,13 +316,14 @@ def check(cc, work):
             print("        " + f, file=sys.stderr)
         return 1
 
-    n_blocked = sum(1 for v in units.values() if v == "blocked")
-    n_ok = len(units) - n_blocked
+    n_blocked = sum(1 for v, _ in units.values() if v == "blocked")
+    n_crt = sum(1 for v, _ in units.values() if v == "crt")
+    n_ok = len(units) - n_blocked - n_crt
     n_hdr = sum(len(v) for v in headers.values())
     print("runtime-nonposix: %s -- %d of %d translation unit(s) compile, %d "
-          "are blocked, and %d header(s) across %d probe(s) are the whole of "
-          "what this target has not got"
-          % (cc, n_ok, len(units), n_blocked, n_hdr, probed))
+          "want only a different C runtime, %d are blocked, and %d header(s) "
+          "across %d probe(s) are the whole of what this target has not got"
+          % (cc, n_ok, len(units), n_crt, n_blocked, n_hdr, probed))
     return 0
 
 
