@@ -46,7 +46,7 @@ export ApTypes = (
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, reqProcCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
-  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, targetIx, PtrSize,
+  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtWin64, targetIx, PtrSize,
   WordAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
@@ -324,7 +324,7 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 3;
+  tgtCount = 4;
   tgtX86 = 1;
   tgtAarch64 = 2;
   { ADR-0325's third, and the first that is not LP64. What made it admissible
@@ -333,6 +333,20 @@ const
     and `target-layout` compares this compiler's own arithmetic against LLVM's
     for every admitted target rather than one target against another. }
   tgtI386 = 3;
+  { ADR-0371's fourth, and the first that is **LLP64**: a pointer is eight
+    bytes and a C `long` is four, a combination the three above do not have
+    (i386 is ILP32 and the other two LP64). `CLongSize` below is what that
+    costs and it is one line, the foreign boundary having been given `clong`
+    and `csize` by ADR-0328 precisely so a binding can say "whatever this
+    target's is" rather than a number.
+
+    It is also the first target admitted for a platform this tree cannot
+    *run*: `runtime-nonposix` (ADR-0369) says what the runtime still needs
+    there. What makes it admissible anyway is that a target is a claim about
+    the module the compiler *writes* -- `target-layout` compares this
+    compiler's arithmetic against LLVM's for every admitted target, and `llc`
+    assembles the result, neither of which needs a Windows to run on. }
+  tgtWin64 = 4;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.
@@ -4424,7 +4438,12 @@ end;
 
 function CLongSize;
 begin
-  if targetIx = tgtI386 then CLongSize := 4 else CLongSize := 8
+  { Two targets and not one: i386 is ILP32 and Win64 is LLP64, and what they
+    share is a four-byte `long`. It is the *only* thing tgtWin64 changes about
+    this compiler's arithmetic -- its pointers and its word alignment are the
+    other two LP64 targets' (ADR-0371). }
+  if (targetIx = tgtI386) or (targetIx = tgtWin64) then CLongSize := 4
+  else CLongSize := 8
 end;
 
 function FileIndexOf;

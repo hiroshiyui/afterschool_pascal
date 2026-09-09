@@ -303,6 +303,18 @@ def corpus(root):
     # diagnostic_coverage.py filters out as not being about a program, so
     # nothing but this reaches it. selfhost/producttest.py is what asserts both.
     jobs.append((hello, ["--target=aarch64-linux-gnu"]))
+
+    # ...and ADR-0371's fourth target over a source with a **non-local goto**,
+    # because that target is the first whose difference reaches the code
+    # generator rather than only the two lines above it. `_setjmp` is the one
+    # foreign function the emitted module names, and Win64 takes a frame
+    # pointer as well as the buffer, so the call and its declaration each have
+    # an arm no other target enters. An ordinary program would not do: without
+    # a label in an outer block and a jump from a nested one, `JumpDispatch`
+    # is never entered and `line-coverage` reported seven statements never run
+    # -- which is how this job came to exist.
+    jobs.append((root / "tests" / "goto_nonlocal.pas",
+                 ["--target=x86_64-w64-mingw32"]))
     # ADR-0364: the emitter writes a slice's count at the target's pointer
     # width, so it has an arm only an ILP32 target takes -- at the argument
     # and at the declaration. `hello` reaches neither; a module whose slice

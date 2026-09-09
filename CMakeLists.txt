@@ -880,6 +880,24 @@ set_tests_properties(runtime-isoc PROPERTIES
 #
 # Skips (77) without a mingw-w64 cross compiler; the `non-posix` CI job sets
 # NONPOSIX_REQUIRE so it cannot pass by skipping there (ADR-0330).
+# `_setjmp` is the one foreign function the emitted module names, and the two
+# platforms this compiler admits disagree about its *arity* rather than its
+# spelling -- Win64 unwinds through SEH and takes a frame pointer as well
+# (ADR-0371). A wrong arity there is undefined behaviour with no diagnostic
+# anywhere: LLVM does not compare a direct call against its declaration under
+# opaque pointers, so the module verifies, assembles and links.
+#
+# Checked the way `foreign-layout` checks a record -- the source states a
+# claim and a C compiler holding the real header judges it. The target list is
+# the compiler's own refusal, so a fifth is compared without editing the
+# check, and the floor is that the answers are *not all the same*.
+add_test(NAME setjmp-arity
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/setjmp_arity.py)
+set_tests_properties(setjmp-arity PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 300
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 add_test(NAME runtime-nonposix
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/runtime_nonposix.py)
 set_tests_properties(runtime-nonposix PROPERTIES

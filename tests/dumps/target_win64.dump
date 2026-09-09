@@ -1,0 +1,34 @@
+record wptr size=16 align=8
+  field c offset=0 size=1 align=1
+  field v offset=8 size=8 align=8
+record wi64 size=16 align=8
+  field c offset=0 size=1 align=1
+  field v offset=8 size=8 align=8
+record wreal size=16 align=8
+  field c offset=0 size=1 align=1
+  field v offset=8 size=8 align=8
+record wfile size=128 align=8
+  field c offset=0 size=1 align=1
+  field v offset=8 size=120 align=8
+record wpair size=16 align=8
+  field a offset=0 size=8 align=8
+  field b offset=8 size=8 align=8
+record wset size=48 align=16
+  field c offset=0 size=1 align=1
+  field v offset=16 size=32 align=16
+record wcplx size=32 align=16
+  field c offset=0 size=1 align=1
+  field v offset=16 size=16 align=16
+record wclong size=8 align=4
+  field c offset=0 size=1 align=1
+  field v offset=4 size=4 align=4
+record wcsize size=16 align=8
+  field c offset=0 size=1 align=1
+  field v offset=8 size=8 align=8
+record wmixed size=48 align=8
+  field a offset=0 size=1 align=1
+  field b offset=8 size=8 align=8
+  field c offset=16 size=4 align=4
+  field d offset=24 size=8 align=8
+  field e offset=32 size=8 align=8
+  field f offset=40 size=1 align=1
