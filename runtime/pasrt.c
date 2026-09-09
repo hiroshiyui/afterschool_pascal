@@ -1992,7 +1992,38 @@ void pas_jump_done(void *v) {
   j->active = 0;
 }
 
-/* The jump itself. `id` is the label's number plus one, because `_longjmp`
+/* **The one conditional in this runtime, and it is catalogued** (ADR-0373).
+ *
+ * The emitted module calls `_setjmp`, and what pairs with it is the jump that
+ * does *not* restore a signal mask -- `_longjmp` where POSIX declares one.
+ * mingw-w64 declares none: its `<setjmp.h>` has `longjmp`, `_longjmpex` for
+ * i386 and `__mingw_longjmp` for arm, and nothing spelled `_longjmp`. There
+ * `longjmp` is the counterpart, its `setjmp` macro expanding to the same
+ * two-argument `_setjmp` the emitter writes for that target (ADR-0371).
+ *
+ * The portable spelling is not available in either direction. Calling
+ * `longjmp` everywhere works on glibc -- measured, and no mask is restored,
+ * because glibc's reads a flag the buffer carries -- and breaks on Darwin,
+ * where the BSD rule is the opposite and `longjmp` would restore a mask
+ * `_setjmp` never saved.
+ *
+ * **Why this is a `#if` and not a split** is the bootstrap: the committed
+ * seed declares and calls `@pas_jump_go`, so moving the jump into the code
+ * the compiler emits
+ * -- which is where `_setjmp` already lives, and would be the tidier shape --
+ * cannot land without an out-of-cycle reseed. That is a release operation and
+ * this is not a release.
+ *
+ * `runtime-isoc` holds the set of conditionals in this runtime against a
+ * catalogue, both directions, so a second one is a decision and not a habit.
+ */
+#if defined(_WIN32)
+#  define PAS_LONGJMP longjmp
+#else
+#  define PAS_LONGJMP _longjmp
+#endif
+
+/* The jump itself. `id` is the label's number plus one, because the jump
  * with zero would arrive at the `_setjmp` looking like the ordinary entry. */
 void pas_jump_go(void *v, int id) {
   struct pas_jump *j = v;
@@ -2041,7 +2072,7 @@ void pas_jump_go(void *v, int id) {
       h = next;
     }
   }
-  _longjmp(j->env, id);
+  PAS_LONGJMP(j->env, id);
 }
 
 /* ------------------------------------------------------- strings and memory */

@@ -239,6 +239,7 @@ listed = sorted({
     line.replace(" ", "").replace("\t", "")
     for line in list_text.splitlines()
     if not re.match(r"^\s*(#|$)", line) and not line.startswith("header:")
+    and not line.startswith("conditional:")
 })
 
 missing = [n for n in listed if n not in set(found)]
@@ -333,6 +334,58 @@ if not posix_src.is_file():
     finish(1)
 
 posix_text = posix_src.read_text()
+# --- the conditionals, and there is meant to be almost none -------------
+#
+# **No translation unit here held a preprocessor conditional until ADR-0373**,
+# and the discipline that made that true is worth keeping: each unit is
+# bounded by what it may depend on, and a `#if` makes the bound depend on who
+# is compiling. One was unavoidable. The emitted module calls `_setjmp`, the
+# jump that pairs with it is `_longjmp` where POSIX declares one, and
+# mingw-w64 declares none -- there `longjmp` is the counterpart. Neither
+# spelling is portable: `longjmp` after `_setjmp` works on glibc and breaks on
+# Darwin, whose `longjmp` restores a mask that was never saved.
+#
+# So the set of conditions is catalogued and compared **both ways**: one that
+# appears without a row is a bound nobody argued for, and a row whose
+# condition is gone is describing a runtime that no longer exists, which is
+# verify/'s KNOWN_GAP rule (ADR-0013). Format: `conditional: <unit> <macro>`.
+COND_RE = re.compile(r"(?m)^[ \t]*#[ \t]*if(?:def|ndef)?[ \t]+(.*)$")
+NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+cond_used = set()
+for unit in ("pasrt.c", "pasrt_posix.c", "pasrt_task.c", "pasrt_unicode.c"):
+    text = (root / "runtime" / unit).read_text()
+    for expr in COND_RE.findall(text):
+        for name in NAME_RE.findall(expr):
+            if name != "defined":
+                cond_used.add((unit, name))
+cond_named = set()
+for line in list_text.splitlines():
+    m = re.match(r"^conditional:\s+(\S+)\s+(\S+)\s*$", line)
+    if m:
+        cond_named.add((m.group(1), m.group(2)))
+
+cond_extra = sorted(cond_used - cond_named)
+cond_gone = sorted(cond_named - cond_used)
+if cond_extra:
+    err("runtime-isoc: the runtime holds a preprocessor conditional this",
+        "catalogue does not name:")
+    for unit, name in cond_extra:
+        err("          runtime/%s on %s" % (unit, name))
+    err("        Every unit here is bounded by what it may depend on, and a",
+        "`#if` makes that bound depend on who is compiling. Adding one is a",
+        "decision with a record (ADR-0373), not a habit -- write the row and",
+        "the argument for it.")
+    finish(1)
+if cond_gone:
+    err("runtime-isoc: this catalogue names a conditional the runtime no",
+        "longer holds:")
+    for unit, name in cond_gone:
+        err("          runtime/%s on %s" % (unit, name))
+    err("        That is progress and it has to be recorded: strike the row",
+        "in the change that removed the conditional.")
+    finish(1)
+
 posix_used = sorted({"<%s>" % h for h in INCLUDE_RE.findall(posix_text)
                      if h[: -len(".h")] not in iso_headers})
 posix_named = sorted(set(re.findall(r"(?m)^header: (<[a-z0-9_/]+\.h>)",
@@ -511,6 +564,8 @@ out("runtime-isoc: runtime/pasrt.c is strict ISO C11 apart from %d catalogued"
     "names (%s), runtime/pasrt_posix.c is bounded by" % (" ".join(found) + " "),
     "%d catalogued headers (%s)," % (h, " ".join(posix_named) + " "),
     "runtime/pasrt_unicode.c needs no catalogue at all,",
-    "runtime/pasrt_task.c is bounded by <pthread.h> alone, and the",
-    "emitted module names nothing but its own")
+    "runtime/pasrt_task.c is bounded by <pthread.h> alone, the emitted",
+    "module names nothing but its own, and the four units hold %d catalogued"
+    % len(cond_named),
+    "preprocessor conditional(s)")
 finish(0)

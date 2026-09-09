@@ -381,3 +381,4 @@ the alternatives that were rejected and why.
 | [0370](0370-a-string-transfer-needs-memory-not-a-stream.md) | A string transfer needs memory, not a stream | Accepted |
 | [0371](0371-the-emitter-learns-its-target-for-one-call.md) | The emitter learns its target for one call | Accepted |
 | [0372](0372-macos-is-a-target-the-compiler-names.md) | macOS is a target the compiler names | Accepted |
+| [0373](0373-one-conditional-and-it-is-catalogued.md) | One conditional, and it is catalogued | Accepted |

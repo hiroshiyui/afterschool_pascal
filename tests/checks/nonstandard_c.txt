@@ -59,6 +59,36 @@ _longjmp
 access
 
 
+
+# --- the preprocessor conditionals, and there is meant to be almost none ----
+#
+# No translation unit here held one until ADR-0373, and the discipline that
+# made that true is worth keeping: each unit is bounded by what it may depend
+# on, and a `#if` makes that bound depend on who is compiling. The set below
+# is compared **both ways**, so a second one is a decision with a record
+# rather than a habit, and a row whose condition is gone is describing a
+# runtime that no longer exists.
+#
+# Format: `conditional: <unit> <macro>`, with the argument above it.
+
+# The emitted module calls `_setjmp`, and what pairs with it is the jump that
+# does *not* restore a signal mask -- `_longjmp` where POSIX declares one.
+# mingw-w64 declares none: its <setjmp.h> has `longjmp`, `_longjmpex` for i386
+# and `__mingw_longjmp` for arm, and nothing spelled `_longjmp`. There
+# `longjmp` is the counterpart, its `setjmp` macro expanding to the same
+# two-argument `_setjmp` the emitter writes for that target (ADR-0371).
+#
+# Neither spelling is portable on its own, and both directions were measured:
+# `longjmp` after `_setjmp` works on glibc -- no mask is restored, because
+# glibc's reads a flag the buffer carries -- and breaks on Darwin, where the
+# BSD rule is the opposite and it would restore a mask that was never saved.
+#
+# The tidier shape is not available yet. `_setjmp` is emitted by the compiler
+# and the jump could be too, leaving this file with neither name; the
+# committed seed declares and calls `@pas_jump_go`, so that needs an
+# out-of-cycle reseed, which is a release operation.
+conditional: pasrt.c _WIN32
+
 # --- runtime/pasrt_posix.c: the headers, not the names ----------------------
 #
 # The second translation unit (ADR-0186) is not held to ISO C, because what

@@ -56,7 +56,7 @@
 # pasrt_unicode.c compiling clean is the whole of AP 6.4.15 -- normalisation
 # and grapheme segmentation over tables, and nothing else. It is the one unit
 # a port gets for free, and it is measured here rather than hoped for.
-unit  pasrt.c            blocked
+unit  pasrt.c            compiles
 unit  pasrt_posix.c      blocked
 unit  pasrt_task.c       crt _UCRT
 unit  pasrt_unicode.c    compiles
@@ -67,14 +67,20 @@ unit  pasrt_unicode.c    compiles
 # is names inside those headers, which is a different claim and is not this
 # file's.
 #
-# For `pasrt.c` that is `_longjmp` -- ADR-0370 removed `fmemopen` and
-# `open_memstream`, so it is one name from compiling here. The *emitter's*
-# half of the non-local goto is closed (ADR-0371): `_setjmp` is an arity and
-# not a spelling, `setjmp(x)` expanding to `_setjmp(x)` on glibc and
-# `_setjmp((x), frame)` on mingw, and the compiler now writes whichever its
-# target wants. What is left is the runtime's call, and **the name it needs is
-# present in some mingw-w64 builds and not others**, which is the pinning
-# above.
+# `pasrt.c` **compiles here since ADR-0373**, and getting it there took three
+# records. ADR-0370 removed `fmemopen` and `open_memstream`, neither of which
+# §6.7.5.5 had ever asked for. ADR-0371 closed the emitter's half of the
+# non-local goto: `_setjmp` is an *arity* and not a spelling, `setjmp(x)`
+# expanding to `_setjmp(x)` on glibc and `_setjmp((x), frame)` on mingw, and
+# the compiler now writes whichever its target wants. ADR-0373 closed the
+# runtime's half, which is the jump -- `_longjmp` where POSIX declares one and
+# `longjmp` where it does not, the one catalogued conditional in this runtime.
+#
+# **The name it needed was present in some mingw-w64 builds and not others**,
+# which is why the toolchain is pinned above: Ubuntu 24.04's declares
+# `_longjmp` and Debian trixie's v14 does not. That difference is now
+# irrelevant to whether this unit compiles, which is the better place for it
+# to be.
 #
 # For `pasrt_task.c` it was `timespec_get`/`TIME_UTC`, and measurement settled
 # it: both are `#ifdef _UCRT` in mingw's own <time.h>, and the unit compiles
