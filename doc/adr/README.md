@@ -385,3 +385,4 @@ the alternatives that were rejected and why.
 | [0374](0374-windows-runs-and-is-deferred.md) | Windows runs, and Windows is deferred | Accepted |
 | [0375](0375-macos-ships-an-archive.md) | macOS ships an archive | Accepted |
 | [0376](0376-one-symbol-one-signature.md) | One symbol, one signature | Accepted |
+| [0377](0377-a-link-is-followed-by-nobody.md) | A link is followed by nobody | Accepted |

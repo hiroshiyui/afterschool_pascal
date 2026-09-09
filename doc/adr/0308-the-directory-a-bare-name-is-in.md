@@ -12,7 +12,7 @@ in a `docs:` commit and a compiler change wants a case of its own.
 
 ## Context
 
-[ADR-0244](0244-an-import-is-found-where-the-program-is.md)'s first search
+[ADR-0244](0244-an-import-that-names-no-file.md)'s first search
 rule is the directory the source being translated is in, and it is the rule
 that makes a checkout compile with no configuration: a program and its
 components written in one directory find each other, with no manifest and no

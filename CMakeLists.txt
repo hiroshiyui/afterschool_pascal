@@ -382,6 +382,17 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
                    ${CMAKE_SOURCE_DIR})
 
+  # And every link in it still points at something (ADR-0377). A dead relative
+  # link renders exactly like a live one, so the only way to find one is to
+  # follow it, and nobody follows the links in a document they are reading for
+  # its prose: doc/adr/README.md pointed at a record renamed the day before and
+  # a sweep found eight more, every one an ADR renamed after something cited
+  # it. Two claims -- the file exists, and a #fragment names a heading there.
+  add_test(NAME markdown-links
+           COMMAND ${CMAKE_COMMAND} -E env python3
+                   ${CMAKE_SOURCE_DIR}/tests/checks/markdown_links.py
+                   ${CMAKE_SOURCE_DIR})
+
   # ADR-0350: how much of lib/ does the corpus run? `line_coverage.py`
   # measures the compiler's three program-components and nothing else, so
   # 11 160 lines across 32 modules -- the largest body of this dialect outside

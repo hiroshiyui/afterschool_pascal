@@ -5,7 +5,7 @@ Date: 2026-09-03
 ## Status
 
 Accepted, 2026-09-03. Extends
-[ADR-0242](0242-a-document-is-not-a-file-the-compiler-can-open.md)'s sidecar
+[ADR-0242](0242-a-name-no-other-live-process-will-choose.md)'s sidecar
 reading to ADR-0244's other sidecar. Found by asking the language server about
 `examples/word_freq.pas` — a program landed the day before, in a directory
 added the day before, to be *read*.

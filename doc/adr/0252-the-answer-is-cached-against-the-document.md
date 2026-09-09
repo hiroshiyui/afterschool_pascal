@@ -8,10 +8,10 @@ Accepted, 2026-08-30.
 
 It is the cheaper answer the concurrency row asks for before a construct, and
 it is the second time that row has been answered by trying one:
-[ADR-0201](0201-a-borrow-cannot-outlive-a-call.md) said *"a socket module
+[ADR-0201](0201-aliasing-was-answered-too-and-what-is-left-is-two-threads-of-control.md) said *"a socket module
 serving more than one client is what would demand it, and `select` is the
 cheaper answer to try first"*, and `poll` was enough
-([ADR-0205](0205-a-server-that-serves-more-than-one-client.md)).
+([ADR-0205](0205-a-server-serves-many-clients-and-the-language-needed-nothing.md)).
 
 ## Context
 

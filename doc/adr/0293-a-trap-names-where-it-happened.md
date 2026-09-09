@@ -6,7 +6,7 @@ Date: 2026-09-03
 
 Accepted. Extends [ADR-0014](0014-iso-error-conditions-trap-at-run-time.md),
 which made every ISO error condition the compiler can detect a trap, and
-[ADR-0017](0017-name-equivalence-and-checked-subscripts.md), whose subscript
+[ADR-0017](0017-structured-types-use-name-equivalence.md), whose subscript
 check is the trap a program meets first. Closes the first row of
 `doc/roadmap.md`'s "What would make this practical to pick up".
 

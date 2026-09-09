@@ -6,7 +6,7 @@ Date: 2026-09-03
 
 Accepted, 2026-09-03. Closes the `codeAction` row of `doc/roadmap.md`'s
 Tooling table, and corrects
-[ADR-0283](0283-a-var-parameter-nothing-writes-through.md), whose warning
+[ADR-0283](0283-a-parameter-that-could-say-it-is-read-only.md), whose warning
 could give advice that does not compile.
 
 ## Context

@@ -7,7 +7,7 @@ Date: 2026-08-29
 Accepted, 2026-08-29.
 
 It supersedes nothing. It is the decision
-[ADR-0085](0085-retire-stage-0.md) left implicit when it demoted the tree
+[ADR-0085](0085-stage-0-is-retired.md) left implicit when it demoted the tree
 dumps from a specification to a debugging aid: nothing then said what a
 *machine* should read instead, because until the language server there was no
 machine reading.

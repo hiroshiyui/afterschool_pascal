@@ -8566,8 +8566,10 @@ procedure, and a number quoted in a document is re-read by nobody.**
   index named `0374-a-windows-program-runs.md`; the record is
   `0374-windows-runs-and-is-deferred.md`, renamed when the decision became *and
   Windows is deferred*. Markdown renders a dead relative link exactly like a
-  live one, so nothing here could see it — the check is three lines and now
-  worth writing.
+  live one, so nothing here could see it. **It was written the same day**:
+  `markdown-links` (ADR-0377) holds every relative link and every `#fragment`
+  in a tracked document, the eight further dead links a sweep then found are
+  repaired, and its anchor half found a ninth on its first run.
 - **Two terms defined twice in one file.** `doc/glossary.md` carried a
   **Warning** and a **Trivia** entry in the dialect section and again in the
   pipeline section, and the two Warning entries already disagreed about

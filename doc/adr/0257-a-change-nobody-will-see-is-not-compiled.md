@@ -7,7 +7,7 @@ Date: 2026-08-30
 Accepted, 2026-08-30.
 
 It is the fourth answer to `doc/roadmap.md`'s concurrency row — after `select`
-for the sockets ([ADR-0205](0205-a-server-waits-on-many-sockets.md)) and the
+for the sockets ([ADR-0205](0205-a-server-serves-many-clients-and-the-language-needed-nothing.md)) and the
 document cache ([ADR-0252](0252-the-answer-is-cached-against-the-document.md))
 — and it closes the 933 ms that row named as what was left.
 

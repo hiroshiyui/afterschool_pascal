@@ -14,7 +14,7 @@ rule this record wrote was widened by
 prefix of its type arguments, so the two forms below are the ends of a range.*
 
 It answers the deferral
-[ADR-0211](0211-a-routine-may-be-generic-over-a-type.md) recorded and
+[ADR-0211](0211-a-routine-may-be-parameterised-by-a-type.md) recorded and
 `doc/roadmap.md` has carried since — *generics have no inference*, with the
 question that had to be settled first written into the row: **what happens
 when two arguments imply different types**.
