@@ -283,11 +283,18 @@ failures, and **five of them were this tree assuming Linux in a place nothing
 had ever asked about** — three `mapfile` uses, a GNU-only regex alternation, a
 Linux-only path in three test programs, an `errno` a `strerror` call may
 clobber, and a socket that refuses a write after a number of tries the kernel
-picks).
+picks), 2026-09-09 (after v3.8.0: **the register itself was current and every
+stale thing was outside it**, which is the second time an audit has found that
+— six counts quoted from gates and never re-run, `target32`'s 573 of 574 where
+it now answers 597 of 598, the two sanitizer sweeps at 377 and 383 where both
+answer 389, ThreadSanitizer's eleven where fifteen qualify, `lib/`'s 32 modules
+where there are 33, and two triage counts; plus an ADR index row pointing at a
+filename that had been renamed, two glossary terms defined twice in one file,
+and a roadmap that said in one line what it contradicted in another).
 
 **Verified on each audit rather than assumed**: the string-arena producer
-count — **eight** `strTemps := strTemps + 1` in `selfhost/compiler.pas` — and
-the `-O1`/`-O3` row, still a judgement.
+count — **eight** `strTemps := strTemps + 1` in `selfhost/compiler.pas`,
+re-counted 2026-09-09 — and the `-O1`/`-O3` row, still a judgement.
 
 | Blind spot | Consequence | Recorded |
 | --- | --- | --- |
@@ -354,7 +361,7 @@ the `-O1`/`-O3` row, still a judgement.
 | A dialect scenario cannot reach **6.13.1, 6.13.2 or 6.11** | All three are rules about linking components and `run.py` compiles one program; they stay in `pending.txt` and are held by `stale-component` and `tests/dialect/`. `tests/spec/run.py --coverage` prints the pair rather than this row | ADR-0135, ADR-0144, ADR-0245 |
 | Nothing checks that a **listening** socket is what `PasNet.Wait` reports | The one case has one listener, in slot 1, every time; a server listening on two services is the test and none exists | ADR-0205 |
 | Nothing stages **two processes racing for `TemporaryPath`** | Its exclusivity is pinned inside one process; two programs started in the same second are argued and not staged. `TemporaryDirectory` is `mkdtemp` and outside this row | ADR-0243, ADR-0363 |
-| The mutation catalogue is a register, not a measurement | The files are specific claims; a hundred-odd records carry mutations in prose that nothing compares. `kills:` names one test, so a mutant caught by a different test is unnoticed, and it rots — six of 48 were `NOT-APPLIED` after ADR-0232. Run it after a change to anything a mutant names | ADR-0207, ADR-0232 |
+| The mutation catalogue is a register, not a measurement | The files are specific claims; a hundred-odd records carry mutations in prose that nothing compares. `kills:` names one test, so a mutant caught by a different test is unnoticed, and it rots — six of the 48 then catalogued were `NOT-APPLIED` after ADR-0232, and the catalogue holds 91 today. Run it after a change to anything a mutant names | ADR-0207, ADR-0232 |
 | An `int64` result is the door AP 6.7.7.9 c) says is shut | An address fits in an `int64`, so `opendir` bound with one compiles, copies, adds 8 and double-frees. Unfixable without a type that tells a count from an address; `foreign_int64_handle.pas` is kept as a gap failing both ways | ADR-0128, ADR-0151 |
 | A constant's storage may be filled **twice** and no test can see it | The alias guard cannot be mutated into a failing test: the second fill writes the same value, and nothing compares emitted IR | ADR-0069, ADR-0170 |
 | `model-drift` is scoped to a **range**, so a sibling commit can satisfy it | Right for a push, wrong for a commit; a bisector finds an unexplained CodeGen change. A per-commit gate would train people to write trailers without reading them | ADR-0013, ADR-0167 |
@@ -363,7 +370,7 @@ the `-O1`/`-O3` row, still a judgement.
 | A citation may name a **real clause of the wrong standard** | 825 citations name one of the 45 ambiguous numbers; a ratchet would be a standing cost for a claim it could not verify. B1's convention is the answer and nothing enforces it | ADR-0163, ADR-0164 |
 | Whether **HT, VT and FF are separators** is unsettled | §6.1.8 names neither; no reader found a settling sentence and no program breaks either way, so it gets no scenario | ADR-0162 |
 | **`bindable` in a variant-denoter is caught only on the arm** | §6.4.3.4's third limb reaches through a component for both forbidden words and this compiler applies it to `restricted` only; a bindable non-file field decides 6.9.3.9.1 and nothing else since ADR-0299 | ADR-0163, ADR-0299 |
-| Most triage reasons are still a **title** | 51 `structural` rows share one sentence and some 340 `testable` rows carry the clause's title, so a checked row and a filled-in row look alike. Both directions were swept once; a `shall` about something a program cannot exercise is visible only to a reader | ADR-0106, ADR-0200, ADR-0204 |
+| Most triage reasons are still a **title** | 44 of the 144 `structural` rows share one sentence and 204 of the 390 `testable` rows carry the clause's title, so a checked row and a filled-in row look alike. Both directions were swept once; a `shall` about something a program cannot exercise is visible only to a reader | ADR-0106, ADR-0200, ADR-0204 |
 | The layout comparison covers **frames and nothing else** | A global's alignment, a string constant's and the ABI arguments travel by are outside `target-layout` | ADR-0028, ADR-0157 |
 | Text-mode translation and other **C library semantics** are unasked | `runtime-isoc` bounds what a port must supply, not what a call *means* elsewhere; a second C library would be the oracle | ADR-0161 |
 | §6.6.3.8's bounds error is not detected where **both** ends are dynamic | A conformant actual handed to a conformant formal gets no run-time comparison; an error in §3.1's sense, documented in `implementation-defined.md` §3. One comparison per bound at the call site, not done because no test could fail without it before the feature existed | ADR-0153, ADR-0014 |

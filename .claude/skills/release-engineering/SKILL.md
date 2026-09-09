@@ -88,7 +88,7 @@ When performing release engineering, always follow these steps:
    longer produces, which a per-module comparison alone would not see.
 
    **Reseed last, and freeze the compiler's sources once you have.** `seed/refresh.py` writes **one seed module per program-component** (ADR-0233) and removes the old ones first, so a component dropped from the tree does not leave a module behind for CMake's glob to link. The seed
-   is ~10 MB and 240 000 lines, so every refresh is that much churn in the
+   is ~15 MB and 319 000 lines, so every refresh is that much churn in the
    history, and `seed-is-current` compares it to the compiler **byte for byte**
    at the tag — a single character changed in the source afterwards, even
    inside a comment that costs no IR, is only *usually* free. A reworded

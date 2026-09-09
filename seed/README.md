@@ -148,7 +148,7 @@ the compiler, not the runtime.
 
 ## Refreshing it
 
-**At release tags, not per commit.** The seed is 10.2 MB and 242,000 lines;
+**At release tags, not per commit.** The seed is 15.3 MB and 318,743 lines;
 regenerating it whenever the compiler changes would rewrite all of it on every
 commit that touches the compiler, which is most of them. A refresh after
 ADR-0233 also changes the *set* of files, `pascalc.ll` giving way to one module

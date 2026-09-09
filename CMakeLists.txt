@@ -966,7 +966,7 @@ set_tests_properties(valgrind-corpus PROPERTIES
 
 # ...and the same harness a fifth time, asking how much of the runtime the
 # corpus reaches at all (ADR-0351). `line-coverage` measures the compiler's
-# three components and `lib-coverage` the 32 library modules, so every line of
+# three components and `lib-coverage` the 33 library modules, so every line of
 # Pascal here is measured and the 5 551 lines of C were measured by nothing --
 # `gcov` left with the C++ implementation (ADR-0232) and nothing replaced it.
 #

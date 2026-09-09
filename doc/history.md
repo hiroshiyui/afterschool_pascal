@@ -43,7 +43,7 @@ part that never changes was the first 2,000 lines a reader met.
 | [The four decisions the goal forced](#the-four-decisions-the-goal-forced) | ADR-0109's four, and the thing they have in common: not one decided the question its row was written to pose |
 | [The 32-bit port, and the width it left](#the-32-bit-port-and-the-width-it-left) | the two struck rows of the cross-platform chapter, moved whole, and the third time a foreign width was wrong — found by a register nobody could have found it with |
 | [After v3.6.0](#after-v360-a-configuration-file-and-the-boundary-audited) | six records in one day: a TOML library, a project reader that read all of it, and a command injection found, closed, audited and audited again |
-| [The blind-spot register](#the-blind-spot-register-the-audits-and-what-closed) | `doc/sop.md` §7's five audits and every row struck as closed, moved whole when the register was compacted to what is open |
+| [The blind-spot register](#the-blind-spot-register-the-audits-and-what-closed) | `doc/sop.md` §7's six audits and every row struck as closed, moved whole when the register was compacted to what is open |
 | [The concurrency clauses, audited](#the-concurrency-clauses-audited) | four readers given the behaviour and not the reasoning found seven defects in a surface every gate here called green |
 | [The first macOS run](#the-first-macos-run) | nine failures, five runs, and not one of them in the compiler — what a suite learns the first time it is run somewhere else |
 | [The roadmap as it stood](#the-roadmap-as-it-stood-on-2026-09-07) | the whole page, verbatim, the moment before it was compacted to what is open |
@@ -8217,7 +8217,7 @@ first act was to fail on the defect it was written for.
 
 `doc/sop.md` §7 is the live register of what is not checked, and it was
 compacted on 2026-09-07 to the open rows and a dated audit log. Everything it
-had accumulated that is *settled* — five end-to-end audits with what each
+had accumulated that is *settled* — every end-to-end audit with what each
 found, every row struck as closed with the reason, and the list of gaps closed
 before the register had rows — is here, verbatim, in the order it stood. The
 open rows are still in `doc/sop.md`, each shortened to its claim; the record
@@ -8544,6 +8544,47 @@ producers and there are eight, a third audit running; `runtime-coverage` still
 reports `pasrt_posix.c` at 111 of 353 uncovered, the row's 68.6%, the new
 `pasx_exec_*` lines being reached by `lib_process_execute`; and the `-O1`/`-O3`
 row is still a judgement nobody has revisited.
+
+**Read end to end a sixth time on 2026-09-09**, after v3.8.0 was published, and
+**the register itself was clean**. Every row was current, including the four
+written during the release increment; nothing had dated itself from a shipped
+feature and no row named a closing condition that had since been met. What was
+stale was everywhere else, which is the second audit to find that and is worth
+stating as a shape of its own: **the register is re-read by whoever reads this
+procedure, and a number quoted in a document is re-read by nobody.**
+
+- **Six counts quoted from gates, none of them re-run since it was written.**
+  `target32` answers 597 of 598 where README said 573 of 574; `valgrind-corpus`
+  and `sanitizers` each sweep 389 programs where `CLAUDE.md` said 377 and 383;
+  `thread-sanitizer` selects fifteen where it said eleven; `lib-coverage`
+  measures 33 modules where two files said 32; and §7's own triage row said 51
+  structural rows sharing a sentence and 340 testable rows carrying a title
+  where the file has 144, 44 and 390, 204. Every one was found by running the
+  gate and by nothing else, which is the rule `docs-engineering` states and the
+  step it is structurally blind to.
+- **An index row pointing at a filename that had been renamed.** `doc/adr/`'s
+  index named `0374-a-windows-program-runs.md`; the record is
+  `0374-windows-runs-and-is-deferred.md`, renamed when the decision became *and
+  Windows is deferred*. Markdown renders a dead relative link exactly like a
+  live one, so nothing here could see it — the check is three lines and now
+  worth writing.
+- **Two terms defined twice in one file.** `doc/glossary.md` carried a
+  **Warning** and a **Trivia** entry in the dialect section and again in the
+  pipeline section, and the two Warning entries already disagreed about
+  whether there are four of them. A fact stated twice is a fact that will
+  disagree with itself, and this one had begun to.
+- **A document contradicting itself about a platform.** `doc/roadmap.md`'s
+  summary line said macOS had "a release leg still disabled" while the row it
+  linked to said ADR-0375 had enabled it; the same row said eight skips where
+  the job's own comment enumerates nine, ADR-0369 having added one. The leg had
+  by then run and shipped an archive.
+- **A sentence left as a fragment by an edit.** The macOS row ended *"The leg
+  that was disabled, which is three decisions rather than a run finding
+  anything"* — a clause whose subject had been rewritten around it. Nothing
+  here reads prose for sense, and nothing will.
+
+Verified rather than assumed: the string-arena row still says **eight**
+producers and there are eight, a fourth audit running.
 
 ### The rows struck as closed
 
