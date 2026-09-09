@@ -13,15 +13,63 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-09-09
+
+**The platforms were measured instead of assumed, and one of them was told
+no.** `--target=` admits six machines where it admitted three: a Windows
+triple, and both Darwin ones, so a module built on macOS names the machine it
+is for rather than relying on clang to override an x86-64 Linux header. A
+release now ships a macOS archive beside the two Linux ones. Windows got as
+far as a program that runs and was then **deferred**, on a run rather than a
+reading — a trivial program prints its golden under wine and the non-local
+goto faults on an alignment this compiler gets wrong for Win64 alone. Minor,
+because the command line accepts input it used to refuse and nothing already
+accepted changed meaning.
+
+### Added
+
+- **Three more targets** (ADR-0371, ADR-0372). `--target=` accepts
+  `x86_64-w64-mingw32`, `arm64-apple-macosx` and `x86_64-apple-macosx`, with
+  the spellings people write for each, and the emitted module states that
+  target's own datalayout and triple — each taken from clang and verified
+  byte-identical. Win64 is the first **LLP64** target here, a pointer of eight
+  bytes with a four-byte C `long`, which cost one line because AP 6.4.2.7's
+  `clong` and `csize` already existed for saying "whatever this target's is".
+- **A macOS release archive** (ADR-0375). A `v*` tag now produces
+  `afterschool-pascal-<tag>-arm64-darwin.tar.gz` beside the two Linux ones.
+  Apple ships no static libc, so that archive cannot be statically linked and
+  is not required to be; what is checked instead is a claim that platform can
+  answer — that the binary depends on **nothing outside `/usr/lib` and
+  `/System`**, which `otool -L` reports and every hosted runner's Homebrew
+  makes worth asking.
+- **Platform tiers, written down** (README). GNU/Linux is the first tier —
+  the seed is generated for x86-64, every gate has a job that installs its
+  tools, and i386 is built and run at two optimisation levels. macOS (arm64)
+  is the second: the whole suite runs there natively on every push and the job
+  can fail. Everything else is unsupported, and README says what a
+  contributor starts from.
+- **Four gates.** `runtime-nonposix` compiles the runtime for a target that is
+  not POSIX and holds the result in a catalogue that fails both ways
+  (ADR-0369); `setjmp-arity` compares the `_setjmp` this compiler emits
+  against what each target's C library declares (ADR-0371);
+  `helper-portability` makes ADR-0366's rule mechanical (ADR-0367); and
+  `foreign-width` gained a second claim — a C function declared in more than
+  one module must have one representation (ADR-0376).
+
 ### Changed
 
+- **`readstr` and `writestr` are backed by memory, not by a `FILE *`**
+  (ADR-0370). §6.7.5.5 asks for an auxiliary `text` variable backed by memory
+  and never for a stream; `fmemopen` and `open_memstream` are POSIX and were
+  two of the three names that stopped `runtime/pasrt.c` compiling for a target
+  that is not POSIX. The formatting is untouched — the same bytes, handed
+  somewhere else — and `runtime/pasrt.c`'s departure from ISO C went from five
+  names to three. `tmpfile()` would have been ISO C and is 88 times slower,
+  measured.
 - **macOS is a job that can fail** (ADR-0368). It was advisory from the first
-  run of the port; 901 of 911 cases run and pass on arm64, so
-  `continue-on-error` is gone and a macOS failure now stops the build.
-  `SANITIZE_REQUIRE` is set — those two gates already ran there — and the
-  other nine name tools the runner has not got. The ten gates that still skip
-  are listed in the job with the reason for each. The release-matrix leg stays
-  disabled: a platform is run before it is shipped.
+  run of the port; the whole suite runs there natively on every push now, and
+  a macOS failure stops the build. Nine gates still skip, each naming a tool
+  the runner has not got, and the job lists them with the reason for each.
 - **Every helper is Python 3, and a gate keeps it that way** (ADR-0366,
   ADR-0367). The thirty-one shell scripts under test were converted one at a
   time, each proved by byte-identical output from both versions on this tree
@@ -29,6 +77,12 @@ appears below in the release where it still existed.
   remains, by decision. `helper-portability` refuses a new shell script, the
   constructs bash 3.2 lacks in the one that is catalogued, and a Python helper
   starting a general-purpose utility to do what the standard library does.
+- **The runtime holds one preprocessor conditional** (ADR-0373), where it held
+  none. `_longjmp` is what pairs with the `_setjmp` the emitter writes and
+  mingw-w64 declares no such name; no portable spelling exists, `longjmp`
+  after `_setjmp` working on glibc and restoring on Darwin a mask that was
+  never saved. `runtime-isoc` now catalogues the set of conditionals in both
+  directions, so a second one is a decision with a record.
 
 ### Fixed
 
@@ -52,6 +106,20 @@ appears below in the release where it still existed.
 - **An integer expression may be sent on a channel of real, and passed to a
   real formal of a task.** Both were accepted by the front end and then
   refused by the assembler, 6.4.6 c)'s conversion never having been emitted.
+- **A failed write to a text file is reported.** `pas_write_padded` called
+  `fwrite` and ignored the result where the primitive beside it checked;
+  both go through one emitter now (ADR-0370).
+- **Two goldens pinned a platform rather than a program.** `lib_net_wait`'s
+  fixed which of a buffered line and a socket's reply a round saw first, and
+  `lib_net`'s fixed how many writes a closed connection takes to be refused —
+  two on Linux, more than a hundred on macOS, where they fit in a send buffer.
+  Both were found by macOS after passing on Linux for their whole lives.
+- **Four gates were asking about something other than what they said.**
+  `runtime-isoc`'s fifth strict compile spelled `clang` literally where the
+  other four honoured `APASCAL_CLANG`; `irtest` read neither `name.opt` nor
+  `AFTERSCHOOL_PASCAL_OPT`, so the fixed-point harness compiled at a level no
+  case had asked for; `runtime-coverage`'s two totals were written and never
+  compared, and had drifted; and `tls` reported its findings to nowhere.
 
 ## [3.7.0] - 2026-09-07
 
