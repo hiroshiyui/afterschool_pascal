@@ -502,15 +502,6 @@ begin
   else if EQ(name, 'i386-pc-linux-gnu') or EQ(name, 'i386-linux-gnu') or
           EQ(name, 'i386-unknown-linux-gnu') or EQ(name, 'i686-linux-gnu') or
           EQ(name, 'i686-pc-linux-gnu') then TargetIndex := tgtI386
-  { ADR-0371's fourth. Four spellings and they are all in use: mingw-w64's own
-    driver is `x86_64-w64-mingw32`, clang canonicalises that to
-    `x86_64-w64-windows-gnu`, and `-pc-` is what a person writes for both. The
-    module states the canonical one, as the aarch64 pair above does, so that
-    an over-ridden module raises no -Woverride-module. }
-  else if EQ(name, 'x86_64-w64-mingw32') or
-          EQ(name, 'x86_64-w64-windows-gnu') or
-          EQ(name, 'x86_64-pc-windows-gnu') or
-          EQ(name, 'x86_64-pc-mingw32') then TargetIndex := tgtWin64
   { ADR-0372's two. `arm64` and `aarch64` name one machine to clang and both
     are written by people, as `i386` and `i686` are above; `darwin` and
     `macosx` are the two spellings of the system, and a version suffix --
@@ -530,7 +521,6 @@ begin
     tgtX86: name := 'x86_64-pc-linux-gnu';
     tgtAarch64: name := 'aarch64-linux-gnu';
     tgtI386: name := 'i386-pc-linux-gnu';
-    tgtWin64: name := 'x86_64-w64-windows-gnu';
     tgtDarwinArm64: name := 'arm64-apple-macosx';
     tgtDarwinX86: name := 'x86_64-apple-macosx'
   end
@@ -10528,7 +10518,7 @@ end;
   recorded. #0 is `returns_twice`, without which LLVM may keep a value in a
   register across the call that the jump will not restore. }
 procedure JumpDispatch(p: symPtr);
-var frame, rec, env, arrived, fa: str; num: numPtr; bodyB: integer;
+var frame, rec, env, arrived: str; num: numPtr; bodyB: integer;
 begin
   if p^.nlLabels <> nil then begin
     FrameAt(p^.level, frame);
@@ -10537,40 +10527,24 @@ begin
     write(ircode, 'call ptr @pas_jump_env(ptr ');
     PutOp(rec);
     writeln(ircode, ')');
-    { **The one call whose *shape* is the target's** (ADR-0371). ISO C makes
-      `setjmp` a macro, so what a module can name is whatever that macro
-      expands to, and the two platforms disagree about its arity rather than
-      its spelling:
+    { **One shape, on every target this compiler admits** -- and it was two
+      (ADR-0371, ADR-0380). ISO C makes `setjmp` a macro, so what a module can
+      name is whatever that macro expands to, and the platforms need not agree
+      about its *arity*: on glibc and on Darwin `setjmp(x)` expands to
+      `_setjmp(x)`, and on Win64 it expanded to `_setjmp((x), frame)`, the
+      second argument being the frame SEH unwinds from. That target is gone
+      and every one that is left takes the buffer alone.
 
-        glibc, Darwin   setjmp(x)  ->  _setjmp(x)
-        Win64           setjmp(x)  ->  _setjmp((x), frame)
-
-      Windows unwinds through SEH, and the second argument is the frame the
-      unwinder walks from. Emitting the one-argument call there is a wrong
-      arity -- undefined behaviour with no diagnostic anywhere, which is
-      exactly the class doc/sop.md 7 records nothing here checks, LLVM not
-      comparing a direct call against a declaration under opaque pointers.
-
-      `llvm.frameaddress` is what supplies it, and it is the same frame
-      `_setjmp` is being called in the middle of -- the reason this call is
-      here and not behind a runtime wrapper (see above) is the same reason the
-      address is honest. }
-    if targetIx = tgtWin64 then begin
-      Def(fa);
-      writeln(ircode, 'call ptr @llvm.frameaddress.p0(i32 0)');
-      Def(arrived);
-      write(ircode, 'call i32 @_setjmp(ptr ');
-      PutOp(env);
-      write(ircode, ', ptr ');
-      PutOp(fa);
-      writeln(ircode, ') #0')
-    end
-    else begin
-      Def(arrived);
-      write(ircode, 'call i32 @_setjmp(ptr ');
-      PutOp(env);
-      writeln(ircode, ') #0')
-    end;
+      **`setjmp-arity` is what keeps this honest** rather than this comment: a
+      wrong arity is undefined behaviour with no diagnostic anywhere, LLVM not
+      comparing a direct call against a declaration under opaque pointers, so
+      the gate compiles a C probe with the real header for every admitted
+      target and requires this call and its `declare` to agree with it. A
+      target whose header disagrees fails there rather than here. }
+    Def(arrived);
+    write(ircode, 'call i32 @_setjmp(ptr ');
+    PutOp(env);
+    writeln(ircode, ') #0');
     bodyB := NewBlock;
     write(ircode, '  switch i32 ');
     PutOp(arrived);
@@ -11745,13 +11719,11 @@ begin
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
   writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');
-  { The declaration follows the call's shape, or the module names one
-    function with two signatures (ADR-0371). }
-  if targetIx = tgtWin64 then begin
-    writeln(ircode, 'declare i32 @_setjmp(ptr, ptr) #0');
-    writeln(ircode, 'declare ptr @llvm.frameaddress.p0(i32)')
-  end
-  else writeln(ircode, 'declare i32 @_setjmp(ptr) #0');
+  { The declaration follows the call's shape, and there is one shape again
+    since ADR-0380 took the only target that had another. `setjmp-arity`
+    compares both against the target's real header, so this line and
+    JumpDispatch's call cannot drift apart or away from the platform. }
+  writeln(ircode, 'declare i32 @_setjmp(ptr) #0');
   writeln(ircode, 'attributes #0 = { returns_twice }');
   { Every function this emitter defines carries #1 (ADR-0358). The two
     attributes are inert until clang runs the pass they name, and the pass
@@ -12171,19 +12143,6 @@ begin
                       'p271:32:32-p272:64:64-i128:128-f64:32:64-f80:32-',
                       'n8:16:32-S128"');
       writeln(ircode, 'target triple = "i386-pc-linux-gnu"')
-    end;
-    { ADR-0371, and taken the same way as the three above: clang's own line
-      for `x86_64-w64-mingw32`. It differs from tgtX86's in **one field** --
-      `m:w` where that says `m:e`, which is the symbol mangling Windows uses
-      and not a size or an alignment. Every offset this compiler computes is
-      therefore the same as tgtX86's, which is what makes `target-layout`'s
-      first claim -- that targets of one word size lay every frame out
-      identically -- true of it by construction rather than by luck. What is
-      *not* the same is `CLongSize`, and a C `long` is not a frame field. }
-    tgtWin64: begin
-      writeln(ircode, 'target datalayout = "e-m:w-p270:32:32-p271:32:32-',
-                      'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
-      writeln(ircode, 'target triple = "x86_64-w64-windows-gnu"')
     end;
     { ADR-0372, and clang's own lines for `arm64-apple-macosx` and
       `x86_64-apple-macosx`. Each differs from the Linux target of the same

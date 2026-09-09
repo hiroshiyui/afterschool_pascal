@@ -349,7 +349,8 @@ of the type to convert to and back from. `-maxint64..maxint64`, symmetric like
 integer type this language already has that a C `long` and a C `size_t` fit on
 the target — `int64` on x86-64 and aarch64, `integer` on i386 (AP 6.4.2.7,
 ADR-0328). **Two rather than one**, and the measurement is the argument: they
-agree on every admitted target and differ on Windows x64, which is LLP64. They
+agree on every admitted target and part company on any LLP64 one — Windows
+x64 was such a target until ADR-0380 dropped it. They
 exist so that an `external` heading naming a C routine is written once rather
 than per target; before them, `strlen('hello')` declared with `int64` answered
 21474836485 on i386.
@@ -778,13 +779,15 @@ program's own loads and stores.
 deliberate: a target is admitted when this compiler's own size and alignment
 rules have been compared against LLVM's for that machine, over every frame the
 emitter writes and over six record shapes, on every build (ADR-0157,
-ADR-0325). There are **six** — `x86_64-pc-linux-gnu`, `aarch64-linux-gnu`,
-`i386-pc-linux-gnu`, `x86_64-w64-windows-gnu` (ADR-0371) and the two Darwin
-triples (ADR-0372) — and every other is refused. It says nothing about the
-platform being *supported*: Windows is admitted and deferred (ADR-0374), and
-README's **Platform tiers** is where a user reads what each one means. Several
-gates enumerate the list from the compiler's own refusal rather than from a
-copy, so a seventh is compared without any of them being edited.
+ADR-0325). There are **five** — `x86_64-pc-linux-gnu`, `aarch64-linux-gnu`,
+`i386-pc-linux-gnu` and the two Darwin triples (ADR-0372) — and every other is
+refused. **Every one is POSIX** since ADR-0380 dropped `x86_64-w64-windows-gnu`,
+a target admitted on a measurement (ADR-0371) and deferred on one (ADR-0374).
+Admission still says nothing about a platform being *supported*: it is a claim
+about the module the compiler *writes*, and README's **Platform tiers** is
+where a user reads what each one means. Several gates enumerate the list from
+the compiler's own refusal rather than from a copy, so a sixth is compared
+without any of them being edited.
 
 **Golden test.** `tests/name.pas` plus `name.out`, the expected stdout of a
 program that must compile and exit 0 (ADR-0011). An optional `name.in` is fed

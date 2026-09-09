@@ -219,9 +219,17 @@ def check(cc, work):
         # file is one a reader cannot act on.
         ok, err = compiles(cc, src, ["-I", str(ROOT / "runtime"), "-O2"])
         status_found[name] = "compiles" if ok else "blocked"
-        if not ok and name in units and units[name] == "blocked":
+        if not ok and units.get(name, (None,))[0] == "blocked":
             # Shown, never parsed. A reader wants to know why; the claim
             # above rests on the exit status alone.
+            #
+            # `units[name]` is a pair -- the status and the CRT macro where
+            # there is one -- and this arm compared the pair against a string
+            # for the whole of its life, so it had never printed anything. It
+            # was found by a unit going backwards on purpose (ADR-0380) and
+            # the reason not being shown: *the reader wants to know why* was
+            # written down here and then not delivered, which is a comment
+            # describing a mechanism that is not there.
             head = "".join(err.splitlines(True)[:3]).rstrip("\n")
             if head:
                 print("runtime-nonposix: %s is blocked, and it begins:" % name)
@@ -320,10 +328,22 @@ def check(cc, work):
     n_crt = sum(1 for v, _ in units.values() if v == "crt")
     n_ok = len(units) - n_blocked - n_crt
     n_hdr = sum(len(v) for v in headers.values())
+    # **The headers are the whole of what is missing only when every blocked
+    # unit has one**, and that stopped being true when a unit came to be
+    # blocked by a *name* instead (ADR-0380): `pasrt.c` names `_longjmp`,
+    # which POSIX declares and this target does not, and no header probe can
+    # report that. Saying it the old way would have been a sentence the
+    # catalogue itself contradicts.
+    n_named = sum(1 for u, (v, _) in units.items()
+                  if v == "blocked" and not headers.get(u))
+    tail = ("are the whole of what this target has not got" if not n_named else
+            "are what this target has not got, and %d blocked unit(s) name "
+            "something it does not declare rather than wanting a header"
+            % n_named)
     print("runtime-nonposix: %s -- %d of %d translation unit(s) compile, %d "
           "want only a different C runtime, %d are blocked, and %d header(s) "
-          "across %d probe(s) are the whole of what this target has not got"
-          % (cc, n_ok, len(units), n_crt, n_blocked, n_hdr, probed))
+          "across %d probe(s) %s"
+          % (cc, n_ok, len(units), n_crt, n_blocked, n_hdr, probed, tail))
     return 0
 
 

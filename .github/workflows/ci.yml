@@ -213,17 +213,25 @@ jobs:
     # (ADR-0369) Every target this tree compiles the runtime for is
     # `*-linux-gnu`: `target-sizes` builds `runtime/*.c` for nine triples and
     # all nine are Linux, so nothing here noticed the runtime drifting further
-    # from a platform without those headers. doc/roadmap.md's Windows row was
-    # a measurement somebody took by hand once, and a row there is meant to be
-    # a report.
+    # from a platform without those headers.
+    #
+    # **The question is about the runtime, not about Windows** -- which is why
+    # this job survives ADR-0380 dropping that platform. mingw-w64 is the
+    # non-POSIX toolchain Debian packages, so it is the one that can ask; what
+    # it answers about is whether `runtime/*.c` still depends only on what
+    # each unit is allowed to depend on. The answer moved when Windows was
+    # dropped: `pasrt.c` names `_longjmp` unconditionally now, so it is
+    # catalogued `blocked` here, on purpose and with the argument in
+    # `nonposix_headers.txt`.
     #
     # A job of its own for `unicode-conformance`'s reason: a red bar should
     # name the question. This one is cheap -- four translation units and 34
     # one-line header probes, under a second -- so it is not here for time,
-    # it is here so that "the runtime stopped compiling for Windows" is a job
-    # name and not a line inside the suite.
+    # it is here so that "the runtime stopped being portable" is a job name
+    # and not a line inside the suite.
     #
-    # **It builds, since ADR-0371.** It did not, and the comment here said so:
+    # **It builds a compiler, since ADR-0371.** It did not, and the comment
+    # here said so:
     # `runtime_nonposix.py` compiles C and nothing else. `setjmp_arity.py` is
     # the second question about this platform and it needs the compiler under
     # test, half of what it compares being a Pascal probe -- so the build
@@ -234,8 +242,8 @@ jobs:
     # the other way first.** Installing mingw-w64 in the container matrix job
     # made `runtime-nonposix` run there too, against a *different* mingw-w64 --
     # and Ubuntu 24.04's has `_longjmp` where Debian trixie's has not, so the
-    # catalogue's `blocked` row for `runtime/pasrt.c` was true on one image and
-    # false on the other. One question, one toolchain, one image.
+    # catalogue's row for `runtime/pasrt.c` was true on one image and false on
+    # the other. One question, one toolchain, one image.
     name: the runtime on a target that is not POSIX
     runs-on: ubuntu-latest
     container: 'debian:trixie'
@@ -274,13 +282,16 @@ jobs:
         env:
           SETJMP_ARITY_REQUIRE: '1'
         run: python3 tests/checks/setjmp_arity.py
-        # ADR-0371. `setjmp-arity` runs as a ctest case everywhere and
-        # compares what the local clang has headers for; without a mingw-w64
-        # sysroot that is the Linux targets alone, which all want one
-        # argument, so the comparison is true and says nothing about
-        # *target-dependence*. This is the job with the cross toolchain, so it
-        # is the job that can demand two arities among whatever was compared
-        # (ADR-0330).
+        # ADR-0371, and ADR-0380 changed what the variable means here.
+        # `setjmp-arity` runs as a ctest case everywhere and compares what the
+        # local clang has headers for. While Win64 was admitted this was the
+        # job with its cross toolchain, so it was the job that could demand
+        # *two arities* among whatever was compared -- the claim that made the
+        # comparison about target-dependence rather than about one platform.
+        # Every admitted target is POSIX now and every one takes the buffer
+        # alone, so what the variable demands is that something was compared:
+        # a skip here is a job that asked nothing (ADR-0330), and the claim it
+        # is protecting is each target against its own header.
 
   fpc-differential:
     # The other oracle nobody here wrote (ADR-0234), and the only one that is a
@@ -905,9 +916,9 @@ jobs:
     # built here names the machine it is for. It did not: it said
     # `x86_64-pc-linux-gnu` and clang overrode the header when it assembled,
     # as the aarch64 job still relies on. That also took `setjmp-arity` off
-    # this list -- it had nothing to compare here, every admitted target being
-    # a Linux or a Windows triple with no Apple sysroot, and the host target
-    # is comparable now. It was the only skip on this list that a change to
+    # this list -- it had nothing to compare here, every admitted target then
+    # being a Linux or a Windows triple with no Apple sysroot, and the host
+    # target is comparable now. It was the only skip on this list that a change to
     # the compiler could close, and this is the change.
     #
     # The release-matrix leg stays disabled: a platform is run before it is

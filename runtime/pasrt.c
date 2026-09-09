@@ -1992,36 +1992,24 @@ void pas_jump_done(void *v) {
   j->active = 0;
 }
 
-/* **The one conditional in this runtime, and it is catalogued** (ADR-0373).
+/* **This runtime holds no preprocessor conditional, and that is a claim**
+ * `runtime-isoc` checks in both directions (ADR-0373, ADR-0380).
  *
- * The emitted module calls `_setjmp`, and what pairs with it is the jump that
- * does *not* restore a signal mask -- `_longjmp` where POSIX declares one.
- * mingw-w64 declares none: its `<setjmp.h>` has `longjmp`, `_longjmpex` for
- * i386 and `__mingw_longjmp` for arm, and nothing spelled `_longjmp`. There
- * `longjmp` is the counterpart, its `setjmp` macro expanding to the same
- * two-argument `_setjmp` the emitter writes for that target (ADR-0371).
+ * It held exactly one, for a year of increments and for one week: the emitted
+ * module calls `_setjmp`, what pairs with it is the jump that does *not*
+ * restore a signal mask, and POSIX spells that `_longjmp` where mingw-w64
+ * spelled it `longjmp` and declared no `_longjmp` at all. No portable
+ * spelling exists in either direction -- `longjmp` everywhere works on glibc,
+ * whose buffer carries a flag, and breaks on Darwin, where it would restore a
+ * mask `_setjmp` never saved -- so the choice was a `#if` and a catalogue
+ * row. ADR-0380 dropped the target rather than the rule, and the row went
+ * with it.
  *
- * The portable spelling is not available in either direction. Calling
- * `longjmp` everywhere works on glibc -- measured, and no mask is restored,
- * because glibc's reads a flag the buffer carries -- and breaks on Darwin,
- * where the BSD rule is the opposite and `longjmp` would restore a mask
- * `_setjmp` never saved.
- *
- * **Why this is a `#if` and not a split** is the bootstrap: the committed
- * seed declares and calls `@pas_jump_go`, so moving the jump into the code
- * the compiler emits
- * -- which is where `_setjmp` already lives, and would be the tidier shape --
- * cannot land without an out-of-cycle reseed. That is a release operation and
- * this is not a release.
- *
- * `runtime-isoc` holds the set of conditionals in this runtime against a
- * catalogue, both directions, so a second one is a decision and not a habit.
+ * Every target this compiler admits is POSIX and declares `_longjmp`, so it
+ * is named here directly. A target that does not is a decision with a record,
+ * and the empty catalogue is what makes that unavoidable.
  */
-#if defined(_WIN32)
-#  define PAS_LONGJMP longjmp
-#else
-#  define PAS_LONGJMP _longjmp
-#endif
+#define PAS_LONGJMP _longjmp
 
 /* The jump itself. `id` is the label's number plus one, because the jump
  * with zero would arrive at the `_setjmp` looking like the ordinary entry. */

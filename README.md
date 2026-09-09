@@ -379,7 +379,8 @@ M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
 by default, then `aarch64-linux-gnu`, `i386-pc-linux-gnu`,
-`x86_64-w64-windows-gnu`, `arm64-apple-macosx` and `x86_64-apple-macosx`.
+`arm64-apple-macosx` and `x86_64-apple-macosx`. **Every one is POSIX**
+(ADR-0380).
 `pascalcc` hands it to `clang` as well, so with a cross toolchain installed it
 cross-compiles:
 
@@ -396,16 +397,13 @@ Pentium III and earlier; a caller who wants the x87 back can name
 
 Any other target is refused. The list is short because each entry is a claim
 that this compiler's own size and alignment rules have been compared against
-LLVM's for that machine, which has been done for those six and no others —
+LLVM's for that machine, which has been done for those five and no others —
 and the comparison is re-run on every build, over every frame size and field
 offset the compiler emits, and against LLVM's own answer for six record shapes.
 
-**Naming a target is not the same as supporting the platform.** The three
-Linux triples are what every gate runs on; the two Darwin ones say the emitted
-module is right for macOS, and one of them ships an archive; and
-`x86_64-w64-windows-gnu` is admitted because the arithmetic was compared and
-the non-local goto measured, with the platform itself *deferred* (ADR-0374).
-**Platform tiers** below says what each of those means to a user.
+The three Linux triples are what every gate runs on; the two Darwin ones say
+the emitted module is right for macOS, and one of them ships an archive.
+**Platform tiers** below says what each means to a user.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
@@ -443,9 +441,14 @@ system's own directories, so what is attached is a compiler a user can move.
 
 **Everything else is unsupported, and contributions are very welcome.**
 Windows, FreeBSD, OpenBSD, NetBSD and Haiku — practical compatibility work on
-any of them, from anyone who wants to run it there. Windows is *deferred*
-rather than untried (ADR-0374), which means the measurements below are real
-and current.
+any of them, from anyone who wants to run it there.
+
+**Windows was measured and then dropped** (ADR-0380): a program was built and
+run under wine, and what remained was a frame-layout change compared across
+every target plus seven headers of winsock — a body of work for a platform
+nobody here runs. It is not a target the compiler names any more, and the
+measurements below are kept because a contributor who wants it should start
+from them rather than from nothing.
 
 What a contributor starts from is measurement rather than guesswork, which is
 the point of the machinery below:
@@ -460,11 +463,15 @@ the point of the machinery below:
   the answers are pinned to one toolchain on purpose: two mingw-w64 versions
   disagreed about a name and the catalogue said so.
 - **`doc/adr/0369` to `0374`** are the working, in order, and ADR-0374 carries
-  the commands that build and run a Windows program end to end.
+  the commands that build and run a Windows program end to end; ADR-0380 is
+  the decision that followed them.
 
-**The shape of a port, measured against mingw-w64:** `runtime/pasrt.c` and
-`runtime/pasrt_unicode.c` compile; `runtime/pasrt_task.c` wants only the
-platform's modern C runtime; `runtime/pasrt_posix.c` is the POSIX half and
+**The shape of a port, measured against mingw-w64:**
+`runtime/pasrt_unicode.c` compiles, which is the whole of the text model;
+`runtime/pasrt_task.c` wants only the platform's modern C runtime;
+`runtime/pasrt.c` compiled until ADR-0380 and now names `_longjmp`, which
+POSIX declares and that target does not — one line, and the catalogue records
+it going backwards on purpose; `runtime/pasrt_posix.c` is the POSIX half and
 wants seven headers — sockets, the terminal and `posix_spawn`. Ten of the
 seventeen it names are already there, so the directory walk, the file
 information and the file model are *not* what is missing. Whether a first port
@@ -673,9 +680,11 @@ type TimeSpec = record sec, nsec: clong end;   { a time_t beside a long }
 
 They are required identifiers a program may shadow, like `int64`, and they add
 no type — each *is* `integer` or `int64` on any given target. **Two names and
-not one**: they agree on every target this compiler emits for and differ on
-Windows x64, where a `long` is 4 bytes beside an 8-byte pointer. `csize` is
-also `ssize_t`, `ptrdiff_t` and `intptr_t`. To get an `integer` out of one,
+not one**: they agree on every target this compiler emits for and part company
+on any LLP64 one, where a `long` is 4 bytes beside an 8-byte pointer — Windows
+x64 was such a target here until ADR-0380, and writing `csize` where `clong`
+was meant was right on all five that are left and would be wrong on the next
+one. `csize` is also `ssize_t`, `ptrdiff_t` and `intptr_t`. To get an `integer` out of one,
 widen and then narrow — `n: int64; n := strlen(s); ... trunc(n)` — which is one
 spelling on every target.
 
@@ -2701,7 +2710,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 917 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 916 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

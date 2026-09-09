@@ -2,8 +2,13 @@
 
 ## Status
 
-Accepted. Records what running a Windows program measured, and defers the
-platform. Follows ADR-0369 through ADR-0373, every one of which asserted that
+**Superseded by [ADR-0380](0380-the-target-is-posix.md)**, which drops
+Windows rather than deferring it. What this record *measured* is unaffected and
+is the reason that decision could be taken with its cost known; what is
+superseded is the disposition.
+
+Accepted as written. Records what running a Windows program measured, and
+defers the platform. Follows ADR-0369 through ADR-0373, every one of which asserted that
 something *compiles*.
 
 ## Context

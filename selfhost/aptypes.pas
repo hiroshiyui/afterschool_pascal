@@ -46,7 +46,7 @@ export ApTypes = (
   textWidth, nounParamForm, nounVarType, nounPointerDomain, kwCount, reqProcCount, nul,
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
-  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtWin64, tgtDarwinArm64,
+  fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtDarwinArm64,
   tgtDarwinX86, targetIx, PtrSize,
   WordAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
@@ -309,7 +309,8 @@ const
   fileSize = 120;
   { ISO 7185 says nothing about a machine; this compiler has to. `--target=`
     selects which triple and datalayout the emitted module states, and the list
-    is **two entries long on purpose** (ADR-0156).
+    is short on purpose (ADR-0156), and every entry is a POSIX platform
+    (ADR-0380).
 
     A target belongs here when this compiler's own layout rules -- LlSize and
     LlAlign, which are hand-written because there is no DataLayout to ask --
@@ -325,7 +326,7 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 6;
+  tgtCount = 5;
   tgtX86 = 1;
   tgtAarch64 = 2;
   { ADR-0325's third, and the first that is not LP64. What made it admissible
@@ -334,21 +335,7 @@ const
     and `target-layout` compares this compiler's own arithmetic against LLVM's
     for every admitted target rather than one target against another. }
   tgtI386 = 3;
-  { ADR-0371's fourth, and the first that is **LLP64**: a pointer is eight
-    bytes and a C `long` is four, a combination the three above do not have
-    (i386 is ILP32 and the other two LP64). `CLongSize` below is what that
-    costs and it is one line, the foreign boundary having been given `clong`
-    and `csize` by ADR-0328 precisely so a binding can say "whatever this
-    target's is" rather than a number.
-
-    It is also the first target admitted for a platform this tree cannot
-    *run*: `runtime-nonposix` (ADR-0369) says what the runtime still needs
-    there. What makes it admissible anyway is that a target is a claim about
-    the module the compiler *writes* -- `target-layout` compares this
-    compiler's arithmetic against LLVM's for every admitted target, and `llc`
-    assembles the result, neither of which needs a Windows to run on. }
-  tgtWin64 = 4;
-  { ADR-0372's fifth and sixth, and the first for a platform this tree
+  { ADR-0372's fourth and fifth, and the first for a platform this tree
     **runs**. macOS is a job that can fail (ADR-0368) and every module built
     there said `x86_64-pc-linux-gnu`: clang overrides the header when it
     assembles, as the aarch64 job also relies on, so a program links and runs
@@ -358,9 +345,20 @@ const
 
     Both are LP64, so `PtrSize`, `WordAlign` and `CLongSize` are untouched;
     what differs from the Linux targets of the same word size is `m:o`, the
-    Mach-O symbol mangling, which is not a size. }
-  tgtDarwinArm64 = 5;
-  tgtDarwinX86 = 6;
+    Mach-O symbol mangling, which is not a size.
+
+    **Every target here is POSIX** (ADR-0380). `x86_64-w64-windows-gnu` was
+    the fourth for a while and is gone: it was admitted on a measurement
+    (ADR-0371) and deferred on one (ADR-0374), and what removed it is a
+    decision about what this project is for rather than a further
+    measurement. What it cost while it was here is worth knowing before
+    anybody adds a sixth -- it was the only LLP64 target, so `CLongSize`
+    below had two arms; it was the only target whose `_setjmp` takes a second
+    argument, so `JumpDispatch` and its `declare` each had one; and it was
+    the reason `runtime/pasrt.c` held the only preprocessor conditional in
+    the runtime. All three are gone with it. }
+  tgtDarwinArm64 = 4;
+  tgtDarwinX86 = 5;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.
@@ -4452,12 +4450,13 @@ end;
 
 function CLongSize;
 begin
-  { Two targets and not one: i386 is ILP32 and Win64 is LLP64, and what they
-    share is a four-byte `long`. It is the *only* thing tgtWin64 changes about
-    this compiler's arithmetic -- its pointers and its word alignment are the
-    other two LP64 targets' (ADR-0371). }
-  if (targetIx = tgtI386) or (targetIx = tgtWin64) then CLongSize := 4
-  else CLongSize := 8
+  { One target and not two, since ADR-0380 removed the only LLP64 one: every
+    target here is LP64 but i386, which is ILP32, and a C `long` is four bytes
+    there and eight everywhere else. It is asked separately from PtrSize
+    because the two came apart once -- Win64 had eight-byte pointers and a
+    four-byte `long` -- and a boundary that says `clong` rather than a number
+    (ADR-0328) is what made that one line rather than an audit. }
+  if targetIx = tgtI386 then CLongSize := 4 else CLongSize := 8
 end;
 
 function FileIndexOf;

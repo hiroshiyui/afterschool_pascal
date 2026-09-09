@@ -382,9 +382,10 @@ the alternatives that were rejected and why.
 | [0371](0371-the-emitter-learns-its-target-for-one-call.md) | The emitter learns its target for one call | Accepted |
 | [0372](0372-macos-is-a-target-the-compiler-names.md) | macOS is a target the compiler names | Accepted |
 | [0373](0373-one-conditional-and-it-is-catalogued.md) | One conditional, and it is catalogued | Accepted |
-| [0374](0374-windows-runs-and-is-deferred.md) | Windows runs, and Windows is deferred | Accepted |
+| [0374](0374-windows-runs-and-is-deferred.md) | Windows runs, and Windows is deferred | Superseded by [0380](0380-the-target-is-posix.md) |
 | [0375](0375-macos-ships-an-archive.md) | macOS ships an archive | Accepted |
 | [0376](0376-one-symbol-one-signature.md) | One symbol, one signature | Accepted |
 | [0377](0377-a-link-is-followed-by-nobody.md) | A link is followed by nobody | Accepted |
 | [0378](0378-a-sweep-runs-a-case-the-way-the-suite-does.md) | A sweep runs a case the way the suite does | Accepted |
 | [0379](0379-a-number-a-document-quotes-is-a-gates-answer.md) | A number a document quotes is a gate's answer | Accepted |
+| [0380](0380-the-target-is-posix.md) | The target is POSIX | Accepted |

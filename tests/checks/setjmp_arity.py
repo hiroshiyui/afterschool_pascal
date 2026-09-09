@@ -22,22 +22,28 @@ library gives it? (ADR-0371)
 other symbol in it is `pas_*` or an LLVM intrinsic (`foreign-reserved`,
 ADR-0121). It is there because ISO C makes `setjmp` a *macro* whose expansion
 must appear in a very restricted set of contexts, so what a module can name is
-whatever that macro expands to; and the platforms this compiler admits
-disagree about its **arity** rather than its spelling:
+whatever that macro expands to -- and platforms need not agree about its
+**arity**, nor even about whether it is a macro:
 
     glibc           setjmp(x)  ->  _setjmp(x)          a macro
-    Win64           setjmp(x)  ->  _setjmp((x), frame)  a macro, and SEH
     Darwin          _setjmp(x)                          a function of its own,
                                                         beside setjmp
+    Win64           setjmp(x)  ->  _setjmp((x), frame)  a macro, and SEH
+                                                        -- no longer admitted
+                                                        (ADR-0380)
 
-Windows unwinds through SEH and the second argument is the frame the unwinder
-walks from. Emitting the one-argument call there is a wrong arity, which is
-undefined behaviour with **no diagnostic anywhere**: LLVM does not compare a
-direct call against a declaration under opaque pointers, so the module
-verifies, assembles and links, and the defect is a corrupted unwind at run
-time on a platform this tree cannot run. That is `doc/sop.md` §7's row about
-an `external` declaration nobody checks, arrived at from the other side --
-here the declaration is one this compiler *writes*.
+Emitting the wrong arity is undefined behaviour with **no diagnostic
+anywhere**: LLVM does not compare a direct call against a declaration under
+opaque pointers, so the module verifies, assembles and links, and the defect
+is a corrupted unwind at run time. That is `doc/sop.md` §7's row about an
+`external` declaration nobody checks, arrived at from the other side -- here
+the declaration is one this compiler *writes*.
+
+**Every admitted target agrees today, and the check is not therefore idle.**
+Win64 was the one that disagreed and it is gone, so what this compares is no
+longer *two platforms against each other* but **each platform against its own
+header** -- which is the claim that was always load-bearing, and the one a
+sixth target would falsify without anybody noticing.
 
 So it is checked the way `foreign-layout` checks a record: **the source states
 a claim, a C compiler holding the real header judges it.** For every target
@@ -58,18 +64,15 @@ installed fails cleanly -- `'setjmp.h' file not found` -- rather than falling
 back to the host's header and answering about the wrong C library, which was
 checked before this was relied on.
 
-**The floor that the answers are not all the same is therefore conditional.**
-A gate comparing three targets that happen to agree proves nothing about
-target-dependence -- but on a machine with no mingw-w64 the only target with
-the other arity is precisely the one that cannot be compared, so demanding it
-everywhere would fail for want of a cross toolchain rather than for a defect.
-`SETJMP_ARITY_REQUIRE` is what demands it, and the container job that builds
-and runs the suite is where it is set, that job installing mingw-w64 for this
-and nothing else (ADR-0330).
-Without it this compares what it can and says what it could not.
+**`SETJMP_ARITY_REQUIRE` demands that something was compared**, and no more.
+It demanded *two distinct arities* while a target existed that had the other
+one; ADR-0380 removed it, and a floor that could only be met by re-admitting a
+platform nobody runs is a floor that would be met by editing the target list
+rather than by checking anything.
 
-Skips (77) without clang. Not without a target: the compiler names its own,
-so a fifth is compared without this file being edited (ADR-0144).
+Skips (77) without clang, and where clang has the headers for no admitted
+target. Not without a target: the compiler names its own, so a sixth is
+compared without this file being edited (ADR-0144).
 """
 
 import os
@@ -243,41 +246,38 @@ def check(work, require):
         # The three positions a runner is in, written down because reasoning
         # about one machine is how this check was wrong twice:
         #
-        #   Linux with mingw-w64   all four compared, and SETJMP_ARITY_REQUIRE
-        #                          demands two arities among them
-        #   Linux without it       the three Linux targets compared and in
-        #                          agreement; it says which it could not reach
-        #   macOS                  **none**: every admitted target is a Linux
-        #                          or a Windows triple and Apple clang has a
-        #                          sysroot for neither, so it skips
-        #
-        # The third is why this arm exists. It is also the sharpest argument
-        # for admitting a Darwin triple, which would make the host target
-        # comparable there (doc/sop.md 7).
+        #   Linux                  the targets whose headers are installed,
+        #                          and it names the ones it could not reach
+        #   macOS                  the host Darwin target, since ADR-0372
+        #                          admitted the two triples that made it
+        #                          comparable there -- before them Apple
+        #                          clang had a sysroot for no admitted target
+        #                          and this arm was taken on every run
         if require:
             fails.append("SETJMP_ARITY_REQUIRE is set and clang has the "
                          "headers for none of the admitted targets, so this "
                          "job asked nothing")
         else:
             print("setjmp-arity: skipped, clang here has the headers for "
-                  "none of the %d admitted target(s) -- every one is a Linux "
-                  "or a Windows triple" % len(rows))
+                  "none of the %d admitted target(s)" % len(rows))
             return 77
-    elif require:
-        # **The discriminating claim, and it is the only thing required.**
-        # Not that every admitted target be comparable: no job guarantees a
-        # sysroot for all of them, and the container that sets this variable
-        # installs cross libcs for aarch64 and armhf and none for i386 -- so
-        # demanding reachability failed there for want of a toolchain nobody
-        # had asked for, which is this check's own mistake made a second time
-        # (ADR-0330). What the variable is for is that *two arities* were
-        # seen, which is the whole of what makes the comparison about
-        # target-dependence rather than about one platform.
-        if len(seen) < 2:
-            fails.append("every compared target wanted %d argument(s), so "
-                         "nothing here exercised the target-dependence this "
-                         "gate exists for. If a target with the other arity "
-                         "was removed, this check goes with it" % seen.pop())
+    # **What the variable demands is that something was compared, and no
+    # more.** It demanded *two distinct arities* until ADR-0380, which was the
+    # discriminating claim while a target existed whose `_setjmp` took a second
+    # argument -- Win64's, through SEH. That target is gone and every one left
+    # takes the buffer alone, so the floor would now be a demand this tree
+    # cannot meet and would have to be met by re-admitting a platform nobody
+    # runs. The check's own comment named this: *if a target with the other
+    # arity was removed, this check goes with it*. It does not go. What it
+    # claims is the half that was always the point -- **the emitted call and
+    # its `declare` agree with the real header of each target clang can answer
+    # for** -- and a wrong arity is undefined behaviour with no diagnostic
+    # whether or not any two targets disagree.
+    #
+    # Not requiring reachability of *every* admitted target is deliberate and
+    # was learned: no job guarantees a sysroot for all of them, and the
+    # container that sets this variable has cross libcs for aarch64 and armhf
+    # and none for i386 (ADR-0330).
 
     for t, want, got, decls in rows:
         if want is None:
@@ -294,14 +294,10 @@ def check(work, require):
             print("        " + f, file=sys.stderr)
         return 1
 
-    note = ""
-    if len(seen) < 2 and not require:
-        note = (" -- no target with a differing arity could be reached here, "
-                "so the `non-posix` job is where that half is required")
     print("setjmp-arity: %d of %d admitted target(s) compared, %d distinct "
           "arit(ies), every emitted call and declaration matching what clang "
-          "says `_setjmp` takes there%s"
-          % (len(compared), len(rows), len(seen), note))
+          "says `_setjmp` takes there"
+          % (len(compared), len(rows), len(seen)))
     return 0
 
 

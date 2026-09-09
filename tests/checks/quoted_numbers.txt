@@ -33,4 +33,8 @@ CLAUDE.md   | sanitize[address]  | green at a level it had not asked for — (\d
 CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify
 CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
 doc/roadmap.md | ctest           | the suite is (\d+) cases green
-doc/roadmap.md | runtime-nonposix | so (seven) come back where the compile reported one
+
+# The roadmap's Windows row quoted the same seven and had a row here; ADR-0380
+# moved that row to `doc/history.md` whole, and a number a *record* quotes is
+# out of scope on purpose -- history says what was found then. README's
+# sentence above is the live one.

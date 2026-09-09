@@ -56,7 +56,21 @@
 # pasrt_unicode.c compiling clean is the whole of AP 6.4.15 -- normalisation
 # and grapheme segmentation over tables, and nothing else. It is the one unit
 # a port gets for free, and it is measured here rather than hoped for.
-unit  pasrt.c            compiles
+#
+# **pasrt.c compiled here for one week and no longer does, and that is a
+# decision rather than a regression** (ADR-0380). It reaches the non-local
+# goto's jump through `_longjmp`, which POSIX declares and mingw-w64 does not;
+# ADR-0373 bought this row with the runtime's only preprocessor conditional,
+# and dropping Windows as a target bought the conditional back. The row is
+# `blocked` because that is what is true, and the gate prints the first lines
+# of the diagnostic beside it so the reason is read rather than remembered.
+#
+# It is worth being plain about what that costs, since a row moving backwards
+# is exactly what this catalogue exists to make impossible to do quietly:
+# **the runtime's ISO C unit is no longer portable to a target whose C library
+# declares no `_longjmp`.** Every target this compiler admits declares one. A
+# port to one that does not gets the conditional back, with a record.
+unit  pasrt.c            blocked
 unit  pasrt_posix.c      blocked
 unit  pasrt_task.c       crt _UCRT
 unit  pasrt_unicode.c    compiles

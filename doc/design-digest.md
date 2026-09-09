@@ -102,7 +102,8 @@ own exception and compare by length instead.
   denoting `int64` or `integer` by target, `int64`'s route exactly (ADR-0128),
   and they **introduce no type**: no predicate gains a case and CodeGen never
   hears of them. **Two and not one**, measured rather than reasoned — they
-  agree on every admitted target and differ on Windows x64, which is LLP64.
+  agree on every admitted target and part company on any LLP64 one, which
+  Windows x64 was until ADR-0380 dropped it.
   `csize` covers `size_t`, `ssize_t`, `ptrdiff_t` and `intptr_t`, one width on
   every admitted target; `time_t` and `off_t` ride on `clong` and are not
   required to, which the clause says rather than leaving to be found. The
@@ -128,25 +129,30 @@ own exception and compare by length instead.
   `PAS_SELECT_ARM_SIZE`, and the compiler wrote that arm's fourth field at a
   literal 16 where i386 puts it at 12. `target32` is the gate that exists
   because `target-layout` passed with both in place.
-- **And one call's shape is the target's** (ADR-0371, ADR-0372). `_setjmp` is
-  the only foreign function the emitted module names, and the platforms
-  disagree about its *arity* rather than its spelling: `setjmp(x)` expands to
-  `_setjmp(x)` on glibc and Darwin and to `_setjmp((x), frame)` on Win64,
-  which unwinds through SEH. So `JumpDispatch` and the `declare` beside it each
-  have an arm keyed on `targetIx`, the Win64 arm taking
-  `llvm.frameaddress.p0(i32 0)` — the first target difference that reaches
-  past the two lines at the top of the module. A wrong arity is undefined
+- **And one call's shape can be the target's** (ADR-0371, ADR-0372,
+  ADR-0380). `_setjmp` is the only foreign function the emitted module names,
+  and platforms need not agree about its *arity*: `setjmp(x)` expands to
+  `_setjmp(x)` on glibc, `_setjmp` is a function of its own beside `setjmp` on
+  Darwin, and on Win64 it expanded to `_setjmp((x), frame)`, which unwinds
+  through SEH. So `JumpDispatch` and the `declare` beside it each grew an arm
+  keyed on `targetIx`, the Win64 one taking `llvm.frameaddress.p0(i32 0)` —
+  the first target difference reaching past the two lines at the top of the
+  module, and the only one there has ever been. A wrong arity is undefined
   behaviour with no diagnostic, LLVM not comparing a direct call against its
   declaration under opaque pointers, so `setjmp-arity` holds the emitted arity
   against what clang makes of the real `<setjmp.h>` for every target it has
-  headers for. **Win64 is also the first admitted target that is LLP64** — a
-  pointer of eight bytes with a four-byte C `long` — which is one line in
+  headers for. **Win64 was also the only admitted target that was LLP64** — a
+  pointer of eight bytes with a four-byte C `long` — which was one line in
   `CLongSize` and no more, because ADR-0328 had already given the boundary
   `clong` and `csize`. ADR-0372 then admitted `arm64-apple-macosx` and
-  `x86_64-apple-macosx`, which took the count to six targets and made the
-  arity comparable on the macOS runner: Darwin's `setjmp` is a *function* with
-  `_setjmp` beside it rather than a macro naming it, which is a reading the
-  gate had taken from glibc and would have got wrong.
+  `x86_64-apple-macosx`, which made the arity comparable on the macOS runner:
+  Darwin's `setjmp` is a *function* with `_setjmp` beside it rather than a
+  macro naming it, a reading the gate had taken from glibc and would have got
+  wrong. **ADR-0380 then dropped Windows**, and with it both arms, the LLP64
+  case and the runtime's only preprocessor conditional — five targets, every
+  one POSIX, and `_setjmp` back to one shape. What survives is the
+  *mechanism*: the gate still compares each target against its own header, so
+  a sixth that disagrees is caught rather than admitted.
 - **A type's storage is a fact about the source program** (ADR-0287), so the
   layout arithmetic lives in ApFront and not in CodeGen, and a size is an
   `int64`. It answered a Pascal `integer` until a channel of an 8 GB element
@@ -3739,15 +3745,17 @@ per unit against `nonposix_headers.txt`, both directions.
   which is the same claim from the other side — a POSIX name in the ISO C unit
   is a name the catalogue above could not have caught, because that unit's
   bound is its *functions* and these were included by a header it may use.
-- **One preprocessor conditional exists in the whole runtime and it is
-  catalogued** (ADR-0373): the non-local goto reaches its jump through
-  `_longjmp` where POSIX declares one and `longjmp` where it does not,
-  mingw-w64 having none. No portable spelling exists — `longjmp` after
+- **No preprocessor conditional exists in the whole runtime, and the empty
+  catalogue is the claim** (ADR-0373, ADR-0380). `runtime-isoc` compares the
+  set of `#if`/`#ifdef`/`#ifndef` conditions across all four units against
+  `nonstandard_c.txt` in both directions, so adding one is a decision with a
+  record. Exactly one existed, for a week: the non-local goto reaches its jump
+  through `_longjmp` where POSIX declares one and `longjmp` where it does not,
+  mingw-w64 having none, and no portable spelling exists — `longjmp` after
   `_setjmp` works on glibc and would restore on Darwin a mask that was never
-  saved — so the choice is a decision, and `runtime-isoc` compares the set of
-  `#if`/`#ifdef`/`#ifndef` conditions across all four units against
-  `nonstandard_c.txt` in both directions. A second conditional is therefore a
-  record and not a patch.
+  saved. Dropping Windows as a target bought it back, at the price of one row
+  in `nonposix_headers.txt` going backwards on purpose: `pasrt.c` is
+  `blocked` for mingw-w64 now, because it names `_longjmp`.
 
 **A foreign answer of a record is a copy** (ADR-0187, AP 6.7.7.8). The last row
 under the roadmap's "What each landed feature left open", which carried this

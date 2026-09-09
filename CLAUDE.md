@@ -360,7 +360,7 @@ that proved it.
 | `long-path` | a path a harness builds, and the compiler | can this compiler open a file whose path is longer than a name? (ADR-0291) — no oracle here could see this, because **no test case can choose its own path**: every case is compiled where it sits and every path a harness passes is short |
 | `foreign-width` | `tests/checks/foreign_int64.txt`, `tests/checks/foreign_repeats.txt`, and a probe compiled per target | is every foreign scalar the width of its C type, and does every symbol have one signature? (ADR-0364) — `time` bound as `int64` answered 7682741216296735854 on CI's i386 container and the right epoch here, the high word being whatever the spare register held, so **no behavioural case can hold this** and the mutation putting `int64` back survived. What is held is the *declaration*: every `external` under `lib/` and `lsp/` naming `int64` carries a catalogued C type that is 64 bits everywhere, both directions; and the emitter's own slice count is read back from the IR on each admitted target — `ptr, i32` on i386. **A second claim since ADR-0376**: a C function declared in more than one module under those roots must have one *representation* or a catalogued argument — compared by representation and not by spelling, two modules legitimately naming one C type differently, and resolved across the tree because a module that *imports* a handle type names it without declaring it |
 | `command-injection` | a path the language server is *given*, and a marker file | is a path still only a path? (ADR-0362) — `lsp/pasls.pas` built a shell command and quoted the source with apostrophes, so a file named `a'; touch PWNED; echo '.pas` ran the command in its own name, over LSP from an editor and over MCP from whatever drives the model. `long-path`'s argument a fourth time: **no test case can choose how it is named**. Both directions — a payload that runs is the defect, and a payload path that stops *compiling* is the other half, which is exactly what answering it with cleverer quoting would fail. Since ADR-0363 it holds two more claims from the audit: a path holding `chr(0)` is refused **without ending the session**, and a spy compiler must see the server's scratch files in one private `pasls-XXXXXX` directory *while it runs*, with `TMPDIR` empty after `exit` |
-| `setjmp-arity` | the compiler's own `--target=` refusal, and clang | does the `_setjmp` this compiler emits have the arity the target's C library gives it? (ADR-0371) — it is **the one foreign function the emitted module names**, and the platforms disagree about its *arity* rather than its spelling: `setjmp(x)` expands to `_setjmp(x)` on glibc and Darwin and to `_setjmp((x), frame)` on Win64, which unwinds through SEH. A wrong arity is undefined behaviour with no diagnostic, LLVM not comparing a direct call against its declaration under opaque pointers. `foreign-layout`'s mechanism — the source states a claim and a C compiler holding the real header judges it — over every admitted target, with the module's own `declare` required to agree with its calls. A target is compared only where clang has that target's headers, asking for an absent sysroot failing cleanly rather than answering about the host's C library. **The floor that the answers are not all the same is therefore conditional** — the three Linux targets agree, and on a machine with no mingw-w64 the one target with the other arity is exactly the one that cannot be compared; `SETJMP_ARITY_REQUIRE` demands it, and the container job that builds and runs the suite sets it, installing mingw-w64 for this and nothing else. Skips 77 where clang can answer for **no** admitted target. That was macOS until ADR-0372 admitted the two Darwin triples and made the host target comparable there — which is where the arity of `_setjmp` is checked against Darwin's own header, `setjmp` being a function there with `_setjmp` beside it rather than a macro naming it |
+| `setjmp-arity` | the compiler's own `--target=` refusal, and clang | does the `_setjmp` this compiler emits have the arity the target's C library gives it? (ADR-0371) — it is **the one foreign function the emitted module names**, and the platforms disagree about its *arity* rather than its spelling: `setjmp(x)` expands to `_setjmp(x)` on glibc, `_setjmp` is a function of its own beside `setjmp` on Darwin, and on Win64 it expanded to `_setjmp((x), frame)`, which unwinds through SEH — that target is gone (ADR-0380). A wrong arity is undefined behaviour with no diagnostic, LLVM not comparing a direct call against its declaration under opaque pointers. `foreign-layout`'s mechanism — the source states a claim and a C compiler holding the real header judges it — over every admitted target, with the module's own `declare` required to agree with its calls. A target is compared only where clang has that target's headers, asking for an absent sysroot failing cleanly rather than answering about the host's C library. **Every admitted target agrees today and the check is not therefore idle**: what it compares is no longer two platforms against each other but each platform against its own header, which is the claim a sixth target would falsify. It demanded *two distinct arities* until ADR-0380 removed the target that had the other one — a floor that could then only be met by re-admitting a platform nobody runs — and `SETJMP_ARITY_REQUIRE` now demands only that something was compared. Skips 77 where clang can answer for **no** admitted target. That was macOS until ADR-0372 admitted the two Darwin triples and made the host target comparable there |
 | `bare-source-name` | the compiler, run from another directory | does a source named with **no** directory find its neighbours? (ADR-0308) — `SourceDir` answered the empty string where the answer is `./` and `AddPath` drops an empty one on purpose, so ADR-0244's first rule held for every spelling but `pascalc prog.pas`. The row above's argument met a third time, one step over: no test case can choose how it is **named** |
 | `stale-component` | a component's source, edited between two links | is an object built from an older module-heading refused? (ADR-0245, AP 6.13.2) — it cost a **wrong answer with a zero exit status** and no diagnostic from compiler, driver or linker. It is a shell harness because **no test case can edit its own source between two compilations**, and it fails in both directions: a comment or a reflow must still link |
 | `require-consistency` | the `*_REQUIRE` variables, and the workflows | does every gate that can skip have a job that refuses to let it? (ADR-0330) — ctest reads 77 as success, so a skipped gate and a clean one print the same bar, and the `*_REQUIRE` convention that closes it had shipped broken **four** times. Both directions: a variable a check reads and no job sets is a gate answering only where its author was, and one a workflow sets and no check reads is a comment describing a mechanism that is not there. It matches a **mapping key** and not a mention, its own mutation having caught it passing on a name left in a comment |
@@ -699,13 +699,16 @@ pointers. **A command assembled out of values goes through `Execute` and never
 through `Run`**: `system` takes a line, so a shell reads every value in it as
 syntax, and that cost this project a command injection reachable over LSP and
 over MCP.
-**One preprocessor conditional exists in the whole runtime** and it is catalogued
-(ADR-0373): `pasrt.c` reaches the non-local goto's jump through `_longjmp` where
-POSIX declares one and `longjmp` where it does not, mingw-w64 having none, and no
-portable spelling existing — `longjmp` after `_setjmp` works on glibc and would
-restore on Darwin a mask that was never saved. `runtime-isoc` compares the set of
-conditions against its catalogue in both directions, so a second one is a decision
-with a record.
+**No preprocessor conditional exists in the whole runtime, and that is a claim
+rather than a silence** — `runtime-isoc` compares the set of them against an
+*empty* catalogue in both directions, so adding one is a decision with a record.
+One stood for a week (ADR-0373): `pasrt.c` reaches the non-local goto's jump
+through `_longjmp` where POSIX declares one and `longjmp` where it does not,
+mingw-w64 having none, and no portable spelling exists — `longjmp` after
+`_setjmp` works on glibc and would restore on Darwin a mask that was never
+saved. ADR-0380 dropped that target rather than the rule, so the unit names
+`_longjmp` directly and `runtime-nonposix` records `pasrt.c` as **blocked**
+there, on purpose and with the argument beside it.
 `runtime/pasrt_unicode.c` holds AP 6.4.15's Normalization Form C and grapheme
 segmentation over tables transcribed from the Unicode Character Database —
 **the database is fetched and never committed, the generated header is
@@ -870,13 +873,16 @@ same message, so what it varies is the *backend configuration*.
 Five things about the emitter are true of every change to it; the rest is in
 `doc/design-digest.md`.
 
-- **One call's shape is the target's** (ADR-0371). `_setjmp` is the only foreign
-  function the emitted module names, and Win64 takes a frame pointer beside the
-  buffer where the other five targets take the buffer alone — so the call and its
-  `declare` each have an arm keyed on `targetIx`. It is the first target difference
-  that reaches past the two lines at the top of the module, and the first target
-  that is LLP64: a pointer of eight bytes with a four-byte C `long`, which is one
-  line in `CLongSize` because ADR-0328 gave the boundary `clong` and `csize`.
+- **`_setjmp` is the only foreign function the emitted module names**, and one
+  call's shape can be the target's. It is one shape today — every admitted
+  target is POSIX and takes the buffer alone (ADR-0380) — and it was two:
+  Win64's `setjmp` macro expanded to `_setjmp((x), frame)`, unwinding through
+  SEH, so the call and its `declare` each had an arm keyed on `targetIx`
+  (ADR-0371). Removing that target removed the arms, the only LLP64 case in
+  `CLongSize`, and the runtime's only preprocessor conditional. **What holds
+  the claim is `setjmp-arity` and not the uniformity**: it compares the emitted
+  call and its `declare` against each target's real header, so a sixth target
+  whose C library disagrees fails there rather than miscompiling in silence.
 - The emitter is **sequential**, with no instruction list: it never returns to a
   block it has left, so the order it emits in is the order text can be printed
   in. Don't add buffering to "fix" something. Activation records are the one
