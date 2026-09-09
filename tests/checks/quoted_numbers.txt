@@ -1,0 +1,36 @@
+# What a document quotes from a gate, and which gate answers it (ADR-0379).
+#
+# Three fields, separated by `|`:
+#
+#   <document> | <gate> | <pattern>
+#
+# The pattern is matched against the document; **every number it captures must
+# appear in that gate's own summary line** from the last suite run, and the
+# pattern must go on matching -- a sentence reworded away from its row is a row
+# that has stopped watching, and that is the direction a catalogue rots in.
+#
+# The gate is named as it names itself at the start of its summary, which is
+# the convention every check in this directory follows. `sanitize.py` runs in
+# four modes and writes `sanitize[address]:`, so the mode is part of the name.
+#
+# **What does not belong here**: a number a *record* quotes. An ADR states what
+# was true when the decision was taken and is immutable (ADR-0001), so binding
+# one to today's answer would be asking history to change. Nor a number that is
+# a *floor* written into a gate's source -- that is a constant, and the gate
+# reading it is the check.
+#
+# Add a row when a document states a number some gate reports. The six stale
+# numbers of 2026-09-09 were each found by running the gate and by nothing
+# else, and writing this catalogue found two more in README that the audit had
+# not thought to run: 887 cases where ctest runs 917, and 417 scenarios where
+# tests/spec/ holds 427.
+
+README.md   | target32           | \*\*(\d+) of the (\d+) programs in this repository's
+README.md   | ctest              | Beside that: (\d+) cases under
+README.md   | runtime-nonposix   | wants (seven) headers
+CLAUDE.md   | sanitize[valgrind] | \. (\d+) clean, 0 flagged
+CLAUDE.md   | sanitize[address]  | green at a level it had not asked for — (\d+) of them today
+CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify
+CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
+doc/roadmap.md | ctest           | the suite is (\d+) cases green
+doc/roadmap.md | runtime-nonposix | so (seven) come back where the compile reported one

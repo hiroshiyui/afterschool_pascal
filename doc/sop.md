@@ -269,7 +269,9 @@ where every closed row and every audit's findings are kept verbatim.
 Three shapes of decay, each found more than once: a row dating itself from a
 record whose feature has since shipped; a row **naming its own closing
 condition**, which the person meeting it is working on a feature and will not
-re-read; and a **count quoted from a gate**, checked only by running the gate.
+re-read; and a **count quoted from a gate** — checked by `quoted-numbers` since
+ADR-0379, which reads what each gate last printed rather than re-running it, so
+what is left to a reader is the number nobody has catalogued yet.
 Two more: a record that reached no document outside itself, found by reading
 the record and asking where else it belongs; and a gate that prints a claim it
 never evaluated. Audits so far, each written up in history: 2026-08-25

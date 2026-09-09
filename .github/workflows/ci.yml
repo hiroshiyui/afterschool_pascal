@@ -131,6 +131,21 @@ jobs:
         # 435 cases: the two corpora, the 157 error-path sources, the SMT
         # rules, the stage-2/stage-3 fixed point, and the product check.
 
+      - name: The numbers the documents quote are still the gates' answers
+        run: tests/checks/quoted_numbers.py
+        env:
+          QUOTED_NUMBERS_REQUIRE: '1'
+        # ADR-0379, and it runs **after** the suite because that is where its
+        # evidence comes from: every gate writes its own summary and ctest
+        # records it, so the numbers are read rather than re-measured --
+        # `valgrind-corpus` alone is 170 s and a check that re-ran what it
+        # quotes would be a second suite. It cannot be a ctest case for the
+        # same reason: during a run the log holds whatever has finished so far.
+        #
+        # It skips 77 where the log is absent or older than something the
+        # gates measure, which is right by hand and wrong here -- this job has
+        # just run the suite, so the variable turns that skip into a failure.
+
       - name: Compile a program by hand
         run: |
           tools/pascalcc tests/hello.pas -o /tmp/hello

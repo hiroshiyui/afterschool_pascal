@@ -13,17 +13,19 @@ question this page has closed and what closing it found — including
 [the page as it stood on 2026-09-07](history.md#the-roadmap-as-it-stood-on-2026-09-07),
 verbatim, the moment before it was cut to this.
 
-## Where development stands — 2026-09-07
+## Where development stands — 2026-09-09
 
-**Released: v3.7.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
-headline is the boundary: a command injection in the language server found,
-closed, audited and audited again (ADR-0362 – ADR-0364), a TOML library and
-the project reader rewritten over it (ADR-0360, ADR-0361) — none of it a
-change to the language. The release before it, v3.6.0, was the first whose
-headline broke existing programs: the map keys itself with a trait
-(ADR-0355). The compiler builds itself,
-stage 2 equals stage 3 in every program-component, and the suite is 905 cases
-green at `-O2` and at `-O0`.
+**Released: v3.8.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
+headline is the platforms, measured rather than assumed: `--target=` admits
+six machines where it admitted three, a release ships an `arm64-darwin`
+archive beside the two Linux ones (ADR-0372, ADR-0375), and **Windows got as
+far as a program that runs and was then deferred** — on a run and not a
+reading (ADR-0374). The release before it, v3.7.0, had the boundary for its
+headline: a command injection in the language server found, closed, audited
+and audited again (ADR-0362 – ADR-0364), a TOML library and the project reader
+rewritten over it (ADR-0360, ADR-0361) — none of it a change to the language.
+The compiler builds itself, stage 2 equals stage 3 in every
+program-component, and the suite is 917 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
