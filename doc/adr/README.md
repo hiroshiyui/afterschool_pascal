@@ -378,3 +378,4 @@ the alternatives that were rejected and why.
 | [0367](0367-the-rule-about-helpers-is-enforced.md) | The rule about helpers is enforced | Accepted |
 | [0368](0368-macos-is-a-job-that-can-fail.md) | macOS is a job that can fail | Accepted |
 | [0369](0369-a-port-is-measured-or-it-is-an-estimate.md) | A port is measured, or it is an estimate | Accepted |
+| [0370](0370-a-string-transfer-needs-memory-not-a-stream.md) | A string transfer needs memory, not a stream | Accepted |

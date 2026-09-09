@@ -40,10 +40,10 @@
 #   tests/checks/runtime_coverage.py tools/pascalcc --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 431
-instrumented 2778
+uncovered 504
+instrumented 3116
 
-runtime/pasrt.c 243/1720
+runtime/pasrt.c 246/1778
 runtime/pasrt_posix.c 111/353
 runtime/pasrt_task.c 28/291
 runtime/pasrt_unicode.c 49/414

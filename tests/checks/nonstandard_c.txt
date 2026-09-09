@@ -2,12 +2,13 @@
 #
 # runtime/pasrt.c is the runtime proper, and how close it stays to the standard
 # decides what a port to another C library costs. Measured on 2026-08-22 it was
-# *three names*, and access made a fourth on 2026-08-23 -- see
+# *three names*, and access made a fourth on 2026-08-23; ADR-0370 then removed
+# two of them and it is *three* again -- see
 # doc/roadmap.md's cross-platform chapter, where this replaced the claim that
 # "the file model is a POSIX assumption".
 #
 # tests/checks/runtime_isoc.py reads this file and fails in both directions: a
-# fifth dependency appearing, and one of these four going away while the
+# fourth dependency appearing, and one of these three going away while the
 # entry stays. Add a name only with the argument for why ISO C could not do it.
 #
 # **This list can only ever hold functions**, and ADR-0186 is where that turned
@@ -38,13 +39,16 @@
 _setjmp
 _longjmp
 
-# ADR-0057's readstr: a string-expression read as if it were a text file. The
-# whole feature is "a FILE* over memory", which ISO C has no way to make.
-fmemopen
-
-# ...and writestr, the other direction: a text file whose contents become a
-# string value, so the buffer has to grow as it is written.
-open_memstream
+# `fmemopen` and `open_memstream` stood here and are gone (ADR-0370). The
+# argument they carried was that ADR-0057's readstr and writestr are "a FILE*
+# over memory, which ISO C has no way to make" -- and that first half is true
+# while the second was never the requirement. What §6.7.5.5 needs is an
+# auxiliary `text` variable backed by memory, not a `FILE *`; the buffer is
+# now written into and read out of directly, and the read and write primitives
+# branch once on which destination they have. They were two of the three names
+# that stopped this translation unit compiling for a target that is not POSIX
+# (ADR-0369), and `tmpfile()` -- ISO C, and used here for an internal file --
+# was measured at 88 times the cost and refused.
 
 # ISO/IEC 10206:1991 §6.7.5.6's bind: "the binding shall be
 # implementation-defined", and this processor's is that the attempt succeeds

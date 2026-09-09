@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <math.h>
 #include <setjmp.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -494,15 +495,6 @@ struct pas_file {
    * a third answer to the question `pas_external` asks, and the only one the
    * running program chooses for itself. */
   char *bound_name;
-  /* ISO/IEC 10206:1991 §6.7.5.5: the auxiliary `text` variable readstr and
-   * writestr are defined in terms of is backed by memory rather than by a
-   * stream the operating system named. `membuf` is that memory — the copy of
-   * the string-expression readstr reads from, or the buffer open_memstream
-   * grows for writestr — and `memlen` is the length open_memstream reports.
-   * Every other field means what it always did, which is the whole point:
-   * the read and write primitives are reused unchanged (ADR-0060). */
-  char *membuf;
-  size_t memlen;
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
@@ -767,6 +759,36 @@ static void pas_unlink_open(struct pas_file *f) {
 _Static_assert(sizeof(struct pas_file) <= PAS_FILE_SIZE,
                "PAS_FILE_SIZE is smaller than struct pas_file");
 
+/* ISO/IEC 10206:1991 §6.7.5.5: the auxiliary `text` variable readstr and
+ * writestr are defined in terms of is backed by memory rather than by a
+ * stream the operating system named. `buf` is that memory -- the copy of the
+ * string-expression readstr reads from, or the buffer writestr grows -- `len`
+ * is how much of it is in use, and `at` is **one field meaning two things
+ * because it cannot mean both at once**: how far a read has got, or what the
+ * buffer can hold while it is being written.
+ *
+ * **They are here and not in `struct pas_file`, and that is the point.**
+ * Every file variable a program declares is `PAS_FILE_SIZE` bytes, a number
+ * the *compiler* also states as `fileSize` and which the **seed** was built
+ * with -- so growing the struct is an out-of-cycle reseed rather than a field
+ * (ADR-0155, and CLAUDE.md on `buffer-headroom`). A string transfer's file is
+ * the one this runtime allocates for itself, in `pas_str_file`, so it can be
+ * larger; putting these three here took `struct pas_file` from 112 bytes to
+ * 96 and left 24 free where there had been 8.
+ *
+ * `f` is first, so a `struct pas_file *` and a `struct pas_str_file *` are
+ * the same address and the cast in `PAS_STR` is the one C guarantees. Every
+ * use of it is guarded by `PAS_ISMEM`, and `readstr`/`writestr` are the only
+ * things that make one (ADR-0060, ADR-0370). */
+struct pas_str_file {
+  struct pas_file f;
+  char *buf;
+  size_t len;
+  size_t at;
+};
+
+#define PAS_STR(f) ((struct pas_str_file *)(f))
+
 static int pas_argc;
 static char **pas_argv;
 
@@ -800,6 +822,13 @@ static void pas_check_open(struct pas_file *f, int mode, const char *op) {
  * value, so the runtime never sees an ordinal: `SeekRead(f, 'c')` on a
  * `file [char] of T` arrives here as 99. That is the same division of labour
  * the array code has, where the lower bound is folded into the offset. */
+
+/* Is this file a string transfer rather than a stream? (ADR-0370) A file
+ * that is open has a `FILE *` -- `reset` and `rewrite` error out rather than
+ * leave one null, and an internal file falls back to `tmpfile()` -- and
+ * `readstr`/`writestr` are the only makers of one. Asked only after
+ * `pas_check_open`, so a closed file never reaches it. */
+#define PAS_ISMEM(f) ((f)->fp == NULL)
 
 static void pas_check_direct(struct pas_file *f, const char *op) {
   if (!f->fp || f->mode == PAS_CLOSED)
@@ -951,8 +980,6 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->atbol = 1;
   f->name = name;
   f->bound_name = NULL;
-  f->membuf = NULL;
-  f->memlen = 0;
   /* The buffer variable of a text file is the one character `ch` already
    * there; a `file of T` needs T's worth of storage, and malloc is what
    * guarantees it is aligned for any T. It is freed when the block that
@@ -1151,7 +1178,15 @@ static void pas_fill(struct pas_file *f) {
     f->ch = (char)f->lookahead;
     return;
   }
-  f->lookahead = getc(f->fp);
+  /* A string transfer reads from its own buffer and every other text from the
+   * stream. One branch, and it is the whole of the read side's cost
+   * (ADR-0370). */
+  if (PAS_ISMEM(f))
+    f->lookahead = PAS_STR(f)->at < PAS_STR(f)->len
+                       ? (unsigned char)PAS_STR(f)->buf[PAS_STR(f)->at++]
+                       : EOF;
+  else
+    f->lookahead = getc(f->fp);
   /* ISO 7185 §6.6.5.2: `reset(f)` on a text whose contents do not end in an
    * end-of-line appends one. The stream cannot be asked for its last byte, so
    * the appended component is produced here, where the read arrives at the
@@ -1545,19 +1580,109 @@ double pas_read_real(void *v) {
 
 /* ------------------------------------------------------------------ output */
 
-static FILE *pas_out(void *v) {
+/* --- where a written character goes (ADR-0370) ----------------------------
+ *
+ * Every write primitive below used to take the `FILE *` this returned and
+ * call `putc`, `fwrite` and `fprintf` on it. A string transfer's destination
+ * was a `FILE *` too, because `open_memstream` made one over memory -- and
+ * that is POSIX, one of the three names that stopped this translation unit
+ * compiling for a target that is not POSIX.
+ *
+ * ISO C offers no way to make a `FILE *` over memory, so the destination
+ * stops being one. `pas_out` hands back the file, and the three emitters
+ * branch on `PAS_ISMEM`: to the stream for an ordinary text, into a growable
+ * buffer for a string transfer. **The formatting is untouched** -- §6.10.3.4's
+ * exact decimal expansion, the padding rules and the field-width readings all
+ * still produce the same bytes and merely hand them somewhere else.
+ *
+ * The alternative was `tmpfile()`, which is ISO C and is what this file
+ * already uses for an internal file. Measured, it costs 17.6 us against
+ * open_memstream's 0.2 -- 88 times -- and `writestr` is not rare: the
+ * compiler's own three components use it 49 times and `lib/pastext.pas` 20
+ * more. A string transfer is a string operation and must not touch a disk. */
+static struct pas_file *pas_out(void *v) {
   struct pas_file *f = v;
   pas_check_open(f, PAS_WRITING, "writing to");
-  return f->fp;
+  return f;
+}
+
+/* Room for `n` more bytes in a string transfer's buffer. Doubling, from a
+ * start big enough that the ordinary `writestr` never grows twice. */
+static void pas_mem_room(struct pas_str_file *m, size_t n) {
+  size_t want = m->len + n + 1;
+  size_t cap = m->at;
+  char *grown;
+  if (want <= cap)
+    return;
+  if (cap < 128)
+    cap = 128;
+  while (cap < want) {
+    if (cap > (size_t)-1 / 2)
+      pas_runtime_error("writestr: too much was written to a string");
+    cap *= 2;
+  }
+  grown = realloc(m->buf, cap);
+  if (!grown)
+    pas_runtime_error("out of memory for a string transfer");
+  m->buf = grown;
+  m->at = cap;
+}
+
+static void pas_swrite(const void *bytes, size_t n, struct pas_file *o) {
+  if (!PAS_ISMEM(o)) {
+    if (n && fwrite(bytes, 1, n, o->fp) != n)
+      pas_runtime_error("cannot write to the file");
+    return;
+  }
+  pas_mem_room(PAS_STR(o), n);
+  memcpy(PAS_STR(o)->buf + PAS_STR(o)->len, bytes, n);
+  PAS_STR(o)->len += n;
+  PAS_STR(o)->buf[PAS_STR(o)->len] = '\0';
+}
+
+static void pas_sputc(int c, struct pas_file *o) {
+  char b = (char)c;
+  if (!PAS_ISMEM(o)) {
+    putc(c, o->fp);
+    return;
+  }
+  pas_swrite(&b, 1, o);
+}
+
+/* `fprintf` onto whichever destination. The stack buffer covers every
+ * ordinary case; a field width a program *wrote* can exceed it -- §6.9.3.1
+ * bounds it below and not above -- so the count vsnprintf returns is asked
+ * for, and the overflowing case allocates rather than truncating. */
+static void pas_sprintf(struct pas_file *o, const char *fmt, ...) {
+  char stackbuf[256];
+  char *buf = stackbuf;
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vsnprintf(stackbuf, sizeof stackbuf, fmt, ap);
+  va_end(ap);
+  if (n < 0)
+    pas_runtime_error("cannot format a value for writing");
+  if ((size_t)n >= sizeof stackbuf) {
+    buf = malloc((size_t)n + 1);
+    if (!buf)
+      pas_runtime_error("out of memory formatting a value for writing");
+    va_start(ap, fmt);
+    vsnprintf(buf, (size_t)n + 1, fmt, ap);
+    va_end(ap);
+  }
+  pas_swrite(buf, (size_t)n, o);
+  if (buf != stackbuf)
+    free(buf);
 }
 
 void pas_write_int(void *v, long long val, int width) {
-  FILE *o = pas_out(v);
+  struct pas_file *o = pas_out(v);
   /* §6.10.3.3 b): a TotalWidth of zero is not "suppress" — 0 is always less
    * than IntDigits + 1, so what is written is the sign and the digits, which
    * is what a zero field width means to printf too. */
-  if (width < 0) fprintf(o, "%lld", val);
-  else fprintf(o, "%*lld", width, val);
+  if (width < 0) pas_sprintf(o, "%lld", val);
+  else pas_sprintf(o, "%*lld", width, val);
   ((struct pas_file *)v)->atbol = 0; /* a number is never no characters */
 }
 
@@ -1572,18 +1697,19 @@ void pas_write_int(void *v, long long val, int width) {
  * §6.10.3.5 makes a Boolean "equivalent to writing the appropriate
  * character-string 'True' or 'False' ... with a field-width parameter of
  * TotalWidth", so it is the same three cases and the same code. */
-static void pas_write_padded(FILE *o, const char *s, int len, int width) {
+static void pas_write_padded(struct pas_file *o, const char *s, int len,
+                             int width) {
   if (width < 0) { /* no width given: the default is the string's own length */
-    fwrite(s, 1, (size_t)len, o);
+    pas_swrite(s, (size_t)len, o);
     return;
   }
   if (width > len) {
     int pad = width - len;
-    while (pad-- > 0) putc(' ', o);
-    fwrite(s, 1, (size_t)len, o);
+    while (pad-- > 0) pas_sputc(' ', o);
+    pas_swrite(s, (size_t)len, o);
     return;
   }
-  fwrite(s, 1, (size_t)width, o); /* width == 0 writes nothing */
+  pas_swrite(s, (size_t)width, o); /* width == 0 writes nothing */
 }
 
 /* ISO/IEC 10206:1991 §6.10.3.4.1 and §6.10.3.4.2 — and ISO 7185 §6.9.3.4.1
@@ -1651,7 +1777,7 @@ static int pas_digits_all_zero(const char *d) {
 }
 
 void pas_write_real(void *v, double val, int width, int prec) {
-  FILE *o = pas_out(v);
+  struct pas_file *o = pas_out(v);
   /* ISO 7185 §6.9.5's `page` needs to know whether the current line has
    * anything on it, and every other write primitive says so. This one did not,
    * so a real was the one value that could be written and leave the line
@@ -1674,8 +1800,8 @@ void pas_write_real(void *v, double val, int width, int prec) {
     /* A non-finite value has no decimal representation for the clause to
      * describe, and nothing here can improve on what printf says about it. */
     if (!isfinite(val)) {
-      if (width < 0) fprintf(o, "%f", val);
-      else fprintf(o, "%*f", width, val);
+      if (width < 0) pas_sprintf(o, "%f", val);
+      else pas_sprintf(o, "%*f", width, val);
       return;
     }
     /* One spare leading slot, for a carry out of the top: 9.99:0:1 is 10.0. */
@@ -1704,11 +1830,11 @@ void pas_write_real(void *v, double val, int width, int prec) {
     /* "if TotalWidth >= MinNumChars, (TotalWidth - MinNumChars) spaces". The
      * NOTE is explicit that no initial spaces are written otherwise, so a
      * TotalWidth of zero is not a suppression. */
-    for (pad = width - minChars; pad > 0; pad--) putc(' ', o);
-    if (negative) putc('-', o);
-    fwrite(ip, 1, (size_t)ilen, o);
-    putc('.', o);
-    fwrite(ip + ilen, 1, (size_t)prec, o);
+    for (pad = width - minChars; pad > 0; pad--) pas_sputc(' ', o);
+    if (negative) pas_sputc('-', o);
+    pas_swrite(ip, (size_t)ilen, o);
+    pas_sputc('.', o);
+    pas_swrite(ip + ilen, (size_t)prec, o);
     return;
   }
   /* Floating-point form, §6.10.3.4.1. ExpDigits is implementation-defined and
@@ -1732,7 +1858,7 @@ void pas_write_real(void *v, double val, int width, int prec) {
     if (!isfinite(val)) {
       actWidth = width < 0 ? expDigits + 17 : width;
       if (actWidth < expDigits + 6) actWidth = expDigits + 6;
-      fprintf(o, "% *.*E", actWidth, actWidth - expDigits - 5, val);
+      pas_sprintf(o, "% *.*E", actWidth, actWidth - expDigits - 5, val);
       return;
     }
     /* The exact significant digits and the decimal exponent in one call: %e
@@ -1772,13 +1898,13 @@ void pas_write_real(void *v, double val, int width, int prec) {
     negative = val < 0.0 && !pas_digits_all_zero(dig);
     /* "the sign character ('-' if (e < 0.0) and (eWritten > 0.0), otherwise a
      * space)" — a space, not nothing. */
-    putc(negative ? '-' : ' ', o);
-    putc(dig[0], o);
-    putc('.', o);
-    fwrite(dig + 1, 1, (size_t)decPlaces, o);
-    putc('E', o);
-    putc(expValue < 0 ? '-' : '+', o);
-    fprintf(o, "%0*d", expDigits, expValue < 0 ? -expValue : expValue);
+    pas_sputc(negative ? '-' : ' ', o);
+    pas_sputc(dig[0], o);
+    pas_sputc('.', o);
+    pas_swrite(dig + 1, (size_t)decPlaces, o);
+    pas_sputc('E', o);
+    pas_sputc(expValue < 0 ? '-' : '+', o);
+    pas_sprintf(o, "%0*d", expDigits, expValue < 0 ? -expValue : expValue);
   }
 }
 
@@ -1789,11 +1915,11 @@ void pas_write_bool(void *v, int val, int width) {
 }
 
 void pas_write_char(void *v, char c, int width) {
-  FILE *o = pas_out(v);
+  struct pas_file *o = pas_out(v);
   /* §6.10.3.2: "if TotalWidth = 0, no characters." */
   if (width == 0) return;
-  if (width < 0) putc(c, o);
-  else fprintf(o, "%*c", width, c);
+  if (width < 0) pas_sputc(c, o);
+  else pas_sprintf(o, "%*c", width, c);
   ((struct pas_file *)v)->atbol = 0;
 }
 
@@ -1804,7 +1930,7 @@ void pas_write_str(void *v, const char *s, int len, int width) {
 }
 
 void pas_writeln(void *v) {
-  putc('\n', pas_out(v));
+  pas_sputc('\n', pas_out(v));
   ((struct pas_file *)v)->atbol = 1;
 }
 
@@ -1819,9 +1945,9 @@ void pas_writeln(void *v) {
  * which here is the lookahead being dropped. */
 void pas_page(void *v) {
   struct pas_file *f = v;
-  FILE *o = pas_out(v);
-  if (!f->atbol) putc('\n', o);
-  putc('\f', o);
+  struct pas_file *o = pas_out(v);
+  if (!f->atbol) pas_sputc('\n', o);
+  pas_sputc('\f', o);
   f->atbol = 1;
   f->have = 0;
 }
@@ -3129,7 +3255,9 @@ void pas_read_str(void *v, void *dst, int cap, int isvar) {
  * program does not contain, so it is none of the business of the block exits
  * and non-local gotos that list serves (ADR-0032). */
 static struct pas_file *pas_str_file(void) {
-  struct pas_file *f = calloc(1, sizeof *f);
+  /* The larger struct, because this is the one file here the runtime
+   * allocates rather than the program (ADR-0370). */
+  struct pas_file *f = calloc(1, sizeof(struct pas_str_file));
   if (!f)
     pas_runtime_error("out of memory for a string transfer");
   f->lookahead = EOF;
@@ -3147,14 +3275,13 @@ static struct pas_file *pas_str_file(void) {
  * into the very variable it reads from. */
 void *pas_str_read_begin(const char *chars, int len) {
   struct pas_file *f = pas_str_file();
-  f->membuf = malloc((size_t)len + 1);
-  if (!f->membuf)
+  PAS_STR(f)->buf = malloc((size_t)len + 1);
+  if (!PAS_STR(f)->buf)
     pas_runtime_error("out of memory for a string transfer");
-  memcpy(f->membuf, chars, (size_t)len);
-  f->membuf[len] = '\n';
-  f->fp = fmemopen(f->membuf, (size_t)len + 1, "r");
-  if (!f->fp)
-    pas_runtime_error("cannot read from a string");
+  memcpy(PAS_STR(f)->buf, chars, (size_t)len);
+  PAS_STR(f)->buf[len] = '\n';
+  PAS_STR(f)->len = (size_t)len + 1;
+  PAS_STR(f)->at = 0;
   f->mode = PAS_READING;
   return f;
 }
@@ -3166,16 +3293,15 @@ void pas_str_read_end(void *v) {
   struct pas_file *f = v;
   if (pas_eof(f))
     pas_runtime_error("readstr: the string ended before every value was read");
-  fclose(f->fp);
-  free(f->membuf);
+  free(PAS_STR(f)->buf);
   free(f);
 }
 
 void *pas_str_write_begin(void) {
   struct pas_file *f = pas_str_file();
-  f->fp = open_memstream(&f->membuf, &f->memlen);
-  if (!f->fp)
-    pas_runtime_error("cannot write to a string");
+  PAS_STR(f)->buf = NULL;
+  PAS_STR(f)->len = 0;
+  PAS_STR(f)->at = 0;
   f->mode = PAS_WRITING;
   return f;
 }
@@ -3188,22 +3314,19 @@ void *pas_str_write_begin(void) {
  * was written than the read could take. */
 int pas_str_write_len(void *v) {
   struct pas_file *f = v;
-  fflush(f->fp);
-  if (f->memlen > 2147483647u)
+  if (PAS_STR(f)->len > 2147483647u)
     pas_runtime_error("writestr: too much was written to a string");
-  return (int)f->memlen;
+  return (int)PAS_STR(f)->len;
 }
 
 const char *pas_str_write_ptr(void *v) {
   struct pas_file *f = v;
-  fflush(f->fp);
-  return f->membuf ? f->membuf : "";
+  return PAS_STR(f)->buf ? PAS_STR(f)->buf : "";
 }
 
 void pas_str_write_end(void *v) {
   struct pas_file *f = v;
-  fclose(f->fp);
-  free(f->membuf);
+  free(PAS_STR(f)->buf);
   free(f);
 }
 

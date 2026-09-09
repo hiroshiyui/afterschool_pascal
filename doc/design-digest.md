@@ -1959,10 +1959,22 @@ able to make.
   does not say what the two procedures compute — it says each is *equivalent
   to* `rewrite(f); writeln(f, ...); reset(f); read(f, ...)` over "an auxiliary
   variable that the program does not otherwise contain, which possesses the
-  required type text". So the runtime builds that variable with `fmemopen` and
-  `open_memstream`, and every `pas_read_*` and `pas_write_*` primitive is
-  reused **unchanged**: a field width, the spelling of a real and where a
-  string read stops are §6.10's, because they are the same code.
+  required type text". So the runtime builds that variable over memory, and
+  every `pas_read_*` and `pas_write_*` primitive is reused **unchanged**: a
+  field width, the spelling of a real and where a string read stops are
+  §6.10's, because they are the same code.
+  - **The memory was a `FILE *` until ADR-0370** — `fmemopen` for the read and
+    `open_memstream` for the write — and both are POSIX, two of the three names
+    that stopped `pasrt.c` compiling for a target that is not POSIX. ISO C
+    cannot make a stream over memory, and §6.7.5.5 never asked for one: it asks
+    for a *variable*. So `pas_out` hands back the file rather than its stream
+    and three emitters branch on `PAS_ISMEM`, into a growable buffer or out to
+    the stream. The formatting is untouched, which is what keeps the sentence
+    above true. The fields that buffer needs live in a `struct pas_str_file`
+    embedding `struct pas_file`, because a file *variable* is `PAS_FILE_SIZE`
+    bytes and the seed was built with that number; a string transfer's file is
+    the one the runtime allocates itself. `tmpfile()` would have been ISO C and
+    is 88 times slower, measured.
   - `WriteStmt::str`/`ReadStmt::str` say which statement it is; Sema then
     skips the leading-argument-is-a-file detection and leaves `file` null, and
     CodeGen asks the runtime for the handle. `emitWriteArgs`/`emitReadArgs`
