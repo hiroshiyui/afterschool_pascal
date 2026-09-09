@@ -65,6 +65,9 @@ import subprocess
 import sys
 
 CATALOGUE = "tests/checks/quoted_numbers.txt"
+# What the gates measure. A log written before any of this changed is a log
+# about a tree that no longer exists.
+WATCHED = ("selfhost", "lib", "lsp", "runtime", "tests", "examples", "tools")
 DEFAULT_LOG = "build/Testing/Temporary/LastTest.log"
 FLOOR = 8          # rows a catalogue must hold, or it is watching nothing
 
@@ -146,13 +149,16 @@ def main():
     # gates measure has been touched since the run that wrote it, the numbers
     # in it are about a tree that no longer exists -- so this refuses rather
     # than comparing, and the refusal names the newer file.
-    watched = subprocess.run(
-        ["git", "-C", str(root), "ls-files",
-         "selfhost", "lib", "lsp", "runtime", "tests", "examples", "tools"],
-        capture_output=True, text=True).stdout.split("\n")
+    #
+    # The roots are walked rather than asked of `git ls-files`, which exits
+    # 128 in a container whose checkout git calls dubiously owned -- the
+    # hazard `format_check.py` records and `markdown-links` was caught by on
+    # its first CI run. An answer of *nothing is newer* has to mean the tree
+    # was not touched, never that git declined to say.
     stamp = log_path.stat().st_mtime
-    newer = [f for f in watched
-             if f and (root / f).exists() and (root / f).stat().st_mtime > stamp]
+    newer = [str(f.relative_to(root))
+             for r in WATCHED for f in (root / r).rglob("*")
+             if f.is_file() and f.stat().st_mtime > stamp]
     if newer:
         return absent(f"{log_path.name} is older than {len(newer)} tracked "
                       f"file(s) -- {newer[0]} among them. The numbers in it "

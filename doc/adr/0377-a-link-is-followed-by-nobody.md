@@ -95,6 +95,24 @@ positive looks exactly like the finding.
 
 Cost: one Python file, no dependency, and it runs in 0.3 s.
 
+**Its first CI run failed in all four container jobs, and the hazard was
+already written down here.** It asked `git ls-files` for the documents to
+sweep; git exits 128 in a container whose checkout it calls dubiously owned,
+which is every containerised job in this workflow, and the check turned that
+into *this is not a git checkout*. `tests/checks/format_check.py` carries a
+comment about exactly this, put there when the same call made *that* sweep
+read an empty list and pass — the better-known half of the failure, and the
+reason its floor exists. So the arrangement is now that file's: **walk the
+tree, skip `build/`, `doc/vendor/` and `.claude/worktrees` by name, and ask
+git only to subtract its ignore list**, tolerating a git that will not answer.
+The cost is that an untracked scratch document in the checkout is swept, which
+is what `markdown-tables` has always done.
+
+The lesson is not *use the other call*. It is that **a helper reading a
+repository has two answers to distinguish and usually distinguishes one**: git
+saying *nothing matched* and git refusing to speak. Both of this tree's
+instances came of collapsing them, in opposite directions.
+
 ## Alternatives rejected
 
 **Check `http://` targets too.** It would have found the one thing this cannot

@@ -47,9 +47,13 @@ cites does not move without every citer moving with it.
 What it does not check is anything off this machine: an `http://` target is
 somebody else's to keep alive and asking would put the network in the suite.
 
-**What git tracks is what it sweeps**, `variant-check`'s rule (ADR-0223): a
-scratch document in the working tree is not this repository's claim, and
-`doc/vendor/` is the two standards, gitignored and not ours.
+**It walks, and asks git only to subtract**, which is `format_check.py`'s
+arrangement and was learned the hard way twice: `git ls-files` exits 128 in a
+container whose checkout git calls dubiously owned, and a sweep that reads that
+as an empty answer sweeps nothing. This one asked outright and *failed* every
+container job, which is the better of the two ways to be wrong and still the
+wrong one. So the files come from the tree, `doc/vendor/` and the rest are
+skipped by name, and where git will speak its ignore list is subtracted.
 
     markdown_links.py [root]
 """
@@ -118,18 +122,39 @@ def headings(text):
     return set(out)
 
 
-def tracked(root):
-    r = subprocess.run(["git", "-C", str(root), "ls-files", "*.md"],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        raise SystemExit("markdown-links: this is not a git checkout, and what "
-                         "git tracks is what this sweeps")
-    return sorted(root / f for f in r.stdout.split("\n") if f)
+# `doc/vendor/` is the two standards, which are not ours; `build/` is
+# generated; `.claude/worktrees` is a background agent's own git worktree,
+# which lives inside the checkout and would be read as a second copy of every
+# document. `markdown_tables.py` skips exactly these three.
+SKIP = ("build", "doc/vendor", ".claude/worktrees")
+
+
+def documents(root):
+    """Every Markdown file in the tree, less what git ignores where git will
+    say.
+
+    Not `git ls-files`: it exits 128 in a container whose checkout git calls
+    dubiously owned, which is every containerised job here. `check-ignore`
+    exits 1 when nothing matched, which is the ordinary case, and 128 in that
+    same situation -- so only the first is a list to subtract, and a git that
+    will not speak leaves the walk's own answer standing."""
+    found = sorted(p for p in root.rglob("*.md")
+                   if not str(p.relative_to(root)).startswith(SKIP))
+    if not found:
+        return found
+    rel = [str(p.relative_to(root)) for p in found]
+    ignored = subprocess.run(["git", "-C", str(root), "check-ignore", "--stdin"],
+                             input="\n".join(rel), capture_output=True,
+                             text=True)
+    if ignored.returncode in (0, 1):
+        drop = set(ignored.stdout.split())
+        found = [p for p in found if str(p.relative_to(root)) not in drop]
+    return found
 
 
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-    files = tracked(root)
+    files = documents(root)
     anchors = {}
     for p in files:
         anchors[p.resolve()] = headings(p.read_text(encoding="utf-8",
