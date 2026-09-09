@@ -590,20 +590,6 @@ ADR-0303 a **handle**, which is moved — the actual is `take(v)` and the
 variable is empty from there on. A *channel* still cannot carry a handle, so a
 worker can be given a socket where it starts and not sent one afterwards.
 
-**Warning.** A diagnostic that is not an error: same format, same stream, same
-exit status, and **the only difference is `errorSeen`**. There are four. Three
-guards govern each and every one was learned by it failing — written only when
-`warnOn`, which every `--dump` flag clears; only when nothing has been
-reported, since a name that did not resolve records no use; and only for
-`curFile = mainFile`, or a component is warned about once per importer. A test
-case is held to them by a `.warn` sidecar in both directions, and this tree's
-own sources by `warning-free` (ADR-0272, ADR-0286).
-
-**Trivia.** A comment, recorded as a **position** and never as text: which
-token it precedes, and where it began and ended in the source. That is all a
-formatter needs and it costs the token table nothing, the words being sliced
-back out of the source by whoever wants them (ADR-0279).
-
 ## The pipeline
 
 **Stage.** One of Tokenize → ParseProgram → RunSema → RunCodeGen, each guarded
@@ -629,7 +615,12 @@ pool holding the folded one (ADR-0279).
 difference is that it does not set `errorSeen`** (ADR-0272). Not "a lesser
 error": the category is *this compiles and is probably not what was meant*, and
 it did not exist here until a compiler that had implemented two standards
-completely still had no way to say so.
+completely still had no way to say so. There are four, and three guards govern
+each — written only when `warnOn`, which every `--dump` flag clears; only when
+nothing has been reported, since a name that did not resolve records no use;
+and only for `curFile = mainFile`, or a component is warned about once per
+importer. A test case is held to them by a `.warn` sidecar in both directions,
+and this tree's own sources by `warning-free` (ADR-0286).
 
 **Husk.** What a parser node becomes when Sema has decided the construct is
 something else. Five constructs the parser cannot tell apart and Sema can,
@@ -782,6 +773,18 @@ this entry claimed until ADR-0342 probed it**: the emitted IR carries no
 program's own loads and stores.
 
 ## Build and test
+
+**Admitted target.** One of the triples `--target=` accepts, and the word is
+deliberate: a target is admitted when this compiler's own size and alignment
+rules have been compared against LLVM's for that machine, over every frame the
+emitter writes and over six record shapes, on every build (ADR-0157,
+ADR-0325). There are **six** — `x86_64-pc-linux-gnu`, `aarch64-linux-gnu`,
+`i386-pc-linux-gnu`, `x86_64-w64-windows-gnu` (ADR-0371) and the two Darwin
+triples (ADR-0372) — and every other is refused. It says nothing about the
+platform being *supported*: Windows is admitted and deferred (ADR-0374), and
+README's **Platform tiers** is where a user reads what each one means. Several
+gates enumerate the list from the compiler's own refusal rather than from a
+copy, so a seventh is compared without any of them being edited.
 
 **Golden test.** `tests/name.pas` plus `name.out`, the expected stdout of a
 program that must compile and exit 0 (ADR-0011). An optional `name.in` is fed

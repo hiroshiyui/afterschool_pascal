@@ -91,11 +91,13 @@ string-character (E.1).
 | E.13 | — | accuracy of the complex operators and functions | C99's, `csqrt`/`clog`/`catan` being called rather than re-derived; the principal values are C99's. |
 
 Each of `minreal`, `maxreal` and `epsreal` is the shortest decimal that
-round-trips to the binary64 value it names, and the same characters appear in
-both compilers (ADR-0062).
+round-trips to the binary64 value it names, and those are the characters the
+compiler writes into the module it emits (ADR-0062). They were the same in the
+C++ front end this compiler replaced, which is how the claim was checked before
+ADR-0232 removed it.
 
 **An i386 this compiler emits for has SSE2**, and that is a decision rather
-than an observation (ADR-0346). `i386-pc-linux-gnu` is one of the three
+than an observation (ADR-0346). `i386-pc-linux-gnu` is one of the six
 targets `--target=` admits, and clang's own default processor for it is
 `i686`, whose x87 registers are eighty bits wide — so an intermediate value
 would be wider than the type holding it, and two of this document's own
@@ -354,8 +356,8 @@ are things evaluated — and this processor answers all of them the same way:
 > value that will be stored into it, and a structured-value-constructor's
 > completer before its written components.
 
-That order is the same in both compilers — the C++ one and the Pascal-hosted
-one of `selfhost/` — and the same at `-O0` and at `-O2`. It can only be
+That order was the same in the C++ front end this compiler replaced
+(ADR-0232) as it is in `selfhost/`, and it is the same at `-O0` and at `-O2`. It can only be
 *observed* where the sub-expressions have side effects; where they are pure the
 optimiser may reorder freely, which no program can detect.
 

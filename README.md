@@ -378,8 +378,10 @@ what makes that findable, since a constant added to the enumeration moves every
 M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
-by default, `aarch64-linux-gnu`, or `i386-pc-linux-gnu`. `pascalcc` hands it to
-`clang` as well, so with a cross toolchain installed it cross-compiles:
+by default, then `aarch64-linux-gnu`, `i386-pc-linux-gnu`,
+`x86_64-w64-windows-gnu`, `arm64-apple-macosx` and `x86_64-apple-macosx`.
+`pascalcc` hands it to `clang` as well, so with a cross toolchain installed it
+cross-compiles:
 
 ```sh
 tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
@@ -394,13 +396,20 @@ Pentium III and earlier; a caller who wants the x87 back can name
 
 Any other target is refused. The list is short because each entry is a claim
 that this compiler's own size and alignment rules have been compared against
-LLVM's for that machine, which has been done for those three and no others —
+LLVM's for that machine, which has been done for those six and no others —
 and the comparison is re-run on every build, over every frame size and field
 offset the compiler emits, and against LLVM's own answer for six record shapes.
 
+**Naming a target is not the same as supporting the platform.** The three
+Linux triples are what every gate runs on; the two Darwin ones say the emitted
+module is right for macOS, and one of them ships an archive; and
+`x86_64-w64-windows-gnu` is admitted because the arithmetic was compared and
+the non-local goto measured, with the platform itself *deferred* (ADR-0374).
+**Platform tiers** below says what each of those means to a user.
+
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **573 of the 574 programs in this repository's
+a file and a handle (ADR-0325). **597 of the 598 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 
@@ -427,8 +436,10 @@ optimisation levels.
 **macOS (arm64) is the second**: the whole suite runs there natively on every
 push and the job can fail (ADR-0368), so a break is a red bar and not a
 surprise later. Nine gates skip there for want of a tool the runner has not
-got, and the job's comment names each with its reason. No release ships a
-macOS archive yet.
+got, and the job's comment names each with its reason. Since ADR-0375 a
+release ships an `arm64-darwin` archive built and tested on that runner, and
+the job that builds it fails on a dynamic link to anything outside the
+system's own directories, so what is attached is a compiler a user can move.
 
 **Everything else is unsupported, and contributions are very welcome.**
 Windows, FreeBSD, OpenBSD, NetBSD and Haiku — practical compatibility work on
