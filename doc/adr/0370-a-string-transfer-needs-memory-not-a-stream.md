@@ -107,10 +107,21 @@ The emitted code calls `_setjmp` with one argument, so on Win64 that is a wrong
 arity, which is the class ADR-0121's row says nothing here checks. SEH-based
 unwinding is why. The roadmap row is corrected and the work is not started.
 
-Also measured, because it was the reason to expect trouble: `setjmp` costs
-**2.0 ns against `_setjmp`'s 3.0**. glibc's ISO `setjmp` *is* `_setjmp`, so
-there is no signal-mask cost to trade against and that argument is not
-available to either side.
+**A measurement in the first version of this record was wrong and is
+corrected here.** It said `setjmp` costs 2.0 ns against `_setjmp`'s 3.0, so
+there was no signal-mask cost to trade against. Both loops had compiled to
+`_setjmp`: on glibc the *macro* `setjmp` expands to `_setjmp`, which this
+record proves two paragraphs above and the benchmark then failed to work
+around. Calling the **symbol** -- `(setjmp)(env)`, or a `declare` in emitted
+IR -- measures **265.4 ns against `_setjmp`'s 2.4**, because glibc's `setjmp`
+saves the signal mask and that is a `sigprocmask` syscall.
+
+So the mask cost is real and it is 110 times, and the conclusion inverts:
+**emitting a call to `setjmp` is not an available answer for Windows.** What
+is left is a target-dependent call -- `_setjmp(env)` where the ABI is ELF and
+`_setjmp(env, frame)` where it is Win64 -- which makes the emitter aware of
+its target in a way it is not today, and is a decision with its own record
+rather than a fix.
 
 **More of the string path is now instrumented C.** What `open_memstream` did
 inside libc, this runtime does itself, so ASan, UBSan, LSan and Valgrind watch
