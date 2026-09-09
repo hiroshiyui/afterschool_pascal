@@ -22,11 +22,13 @@ library gives it? (ADR-0371)
 other symbol in it is `pas_*` or an LLVM intrinsic (`foreign-reserved`,
 ADR-0121). It is there because ISO C makes `setjmp` a *macro* whose expansion
 must appear in a very restricted set of contexts, so what a module can name is
-whatever that macro expands to; and the two platforms this compiler admits
+whatever that macro expands to; and the platforms this compiler admits
 disagree about its **arity** rather than its spelling:
 
-    glibc, Darwin   setjmp(x)  ->  _setjmp(x)
-    Win64           setjmp(x)  ->  _setjmp((x), frame)
+    glibc           setjmp(x)  ->  _setjmp(x)          a macro
+    Win64           setjmp(x)  ->  _setjmp((x), frame)  a macro, and SEH
+    Darwin          _setjmp(x)                          a function of its own,
+                                                        beside setjmp
 
 Windows unwinds through SEH and the second argument is the frame the unwinder
 walks from. Emitting the one-argument call there is a wrong arity, which is
@@ -42,7 +44,9 @@ a claim, a C compiler holding the real header judges it.** For every target
 the compiler admits, both of these are compiled and their `@_setjmp` calls
 compared:
 
-    a C probe          clang --target=<t>, calling ISO C's setjmp
+    a C probe          clang --target=<t> -- ISO C's setjmp where that is a
+                       macro naming `_setjmp`, and `_setjmp` itself where it
+                       is not, which is Darwin
     a Pascal probe     pascalc --target=<t>, with a non-local goto
 
 and the module's own `declare` has to agree with its calls, or one function
@@ -98,7 +102,22 @@ begin
 end.
 """
 
+# **Two probes, because two families answer differently.** What the emitted
+# module names is `_setjmp`, and the question is the arity *that* takes on a
+# target -- not what ISO C's `setjmp` happens to be spelled as.
+#
+#   glibc, mingw   `setjmp` is a macro that expands to `_setjmp`, so the first
+#                  probe's own IR names it and carries the arity
+#   Darwin         `setjmp` is a *function* and `_setjmp` is a second one
+#                  beside it, so the first probe emits `@setjmp` and says
+#                  nothing; the second names `_setjmp` itself
+#
+# The emitter uses `_setjmp` on every target for the reason glibc and Darwin
+# share: it is the one that does not save the signal mask, which costs a
+# `sigprocmask` syscall (ADR-0371 measured it at 265 ns against 2.4).
 C_PROBE = "#include <setjmp.h>\njmp_buf b;\nint f(void){ return setjmp(b); }\n"
+C_PROBE_DIRECT = ("#include <setjmp.h>\njmp_buf b;\n"
+                  "int f(void){ return _setjmp(b); }\n")
 
 CALL = re.compile(r"call i32 @_setjmp\(([^)]*)\)")
 DECL = re.compile(r"declare i32 @_setjmp\(([^)]*)\)")
@@ -147,6 +166,7 @@ def main():
 
 def check(work, require):
     (work / "sj.c").write_text(C_PROBE)
+    (work / "sjd.c").write_text(C_PROBE_DIRECT)
     (work / "sj.pas").write_text(PASCAL_PROBE)
 
     names = targets()
@@ -161,12 +181,24 @@ def check(work, require):
             rows.append((t, None, None, None))
             continue
         m = CALL.search(r.stdout)
-        if not m:
-            fails.append("clang emitted no call to @_setjmp for %s, so ISO C's "
-                         "setjmp expands to something else there and this "
-                         "gate's premise does not hold" % t)
-            continue
-        want = arity(m.group(1))
+        if m:
+            want = arity(m.group(1))
+        else:
+            # `setjmp` did not expand to `_setjmp` here, which is Darwin: the
+            # two are separate functions rather than a macro and its
+            # expansion. Ask about `_setjmp` directly, since that is the name
+            # the emitted module carries.
+            r = run([CLANG, "--target=" + t, "-O0", "-S", "-emit-llvm",
+                     str(work / "sjd.c"), "-o", "-"])
+            m = CALL.search(r.stdout) if r.returncode == 0 else None
+            if not m:
+                fails.append("clang for %s emitted no call to @_setjmp from "
+                             "either probe -- neither ISO C's setjmp nor a "
+                             "direct call names it, so this target does not "
+                             "have the function the emitted module declares"
+                             % t)
+                continue
+            want = arity(m.group(1))
 
         out = work / ("sj-%s.ll" % t)
         r = run([PASCALC, "--target=" + t, str(work / "sj.pas"), "-o", str(out)])
@@ -268,7 +300,7 @@ def check(work, require):
                 "so the `non-posix` job is where that half is required")
     print("setjmp-arity: %d of %d admitted target(s) compared, %d distinct "
           "arit(ies), every emitted call and declaration matching what clang "
-          "emits for ISO C's setjmp%s"
+          "says `_setjmp` takes there%s"
           % (len(compared), len(rows), len(seen), note))
     return 0
 
