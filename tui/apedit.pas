@@ -42,11 +42,12 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  Key, Decoder, Editor,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
                  EditDirty, EditLines, EditLine_, EditRow, EditCol,
-                 EditName, EditSetName, EditSay,
+                 EditName, EditSetName, EditSay, EditSaved, EditFault,
                  DecodeInit, DecodeByte);
 
 import PasError;
        PasStrVec;
+       PasParse;
 
 const
   { A screen wider or taller than this is drawn to these bounds and the rest
@@ -142,6 +143,26 @@ function EditLine_(var ed: Editor; n: integer): EditLine;
 procedure EditSetName(var ed: Editor; s: EditLine);
 procedure EditSay(var ed: Editor; s: EditLine);
 
+{ What is on screen is what is on disc, so the status line stops saying
+  otherwise. The shell calls it after a write that answered true, and only
+  then: an editor that cleared the mark before knowing the write had happened
+  would be lying at exactly the moment a person is deciding whether to quit. }
+procedure EditSaved(var ed: Editor);
+
+{ Land on the first diagnostic in `text`, which is a compiler's whole output.
+  Answers false where there is none to land on.
+
+  **This is here and not in the shell**, and that is the rule rather than a
+  convenience: the shell is bytes in and bytes out, and *where the cursor goes
+  when a compiler complains* is a decision -- so it belongs where a session
+  can drive it and a golden can hold it. The shell would otherwise be the one
+  place with behaviour nothing checks.
+
+  The shape is `file:line:col: message`, which is every diagnostic this
+  compiler writes and, since ADR-0293, every trap as well. A line that is not
+  one is passed over rather than landing the cursor somewhere arbitrary. }
+function EditFault(var ed: Editor; text: EditLine): boolean;
+
 { No bytes in hand. }
 procedure DecodeInit(var d: Decoder);
 
@@ -222,6 +243,11 @@ end;
 procedure EditSay;
 begin
   ed.says := s
+end;
+
+procedure EditSaved;
+begin
+  ed.dirty := false
 end;
 
 { The first `n` characters, and everything from the `i`th. Both answer the
@@ -357,9 +383,16 @@ begin
       They are still `Key` values because they arrive as bytes among the
       others and the decoder is the one place that knows which. }
     kkSave, kkQuit, kkBuild: ;
-    { A sequence nothing here knows. Reported, because a key that does
-      nothing and a key that was misread look alike to a person. }
-    kkUnknown: ed.says := 'unknown key';
+    { A sequence nothing here knows. Reported **with the byte in it**,
+      because a key that does nothing and a key that was misread look alike
+      to a person -- and because the first thing anybody asks is *which*
+      key. It earned that on its first run under a real terminal: Ctrl-Q
+      arrived as something else, and a message saying only `unknown key`
+      could not say what. }
+    kkUnknown: begin
+      writestr(rest, 'unknown key ', ord(k.ch):1);
+      ed.says := rest
+    end;
     kkNone: ;
   end;
   Clamp(ed)
@@ -417,6 +450,61 @@ begin
   if scr.atCol > cols then scr.atCol := cols
 end;
 
+{ Move to a position, through the keys rather than by writing the fields -- and
+  it is `MoveTo` because `GoTo` folds to a word-symbol, every one of the 45
+  being reserved (6.1.2). A
+  jump is then the same thing as a person arriving with the arrows -- the
+  clamping is `Clamp`'s, once, and a line number past the end of the document
+  lands on the last line instead of nowhere. }
+procedure MoveTo(var ed: Editor; ln, cl: integer);
+var k: Key;
+begin
+  k.ch := ' ';
+  k.kind := kkUp;
+  while ed.row > ln do EditKey(ed, k);
+  k.kind := kkDown;
+  while (ed.row < ln) and (ed.row < SVecLen(ed.lines)) do EditKey(ed, k);
+  k.kind := kkHome;
+  EditKey(ed, k);
+  k.kind := kkRight;
+  while (ed.col < cl) and (ed.col <= length(SVecGet(ed.lines, ed.row))) do
+    EditKey(ed, k)
+end;
+
+function EditFault;
+var i, start, field, ln, cl: integer; part: EditLine; r: IntResult;
+begin
+  EditFault := false;
+  start := 1;
+  field := 0;
+  ln := 0;
+  cl := 0;
+  for i := 1 to length(text) do
+    if text[i] = chr(10) then
+      { One line at a time, and the *first* that is a diagnostic wins: a
+        compiler reports many and a person works on one. }
+      exit
+    else if (text[i] = ':') and (field < 3) then begin
+      part := substr(text, start, i - start);
+      start := i + 1;
+      field := field + 1;
+      if field = 2 then begin
+        r := ParseInt(part);
+        if not r.ok then exit;
+        ln := r.val
+      end
+      else if field = 3 then begin
+        r := ParseInt(part);
+        if not r.ok then exit;
+        cl := r.val;
+        MoveTo(ed, ln, cl);
+        ed.says := From(text, start + 1);
+        EditFault := true;
+        exit
+      end
+    end
+end;
+
 procedure DecodeInit;
 begin
   d.n := 0
@@ -439,11 +527,13 @@ begin
     if d.n > 8 then begin
       d.n := 0;
       k.kind := kkUnknown;
+      k.ch := c;
       DecodeByte := true
     end
     else if (d.n = 2) and (c <> '[') then begin
       d.n := 0;
       k.kind := kkUnknown;
+      k.ch := c;
       DecodeByte := true
     end
     else if d.n >= 3 then begin
@@ -466,9 +556,15 @@ begin
         if d.b[3] = '3' then k.kind := kkDelete
         else if d.b[3] = '1' then k.kind := kkHome
         else if d.b[3] = '4' then k.kind := kkEnd
-        else k.kind := kkUnknown
+        else begin
+          k.kind := kkUnknown;
+          k.ch := d.b[3]
+        end
       end
-      else k.kind := kkUnknown
+      else begin
+        k.kind := kkUnknown;
+        k.ch := c
+      end
     end
   end
   else if b = Esc then begin
@@ -486,7 +582,10 @@ begin
     else if b = 2 then k.kind := kkBuild      { Ctrl-B }
     else if (b = 13) or (b = 10) then k.kind := kkEnter
     else if (b = 8) or (b = 127) then k.kind := kkBack
-    else if b < 32 then k.kind := kkUnknown
+    else if b < 32 then begin
+      k.kind := kkUnknown;
+      k.ch := c
+    end
     else begin
       k.kind := kkChar;
       k.ch := c

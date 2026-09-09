@@ -5,6 +5,11 @@
 #
 # `esc Z` is a real escape sequence with an ending nothing binds; `ctrl A` is
 # a control byte below 32 that is not one of the four the editor takes.
+#
+# **The message names the byte**, which it did not until the editor was first
+# run under a real terminal: Ctrl-Q arrived as something else and `unknown
+# key` could not say what. It was byte 4 -- `^D`, which `script` sends when
+# its stdin closes and which raw mode delivers as an ordinary byte.
 name keys.pas
 size 6 20
 push text

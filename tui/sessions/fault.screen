@@ -1,0 +1,60 @@
++----------------------------+
+|program p(output);          |
+|begin                       |
+|  writeln(x)                |
+|end.                        |
+|~                           |
+|~                           |
+|                            |
+|p.pas                    1:1|
++----------------------------+
+cursor 1,1
++----------------------------+
+|program p(output);          |
+|begin                       |
+|  writeln(x)                |
+|end.                        |
+|~                           |
+|~                           |
+|error: 'x' is not declared  |
+|p.pas                   3:11|
++----------------------------+
+cursor 3,11
++----------------------------+
+|program p(output);          |
+|begin                       |
+|  writeln(x)                |
+|end.                        |
+|~                           |
+|~                           |
+|error: past the end         |
+|p.pas                    4:1|
++----------------------------+
+cursor 4,1
++----------------------------+
+|program p(output);          |
+|begin                       |
+|  writeln(x)                |
+|end.                        |
+|~                           |
+|~                           |
+|error: past the line        |
+|p.pas                   1:19|
++----------------------------+
+cursor 1,19
++----------------------------+
+|program p(output);          |
+|begin                       |
+|  writeln(x)                |
+|end.                        |
+|~                           |
+|~                           |
+|no diagnostic in that       |
+|p.pas                   1:19|
++----------------------------+
+cursor 1,19
+lines 4 dirty FALSE
+  1: [program p(output);]
+  2: [begin]
+  3: [  writeln(x)]
+  4: [end.]

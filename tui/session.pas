@@ -25,6 +25,7 @@
     ctrl  <letter>   the control byte for that letter: `ctrl S` is Ctrl-S
     draw             render, and print what was drawn
     say   <text>     what the shell would have put on the message line
+    fault <text>     a compiler's output, landed on as Ctrl-B lands on it
 
   A line that is none of these stops the program, since a directive nobody
   implements is a session that asserts less than it appears to (`tests/spec/`
@@ -111,6 +112,10 @@ begin
       { a blank line and a comment, so a session can be read }
     else if w = 'name' then EditSetName(ed, arg)
     else if w = 'say' then EditSay(ed, arg)
+    else if w = 'fault' then begin
+      if not EditFault(ed, arg) then
+        EditSay(ed, 'no diagnostic in that')
+    end
     else if w = 'push' then EditPush(ed, arg)
     else if w = 'keys' then FeedAll(arg)
     else if w = 'ctrl' then begin

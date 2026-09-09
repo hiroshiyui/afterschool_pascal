@@ -1,3 +1,4 @@
 ../lib/dialect/paserror.pas
 ../lib/passtrvec.pas
+../lib/dialect/pasparse.pas
 apedit.pas

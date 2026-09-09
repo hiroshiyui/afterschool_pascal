@@ -1,0 +1,26 @@
+# Ctrl-B, and the half of it that is a decision: where the cursor goes when
+# the compiler complains. The shell runs the compiler and hands its output
+# here; this session hands the same text without running anything, which is
+# why the jump has a golden at all (ADR-0381).
+#
+# Four claims. A diagnostic lands the cursor on its line and column and puts
+# the message on the message line. A line number past the end of the document
+# lands on the last line rather than nowhere -- a compiler and an editor can
+# disagree about how long a file is, and the editor is the one holding it. A
+# column past the end of the line stops at the end of that line. And text
+# that is not a diagnostic moves nothing and says so.
+name p.pas
+size 8 28
+push program p(output);
+push begin
+push   writeln(x)
+push end.
+draw
+fault p.pas:3:11: error: 'x' is not declared
+draw
+fault p.pas:99:1: error: past the end
+draw
+fault p.pas:1:400: error: past the line
+draw
+fault this is not a diagnostic
+draw

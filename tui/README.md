@@ -13,6 +13,7 @@ here now is the half that decides things.
 | File | What it is |
 | --- | --- |
 | `apedit.pas` | the editor, with no terminal in it: a key comes in as a value and a **screen** comes out — rows by columns of characters, with the cursor's cell |
+| `apide.pas` | the shell a person runs: `PasTerm.ReadKey` in front of that model and `CursorTo` behind it, plus the file and the compiler |
 | `session.pas` | a program that replays a script against it and prints what it drew |
 | `session.components` | ISO/IEC 10206:1991 §6.13's other program-components, one path per line, in dependency order |
 | `build.py` | builds either program from its sidecar; `lsp/build.py` with the program as an argument, since `tui/` has two over one model |
@@ -49,6 +50,7 @@ esc   <text>     ESC [ <text>, so `esc A` is an up arrow
 ctrl  <letter>   the control byte for that letter: `ctrl S` is Ctrl-S
 draw             render, and print what was drawn
 say   <text>     what the shell would have put on the message line
+fault <text>     a compiler's output, landed on as Ctrl-B lands on it
 ```
 
 A screen is printed inside a border, so that a line ending in blanks and one
@@ -59,6 +61,23 @@ To add one: write the `.keys`, run `run.py`, and **read what it drew before
 saving it as the golden**. A golden agrees with whatever wrote it; that is the
 standing rule everywhere in this tree, and regenerating one is a decision to
 argue for in a commit message rather than a step.
+
+## Running it
+
+```sh
+tui/build.py tools/pascalcc apide.pas /tmp/apide
+/tmp/apide hello.pas
+```
+
+| Key | |
+| --- | --- |
+| Ctrl-S | save |
+| Ctrl-Q | quit — twice when the document has changes in it |
+| Ctrl-B | run the compiler and land the cursor on the first diagnostic |
+| arrows, Home, End | move |
+| Enter, Backspace, Delete | the three that change the shape of the document |
+
+It refuses to start where its standard input is not a terminal, and says so.
 
 ## What milestone one leaves out, on purpose
 

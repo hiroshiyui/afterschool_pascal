@@ -55,7 +55,7 @@ SESSIONS = HERE / 'sessions'
 
 # A sweep that finds nothing prints a number and passes (ADR-0282). The
 # editor has more sessions than this and each is a claim someone wrote down.
-FLOOR = 5
+FLOOR = 6
 
 
 def read_bytes(p):
@@ -88,6 +88,19 @@ def main(argv):
     if build.returncode != 0:
         print('tui: the session program did not build', file=sys.stderr)
         return build.returncode
+
+    # **And the editor itself**, which no session drives and nothing else
+    # here builds. It is the shell -- `PasTerm.ReadKey` in front of the model
+    # and `CursorTo` behind -- so what it does cannot be held to a golden
+    # (`doc/sop.md` §7). That it still *builds and links* can be, and the
+    # alternative is a program that stops compiling and is noticed by
+    # somebody running it. `warning-free` compiles it; this links it, which
+    # is the half that catches a component missing from the sidecar.
+    shell = subprocess.run([sys.executable, str(HERE / 'build.py'), pascalcc,
+                            'apide.pas', str(work / 'apide')], env=env)
+    if shell.returncode != 0:
+        print('tui: the editor did not build', file=sys.stderr)
+        return shell.returncode
 
     bad = 0
     for name in names:

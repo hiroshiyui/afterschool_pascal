@@ -12,7 +12,7 @@ cursor 1,1
 |~                   |
 |~                   |
 |~                   |
-|unknown key         |
+|unknown key 90      |
 |keys.pas         1:1|
 +--------------------+
 cursor 1,1
@@ -30,7 +30,7 @@ cursor 1,2
 |~                   |
 |~                   |
 |~                   |
-|unknown key         |
+|unknown key 1       |
 |keys.pas *       1:2|
 +--------------------+
 cursor 1,2
