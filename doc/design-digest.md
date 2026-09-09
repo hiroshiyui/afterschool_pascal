@@ -4835,6 +4835,61 @@ nothing else. What it would lose, mechanism by mechanism:
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.
 
+### The editor (`tui/apedit.pas`, `tui/apide.pas`, ADR-0381)
+
+A text-mode editor in Turbo Pascal's mould, written in the dialect. It was
+proposed, carried for six increments, **withdrawn by decision** on 2026-09-01
+— *"the language server is the better tool for what the IDE was wanted for"* —
+and un-withdrawn on 2026-09-10 for two reasons the withdrawal could not weigh:
+the *Pascal-lineage answer key* it recorded giving up, and that this is a hobby
+project and the IDE is the part its author wants to build. The server is
+undisturbed; the two answer different questions.
+
+**The mechanism is one decision and everything follows from it: the terminal
+is not in the loop.** `ApEdit` takes a key as a *value* and answers a
+*screen* — rows by columns of characters with the cursor's cell — and touches
+no descriptor. So:
+
+- **`tui/session.pas` replays a script and prints what was drawn**, and
+  `tui/run.py` compares it byte for byte. That is `lsp/run.py`'s conversation
+  replay with the framing taken out, and it needs no pseudo-terminal —
+  ADR-0262 declined a PTY binding because a case needing one becomes a test of
+  the binding.
+- **What a session compares is the screen and not the buffer.** A buffer
+  assertion passes on an editor that edits correctly and draws nothing, and
+  drawing is what a person sees. The buffer is printed once at the end, so the
+  other direction is covered too.
+- **The shell decides nothing**, and that is checked by where things live
+  rather than by intent: parsing a diagnostic and jumping to it began in
+  `apide.pas` and moved into `EditFault`, because *where the cursor goes when
+  a compiler complains* is a decision. What is left in the shell is
+  `PasTerm.ReadKey`, `CursorTo`, the file, and `PasProcess.Execute` — never
+  `Run`, an editor opening arbitrary paths being exactly ADR-0362's injection.
+
+Three things the goldens settled that an argument would not have. **The
+message is about the last key**: it used to persist, and a session showed
+`unknown key` on screen while the person typed, describing a key two
+keystrokes ago. **`Left`/`From` rather than `substr` at fourteen sites**,
+§6.5.6 requiring an index and a length that name characters the value has and
+every edit having an empty half at one end. And **the unknown-key message
+carries the byte**, which it earned on the first run under a real terminal:
+Ctrl-Q appeared not to work, and what had arrived was `^D` — sent by `script`
+when its stdin closes, and delivered by raw mode as an ordinary byte.
+
+`PasTerm` gained the alternate screen, colour and a reset for it, each a
+string like the five before them. `clDefault` is numbered **8 and not 9**
+because SGR 38 is the extended-colour introducer rather than a colour, so a
+subrange running to 9 would admit a value that makes a terminal swallow
+whatever is written next; one private function maps 8 to 39 and 49.
+
+What no oracle here reaches is the shell itself — `doc/sop.md` §7 carries the
+row, which ADR-0262 owed and never wrote. It was checked by hand under a
+pseudo-terminal: the alternate screen entered and left, the cursor hidden
+across a redraw, a keystroke arriving without a newline, and `stty` reporting
+`icanon` and `echo` back on after a clean exit.
+
+
+
 ### TLS is a module, and the risk moved to a transcription (ADR-0264)
 
 `lib/dialect/pastls.pas` binds OpenSSL through the `external` directive

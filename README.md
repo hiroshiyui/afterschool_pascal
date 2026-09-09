@@ -579,6 +579,36 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"outline","
   | PASLS_COMPILER=build/bin/pascalc ~/bin/pasls --mcp
 ```
 
+### In a terminal
+
+`tui/` holds a text-mode editor in Turbo Pascal's mould, written in this
+language and over this library (ADR-0381). It opens a file, edits it, saves
+it, and runs the compiler with the cursor landing on the first diagnostic.
+
+```sh
+tui/build.py tools/pascalcc apide.pas ~/bin/apide
+~/bin/apide hello.pas
+```
+
+| Key | |
+| --- | --- |
+| Ctrl-S | save |
+| Ctrl-Q | quit, and twice where the document has changes in it |
+| Ctrl-B | compile, and go to the first error |
+| arrows, Home, End | move |
+| Enter, Backspace, Delete | change the shape of the document |
+
+It is a first milestone and says what it is not: no horizontal scrolling — a
+line wider than the window is cut and the cursor stops with it — no mouse, no
+undo, and a column is a byte, since the number of terminal cells a character
+occupies is a property of the Unicode database this language does not carry.
+
+**`tui/apedit.pas` has no terminal in it**: a key goes in as a value and a
+screen comes out, rows by columns with the cursor's cell. That is what lets
+the editor be tested at all — `tui/run.py` replays scripted keys and compares
+the screens byte for byte — and it is why the part that talks to the terminal
+is a few dozen lines. `tui/README.md` has the rest.
+
 ## The language
 
 **There is one language and nothing to select** (ADR-0232). Version 2 had three

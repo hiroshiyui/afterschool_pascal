@@ -13,6 +13,28 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A text-mode editor**, `tui/apide.pas`, in Turbo Pascal's mould and written
+  in this language: open, edit, save, and Ctrl-B to compile with the cursor
+  landing on the first diagnostic. Build it with
+  `tui/build.py tools/pascalcc apide.pas ~/bin/apide`. A first milestone, and
+  it says what it is not — no horizontal scrolling, no mouse, no undo, and a
+  column is a byte.
+- **`PasTerm` gained the alternate screen, colour and a reset**:
+  `EnterScreen`, `LeaveScreen`, `SetColour` and `ResetColour`, each a string
+  the caller writes where it likes, as the five sequences before them are.
+
+### Removed
+
+- **`--target=x86_64-w64-windows-gnu`, and every other spelling of it.** The
+  compiler emits for five machines and every one of them is POSIX. Windows was
+  measured rather than assumed — a program was built and run under wine — and
+  then dropped: what remained was a frame-layout change compared across every
+  target and seven headers of winsock, for a platform this project does not
+  run. The measurements are kept in `doc/history.md` for anyone who wants to
+  take it up, and practical compatibility work is still welcome.
+
 ## [3.8.0] - 2026-09-09
 
 **The platforms were measured instead of assumed, and one of them was told
