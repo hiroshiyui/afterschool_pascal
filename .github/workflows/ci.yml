@@ -821,9 +821,10 @@ jobs:
     # every one of the nine failures that got it there was a harness assuming
     # Linux and not one was in the compiler.
     #
-    # **What still skips, and it is eight.** The promotion left ten, read off
+    # **What still skips, and it is nine.** The promotion left ten, read off
     # the run at a84659a; two of them were skipping because this job did not
-    # ask, and this change asks:
+    # ask and this change asks, and ADR-0369 then added a gate that wants a
+    # cross compiler this runner has not got:
     #
     #   benchmark          abstains where $CI is set, by design (ADR-0282)
     #   llc-second-backend no llc; Homebrew's llvm has one
@@ -831,12 +832,14 @@ jobs:
     #                      skipped for the reason it exists to report
     #   valgrind-corpus    no valgrind on arm64
     #   runtime-coverage   no llvm-profdata and no llvm-cov
+    #   runtime-nonposix   no mingw-w64; the `non-posix` job is where that one
+    #                      is required to answer (ADR-0369)
     #   fpc-differential   no fpc
     #   tls                no OpenSSL headers; the system `openssl` is
     #                      LibreSSL, which is a different transcription
     #   target32           no 32-bit libc
     #
-    # **Every one of the eight names a tool this runner has not got**, which is
+    # **Every one of the nine names a tool this runner has not got**, which is
     # the property the two that closed did not have: `verify-lowering` skipped
     # because z3 was installed with a flag Homebrew's Python refuses and the
     # failure was swallowed by `|| true`, and `unicode-conformance` skipped
@@ -848,7 +851,7 @@ jobs:
     # diffed on a second platform.
     #
     # **`SANITIZE_REQUIRE` and `UNICODE_CONFORMANCE_REQUIRE` are set and the
-    # other eight variables are not.** `sanitizers`, `thread-sanitizer` and
+    # other nine variables are not.** `sanitizers`, `thread-sanitizer` and
     # now `unicode-conformance` run here and pass, so a variable pins what is
     # true rather than demanding something new; the rest name tools this
     # runner has not got, and a job that fails because a tool is absent

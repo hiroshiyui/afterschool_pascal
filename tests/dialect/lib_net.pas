@@ -84,13 +84,22 @@ begin
     answering a code can report, so the runtime ignores the signal where a
     socket is first made.
 
-    Written until it is refused rather than exactly twice. The first write
-    goes into the kernel's buffer and it is the peer's reset that makes a
-    later one fail -- but *how many* later is the kernel's business, and two
-    was Linux's answer read as though it were every kernel's: on macOS the
-    second still succeeded and this reported no error at all. The bound is
-    what keeps a failure a failure, so a connection that never refuses ends
-    the loop with the last code it gave. }
+    **What is asserted is that the program survives, and that is the whole
+    of what this language decides.** Whether a write is refused, and how many
+    writes later, is the kernel's and not this processor's. This case learned
+    that twice. It first wrote exactly twice, which was Linux's answer read as
+    though it were every kernel's; the bound of a hundred that replaced it was
+    the same bet at a larger number, and macOS lost it on run 34307309352 --
+    a hundred writes of twenty-five bytes fit in a send buffer, so no reset
+    was ever seen and the golden's `the operation was refused` became
+    `no error`.
+
+    So the outcome is no longer in the golden. What is: this line is reached
+    at all. If SIGPIPE were not ignored the process would end without a
+    diagnostic at the first refused write -- which is Linux's second -- and
+    nothing below would print. That makes the claim deterministic where the
+    signal exists and vacuous where the kernel never refuses, which is the
+    right way round: a test may not assert a kernel's buffering. }
   e := NetConnect(cli, 'localhost', port);
   e := NetAccept(srv, conn);
   conn := nil;
@@ -99,7 +108,7 @@ begin
     e := NetWriteLine(cli, 'into a closed connection');
     tries := tries + 1
   until Failed(e) or (tries >= 100);
-  writeln('write to closed: ', ErrorText(e));
+  writeln('write to closed: a code came back and the program is still here');
   cli := nil;
 
   { A line longer than the string it is going into. The capacity checked is
