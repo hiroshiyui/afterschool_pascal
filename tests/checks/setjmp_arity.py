@@ -203,17 +203,45 @@ def check(work, require):
     missing = [r[0] for r in rows if r[1] is None]
 
     if not compared:
-        fails.append("no target could be compared at all -- clang has the "
-                     "headers for none of them, so this asked nothing")
+        # **A clang that can answer for none of the admitted targets cannot
+        # ask this question at all**, and a check that cannot ask says so
+        # rather than failing -- `foreign-layout` with no C compiler and
+        # `target-sizes` with only the host do the same.
+        #
+        # The three positions a runner is in, written down because reasoning
+        # about one machine is how this check was wrong twice:
+        #
+        #   Linux with mingw-w64   all four compared, and SETJMP_ARITY_REQUIRE
+        #                          demands two arities among them
+        #   Linux without it       the three Linux targets compared and in
+        #                          agreement; it says which it could not reach
+        #   macOS                  **none**: every admitted target is a Linux
+        #                          or a Windows triple and Apple clang has a
+        #                          sysroot for neither, so it skips
+        #
+        # The third is why this arm exists. It is also the sharpest argument
+        # for admitting a Darwin triple, which would make the host target
+        # comparable there (doc/sop.md 7).
+        if require:
+            fails.append("SETJMP_ARITY_REQUIRE is set and clang has the "
+                         "headers for none of the admitted targets, so this "
+                         "job asked nothing")
+        else:
+            print("setjmp-arity: skipped, clang here has the headers for "
+                  "none of the %d admitted target(s) -- every one is a Linux "
+                  "or a Windows triple" % len(rows))
+            return 77
     elif require:
-        # **The discriminating claim, and it is only available where the
-        # toolchain can answer for a target with the other arity** (ADR-0330).
-        if missing:
-            fails.append("SETJMP_ARITY_REQUIRE is set and clang has no headers "
-                         "for %s -- install the cross toolchain, or this job is "
-                         "not asking the question it says it is"
-                         % ", ".join(missing))
-        elif len(seen) < 2:
+        # **The discriminating claim, and it is the only thing required.**
+        # Not that every admitted target be comparable: no job guarantees a
+        # sysroot for all of them, and the container that sets this variable
+        # installs cross libcs for aarch64 and armhf and none for i386 -- so
+        # demanding reachability failed there for want of a toolchain nobody
+        # had asked for, which is this check's own mistake made a second time
+        # (ADR-0330). What the variable is for is that *two arities* were
+        # seen, which is the whole of what makes the comparison about
+        # target-dependence rather than about one platform.
+        if len(seen) < 2:
             fails.append("every compared target wanted %d argument(s), so "
                          "nothing here exercised the target-dependence this "
                          "gate exists for. If a target with the other arity "

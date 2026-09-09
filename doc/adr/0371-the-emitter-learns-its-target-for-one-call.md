@@ -103,12 +103,20 @@ not found`) rather than falling back to the host's header and answering about
 the wrong C library, which was checked before it was relied on. On a machine
 with no mingw-w64 the only target with the other arity is exactly the one that
 cannot be compared, so demanding two arities everywhere would fail for want of
-a cross toolchain rather than for a defect. `SETJMP_ARITY_REQUIRE` demands it,
+a cross toolchain rather than for a defect. `SETJMP_ARITY_REQUIRE` demands it — **it, and only it**: not that every
+admitted target be reachable, no job guaranteeing a sysroot for all of them.
+The container that sets the variable installs cross libcs for aarch64 and
+armhf and none for i386, so demanding reachability failed there for want
+of a toolchain nobody had asked for. Two arities among whatever was compared
+is the whole of the claim.
 and it is set in the container job that builds and runs the suite, which
 installs mingw-w64 for this and nothing else (ADR-0330). Not in `non-posix`,
 which has the cross toolchain but deliberately builds nothing — the Pascal
 probe has to be compiled by the compiler under test. Elsewhere the check compares what it can and says
-what it could not.
+what it could not — and where it can compare **nothing** it skips (77), which is
+macOS: every admitted target is a Linux or a Windows triple and Apple clang
+has a sysroot for neither. That third case is the sharpest argument for
+admitting a Darwin triple, which would make the host target comparable there.
 
 Three mutations were run: reverting the Win64 call to one argument fails it on
 all three counts, including the floor; leaving the *declaration* alone at one
