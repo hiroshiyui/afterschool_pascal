@@ -772,35 +772,42 @@ jobs:
     # every one of the nine failures that got it there was a harness assuming
     # Linux and not one was in the compiler.
     #
-    # **What still skips, and it is ten** -- read off the run at a84659a
-    # rather than predicted:
+    # **What still skips, and it is eight.** The promotion left ten, read off
+    # the run at a84659a; two of them were skipping because this job did not
+    # ask, and this change asks:
     #
     #   benchmark          abstains where $CI is set, by design (ADR-0282)
-    #   verify-lowering    z3 is installed with `|| true` above and did not
     #   llc-second-backend no llc; Homebrew's llvm has one
     #   target-sizes       reached the host and no cross compiler, so it
     #                      skipped for the reason it exists to report
     #   valgrind-corpus    no valgrind on arm64
     #   runtime-coverage   no llvm-profdata and no llvm-cov
-    #   unicode-conformance the database is fetched, never committed, and this
-    #                      job does not fetch it -- the cheapest of the ten to
-    #                      close, and deliberately not closed in the same
-    #                      change as the promotion: it makes the runtime
-    #                      compile under `-pedantic-errors -Werror` on a
-    #                      compiler nothing here has tried, which is a second
-    #                      question and belongs in its own commit
     #   fpc-differential   no fpc
     #   tls                no OpenSSL headers; the system `openssl` is
     #                      LibreSSL, which is a different transcription
     #   target32           no 32-bit libc
     #
-    # **`SANITIZE_REQUIRE` is set and the other nine variables are not.**
-    # `sanitizers` and `thread-sanitizer` already run here and pass, so the
-    # variable pins what is true rather than demanding something new; the
-    # rest name tools this runner has not got, and a job that fails because a
-    # tool is absent reports the runner and not the port (ADR-0330).
-    # `VALGRIND_REQUIRE` and `RUNTIME_COVERAGE_REQUIRE` guard their own skips,
-    # so setting this one does not reach them.
+    # **Every one of the eight names a tool this runner has not got**, which is
+    # the property the two that closed did not have: `verify-lowering` skipped
+    # because z3 was installed with a flag Homebrew's Python refuses and the
+    # failure was swallowed by `|| true`, and `unicode-conformance` skipped
+    # because nothing here fetched the database. Neither was a fact about
+    # macOS. What the second buys is the more interesting of the two: the
+    # runtime's Unicode translation unit now compiles under
+    # `-pedantic-errors -Werror` on Apple clang, a compiler nothing in this
+    # repository had asked, and the committed tables are regenerated and
+    # diffed on a second platform.
+    #
+    # **`SANITIZE_REQUIRE` and `UNICODE_CONFORMANCE_REQUIRE` are set and the
+    # other eight variables are not.** `sanitizers`, `thread-sanitizer` and
+    # now `unicode-conformance` run here and pass, so a variable pins what is
+    # true rather than demanding something new; the rest name tools this
+    # runner has not got, and a job that fails because a tool is absent
+    # reports the runner and not the port (ADR-0330). `VALGRIND_REQUIRE` and
+    # `RUNTIME_COVERAGE_REQUIRE` guard their own skips, so setting these does
+    # not reach them. `verify-lowering` has no such variable in any job: the
+    # step below imports z3 and fails if it cannot, which is the arrangement
+    # the two container jobs use.
     #
     # The compiler emits an x86-64 Linux header (`--target=` admits no Darwin
     # triple yet); clang overrides it when it assembles, as the aarch64 job
@@ -822,12 +829,33 @@ jobs:
           clang --version
           cmake --version | head -1
           python3 --version
-          # z3 for verify/, as the Linux jobs install it; a failure here is
-          # reported and the proofs skip rather than the job stopping. It has
-          # been failing, which is why `verify-lowering` is in the skip list
-          # above; the proofs are a property of the model and not of this
-          # platform, so it is the least urgent of the ten.
-          python3 -m pip install --user z3-solver || true
+
+      - name: Install z3, so the proofs are not a Linux fact
+        run: python3 -m pip install --break-system-packages z3-solver
+        # `python3 -m pip install --user z3-solver || true` was what this
+        # said, and the run at a84659a reports `verify-lowering` skipped --
+        # so the install did not leave an importable z3 and the `|| true`
+        # turned that into a silent skip of the 43 SMT rules. The runner's
+        # python3 is Homebrew's, which marks its installation externally
+        # managed (PEP 668); `--break-system-packages` is what the two
+        # container jobs already pass, for that PEP and that reason.
+        #
+        # **The `|| true` is the part that mattered.** An install that fails
+        # is now a red step with a name, so the next time this is wrong the
+        # job says which step and not which gate.
+
+      - name: Require z3, so the proofs cannot silently skip
+        run: python3 -c 'import z3; print("z3", z3.get_version_string())'
+        # verify/verify.py skips when z3 is absent, which is right for a
+        # checkout and wrong here. Same step, same words, as the container
+        # jobs.
+
+      - name: Fetch the pinned Unicode Character Database
+        run: runtime/unicode/fetch.py
+        # The oracle nobody in this project wrote (ADR-0189, ADR-0190), and
+        # the only reason it was skipping here is that this job did not ask
+        # for it. `fetch.py` downloads through urllib and needs no curl. The
+        # directory it writes is gitignored.
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -838,6 +866,7 @@ jobs:
       - name: Test
         env:
           SANITIZE_REQUIRE: '1'
+          UNICODE_CONFORMANCE_REQUIRE: '1'
         run: ctest --test-dir build --output-on-failure -j"$(sysctl -n hw.ncpu)"
         # `CI` is set by GitHub, so `benchmark` abstains (ADR-0282).
 
