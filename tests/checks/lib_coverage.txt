@@ -20,30 +20,30 @@
 # Regenerate with:  python3 tests/checks/lib_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 456
-instrumented 3521
+uncovered 386
+instrumented 3556
 
 lib/dialect/pascontainer.pas 0/9
-lib/dialect/pasdir.pas 1/20
-lib/dialect/pasenv.pas 0/8
-lib/dialect/paserror.pas 0/8
-lib/dialect/pasfs.pas 10/35
+lib/dialect/pasdir.pas 1/21
+lib/dialect/pasenv.pas 0/11
+lib/dialect/paserror.pas 0/11
+lib/dialect/pasfs.pas 4/48
 lib/dialect/pashttp.pas 14/291
 lib/dialect/pashttps.pas 19/19
-lib/dialect/pasio.pas 6/22
-lib/dialect/pasjson.pas 47/409
+lib/dialect/pasio.pas 1/23
+lib/dialect/pasjson.pas 41/409
 lib/dialect/paslist.pas 2/35
-lib/dialect/paslsp.pas 71/147
+lib/dialect/paslsp.pas 20/147
 lib/dialect/paslspdiag.pas 20/96
 lib/dialect/pasmathx.pas 0/4
-lib/dialect/pasnet.pas 4/53
+lib/dialect/pasnet.pas 4/55
 lib/dialect/pasos.pas 0/5
 lib/dialect/pasparse.pas 0/28
-lib/dialect/pasprocess.pas 3/85
+lib/dialect/pasprocess.pas 3/94
 lib/dialect/pasregex.pas 6/332
 lib/dialect/passortx.pas 0/0
-lib/dialect/passtream.pas 0/26
-lib/dialect/pasterm.pas 7/32
+lib/dialect/passtream.pas 0/29
+lib/dialect/pasterm.pas 5/32
 lib/dialect/pastime.pas 2/147
 lib/dialect/pastls.pas 149/149
 lib/dialect/pastoml.pas 78/928

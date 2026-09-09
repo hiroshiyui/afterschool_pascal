@@ -224,11 +224,27 @@ def run(root, pascalc, pasrt, work, args):
         # measures is one somebody will stop running.
         cwd = work / f"run{idx}"
         cwd.mkdir(exist_ok=True)
+        # **Run it the way the suite runs it** (ADR-0378). `run_test.py` hands
+        # every case two writable scratch paths and feeds it `<stem>.in` when
+        # there is one; this sweep passed no arguments and fed `/dev/null`,
+        # so a case whose header names external files stopped at its first
+        # statement -- `lib_fs.pas` and six others -- and three that read
+        # their input reached only the statements before the first `read`.
+        # The lines were counted as unreached, which is a number that means
+        # "the sweep did not run this" while reading as "the corpus does not
+        # cover this". `lib_fs_tempdir.pas` exists as the parameterless
+        # workaround and is now a case about `TemporaryDirectory` rather than
+        # a stand-in.
+        stdin_file = src.with_suffix(".in")
         timed_out = False
         try:
-            subprocess.run([str(exe)], capture_output=True, timeout=15,
-                           cwd=str(cwd), stdin=subprocess.DEVNULL,
-                           env=dict(os.environ, PASCOV_LINES=str(lines)))
+            with (open(stdin_file, "rb") if stdin_file.is_file()
+                  else open(os.devnull, "rb")) as fin:
+                subprocess.run([str(exe), str(cwd / "file1"),
+                                str(cwd / "file2")],
+                               capture_output=True, timeout=15,
+                               cwd=str(cwd), stdin=fin,
+                               env=dict(os.environ, PASCOV_LINES=str(lines)))
         except subprocess.TimeoutExpired:
             timed_out = True
         if not lines.exists():
@@ -253,7 +269,7 @@ def run(root, pascalc, pasrt, work, args):
         total_ins += len(denom[m])
 
     # A floor, so a run that linked nothing cannot pass by measuring nothing
-    # (ADR-0282). The library is 32 modules and thousands of statements.
+    # (ADR-0282). The library is 33 modules and thousands of statements.
     if total_ins < 2000:
         print(f"lib-coverage: only {total_ins} statements instrumented, "
               f"below the floor of 2000", file=sys.stderr)
@@ -310,16 +326,46 @@ def run(root, pascalc, pasrt, work, args):
         print(f"lib-coverage: no ratchet at {path} -- "
               f"run with --write-ratchet", file=sys.stderr)
         return 1
-    was = {}
-    prev_unc = None
+    was, was_ins = {}, {}
+    prev_unc = prev_ins = None
     for line in path.read_text().splitlines():
         if line.startswith("uncovered "):
             prev_unc = int(line.split()[1])
+        elif line.startswith("instrumented "):
+            prev_ins = int(line.split()[1])
         elif line and not line.startswith("#") and "/" in line:
             n, r = line.rsplit(" ", 1)
             was[n] = int(r.split("/")[0])
-    if prev_unc is None:
+            was_ins[n] = int(r.split("/")[1])
+    if prev_unc is None or prev_ins is None:
         print("lib-coverage: the ratchet names no total", file=sys.stderr)
+        return 1
+
+    # **The denominator is a claim too, and it was decoration** (ADR-0378).
+    # `instrumented` and each row's `n/M` were written by --write-ratchet and
+    # read by nothing: the header said 3521 while the run measured 3556 and
+    # the gate passed, which is exactly the defect ADR-0354 closed in
+    # `runtime-coverage` and it was here in a second gate the same week. A
+    # denominator that moves unremarked is the half a ratchet on the numerator
+    # cannot see -- a module losing statements takes uncovered ones with it and
+    # the number improves. So both totals are compared, in both directions, and
+    # so is every module's own; a legitimate change to `lib/` re-ratchets and
+    # says what moved, which is the whole cost and the whole point.
+    if total_ins != prev_ins:
+        print(f"lib-coverage: {total_ins} statements instrumented, where the "
+              f"ratchet says {prev_ins}. `lib/` gained or lost executable "
+              f"statements, which is fine and is not this gate's to guess at:\n"
+              f"  python3 tests/checks/lib_coverage.py --write-ratchet\n"
+              f"and say in the commit message what moved.", file=sys.stderr)
+        return 1
+    drift = [(name, was_ins[name], ins) for name, unc, ins in rows
+             if name in was_ins and was_ins[name] != ins]
+    if drift:
+        for name, before, now in drift:
+            print(f"lib-coverage: {name} is {now} statements where the ratchet "
+                  f"says {before}", file=sys.stderr)
+        print("  python3 tests/checks/lib_coverage.py --write-ratchet",
+              file=sys.stderr)
         return 1
     if total_unc > prev_unc:
         print(f"lib-coverage: {total_unc} statements never run, was "

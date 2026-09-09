@@ -386,3 +386,4 @@ the alternatives that were rejected and why.
 | [0375](0375-macos-ships-an-archive.md) | macOS ships an archive | Accepted |
 | [0376](0376-one-symbol-one-signature.md) | One symbol, one signature | Accepted |
 | [0377](0377-a-link-is-followed-by-nobody.md) | A link is followed by nobody | Accepted |
+| [0378](0378-a-sweep-runs-a-case-the-way-the-suite-does.md) | A sweep runs a case the way the suite does | Accepted |

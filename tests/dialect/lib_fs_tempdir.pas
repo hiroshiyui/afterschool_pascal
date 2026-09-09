@@ -5,9 +5,11 @@
   second name composed beside it in a shared directory is a name somebody
   else may have planted a link at first.
 
-  Its own case rather than a paragraph in lib_fs.pas, because that program
-  takes a program-parameter and `lib-coverage` runs every case with none --
-  so nothing past its first statement is ever measured there. }
+  Its own case rather than a paragraph in lib_fs.pas, and the reason has
+  since gone: that program takes a program-parameter, and `lib-coverage` ran
+  every case with none, so nothing past its first statement was measured
+  there. The sweep passes the arguments now (ADR-0378) and this case stands
+  on TemporaryDirectory alone. }
 program lib_fs_tempdir(output);
 
 import PasError;
