@@ -271,7 +271,12 @@ def sweep(seedcc, args, here, root, work):
     # the program's IR would let a change in ApTypes or ApFront reproduce
     # itself unnoticed, which is the exact shape of hole the bootstrap check
     # exists to close.
-    def build(cc, src, outbin):
+    def build(cc, src, outbin, opt=()):
+        # `opt` is what this case is to be assembled and linked at, read from
+        # the sidecar and the environment by the caller -- see `case_opt`.
+        # Empty for the compiler's own three builds, which have no sidecar and
+        # are not corpus cases.
+        opt = list(opt)
         src = str(src)
         stem = src[:-4] if src.endswith(".pas") else src
         # `dirname` of a bare name is `.` and not the empty string, which is
@@ -346,8 +351,9 @@ def sweep(seedcc, args, here, root, work):
                 ir_files.append(str(ll))
                 obj = work / ("c%d.o" % n)
                 with open(link_err, "wb") as le:
-                    rc = run(["clang", "-Wno-override-module", "-fPIC", "-c",
-                              str(ll), "-o", str(obj)], stderr=le)
+                    rc = run(["clang"] + opt
+                             + ["-Wno-override-module", "-fPIC", "-c",
+                                str(ll), "-o", str(obj)], stderr=le)
                 if rc != 0:
                     return 2
                 objects.append(str(obj))
@@ -392,8 +398,9 @@ def sweep(seedcc, args, here, root, work):
                 ir_files.append(str(ll))
                 obj = work / ("c%d.o" % n)
                 with open(link_err, "wb") as le:
-                    rc = run(["clang", "-Wno-override-module", "-fPIC", "-c",
-                              str(ll), "-o", str(obj)], stderr=le)
+                    rc = run(["clang"] + opt
+                             + ["-Wno-override-module", "-fPIC", "-c",
+                                str(ll), "-o", str(obj)], stderr=le)
                 if rc != 0:
                     return 2
                 objects.append(str(obj))
@@ -407,11 +414,43 @@ def sweep(seedcc, args, here, root, work):
             return 1
         ir_files.append(str(ir))
         with open(link_err, "wb") as le:
-            rc = run(["clang", "-Wno-override-module", str(ir)] + objects
-                     + [runtime, "-lm", "-o", str(outbin)], stderr=le)
+            rc = run(["clang"] + opt + ["-Wno-override-module", str(ir)]
+                     + objects + [runtime, "-lm", "-o", str(outbin)],
+                     stderr=le)
         if rc != 0:
             return 2
         return 0
+
+    # Which optimisation level to assemble and link a *case* at, with
+    # tests/run_test.py's precedence and for its reasons:
+    #
+    #   name.opt                  this case pins one, because the other level
+    #                             hides what it is testing
+    #   AFTERSCHOOL_PASCAL_OPT    the whole run wants one
+    #   neither                   nothing, which is clang's own default of -O0
+    #
+    # The two harnesses must read a sidecar the same way or a case means two
+    # things -- the argument .components and .importpath are already read
+    # under. This one read it in neither direction: `.opt` appeared nowhere in
+    # this file and no clang invocation here carried any -O at all, so the
+    # three cases that pin `-O0` were getting it by accident, and a sweep
+    # asking for a level was ignored. With AFTERSCHOOL_PASCAL_OPT=-O2 set,
+    # `tests/for_nested_stack.pas` was assembled with no -O flag on either of
+    # its two clang invocations and the whole run carried -O2 zero times.
+    #
+    # **The default stays bare, and that is deliberate.** doc/sop.md 6 records
+    # that this harness links at -O0 and that ADR-0220 was found by it; making
+    # the default -O2 to match pascalcc's would spend that. What changes is
+    # that -O0 is now what a case asked for rather than what nobody chose,
+    # and that a sweep at another level reaches this harness at all.
+    def case_opt(stem):
+        f = Path(stem + ".opt")
+        if f.is_file():
+            return ["".join(f.read_text().split())]
+        env_opt = os.environ.get("AFTERSCHOOL_PASCAL_OPT", "")
+        if env_opt:
+            return [env_opt]
+        return []
 
     # Stage 1 is built by the seed -- seed/*.ll assembled into a compiler --
     # where it used to be built by the C++ one. Nothing else about the chain
@@ -491,7 +530,7 @@ def sweep(seedcc, args, here, root, work):
             # fails with no .err is a regression, and is reported rather than
             # skipped. Deciding by expectation alone would let a program that
             # must not compile pass by failing to.
-            rc = build(cc, f, work / name)
+            rc = build(cc, f, work / name, case_opt(stem))
             if rc != 0:
                 if Path(expected_err).is_file():
                     if stage == "stage1":
