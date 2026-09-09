@@ -99,6 +99,7 @@ def numbers(text):
 # *how many cases there are* is the number two documents quote and the one a
 # reader is likeliest to trust.
 RUNNING = re.compile(r"^\s*\d+/(\d+) Testing: ")
+SKIPPED = re.compile(r"\s*(skipped|skipping|no )", re.IGNORECASE)
 
 
 def summaries(log, gate):
@@ -113,8 +114,14 @@ def summaries(log, gate):
         totals = {m.group(1) for m in
                   (RUNNING.match(ln) for ln in log.split("\n")) if m}
         return [f"ctest: {t} cases in the suite" for t in sorted(totals)]
-    return [ln for ln in log.split("\n")
-            if ln.strip().startswith(gate + ":")]
+    said = [ln for ln in log.split("\n") if ln.strip().startswith(gate + ":")]
+    # **A gate that skipped still writes a line**, and it is not an answer:
+    # `target32: skipped -- clang cannot link for i386-pc-linux-gnu` carries
+    # the numbers 32 and 386 out of the triple, and comparing a document
+    # against those reports the document as wrong. Anchored after the colon,
+    # because `sanitize[address]`'s real summary ends `209 skipped` and that
+    # one *is* an answer.
+    return [ln for ln in said if not SKIPPED.match(ln.strip()[len(gate) + 1:])]
 
 
 def main():
@@ -166,7 +173,7 @@ def main():
                       f"again")
 
     log = log_path.read_text(encoding="utf-8", errors="replace")
-    fails, rows, checked = [], 0, 0
+    fails, rows, checked, unchecked = [], 0, 0, []
     for raw in (root / CATALOGUE).read_text().split("\n"):
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -184,10 +191,15 @@ def main():
             continue
         said = summaries(log, gate)
         if not said:
-            fails.append(f"{CATALOGUE} names the gate {gate}, which wrote no "
-                         f"summary in the last run -- it skipped, or its name "
-                         f"changed, and either way the row is checking "
-                         f"nothing")
+            # **Not every gate runs in every job.** `target32`, the four
+            # `sanitize` modes and `runtime-nonposix` each have a job of their
+            # own here, so a `test` job's log holds no answer from them --
+            # and neither does a developer's run on a machine without a
+            # 32-bit libc or mingw-w64. The row is *reported unchecked*
+            # rather than failed, which is `setjmp-arity`'s arrangement
+            # (ADR-0371): compare where the answer is available, say plainly
+            # where it was not, and refuse only if nothing could be compared.
+            unchecked.append(f"{doc} <- {gate}")
             continue
         theirs = set()
         for ln in said:
@@ -216,13 +228,22 @@ def main():
     if rows < FLOOR:
         fails.append(f"{CATALOGUE} holds {rows} row(s), below the floor of "
                      f"{FLOOR} -- a catalogue that names nothing passes")
+    if rows and not checked:
+        fails.append(f"not one of {rows} row(s) could be compared -- every "
+                     f"gate they name is absent from this log, so this is not "
+                     f"a suite run this catalogue is about")
     if fails:
         print("quoted-numbers:", file=sys.stderr)
         for f in fails:
             print("  " + f, file=sys.stderr)
         return 1
-    print(f"quoted-numbers: {checked} number(s) quoted across {rows} row(s) "
-          f"are each still what the gate reports")
+    note = ""
+    if unchecked:
+        note = (f"; {len(unchecked)} row(s) unchecked, their gate not having "
+                f"run here -- " + ", ".join(sorted(unchecked)))
+    print(f"quoted-numbers: {checked} number(s) quoted across "
+          f"{rows - len(unchecked)} of {rows} row(s) are each still what the "
+          f"gate reports{note}")
     return 0
 
 
