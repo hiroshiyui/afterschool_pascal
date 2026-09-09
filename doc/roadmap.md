@@ -27,7 +27,7 @@ green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with ten skips listed and a release leg still disabled; **Windows** needs two `FILE*`-over-memory functions, `_access`, and an answer for MSVC's missing `_Complex`; **s390x** aligns `tySet` where nothing else does |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with ten skips listed and a release leg still disabled; **Windows** is measured now rather than read ([below](#cross-platform-support)): two `FILE*`-over-memory functions and a `longjmp` spelling, `_Complex` and `access` not being problems under mingw-w64 at all — and a socket layer nobody had costed; **s390x** aligns `tySet` where nothing else does |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
@@ -241,7 +241,7 @@ target measurement is
 | Target | What it needs |
 | --- | --- |
 | **macOS** | **a job that can fail, since [ADR-0368](adr/0368-macos-is-a-job-that-can-fail.md).** 901 of 911 cases run and pass on arm64; `SANITIZE_REQUIRE` is set, the other nine variables name tools the runner has not got. **Ten skips remain and the job's comment lists them with the reason for each** — the cheapest is `unicode-conformance`, which skips only because that job does not fetch the database. Two things are open rather than done: `--target=` admits no Darwin triple, so a program builds because clang overrides the module's header and nothing there may believe it (`doc/sop.md` §7); and the release-matrix leg is still disabled, which is three decisions rather than a run finding anything — the `package` job's comment names them. Nine failures got it there and **not one was in the compiler** — every one was a harness assuming Linux ([history](history.md#the-first-macos-run)) |
-| **Windows** | `fmemopen` and `open_memstream` do not exist in the CRT, so `readstr` and `writestr` need two `FILE*`-over-memory functions; `access` is `_access`; MSVC lacks the `_Complex` §6.7.6.2's functions are written in |
+| **Windows** | **Measured against mingw-w64 rather than read, on 2026-09-09** (Debian's `x86_64-w64-mingw32-gcc` 16-win32, run under wine 10.0), and the row it replaces was wrong in both directions. Reproduce it with `x86_64-w64-mingw32-gcc -std=c11 -O2 -I runtime -c runtime/<unit>.c` — `pasrt_unicode.c` **compiles clean**, which is the whole of AP 6.4.15. What is real: **`fmemopen` and `open_memstream`**, absent there as in the MSVC CRT, so `readstr` and `writestr` still need two `FILE*`-over-memory functions; and `_longjmp`, which is a spelling — mingw has `longjmp` and the difference is only whether the signal mask is restored. What is **not**: `access` compiles and links against `<io.h>`, so that was an MSVC-only problem; `_Complex` is declared and implemented for all seven functions `pasrt.c` uses, and a probe built from that block compiles under this tree's own `-pedantic-errors -Werror`, links, runs, and agrees with glibc — `(1+1i)**2` differs in the last bits and mingw is the *more* accurate of the two, which `tests/extended/complex.pas` cannot see at `:6:3` anyway. `timespec_get`/`TIME_UTC` are `#ifdef _UCRT` in mingw's `<time.h>`, so they are a CRT choice and not a gap — unsettled here only because this machine's `mingw32ucrt` sysroot has `lib` and no `include`. **And the weight is somewhere nobody had costed**: `pasrt_posix.c` stops at `netdb.h`, and behind it are `sys/socket.h`, `poll.h`, `spawn.h`, `termios.h`, `sys/wait.h` and `sys/ioctl.h` — winsock2 with its own initialisation and error convention, `WSAPoll` for `poll`, and no `posix_spawn` for `PasProcess.Execute`. Fifteen call sites name a socket primitive and that is a **floor**: the compile stops at the first missing header, so the rest of its 1 177 lines was never reached |
 | **s390x** | aligns `tySet`'s `i256` to 8 where every other target says 16 — thirteen offsets, and `target-layout`'s second claim would catch it |
 
 **What is not claimed**: the seed is generated for x86-64 and stays so; the
@@ -367,7 +367,12 @@ written — and the check is a reader, not a gate (`doc/sop.md` §7).
 - **A row saying a feature is blocked is a row nobody has tried.** Three in
   succession were settled by attempting them (ADR-0283, ADR-0284, ADR-0286),
   each having carried a stated reason it could not be done. A reason beside a
-  declined item is an estimate like any other, wherever it is written.
+  declined item is an estimate like any other, wherever it is written. **A
+  fourth, and this one was wrong in both directions**: the Windows row named
+  three things and two of them — `access` and `_Complex` — were problems with
+  MSVC and not with the platform, while the item that actually carries the
+  weight, a socket layer, was not on the row at all. Half an hour with a cross
+  compiler settled it; nobody had installed one.
 - **An item can be re-scoped by measuring it** rather than arguing about it
   (ADR-0276), and **measure the cost before naming the mechanism** — four
   times the expensive-looking sentence was not where the time went
