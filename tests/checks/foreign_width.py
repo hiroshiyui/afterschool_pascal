@@ -63,6 +63,74 @@ def declarations(src: str):
         i = j + 1
     return out
 
+# --- one symbol, one signature (ADR-0376) ---------------------------------
+#
+# A C function may be declared in more than one module here -- `fclose` is,
+# and `fgetc`, and `fflush` -- and nothing compared the declarations. LLVM
+# does not: under opaque pointers a direct call is not checked against its
+# declaration, so two modules disagreeing about what `fopen` returns is
+# undefined behaviour with no diagnostic anywhere, which is `doc/sop.md` §7's
+# row about an `external` nobody checks.
+#
+# **What is compared is the representation and not the spelling**, because two
+# modules legitimately name one C type differently: `PasStream`'s `Stream` and
+# `PasProcess`'s `Pipe` are both `handle external`, so both are a pointer and
+# the declarations agree. Comparing the words would report a difference that
+# is not one.
+#
+# A genuine difference needs a row in the catalogue and an argument above it,
+# which is how `pasprocess.pas` passing `csize` where `passtream.pas` passes a
+# handle is admitted: that call is `fflush(NULL)` and the source says so.
+# Treating `csize` and a handle as the same class everywhere would bless the
+# hazard ADR-0128 exists to refuse -- an address carried in an integer.
+REPEATS = "tests/checks/foreign_repeats.txt"
+
+SCALARS = ("integer", "int64", "clong", "csize", "real", "char", "boolean",
+           "string")
+
+
+def handles_in(src):
+    """The types declared as `<Name> = handle external '...'`, which are
+    pointers whatever they are called.
+
+    **Collected across every file, not per file.** A module that *imports* a
+    handle type names it without declaring it -- `PasTls` takes `Socket` from
+    `PasNet` -- so a file-local scan resolves the same type two ways and
+    reports a difference that is not one. It reported exactly that for
+    `pasx_socket_fd`, which is the symbol `doc/sop.md` §7 already worried
+    about, so the false positive looked like the real thing. `export-unique`
+    (ADR-0298) is what makes one map sound: no two modules export one
+    spelling, so a name means one type across the tree."""
+    return {m.group(1).lower() for m in
+            re.finditer(r"(?im)^\s*(\w+)\s*=\s*handle\s+external\b", src)}
+
+
+def shape(block, handles):
+    """A declaration's representation: the class of each parameter and of the
+    result, with the Pascal names resolved away."""
+    sig = block.split("external '")[0]
+    head, _, res = sig.rpartition("):")
+    if not head:
+        head, res = sig.split("(", 1)[0] if "(" in sig else sig, ""
+        params = ""
+    else:
+        params = head.split("(", 1)[1] if "(" in head else ""
+
+    def cls(t):
+        t = t.strip().strip(";").lower().lstrip("^?")
+        if t in handles:
+            return "handle"
+        return t if t in SCALARS else t
+
+    out = []
+    for seg in params.split(";"):
+        if ":" not in seg:
+            continue
+        kind = "var " if re.match(r"\s*(protected\s+)?var\b", seg) else ""
+        out.append(kind + cls(seg.rsplit(":", 1)[1]))
+    return tuple(out), cls(res.strip().rstrip(";"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=str(pathlib.Path(__file__).resolve().parents[2]))
@@ -71,13 +139,22 @@ def main():
     root = pathlib.Path(args.root)
     found = {}
     total = 0
-    for r in ROOTS:
-        for p in sorted((root / r).rglob("*.pas")):
-            for line, name, block in declarations(p.read_text(encoding="utf-8", errors="replace")):
+    repeats = {}
+    sources = [(p, p.read_text(encoding="utf-8", errors="replace"))
+               for r in ROOTS for p in sorted((root / r).rglob("*.pas"))]
+    handles = set()
+    for _, text in sources:
+        handles |= handles_in(text)
+    for p, text in sources:
+            for line, name, block in declarations(text):
                 total += 1
                 sig = block.split("external '")[0]
                 if re.search(r"\bint64\b", sig, re.IGNORECASE):
                     found[f"{p.relative_to(root)}:{name}"] = line
+                sym = block.split("external '")[1].split("'")[0]
+                repeats.setdefault(sym, []).append(
+                    (f"{p.relative_to(root)}:{line}", name,
+                     shape(block, handles)))
     fails = []
     if total < FLOOR:
         fails.append(f"only {total} external declarations found under {ROOTS}; the sweep reads nothing")
@@ -118,13 +195,47 @@ def main():
     else:
         print(f"foreign-width: no compiler at {pascalc}; the emitter's half was not asked", file=sys.stderr)
 
+    # --- one symbol, one signature -------------------------------------
+    argued = {}
+    rp = root / REPEATS
+    for raw in rp.read_text().split("\n"):
+        t = raw.strip()
+        if t and not t.startswith("#"):
+            argued[t.split()[0]] = t
+    seen_argued, n_repeat = set(), 0
+    for sym in sorted(repeats):
+        decls = repeats[sym]
+        if len(decls) < 2:
+            continue
+        n_repeat += 1
+        shapes = {sh for _, _, sh in decls}
+        if len(shapes) == 1:
+            if sym in argued:
+                fails.append(
+                    f"{REPEATS} names {sym}, whose declarations now agree -- "
+                    f"that is a fix and it has to be recorded: strike the row")
+            continue
+        seen_argued.add(sym)
+        if sym not in argued:
+            where = "; ".join(f"{w} {n}{sh[0]}: {sh[1]}" for w, n, sh in decls)
+            fails.append(
+                f"{sym} is declared with more than one representation and "
+                f"{REPEATS} does not name it -- LLVM compares no direct call "
+                f"against its declaration, so one of these is undefined "
+                f"behaviour with no diagnostic: {where}")
+    for sym in sorted(set(argued) - seen_argued):
+        fails.append(f"{REPEATS} names {sym}, which is not declared with two "
+                     f"representations under {ROOTS} any more -- remove the row")
+
     if fails:
         print("foreign-width:", file=sys.stderr)
         for f in fails:
             print("  " + f, file=sys.stderr)
         return 1
     print(f"foreign-width: {total} external declarations under {ROOTS}, {len(found)} bind int64 and every one is catalogued; "
-          f"a slice's count is size_t on each of {len(want)} targets")
+          f"a slice's count is size_t on each of {len(want)} targets; "
+          f"{n_repeat} symbol(s) are declared more than once and every one "
+          f"has a single representation or a row saying why not")
     return 0
 
 if __name__ == "__main__":

@@ -1,0 +1,33 @@
+# Foreign symbols declared under lib/ and lsp/ with more than one
+# *representation*, each with the argument for why that is right (ADR-0376).
+#
+# A C function may be declared in several modules here and nothing compared
+# the declarations until this. LLVM does not: under opaque pointers a direct
+# call is not checked against its declaration, so two modules disagreeing
+# about what `fopen` returns is undefined behaviour with no diagnostic
+# anywhere — `doc/sop.md` §7's row about an `external` nobody checks, met from
+# the one side a gate can reach.
+#
+# **What is compared is the representation, not the spelling.** Two modules
+# legitimately name one C type differently: `PasStream`'s `Stream` and
+# `PasProcess`'s `Pipe` are both `handle external`, so both are a pointer and
+# the declarations agree without a row. This file is for a difference that is
+# real.
+#
+# Both directions: a symbol whose declarations disagree and has no row fails,
+# and a row for a symbol whose declarations now agree fails as well — that is
+# a fix, and it has to be recorded (ADR-0013's rule).
+#
+# Format: <symbol> <tab or spaces> <why the two representations are right>
+
+# `fflush` takes a `FILE *`. `PasStream` passes one, as a handle.
+# `PasProcess` passes **null** — `fflush(NULL)` flushes every open stream, and
+# there is no handle for "no stream" — so it declares the parameter `csize`,
+# which is pointer-width by AP 6.4.2.7 and is what ADR-0328 added for exactly
+# this: saying "whatever this target's is" without writing a number. The
+# source says so at `lib/dialect/pasprocess.pas`.
+#
+# It is a row rather than a blanket rule that a handle and a `csize` are the
+# same thing, because they are not: an address carried in an integer is the
+# hazard ADR-0128 refuses, and admitting it everywhere would spend that.
+fflush     PasProcess passes null, which no handle can spell; csize is pointer-width

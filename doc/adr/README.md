@@ -384,3 +384,4 @@ the alternatives that were rejected and why.
 | [0373](0373-one-conditional-and-it-is-catalogued.md) | One conditional, and it is catalogued | Accepted |
 | [0374](0374-a-windows-program-runs.md) | A Windows program runs | Accepted |
 | [0375](0375-macos-ships-an-archive.md) | macOS ships an archive | Accepted |
+| [0376](0376-one-symbol-one-signature.md) | One symbol, one signature | Accepted |
