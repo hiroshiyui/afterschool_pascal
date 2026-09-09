@@ -404,11 +404,69 @@ Set `AFTERSCHOOL_PASCAL_TARGET` instead to point a whole run of `pascalcc` at
 one machine without writing the flag each time; an explicit `--target=` wins.
 
 The repository is developed on x86-64 Linux, and the compiler is **built and
-tested on arm64 as well**: the same suite runs there natively on every push.
-No release ships an aarch64 binary, and the seed is still generated
-for x86-64 — but it needs no editing to be used elsewhere: `clang` overrides
-the two header lines with the host's, and the compiler that comes out passes
-the whole suite.
+tested on arm64 and on macOS as well**: the same suite runs on each natively
+on every push, and since ADR-0368 the macOS job is one that can fail. A
+32-bit gate builds the corpus for i386 and runs it. The seed is still
+generated for x86-64 and needs no editing to be used elsewhere: `clang`
+overrides the two header lines with the host's, and the compiler that comes
+out passes the whole suite.
+
+### Platform tiers
+
+**GNU/Linux is the first tier**, and that is a statement about where the
+answers come from rather than a preference. The seed is generated for x86-64;
+every release ships an `x86_64-linux` and an `aarch64-linux` archive; every
+gate in `doc/sop.md` has its tools installed by some job and runs on every
+push; and a 32-bit gate builds the corpus for i386 and runs it, at two
+optimisation levels.
+
+**macOS (arm64) is the second**: the whole suite runs there natively on every
+push and the job can fail (ADR-0368), so a break is a red bar and not a
+surprise later. Nine gates skip there for want of a tool the runner has not
+got, and the job's comment names each with its reason. No release ships a
+macOS archive yet.
+
+**Everything else is unsupported, and contributions are very welcome.**
+Windows, FreeBSD, OpenBSD, NetBSD and Haiku — practical compatibility work on
+any of them, from anyone who wants to run it there. Windows is *deferred*
+rather than untried (ADR-0374), which means the measurements below are real
+and current.
+
+What a contributor starts from is measurement rather than guesswork, which is
+the point of the machinery below:
+
+- **`python3 tests/checks/runtime_nonposix.py`** compiles each of the
+  runtime's four translation units for a target that is not POSIX and reports
+  which of them build, which want only a different C runtime, and — for one
+  that does not build — *every* header the target lacks rather than the first,
+  because a missing header is a fatal error and stops the compile. Point it at
+  another toolchain with `APASCAL_NONPOSIX_CC`.
+- **`tests/checks/nonposix_headers.txt`** is what it holds that against, and
+  the answers are pinned to one toolchain on purpose: two mingw-w64 versions
+  disagreed about a name and the catalogue said so.
+- **`doc/adr/0369` to `0374`** are the working, in order, and ADR-0374 carries
+  the commands that build and run a Windows program end to end.
+
+**The shape of a port, measured against mingw-w64:** `runtime/pasrt.c` and
+`runtime/pasrt_unicode.c` compile; `runtime/pasrt_task.c` wants only the
+platform's modern C runtime; `runtime/pasrt_posix.c` is the POSIX half and
+wants seven headers — sockets, the terminal and `posix_spawn`. Ten of the
+seventeen it names are already there, so the directory walk, the file
+information and the file model are *not* what is missing. Whether a first port
+ships `PasNet` at all is the open question, and a port without it is a much
+smaller thing.
+
+**Two findings are worth knowing before starting**, both from running rather
+than compiling. The runtime has to be built by `clang` on Windows, because
+mingw-gcc compiles `_Thread_local` to emulated TLS that the emitted module's
+native TLS cannot link against. And `_setjmp` on Win64 needs a 16-byte-aligned
+buffer, which this compiler does not yet give it — the non-local goto faults,
+and the fix moves frame offsets that `target-layout` compares. Both are in
+`doc/sop.md` §7 and ADR-0374.
+
+**What a port must not do** is weaken what holds elsewhere. Every gate in
+`doc/sop.md` fails in both directions, and a platform difference belongs in a
+catalogue that says which platform and why — not in a check that stops asking.
 
 `--coverage` compiles a program that records which of its own statements ran
 and which way each of its decisions went. Set `PASCOV_LINES` and
