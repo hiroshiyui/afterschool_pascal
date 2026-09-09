@@ -890,7 +890,12 @@ set_tests_properties(runtime-isoc PROPERTIES
 # Checked the way `foreign-layout` checks a record -- the source states a
 # claim and a C compiler holding the real header judges it. The target list is
 # the compiler's own refusal, so a fifth is compared without editing the
-# check, and the floor is that the answers are *not all the same*.
+# check. **A target is compared only where clang has that target's headers**
+# -- asking for a triple whose sysroot is absent fails cleanly rather than
+# answering about the host's C library -- so the floor that the answers are
+# *not all the same* is conditional: `SETJMP_ARITY_REQUIRE` demands it, and
+# the `non-posix` job, which installs mingw-w64, is where it is set
+# (ADR-0330).
 add_test(NAME setjmp-arity
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/setjmp_arity.py)
 set_tests_properties(setjmp-arity PROPERTIES

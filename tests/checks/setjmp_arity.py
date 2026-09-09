@@ -48,10 +48,20 @@ compared:
 and the module's own `declare` has to agree with its calls, or one function
 has two signatures in one module.
 
-**The floor is that the answers are not all the same.** A gate comparing four
-targets that happen to agree proves nothing about target-dependence, so at
-least two distinct arities must be seen -- which is what makes this a check on
-the *rule* and not on one platform.
+**A target is compared only where clang has that target's headers**, and it
+says which it could not reach. Asking clang for a triple whose sysroot is not
+installed fails cleanly -- `'setjmp.h' file not found` -- rather than falling
+back to the host's header and answering about the wrong C library, which was
+checked before this was relied on.
+
+**The floor that the answers are not all the same is therefore conditional.**
+A gate comparing three targets that happen to agree proves nothing about
+target-dependence -- but on a machine with no mingw-w64 the only target with
+the other arity is precisely the one that cannot be compared, so demanding it
+everywhere would fail for want of a cross toolchain rather than for a defect.
+`SETJMP_ARITY_REQUIRE` is what demands it, and the `non-posix` job -- which
+installs mingw-w64 for `runtime-nonposix` -- is where it is set (ADR-0330).
+Without it this compares what it can and says what it could not.
 
 Skips (77) without clang. Not without a target: the compiler names its own,
 so a fifth is compared without this file being edited (ADR-0144).
@@ -126,14 +136,15 @@ def main():
         print("setjmp-arity: no compiler at %s" % PASCALC, file=sys.stderr)
         return 1
 
+    require = os.environ.get("SETJMP_ARITY_REQUIRE", "")
     work = Path(tempfile.mkdtemp())
     try:
-        return check(work)
+        return check(work, require)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def check(work):
+def check(work, require):
     (work / "sj.c").write_text(C_PROBE)
     (work / "sj.pas").write_text(PASCAL_PROBE)
 
@@ -188,19 +199,29 @@ def check(work):
                          "two signatures" % (t, decls, got))
 
     compared = [r for r in rows if r[1] is not None]
-    if len(compared) < 2:
-        fails.append("only %d target(s) could be compared and the floor is 2 "
-                     "-- a gate that asks about one platform is not asking "
-                     "about the rule" % len(compared))
-    elif len(seen) < 2:
-        fails.append("every compared target wanted %d argument(s), so nothing "
-                     "here exercised the target-dependence this gate exists "
-                     "for. If a target with the other arity was removed, this "
-                     "check goes with it" % seen.pop())
+    missing = [r[0] for r in rows if r[1] is None]
+
+    if not compared:
+        fails.append("no target could be compared at all -- clang has the "
+                     "headers for none of them, so this asked nothing")
+    elif require:
+        # **The discriminating claim, and it is only available where the
+        # toolchain can answer for a target with the other arity** (ADR-0330).
+        if missing:
+            fails.append("SETJMP_ARITY_REQUIRE is set and clang has no headers "
+                         "for %s -- install the cross toolchain, or this job is "
+                         "not asking the question it says it is"
+                         % ", ".join(missing))
+        elif len(seen) < 2:
+            fails.append("every compared target wanted %d argument(s), so "
+                         "nothing here exercised the target-dependence this "
+                         "gate exists for. If a target with the other arity "
+                         "was removed, this check goes with it" % seen.pop())
 
     for t, want, got, decls in rows:
         if want is None:
-            print("setjmp-arity: %-24s no clang for this target here" % t)
+            print("setjmp-arity: %-24s not compared -- clang has no headers "
+                  "for it here" % t)
         else:
             print("setjmp-arity: %-24s %d argument(s), and clang agrees"
                   % (t, got))
@@ -212,10 +233,14 @@ def check(work):
             print("        " + f, file=sys.stderr)
         return 1
 
+    note = ""
+    if len(seen) < 2 and not require:
+        note = (" -- no target with a differing arity could be reached here, "
+                "so the `non-posix` job is where that half is required")
     print("setjmp-arity: %d of %d admitted target(s) compared, %d distinct "
           "arit(ies), every emitted call and declaration matching what clang "
-          "emits for ISO C's setjmp"
-          % (len(compared), len(rows), len(seen)))
+          "emits for ISO C's setjmp%s"
+          % (len(compared), len(rows), len(seen), note))
     return 0
 
 

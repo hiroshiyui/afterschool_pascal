@@ -94,12 +94,26 @@ a C probe with clang and a Pascal probe with a non-local goto, and requires
 The target list is the compiler's own `--target=` refusal (ADR-0144), so a
 fifth is compared without editing the check.
 
-**Its floor is that the answers are not all the same.** A gate comparing four
-targets that happen to agree proves nothing about target-dependence, so at
-least two distinct arities must be seen. Three mutations were run: reverting
-the Win64 call to one argument fails it on all three counts, including the
-floor; leaving the *declaration* alone at one argument fails on the
-signature; and both name the target.
+**Its floor is that the answers are not all the same** — a gate comparing
+targets that happen to agree proves nothing about target-dependence — **and
+that floor is conditional, which the first version of this record did not
+say.** A target is compared only where clang has that target's headers:
+asking for a triple whose sysroot is absent fails cleanly (`'setjmp.h' file
+not found`) rather than falling back to the host's header and answering about
+the wrong C library, which was checked before it was relied on. On a machine
+with no mingw-w64 the only target with the other arity is exactly the one that
+cannot be compared, so demanding two arities everywhere would fail for want of
+a cross toolchain rather than for a defect. `SETJMP_ARITY_REQUIRE` demands it
+and the `non-posix` job — which installs mingw-w64 for `runtime-nonposix` — is
+where it is set (ADR-0330). Elsewhere the check compares what it can and says
+what it could not.
+
+Three mutations were run: reverting the Win64 call to one argument fails it on
+all three counts, including the floor; leaving the *declaration* alone at one
+argument fails on the signature; and both name the target. Two more cover the
+conditional floor itself, through a clang wrapper that refuses the mingw
+triple: unrequired it passes and reports the target as not compared, and
+required it fails naming the missing toolchain.
 
 ## Consequences
 

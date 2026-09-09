@@ -237,6 +237,25 @@ jobs:
         env:
           NONPOSIX_REQUIRE: '1'
         run: python3 tests/checks/runtime_nonposix.py
+
+      - name: ...and the one call whose shape is the target's
+        env:
+          SETJMP_ARITY_REQUIRE: '1'
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+          python3 tests/checks/setjmp_arity.py
+        # ADR-0371. `setjmp-arity` runs as a ctest case everywhere and compares
+        # what the local clang has headers for; on a machine without mingw-w64
+        # that is the three Linux targets, which all want one argument, so the
+        # comparison is true and proves nothing about *target-dependence*.
+        # This job is the one that installs the cross toolchain, so it is the
+        # one that can demand the discriminating half: every admitted target
+        # compared, and at least two distinct arities among them. Same
+        # arrangement as the step above it and as `target32` (ADR-0330).
+        #
+        # It builds the compiler, which the step above does not need -- the
+        # Pascal probe has to be compiled by the compiler under test.
         # Without this the check skips wherever the cross compiler did not
         # arrive, and a skip is a green job that compiled nothing. Same
         # arrangement as `second-backend`, `unicode-conformance` and
