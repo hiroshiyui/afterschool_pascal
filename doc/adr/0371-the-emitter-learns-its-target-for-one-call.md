@@ -103,9 +103,11 @@ not found`) rather than falling back to the host's header and answering about
 the wrong C library, which was checked before it was relied on. On a machine
 with no mingw-w64 the only target with the other arity is exactly the one that
 cannot be compared, so demanding two arities everywhere would fail for want of
-a cross toolchain rather than for a defect. `SETJMP_ARITY_REQUIRE` demands it
-and the `non-posix` job — which installs mingw-w64 for `runtime-nonposix` — is
-where it is set (ADR-0330). Elsewhere the check compares what it can and says
+a cross toolchain rather than for a defect. `SETJMP_ARITY_REQUIRE` demands it,
+and it is set in the container job that builds and runs the suite, which
+installs mingw-w64 for this and nothing else (ADR-0330). Not in `non-posix`,
+which has the cross toolchain but deliberately builds nothing — the Pascal
+probe has to be compiled by the compiler under test. Elsewhere the check compares what it can and says
 what it could not.
 
 Three mutations were run: reverting the Win64 call to one argument fails it on

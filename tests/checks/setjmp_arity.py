@@ -59,8 +59,9 @@ A gate comparing three targets that happen to agree proves nothing about
 target-dependence -- but on a machine with no mingw-w64 the only target with
 the other arity is precisely the one that cannot be compared, so demanding it
 everywhere would fail for want of a cross toolchain rather than for a defect.
-`SETJMP_ARITY_REQUIRE` is what demands it, and the `non-posix` job -- which
-installs mingw-w64 for `runtime-nonposix` -- is where it is set (ADR-0330).
+`SETJMP_ARITY_REQUIRE` is what demands it, and the container job that builds
+and runs the suite is where it is set, that job installing mingw-w64 for this
+and nothing else (ADR-0330).
 Without it this compares what it can and says what it could not.
 
 Skips (77) without clang. Not without a target: the compiler names its own,

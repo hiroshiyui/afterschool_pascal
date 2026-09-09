@@ -80,6 +80,16 @@ jobs:
           apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
             gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
+          # ...and mingw-w64, for `setjmp-arity` and nothing else (ADR-0371).
+          # That gate compares the arity of the `_setjmp` this compiler emits
+          # against what clang emits for ISO C's `setjmp`, on every target the
+          # compiler admits -- and a target can only be compared where clang
+          # has its headers. Without this package the three Linux targets are
+          # compared, all agree, and the comparison proves nothing about the
+          # *target-dependence* it exists to check. It is here rather than in
+          # the `non-posix` job because the Pascal probe has to be compiled by
+          # the compiler under test, and that job deliberately builds nothing.
+          apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
           # z3 for verify/, from pip, which is what verify/README.md documents.
           # --break-system-packages because Debian and Ubuntu both mark their
           # Python installations externally managed (PEP 668).
@@ -128,6 +138,11 @@ jobs:
           # arrangement as `second-backend`, which installs llc and refuses to
           # pass by skipping.
           TARGET_SIZES_REQUIRE: aarch64-linux-gnu arm-linux-gnueabihf
+          # This job installed mingw-w64 above, so `setjmp-arity` must reach
+          # it: without this it compares the three Linux targets, finds them
+          # in agreement and passes, which is a green run that asked nothing
+          # about target-dependence (ADR-0330, ADR-0371).
+          SETJMP_ARITY_REQUIRE: '1'
         # 435 cases: the two corpora, the 157 error-path sources, the SMT
         # rules, the stage-2/stage-3 fixed point, and the product check.
 
@@ -237,29 +252,6 @@ jobs:
         env:
           NONPOSIX_REQUIRE: '1'
         run: python3 tests/checks/runtime_nonposix.py
-
-      - name: ...and the one call whose shape is the target's
-        env:
-          SETJMP_ARITY_REQUIRE: '1'
-        run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(nproc)"
-          python3 tests/checks/setjmp_arity.py
-        # ADR-0371. `setjmp-arity` runs as a ctest case everywhere and compares
-        # what the local clang has headers for; on a machine without mingw-w64
-        # that is the three Linux targets, which all want one argument, so the
-        # comparison is true and proves nothing about *target-dependence*.
-        # This job is the one that installs the cross toolchain, so it is the
-        # one that can demand the discriminating half: every admitted target
-        # compared, and at least two distinct arities among them. Same
-        # arrangement as the step above it and as `target32` (ADR-0330).
-        #
-        # It builds the compiler, which the step above does not need -- the
-        # Pascal probe has to be compiled by the compiler under test.
-        # Without this the check skips wherever the cross compiler did not
-        # arrive, and a skip is a green job that compiled nothing. Same
-        # arrangement as `second-backend`, `unicode-conformance` and
-        # `target32`.
 
   fpc-differential:
     # The other oracle nobody here wrote (ADR-0234), and the only one that is a
