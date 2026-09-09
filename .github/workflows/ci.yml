@@ -193,6 +193,55 @@ jobs:
             exit 1
           fi
 
+  non-posix:
+    # **Is the runtime still portable to a target that is not POSIX?**
+    # (ADR-0369) Every target this tree compiles the runtime for is
+    # `*-linux-gnu`: `target-sizes` builds `runtime/*.c` for nine triples and
+    # all nine are Linux, so nothing here noticed the runtime drifting further
+    # from a platform without those headers. doc/roadmap.md's Windows row was
+    # a measurement somebody took by hand once, and a row there is meant to be
+    # a report.
+    #
+    # A job of its own for `unicode-conformance`'s reason: a red bar should
+    # name the question. This one is cheap -- four translation units and 34
+    # one-line header probes, under a second -- so it is not here for time,
+    # it is here so that "the runtime stopped compiling for Windows" is a job
+    # name and not a line inside the suite.
+    #
+    # No build, no ctest: the check compiles C and nothing else, so the
+    # compiler this repository produces is not needed to answer it.
+    name: the runtime on a target that is not POSIX
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git python3 gcc-mingw-w64-x86-64
+          # The cross compiler *and* its headers. `target-sizes` learned this
+          # the hard way -- Debian ships a driver and its C library
+          # separately, and with --no-install-recommends the driver can arrive
+          # alone, run, fail to find <stdio.h>, and make every unit look
+          # blocked for a reason that is about the runner. The check tells
+          # that state apart and says so; this line is what keeps it from
+          # arising.
+
+      - uses: actions/checkout@v4
+
+      - name: Record which toolchain measured it
+        run: x86_64-w64-mingw32-gcc --version | head -1
+
+      - name: Run it, and refuse to pass by skipping
+        env:
+          NONPOSIX_REQUIRE: '1'
+        run: python3 tests/checks/runtime_nonposix.py
+        # Without this the check skips wherever the cross compiler did not
+        # arrive, and a skip is a green job that compiled nothing. Same
+        # arrangement as `second-backend`, `unicode-conformance` and
+        # `target32`.
+
   fpc-differential:
     # The other oracle nobody here wrote (ADR-0234), and the only one that is a
     # *processor* rather than published data. Every program in tests/ otherwise

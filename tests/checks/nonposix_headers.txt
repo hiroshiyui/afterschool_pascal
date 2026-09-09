@@ -1,0 +1,65 @@
+# What the runtime asks of a target that is not POSIX, measured against
+# mingw-w64 (ADR-0369).
+#
+# `runtime-isoc` bounds each translation unit by the headers it may include;
+# this asks the question that one cannot: **are those headers there on a
+# platform that is not POSIX**, and does the unit compile once they are. Every
+# target this tree compiles the runtime for is `*-linux-gnu` -- `target-sizes`
+# builds it for nine triples and all nine are Linux -- so until this file the
+# answer was a measurement somebody took by hand once and wrote into
+# doc/roadmap.md.
+#
+# **The whole point is that a floor becomes a list.** A missing header is a
+# *fatal* error, so compiling the unit tells you the first one and nothing
+# about the rest: doc/roadmap.md's Windows row said `pasrt_posix.c` stops at
+# `netdb.h` and that "the rest of its 1 177 lines was never reached". Each
+# `#include <...>` is therefore probed on its own, one one-line translation
+# unit per header, and what comes back is every header the target lacks.
+#
+# Two claims, both directions each:
+#
+#   unit:    <name>  compiles | blocked
+#   header:  <name>  <header>        one row per header the target lacks
+#
+# A unit that stops compiling, one that starts, a header that goes missing and
+# a header that arrives are four failures and not one -- the KNOWN_GAP rule
+# (ADR-0013) applied to a port. Progress must be recorded here, so closing a
+# blocker is a commit that edits this file.
+#
+# What this cannot see is a unit blocked for a *new* reason while still
+# blocked for an old one: the status is one bit. doc/sop.md 7 carries that.
+
+# --- which translation units compile for the target -----------------------
+#
+# pasrt_unicode.c compiling clean is the whole of AP 6.4.15 -- normalisation
+# and grapheme segmentation over tables, and nothing else. It is the one unit
+# a port gets for free, and it is measured here rather than hoped for.
+unit  pasrt.c            blocked
+unit  pasrt_posix.c      blocked
+unit  pasrt_task.c       blocked
+unit  pasrt_unicode.c    compiles
+
+# --- the headers the target has not got -----------------------------------
+#
+# `pasrt.c` and `pasrt_task.c` have every header they name; what blocks them
+# is names inside those headers, which is a different claim and is not this
+# file's (doc/roadmap.md's Windows row states them: `_longjmp`, `fmemopen`
+# and `open_memstream` for the first, `timespec_get`/`TIME_UTC` for the
+# second, and the second pair is `#ifdef _UCRT` in mingw's own <time.h>, so a
+# CRT choice rather than a gap).
+#
+# **Seven, and the shape of them is the finding.** `pasrt_posix.c` names ten
+# headers that ARE there -- dirent.h, errno.h, fcntl.h, signal.h, stdio.h,
+# stdlib.h, string.h, sys/stat.h, time.h, unistd.h -- so the directory walk,
+# the file information and the process plumbing are not what is missing. What
+# is missing is sockets, the terminal and `posix_spawn`, which is the layer
+# doc/roadmap.md says nobody had costed. A first target that ships without
+# PasNet is therefore a much smaller thing than "port pasrt_posix.c", and
+# this file is how that stays true rather than being re-argued.
+header  pasrt_posix.c  netdb.h
+header  pasrt_posix.c  poll.h
+header  pasrt_posix.c  spawn.h
+header  pasrt_posix.c  sys/ioctl.h
+header  pasrt_posix.c  sys/socket.h
+header  pasrt_posix.c  sys/wait.h
+header  pasrt_posix.c  termios.h

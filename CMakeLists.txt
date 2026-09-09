@@ -865,6 +865,28 @@ set_tests_properties(runtime-isoc PROPERTIES
                      TIMEOUT 600
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# The neighbouring question, and the one nothing here could ask (ADR-0369):
+# the row above bounds each translation unit by the headers it *may* include,
+# which is a claim about this source. This asks whether those headers are
+# **there**, on a target that is not POSIX, and whether the unit compiles once
+# they are. Every target this tree compiles the runtime for is `*-linux-gnu` --
+# `target-sizes` builds it for nine triples and all nine are Linux -- so until
+# this the answer was one hand measurement written into doc/roadmap.md.
+#
+# What it buys over that measurement is that a floor becomes a list: a missing
+# header is a *fatal* error, so compiling `pasrt_posix.c` reports `netdb.h` and
+# stops. Each `#include <...>` is probed on its own, which is how seven come
+# back instead of one.
+#
+# Skips (77) without a mingw-w64 cross compiler; the `non-posix` CI job sets
+# NONPOSIX_REQUIRE so it cannot pass by skipping there (ADR-0330).
+add_test(NAME runtime-nonposix
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/runtime_nonposix.py)
+set_tests_properties(runtime-nonposix PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 600
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The corpus under AddressSanitizer, UndefinedBehaviorSanitizer and
 # LeakSanitizer (ADR-0261). It is the only oracle here that watches the
 # runtime's own *storage*: every other gate compares what a program printed,
