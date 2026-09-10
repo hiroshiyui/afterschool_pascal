@@ -1311,6 +1311,7 @@ add_test(NAME tui-palette
 # differ.
 add_test(NAME icu-width
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/icu_width.py)
+set_tests_properties(icu-width PROPERTIES SKIP_RETURN_CODE 77)
 
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})

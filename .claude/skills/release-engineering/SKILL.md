@@ -172,12 +172,43 @@ When performing release engineering, always follow these steps:
    to upload, and `release-archive` runs both halves under `ctest` on every
    push, so a script that has stopped working is found before this step.
 
-10. **Tag the release** — create an annotated tag
-   (`git tag -a vX.Y.Z -m "vX.Y.Z"`) and push both the commit and the tag
-   (`git push && git push --tags`). Skip if no remote is configured and report
-   the local tag instead.
+10. **Push the release commit — the commit alone — and wait for CI to be green
+   on it.**
+   ```sh
+   git push                                   # the commit, and not the tag
+   gh run list --limit 1                      # watch it to completion
+   ```
+   **Do not push the commit and the tag together.** `git push && git push
+   --tags` is the shape that costs a version number, and it cost one: v3.10.0
+   was tagged on a commit that was green on the machine that cut it and red on
+   macOS and on ubuntu:24.04, because a gate compared against the C library's
+   `wcwidth` and every platform has a different one (ADR-0398 to ADR-0400).
 
-11. **The tag does the rest** (ADR-0296, `.github/workflows/ci.yml`). Once
+   The reason it is expensive is that a tag is a **published ref** and the tag
+   job is the only thing that creates a release, so a red tag build leaves a
+   tag with nothing attached to it and exactly two ways out, both bad: move a
+   ref other people may have fetched, or burn the version number and ship the
+   next one. Waiting costs one CI cycle and removes the choice.
+
+   **A green local suite is not a green CI**, and that is not a failure of the
+   suite. CI runs the corpus on a second architecture, in three container
+   images, against a different C library and a different `clang` — which is
+   the whole reason those jobs exist. The gates most likely to disagree are
+   the ones comparing against something the *machine* supplies rather than
+   something this tree carries: a libc, a locale, a sysroot, a wasm engine's
+   version, ICU's Unicode version.
+
+11. **Tag the release** — once that run is green, create an annotated tag on
+   that commit and push it:
+   ```sh
+   git tag -a vX.Y.Z -m "vX.Y.Z" && git push --tags
+   ```
+   Skip if no remote is configured and report the local tag instead. If
+   something has landed on the branch since the green run, tag the commit that
+   was green rather than the branch tip — the tag names a state that was
+   tested, not a moment in time.
+
+12. **The tag does the rest** (ADR-0296, `.github/workflows/ci.yml`). Once
     every oracle job is green, `release` creates the GitHub release **as a
     draft** with the CHANGELOG section as its notes, `package` builds a
     statically linked compiler on an x86-64 and an arm64 runner, runs the

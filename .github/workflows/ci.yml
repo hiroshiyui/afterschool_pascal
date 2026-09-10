@@ -174,8 +174,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang libclang-rt-dev git python3 curl \
-            libicu-dev pkg-config
+            ca-certificates cmake make clang libclang-rt-dev git python3 curl
 
       - uses: actions/checkout@v4
 
@@ -190,20 +189,6 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
-
-      # `icu-width` is the *other* half of the text tables' oracle (ADR-0400):
-      # East_Asian_Width has no conformance file, so what stands beside it is
-      # ICU's own reading of the same database. It needs `libicu-dev`, which
-      # this job installs above and a bare checkout may not have, so the
-      # require variable belongs here with the one below it -- and the gate
-      # abstains anyway when ICU's Unicode version is not the pinned one,
-      # which is a *skip* that this variable deliberately does not override
-      # into a failure, two readings of different releases not being a
-      # disagreement about the reading.
-      - name: A second reading of the width properties, and refuse to skip
-        env:
-          ICU_WIDTH_REQUIRE: '1'
-        run: ctest --test-dir build -R '^icu-width$' --output-on-failure
 
       - name: Run it, and refuse to pass by skipping
         env:
@@ -309,7 +294,8 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang libclang-rt-dev git python3 \
-            wasi-libc libclang-rt-dev-wasm32 llvm lld wasmedge
+            wasi-libc libclang-rt-dev-wasm32 llvm lld wasmedge \
+            libicu-dev pkg-config
           # **The sysroot and the builtins, and both are needed** (ADR-0382).
           # `wasi-libc` is the headers this measures against; the clang that
           # is already here supplies the target. `target-sizes` learned the
@@ -335,6 +321,34 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
+
+      # **`icu-width` runs here and nowhere else, and the image is why**
+      # (ADR-0400). That gate compares AP 6.4.15.13's table against ICU's own
+      # reading of the same database and **abstains when the two are built
+      # from different Unicode versions** -- which is the honest answer and
+      # makes it idle on every image whose ICU is behind. `debian:trixie`
+      # ships ICU 76, which is Unicode 16; this image ships ICU 78, which is
+      # Unicode 17 and is what `runtime/unicode/fetch.py` pins. So this is the
+      # one job where the comparison happens rather than being declined.
+      #
+      # `ICU_WIDTH_REQUIRE` refuses a *missing* ICU and deliberately does not
+      # refuse a version mismatch -- so the grep is what makes this job's
+      # stronger claim, that here the versions do match and 1 112 064 code
+      # points were actually compared. `unicode-conformance` has the same
+      # belt-and-braces for the same reason.
+      - name: A second reading of the width properties, and actually take it
+        env:
+          ICU_WIDTH_REQUIRE: '1'
+        run: |
+          set -o pipefail
+          ctest --test-dir build -R '^icu-width$' --output-on-failure \
+            2>&1 | tee /tmp/icu.log
+          if grep -q 'Skipped' /tmp/icu.log; then
+            echo "icu-width abstained on the one image chosen so that it" \
+                 "would not: this image's ICU has moved off the pinned" \
+                 "Unicode version, and the comparison happened nowhere."
+            exit 1
+          fi
 
       - name: ...and does a program built for it behave?
         env:

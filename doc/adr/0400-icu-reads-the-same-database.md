@@ -72,10 +72,23 @@ as 235 disagreements. Both were measured against the old gate first, and both
 passed it.
 
 **On an image whose ICU is older than the pinned Unicode, this abstains and
-says so.** That is the honest cost of exactness, and it is smaller than it
-looks: the gate runs wherever ICU is current, the abstention names both
-versions, and the alternative was a gate that ran everywhere and asserted
-almost nothing.
+says so** — and most of them are. `debian:trixie` ships ICU 76, which is
+Unicode 16; the pinned version is 17. So the comparison is taken in **one
+job**, the one already on a digest-pinned `debian:testing` for the wasm
+gates, whose ICU 78 is Unicode 17. That job greps its own output for
+`Skipped`, because `ICU_WIDTH_REQUIRE` refuses a *missing* ICU and
+deliberately not a version mismatch — the stronger claim, that here the
+versions do match and 1 112 064 code points were actually compared, needs
+saying separately. `unicode-conformance` has the same belt and braces for the
+same reason.
+
+Everywhere else the case is a `SKIP_RETURN_CODE 77` skip. That it must be
+registered as one is not a detail: without it `ctest` reads 77 as a failure,
+and the first run of this gate turned an honest abstention into a red build on
+five jobs.
+
+That is the honest cost of exactness, and it is smaller than it looks: the
+alternative was a gate that ran everywhere and asserted almost nothing.
 
 **Three records for one gate is the process leaking**, which ADR-0343 names
 and this is an instance of. The cause is worth writing down because it is not

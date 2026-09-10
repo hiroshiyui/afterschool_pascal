@@ -147,11 +147,18 @@ def ours():
 
 def main():
     cc = os.environ.get("CC", "clang")
+    # `pkg-config` is how ICU says where it is, and it is not everywhere --
+    # a machine can have the headers and not the tool. Its absence is a
+    # `FileNotFoundError` and not a return code, which is the sort of thing
+    # that turns a skip into a traceback if it is not caught.
     flags = ["-licuuc"]
-    r = subprocess.run(["pkg-config", "--cflags", "--libs", "icu-uc"],
-                       capture_output=True, text=True)
-    if r.returncode == 0 and r.stdout.split():
-        flags = r.stdout.split()
+    try:
+        r = subprocess.run(["pkg-config", "--cflags", "--libs", "icu-uc"],
+                           capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.split():
+            flags = r.stdout.split()
+    except OSError:
+        pass
 
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)
