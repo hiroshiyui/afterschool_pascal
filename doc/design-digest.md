@@ -5134,12 +5134,30 @@ SpacingMark -- the Myanmar ones are Other -- so the break classes alone still
 failed on macOS. Ambiguous is 179 **ranges** rather than the rule *one against
 two*, which would also have excused a generator that made every Wide code
 point one cell -- mutating the committed table so the CJK range measures one
-is caught now and would have passed before. Floors on both: 100 000 code
+is caught now and would have passed before. Floors beside it: 100 000 code
 points compared, because glibc answers -1 outside the locale's charmap and
 the `C` locale would agree with everything it never looked at, and 300
 generated ranges, so neither range class can excuse everything by being
-empty. Nine synthesised C libraries are replayed against it before it is
-trusted, four that must pass and five that must fail.
+empty.
+
+**Exact agreement is not the claim and cannot be**, which was the third
+correction and the one that changed the shape rather than the data: two C
+libraries are built from different Unicode versions -- ubuntu:24.04's
+predates the release that made the trigrams U+2630..U+2637 Wide -- and which
+code points a library is behind on is a property of its age and of no
+property of the character. So divergence is **bounded** at 500 uncatalogued
+code points, every one of them printed whether or not the run fails, and the
+bound is measured: the smallest systematic error this table could hold is
+2307 code points and the largest 182 869, where a version skew is tens.
+Replayed against synthesised libraries before it is trusted -- the macOS
+shape, the ubuntu shape, a whole block a release behind, and two systematic
+errors that must fail.
+
+**What it cannot see is an error inside a class the clause declares open.**
+A generator that stopped giving marks no cell would have every disagreement
+explained by `cluster`, because a library giving a mark one cell is exactly
+what that cause permits. `doc/sop.md` §7 carries it, with the two other
+limits measured beside it.
 
 **The Hangul rows are evidence and not only disagreement.** `wcwidth` is
 per code point and gives a leading jamo two cells and a medial none;

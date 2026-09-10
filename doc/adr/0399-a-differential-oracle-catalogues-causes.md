@@ -59,6 +59,21 @@ precisely the error the gate is for. Mutating the committed table so
 `{0x3250, 0xA48C}` measures one cell is caught now and would have passed
 before.
 
+**Exact agreement is not the claim, and cannot be.** ubuntu:24.04's glibc
+predates the release that made the trigrams U+2630..U+2637 Wide, so it says
+one cell where this table says two — and *which* code points a library is
+behind on is a property of that library's age and not of any property of the
+character, so no catalogue closes it. What is claimed is that divergence is
+**bounded**: at most 500 code points may disagree for no catalogued reason,
+and every one of them is printed whether or not the run fails.
+
+**The bound is measured, not chosen.** The smallest systematic error this
+table could contain is every zero-width code point transcribed wrongly — 2 307
+of them — and the largest is every Wide one, 182 869. An upstream version skew
+is tens: the trigrams are eight, and a whole block of symbols a release behind
+comes to 45. Five hundred separates those by a factor of four in one direction
+and three hundred in the other.
+
 **A floor of 300 ranges** over the two generated sets, so neither class can
 come to excuse everything by being empty.
 
@@ -75,11 +90,23 @@ Ambiguous, one zeroing every jamo — all four pass; and tables that mis-measure
 a Latin letter, a CJK ideograph, or every Wide code point — all fail, naming
 the first code point they got wrong.
 
-**A disagreement in no class is a failure and not a report**, which makes this
-gate hostage to a libc quirk nobody has met yet. That is deliberate and is
-`fpc-differential`'s bargain: a new quirk earns a new cause with an
-explanation, which is the thing worth having, and a gate that only reported
-would have found neither of the two errors this one found in a day.
+**What this cannot see is a systematic error *inside* a class the clause
+itself declares open**, and that is the honest boundary rather than an
+oversight. If the generator stopped giving marks no cell, every mark would
+measure one, every disagreement would be explained by `cluster`, and this
+would pass — because a library giving a mark one cell is exactly what
+`cluster` exists to permit. The same is true of the spacing marks and of
+Ambiguous. What the gate does see is an error that crosses those lines, which
+is what a misread of the width file looks like: narrowing every Wide code
+point leaves 115 396 unexplained.
+
+Nor can it see an error in **one** code point, which is under the bound by
+construction. `unicode-conformance` covers that half by regenerating the
+header and diffing it. Between them, what stays uncovered is a
+`generate.py` bug that misreads fewer than five hundred code points *and*
+stays inside one of the three open classes. That is a `doc/sop.md` §7 row and
+is the smallest this can be made without a second Unicode implementation that
+agrees about the version.
 
 **A cause with no members on this machine is reported and not a failure.**
 Two libraries decide these differently, so a cause that is idle here is one

@@ -93,6 +93,27 @@ int main(void) {
 # with everything it had not looked at.
 LEAST_COMPARED = 100000
 
+# **The two tables are built from different Unicode versions, and no catalogue
+# can close that.**  ubuntu:24.04's glibc predates the release that made the
+# trigrams U+2630..U+2637 Wide, so it says one where this table says two --
+# and which code points a given library is behind on is a property of that
+# library's age, not of any property of the character.
+#
+# So exact agreement is not the claim.  The claim is that divergence is
+# **bounded**, and the bound is set by measurement rather than taste: the
+# smallest systematic error this table could contain is every zero-width code
+# point transcribed wrongly, which is 2307 of them, and the largest is every
+# Wide one, which is 182869.  An upstream version skew is tens.  Five hundred
+# separates those by a factor of four in one direction and by three hundred in
+# the other.
+#
+# What it costs is written down in `doc/sop.md` §7: an error in *one* code
+# point is under the bound and this cannot see it.  `unicode-conformance` is
+# what covers that half, regenerating the header from the database and
+# diffing; between them what is left uncovered is a generate.py bug that
+# misreads fewer than five hundred code points.
+UNEXPLAINED_MAX = 500
+
 
 def skip(message):
     if os.environ.get("WCWIDTH_REQUIRE"):
@@ -318,15 +339,27 @@ def main():
               % (compared, LEAST_COMPARED), file=sys.stderr)
         return 1
 
-    if unexplained:
-        for cp, o, t in unexplained[:20]:
-            print("wcwidth: U+%04X disagrees for no catalogued reason: "
-                  "AP 6.4.15.13 says %d, wcwidth says %d, and its "
-                  "Grapheme_Cluster_Break is %s"
-                  % (cp, o, t, GCB_NAMES[gcb[cp]]), file=sys.stderr)
-        if len(unexplained) > 20:
-            print("wcwidth: ...and %d more" % (len(unexplained) - 20),
-                  file=sys.stderr)
+    # Report every uncatalogued disagreement whether or not it is fatal: a
+    # handful is this library's age showing and is worth seeing, and a person
+    # reading the log is the only thing that can tell that from the beginning
+    # of something else.
+    for cp, o, t in unexplained[:20]:
+        print("wcwidth: U+%04X disagrees for no catalogued reason: "
+              "AP 6.4.15.13 says %d, wcwidth says %d, and its "
+              "Grapheme_Cluster_Break is %s"
+              % (cp, o, t, GCB_NAMES[gcb[cp]]),
+              file=sys.stderr if len(unexplained) > UNEXPLAINED_MAX
+              else sys.stdout)
+    if len(unexplained) > 20:
+        print("wcwidth: ...and %d more" % (len(unexplained) - 20),
+              file=sys.stderr if len(unexplained) > UNEXPLAINED_MAX
+              else sys.stdout)
+    if len(unexplained) > UNEXPLAINED_MAX:
+        print("wcwidth: %d code point(s) disagree for no catalogued reason, "
+              "over the bound of %d -- that is too many to be one C library "
+              "being a Unicode release or two behind, and is the shape a "
+              "systematic transcription error takes"
+              % (len(unexplained), UNEXPLAINED_MAX), file=sys.stderr)
         return 1
 
     # A cause nothing exercises is not a failure and is worth saying: two C
@@ -335,11 +368,12 @@ def main():
     # what keeps the catalogue from quietly describing nobody.
     idle = sorted(c for c in causes if c not in counts)
     print("wcwidth: %d code point(s) compared against the C library's own "
-          "table; every disagreement explained -- %s%s"
+          "table; %s%s; %d unexplained, under the bound of %d"
           % (compared,
              ", ".join("%s %d" % (c, n) for c, n in sorted(counts.items()))
-             or "none on this machine",
-             "; no disagreement here from " + ", ".join(idle) if idle else ""))
+             or "no catalogued disagreement on this machine",
+             "; none here from " + ", ".join(idle) if idle else "",
+             len(unexplained), UNEXPLAINED_MAX))
     return 0
 
 
