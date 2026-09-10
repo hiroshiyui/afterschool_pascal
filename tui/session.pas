@@ -22,6 +22,7 @@
     size  <r> <c>    the terminal to draw for
     keys  <text>     every character of <text>, as bytes
     esc   <text>     ESC [ <text>, so `esc A` is an up arrow
+    ss3   <text>     ESC O <text>, the other introducer: `ss3 Q` is F2
     ctrl  <letter>   the control byte for that letter: `ctrl S` is Ctrl-S
     draw             render, and print what was drawn
     say   <text>     what the shell would have put on the message line
@@ -151,6 +152,15 @@ begin
     else if w = 'esc' then begin
       Feed(chr(27));
       Feed('[');
+      FeedAll(arg)
+    end
+    { **A terminal has two introducers and a session has to reach both.** F1
+      to F4 arrive as `ESC O P`..`ESC O S` on most terminals and F5 upwards as
+      `ESC [ <n> ~`, so a script that could only spell the second would leave
+      the half most likely to be misdecoded undriven. }
+    else if w = 'ss3' then begin
+      Feed(chr(27));
+      Feed('O');
       FeedAll(arg)
     end
     else if w = 'size' then begin

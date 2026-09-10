@@ -13,6 +13,15 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+- **The editor decodes the function keys** and binds two of them in Turbo
+  Pascal's positions: **F2 is Save and F9 is Build**. Both spellings a
+  terminal uses are understood — `ESC O Q` (SS3) and `ESC [ 1 2 ~` (CSI) are
+  the same key — and the decoder maps a bound one *to the key it is bound to*,
+  so nothing above it learns that Save has two spellings. The other ten are
+  decoded and reported by number (`F5 is not bound`) rather than ignored. The
+  hint bar now reads `F2 Save  F9 Build  …`.
+
 ## [3.9.0] - 2026-09-10
 
 **Two more targets and a program that runs on one of them**, and **an editor

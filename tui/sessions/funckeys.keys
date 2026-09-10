@@ -1,0 +1,43 @@
+# The function keys, both spellings (ADR-0389's hint bar, and the increment
+# that made it say `F2 Save` rather than `^S Save`).
+name fk.pas
+push program p(output);
+size 8 34
+draw
+
+# **F2 is Save and arrives as SS3** on most terminals. It is decoded *as*
+# `kkSave`, so a document with no name asks for one exactly as Ctrl-S does --
+# the decoder is the one place that knows a key has two spellings.
+name
+ss3 Q
+draw
+ctrl C
+
+# ...and the CSI spelling of the same key does the same thing.
+esc 12~
+draw
+ctrl C
+
+# F9 is Build, and it is decoded *as* `kkBuild` -- which the model ignores,
+# building being a `PasProcess.Execute` and not a decision about a document.
+# So what this frame pins is that F9 reaches the model as that key and changes
+# nothing here: the message line stays empty rather than reporting an unbound
+# key, which is exactly how a bound one differs from F5.
+esc 20~
+draw
+
+# An unbound one is reported *with its number*, because a key that does
+# nothing and a key that was misread look alike. F1 is SS3, F5 and F10 are
+# CSI, and the numbering has gaps -- 16 and 22 are not function keys.
+ss3 P
+draw
+esc 15~
+draw
+esc 21~
+draw
+esc 24~
+draw
+
+# A parameter that names no function key is still an unknown sequence.
+esc 16~
+draw

@@ -5040,6 +5040,19 @@ which is what the roles immediately buy: the bindings were discoverable only
 by reading `tui/README.md`, which is not where a person sits when looking at
 the editor.
 
+**The function keys came next**, because a hint bar saying `^S Save` is an
+honest bar for an editor that has no F-keys and Turbo Pascal's feel is F-keys
+before it is anything else. Two things had to change in the decoder and each
+had been silently wrong: `ESC O` is a second introducer — F1 to F4 arrive as
+SS3 on most terminals — and the older reading treated anything but `[` as an
+unknown key, losing every one of them at once; and a CSI parameter has to be
+*accumulated*, since `ESC [ 3 ~` is Delete with one digit and `ESC [ 2 0 ~` is
+F9 with two, where keeping the last digit read F9 as an unknown `0`. **A bound
+function key is decoded as the key it is bound to** — F2 arrives as `kkSave`
+and F9 as `kkBuild` — so which bytes mean which key stays the one question the
+decoder answers, and nothing above it learns that Save has two spellings. The
+other ten are reported by number, for `kkUnknown`'s reason.
+
 **`ncurses` was declined, and the record says why** (ADR-0389): it owns the
 screen and the terminal, so drawing through it makes the drawing no longer a
 value anything can diff — ADR-0262's argument against a pseudo-terminal

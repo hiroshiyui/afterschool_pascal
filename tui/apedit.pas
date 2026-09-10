@@ -41,7 +41,7 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  KeyKind, kkNone, kkChar, kkEnter, kkBack, kkDelete,
                  kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
                  kkSave, kkQuit, kkBuild, kkUnknown,
-                 kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel,
+                 kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc,
                  Key, Decoder, Editor,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
                  EditDirty, EditLines, EditLine_, EditRow, EditCol,
@@ -103,11 +103,17 @@ type
   KeyKind = (kkNone, kkChar, kkEnter, kkBack, kkDelete,
              kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
              kkSave, kkQuit, kkBuild, kkUnknown,
-             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel);
+             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc);
 
   Key = record
     kind: KeyKind;
-    ch: char            { only when kind = kkChar }
+    ch: char;           { only when kind = kkChar }
+    { Only when kind = kkFunc. **The function keys are a family and not
+      eleven kinds**: a terminal spells them with one number in one sequence,
+      and an editor binds them from a table, so the number travels with the
+      key rather than being spelled out as a constant apiece. The two that
+      *are* bound arrive as `kkSave` and `kkBuild` -- see `DecodeByte`. }
+    num: integer
   end;
 
   { The state between bytes. A terminal sends `ESC [ A` for an up arrow and
@@ -117,7 +123,12 @@ type
     timeout. }
   Decoder = record
     n: integer;         { how many bytes of a sequence are in hand }
-    b: array [1..8] of char
+    b: array [1..8] of char;
+    { The digits between the introducer and the final byte. It has to be
+      *accumulated* rather than kept as the last one seen: `ESC [ 3 ~` is
+      Delete with one digit and `ESC [ 2 0 ~` is F9 with two, and a decoder
+      that overwrote would read F9 as an unknown `0`. }
+    par: string(4)
   end;
 
   { **What one edit was**, which is the whole of what undo and redo know.
@@ -266,7 +277,7 @@ const
     bindings and the decoder is the other half of that claim -- a key here
     that `DecodeByte` does not answer would be the editor lying about itself
     on every frame. }
-  Hints = '^S Save  ^B Build  ^F Find  ^L Next  ^G Line  ^Z Undo  ^Q Quit';
+  Hints = 'F2 Save  F9 Build  ^F Find  ^L Next  ^G Line  ^Z Undo  ^Q Quit';
 
 procedure EditInit;
 begin
@@ -868,6 +879,13 @@ begin
     { Nothing is open, so there is nothing to cancel -- said rather than
       ignored, for `kkUnknown`'s reason. }
     kkCancel: ed.says := 'nothing to cancel';
+    { Decoded, and not bound to anything yet -- said with its number, because
+      a key that does nothing and a key that was misread look alike, and F3
+      and F10 are the two a Turbo Pascal user will press first. }
+    kkFunc: begin
+      writestr(rest, 'F', k.num:1, ' is not bound');
+      ed.says := rest
+    end;
     { **Ctrl-S is the shell's, except when there is no name to save under.**
       Which key writes a file is the shell's business and stays there; *a
       document with no name cannot be written and has to be asked about* is a
@@ -1049,9 +1067,46 @@ begin
     end
 end;
 
+{ Which function key a CSI parameter names, or 0. **The numbering has gaps**
+  -- 16 and 22 are not used -- and this is the table every terminal agrees on
+  for the twelve; the SS3 spellings of F1 to F4 are handled where they arrive.
+  Written out rather than computed, because the arithmetic that would produce
+  it has two discontinuities and would be a puzzle at every reading. }
+function FuncOf(par: EditLine): integer;
+begin
+  if par = '11' then FuncOf := 1
+  else if par = '12' then FuncOf := 2
+  else if par = '13' then FuncOf := 3
+  else if par = '14' then FuncOf := 4
+  else if par = '15' then FuncOf := 5
+  else if par = '17' then FuncOf := 6
+  else if par = '18' then FuncOf := 7
+  else if par = '19' then FuncOf := 8
+  else if par = '20' then FuncOf := 9
+  else if par = '21' then FuncOf := 10
+  else if par = '23' then FuncOf := 11
+  else if par = '24' then FuncOf := 12
+  else FuncOf := 0
+end;
+
+{ **A function key that is bound is the key it is bound to.** Which bytes mean
+  which key is a question about a terminal, and the decoder is the one place
+  that knows -- so F2 arrives as `kkSave` and F9 as `kkBuild`, and nothing
+  above this has to learn that Turbo Pascal's Save has two spellings. The
+  unbound ones keep their number and are *reported*, for `kkUnknown`'s reason:
+  a key that does nothing and a key that was misread look alike to a person. }
+procedure FuncKey(var k: Key; n: integer);
+begin
+  k.num := n;
+  if n = 2 then k.kind := kkSave
+  else if n = 9 then k.kind := kkBuild
+  else k.kind := kkFunc
+end;
+
 procedure DecodeInit;
 begin
-  d.n := 0
+  d.n := 0;
+  d.par := ''
 end;
 
 function DecodeByte;
@@ -1060,6 +1115,7 @@ begin
   DecodeByte := false;
   k.kind := kkNone;
   k.ch := ' ';
+  k.num := 0;
   b := ord(c);
 
   { Inside a sequence: `ESC [` and then one byte says which key, or a digit
@@ -1074,11 +1130,30 @@ begin
       k.ch := c;
       DecodeByte := true
     end
-    else if (d.n = 2) and (c <> '[') then begin
+    { **Two introducers, because terminals send both.** `ESC [` is CSI and
+      `ESC O` is SS3, and F1 to F4 arrive as SS3 on most terminals while F5
+      upwards arrive as CSI with a number -- which is why the older reading,
+      that anything but `[` is an unknown key, lost every function key on
+      every terminal at once. }
+    else if (d.n = 2) and (c <> '[') and (c <> 'O') then begin
       d.n := 0;
       k.kind := kkUnknown;
       k.ch := c;
       DecodeByte := true
+    end
+    else if d.n = 2 then begin
+      d.b[2] := c;
+      d.par := ''
+    end
+    else if (d.n >= 3) and (d.b[2] = 'O') then begin
+      { SS3, and one byte says which. }
+      DecodeByte := true;
+      d.n := 0;
+      if (c >= 'P') and (c <= 'S') then FuncKey(k, ord(c) - ord('P') + 1)
+      else begin
+        k.kind := kkUnknown;
+        k.ch := c
+      end
     end
     else if d.n >= 3 then begin
       DecodeByte := true;
@@ -1089,20 +1164,21 @@ begin
       else if c = 'D' then k.kind := kkLeft
       else if c = 'H' then k.kind := kkHome
       else if c = 'F' then k.kind := kkEnd
-      else if (c >= '0') and (c <= '9') then begin
-        { A parameter is still coming: `ESC [ 3 ~` is Delete. Stay in the
-          sequence. }
+      else if (c >= '0') and (c <= '9') and (length(d.par) < 4) then begin
+        { A parameter is still coming: `ESC [ 3 ~` is Delete and
+          `ESC [ 2 0 ~` is F9. Stay in the sequence, and *accumulate*. }
         d.n := 3;
-        d.b[3] := c;
+        d.par := d.par + c;
         DecodeByte := false
       end
       else if c = '~' then begin
-        if d.b[3] = '3' then k.kind := kkDelete
-        else if d.b[3] = '1' then k.kind := kkHome
-        else if d.b[3] = '4' then k.kind := kkEnd
+        if d.par = '3' then k.kind := kkDelete
+        else if d.par = '1' then k.kind := kkHome
+        else if d.par = '4' then k.kind := kkEnd
+        else if FuncOf(d.par) > 0 then FuncKey(k, FuncOf(d.par))
         else begin
           k.kind := kkUnknown;
-          k.ch := d.b[3]
+          k.ch := '?'
         end
       end
       else begin

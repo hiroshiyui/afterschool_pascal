@@ -99,9 +99,9 @@ tui/build.py '' session.pas   # the session replayer
 
 | Key | |
 | --- | --- |
-| Ctrl-S | save — and on a document with no name, ask for one first |
+| F2, Ctrl-S | save — and on a document with no name, ask for one first |
+| F9, Ctrl-B | compile, and land on the first diagnostic |
 | Ctrl-Q | quit — twice when the document has changes in it |
-| Ctrl-B | run the compiler and land the cursor on the first diagnostic |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
 | Ctrl-G | go to a line by number |
@@ -111,6 +111,14 @@ The bindings are on the **hint bar** along the bottom now (ADR-0389), so the
 table above is a reference rather than the only place they are written down.
 | arrows, Home, End | move |
 | Enter, Backspace, Delete | the three that change the shape of the document |
+
+**The function keys are decoded and mostly unbound.** F2 and F9 are Save and
+Build, in Turbo Pascal's positions, and arrive through either spelling a
+terminal uses — `ESC O Q` and `ESC [ 1 2 ~` are the same key. The other ten
+are decoded and *reported by number* (`F5 is not bound`) rather than ignored,
+because a key that does nothing and a key that was misread look alike to a
+person. F3 and F10 will be Open and Menu when there is something for them to
+open and a menu to show.
 
 **Ctrl-C and not Escape** closes a prompt, and that is a fact about the
 decoder rather than a preference: it is handed one byte at a time, and a bare
