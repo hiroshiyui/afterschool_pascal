@@ -79,6 +79,53 @@ end.
 
 CONCURRENT = re.compile(r'(^|[^A-Za-z_])(spawn|channel|task)([^A-Za-z_]|$)',
                         re.M)
+
+# 6.1.8's two comment forms and 6.1.7's character-string, blanked before the
+# word above is looked for.  A comment is not what a program *writes*, and
+# this selector read one as if it were: a note in `tests/dialect/lib_term.pas`
+# saying "each channel is a separate parameter" -- about a colour -- enrolled a
+# single-threaded program in the ThreadSanitizer sweep and moved a number
+# `quoted-numbers` watches.  ADR-0229's argument at its own scale: reading
+# Pascal-shaped text with a regex answers about the text.  This does not make
+# it a lexer, and does not need to be one -- what it must not do is see a word
+# in a place a program cannot have written it.
+#
+# 6.1.8 lets `{` be closed by `*)` and `(*` by `}`, so the closers are a pair
+# and not the mate of the opener; a doubled apostrophe inside a string is
+# consumed by the same alternation that started it.
+NOTCODE = re.compile(r"\{[^}*]*(?:\*(?!\))[^}*]*)*[}]|\{.*?\*\)|"
+                     r"\(\*.*?(?:\*\)|\})|"
+                     r"'(?:[^']|'')*'", re.S)
+
+
+def code(text):
+    """`text` with its comments and string literals blanked, newlines kept.
+
+    Blanked rather than removed so that nothing here has to care about the
+    line numbering, and so a comment cannot join two identifiers into one.
+    """
+    return NOTCODE.sub(lambda m: re.sub(r'[^\n]', ' ', m.group(0)), text)
+
+
+def program_text(d, name, src):
+    """The code of a whole program: the main source and its components.
+
+    A question about what a *program* contains has to read every 6.13
+    program-component of it, or it is a question about one file. The sidecar
+    is read the way the linking code below reads it, one path per line
+    relative to the case's own directory.
+    """
+    text = code(src.read_text(errors='surrogateescape'))
+    comps = d / (name + '.components')
+    if comps.is_file():
+        for line in comps.read_text().split('\n'):
+            rel = line.split()[0] if line.split() else ''
+            if not rel:
+                continue
+            part = d / rel
+            if part.is_file():
+                text += '\n' + code(part.read_text(errors='surrogateescape'))
+    return text
 VG_FINDING = re.compile(r'^==[0-9]+== (Invalid|Use of uninitialised|'
                         r'Conditional jump|Mismatched|'
                         r'Source and destination)', re.M)
@@ -327,8 +374,17 @@ def sweep(pascalcc, pascalc, mode, san, work, sanskip):
         # edited -- the arrangement `target-layout` has for a target. A
         # single-threaded program under ThreadSanitizer is minutes of runtime
         # and no question asked.
-        if mode == 'thread' and not CONCURRENT.search(
-                src.read_text(errors='surrogateescape')):
+        #
+        # **The program is the main source and its components** (6.13), and
+        # through `code`, and the two halves of that are one defect found from
+        # opposite sides. A comment is not something a program writes and this
+        # read one as if it were; blanking comments then dropped
+        # `task_in_module.pas`, whose `task` is declared in the module it
+        # imports and whose *comment* had been selecting it all along. Each
+        # error was hiding the other, so fixing either alone is wrong -- one
+        # sweeps three programs that have no thread in them, the other stops
+        # sweeping one that has.
+        if mode == 'thread' and not CONCURRENT.search(program_text(d, name, src)):
             notconc += 1
             continue
         # A case with no `.out` is one that is meant to fail, and what it
