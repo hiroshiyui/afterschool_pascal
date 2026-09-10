@@ -319,8 +319,10 @@ def check(cc, work, require=""):
             # reader and not done it: before that it compared a pair against
             # a string, so it had never printed anything at all.
             # From the first line that says `error`, not from the first
-            # line: this toolchain warns three times about `tmpfile` before
-            # it refuses, and a reader shown those learns nothing. **Display
+            # line: a unit may warn several times before it refuses -- this
+            # toolchain warned three times about `tmpfile` until ADR-0390
+            # removed the call -- and a reader shown those learns nothing
+            # about why the unit is blocked. **Display
             # only** -- the claim above rests on the exit status alone, and
             # a diagnostic with no such line still shows its opening.
             lines = err.splitlines(True)

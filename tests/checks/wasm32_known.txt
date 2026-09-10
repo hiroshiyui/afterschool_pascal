@@ -1,82 +1,26 @@
 # Cases that do not pass for wasm32-wasi (ADR-0385).
 #
-# **519 of 598 corpus programs compile for WebAssembly, link against the two
+# **558 of 598 corpus programs compile for WebAssembly, link against the two
 # runtime units that build for it, and answer their golden under a WASI
 # runtime.** These are the rest, and the gate beside this file fails in both
 # directions: a case that starts failing is a regression, and a case that
 # stops failing is progress somebody has to record.
+#
+# It was 519, and the 52 that moved were one function. `tmpfile` is ISO C,
+# wasi-libc declares it and does not define it, and `runtime/pasrt.c` called
+# it for §6.7.5.5's auxiliary file -- so the whole unit linked with an
+# undefined symbol. ADR-0390 stopped calling it: an exclusive `fopen` and a
+# `remove` are both ISO C and are the whole of what `tmpfile` was doing, so
+# the fix cost no preprocessor conditional and applies on every target.
+# **Thirteen of the 52 were behind a second cause as well** and have moved to
+# the row that names it, which is the half of this exercise a summary number
+# hides.
 #
 # It is a long file and every row is one of six causes. That is the point --
 # **this is a port's work queue and not a list of defects**. Nothing here is
 # the compiler getting an answer wrong; the two behavioural differences that
 # were, a stack overrun and a lost `SOURCE_DATE_EPOCH`, are fixed and the
 # fixes are in `tools/pascalcc` and in the runner command.
-
-# --- 52 cases: `tmpfile` -----------------------------------------------
-#
-# **The single largest thing between this corpus and WebAssembly, and it is
-# one function.** wasi-libc *declares* `tmpfile` and does not define it --
-# `runtime-nonposix` records the deprecation warning and this is where that
-# warning becomes a link error. It is 6.7.5.5's auxiliary file: `rewrite(f)`
-# on a file variable bound to no name, which is what a program writes when it
-# wants scratch storage, and what this compiler's own scratch files use.
-#
-# A port closes all 52 with one routine: a temporary file opened in a
-# directory the module was granted, named by the runtime rather than by the C
-# library. Nothing in the language or the emitter is involved.
-
-examples/dir_sizes.pas
-tests/dialect/bind_anywhere.pas
-tests/dialect/binding_writable.pas
-tests/dialect/defer.pas
-tests/dialect/exit.pas
-tests/dialect/factory_fallible.pas
-tests/dialect/factory_handle.pas
-tests/dialect/handle.pas
-tests/dialect/handle_bare_call.pas
-tests/dialect/lib_dir.pas
-tests/dialect/lib_fs.pas
-tests/dialect/lib_io.pas
-tests/dialect/lib_os.pas
-tests/dialect/lib_path.pas
-tests/dialect/lib_process_execute.pas
-tests/dialect/owned.pas
-tests/dialect/take.pas
-tests/dialect/try.pas
-tests/eoln_appended.pas
-tests/extended/bind_missing.pas
-tests/extended/bind_qualified.pas
-tests/extended/bind_qualified_plain.pas
-tests/extended/binding.pas
-tests/extended/bindprogparam.pas
-tests/extended/directfile.pas
-tests/extended/dynbounds_subrange.pas
-tests/extended/extendoutput.pas
-tests/extended/halt_status.pas
-tests/extended/lib_file.pas
-tests/extended/lib_strvec.pas
-tests/extended/required_identifiers.pas
-tests/extended/trap_bind_twice.pas
-tests/extended/trap_extendinput.pas
-tests/extended/trap_filecapacity.pas
-tests/extended/trap_seek.pas
-tests/filecomponents.pas
-tests/files_ext.pas
-tests/files_scratch.pas
-tests/goto_files.pas
-tests/page.pas
-tests/page_after_real.pas
-tests/progparam_nonfile.pas
-tests/resetinput.pas
-tests/rewritefile_page.pas
-tests/rewriteoutput.pas
-tests/textfile_chars.pas
-tests/trap_filecomponent.pas
-tests/trap_filesubrange.pas
-tests/trap_resetoutput.pas
-tests/trap_rewriteinput.pas
-tests/trap_typedfile.pas
-tests/typedfiles.pas
 
 # --- 14 cases: channels and tasks -----------------------------------------------
 #
@@ -100,7 +44,7 @@ tests/dialect/task_real_conversion.pas
 tests/dialect/task_wait.pas
 tests/dialect/task_wait_empty.pas
 
-# --- 9 cases: processes, sockets, directories and the terminal -----------------
+# --- 16 cases: processes, sockets, directories and the terminal -----------------
 #
 # `runtime/pasrt_posix.c` wants five headers wasi has not got, so none of it
 # is built and every `pasx_` routine is undefined. What each program here
@@ -108,37 +52,92 @@ tests/dialect/task_wait_empty.pas
 # directory walk, `isatty`. This is the part of a port with a decision in it
 # -- wasi has its own socket interface and no processes at all -- and
 # ADR-0382 sets out the shape.
+#
+# **An absent `pasx_` shows up in three ways and all three are here**, which
+# is worth knowing before reading a failure as a defect. `lib_fs` and
+# `lib_dir` stop at the *link* with `pasx_file_info` named. `lib_io` and
+# `lib_os` link -- wasm-ld having left the symbol undefined weak -- print
+# their first few lines and then trap on `unreachable` at the call. And
+# `lib_path` neither fails nor traps: `PasPath` reports the refusal its own
+# way, so the program answers `symlink made = no` and differs from its golden
+# by two lines. The third is the shape to watch for, because it is a *wrong
+# answer* and nothing about it says wasm.
+examples/dir_sizes.pas
 examples/fetch_http.pas
 tests/dialect/handle_release.pas
 tests/dialect/lib_boundary_nul.pas
+tests/dialect/lib_dir.pas
+tests/dialect/lib_fs.pas
 tests/dialect/lib_fs_tempdir.pas
 tests/dialect/lib_http.pas
+tests/dialect/lib_io.pas
 tests/dialect/lib_net.pas
 tests/dialect/lib_net_wait.pas
+tests/dialect/lib_os.pas
+tests/dialect/lib_path.pas
 tests/dialect/lib_process.pas
+tests/dialect/lib_process_execute.pas
 tests/dialect/lib_term.pas
 
-# --- 2 cases: a foreign name this target has not got ---------------------------
-#
-# Not a link error: wasm-ld leaves an unresolved function as an *undefined
-# weak* symbol, so the module links and traps on `unreachable` the first time
-# the call is reached. Both of these bind a C routine by name for the sake of
-# testing the boundary itself, and the name is not in wasi's libc. The trap is
-# the right outcome and the case is not portable, which is what this row says.
-tests/dialect/foreign_int64_handle.pas
-tests/dialect/foreign_slice.pas
-
-# --- 1 cases: the non-local goto, and the runtime running it -------------------
+# --- 4 cases: the non-local goto, and the runtime running it -------------------
 #
 # **The compiler emits this correctly and the runner cannot run it.** A
 # `goto` out of a procedure lowers through LLVM's SjLj on this target, which
 # emits a wasm *tag* -- the exception-handling proposal -- and neither engine
-# tried here implements it: wasmedge refuses the module and wazero answers
-# `tag section not supported as feature "exception-handling" is disabled`. An
+# tried here implements it: wasmedge refuses the module with `illegal opcode,
+# Code: 0x117` before a single instruction runs, and wazero answers `tag
+# section not supported as feature "exception-handling" is disabled`. An
 # engine that implements the proposal runs it; that is a fact about which
 # `.wasm` engine is installed, and the gate names the one it used in its
 # summary line so a reader can tell this row from a defect.
+#
+# Three of these four arrived from the `tmpfile` row and are the reason that
+# row could not be closed by counting. They are not *about* the non-local
+# goto -- `defer.pas` and `handle.pas` are about a deferred statement and a
+# handle -- but each contains a jump out of a procedure somewhere, and one
+# `@_setjmp` in a module is enough for the whole module to be refused. Asked
+# of the emitted IR rather than of the source: `pascalc --target=wasm32-wasi
+# tests/dialect/defer.pas` writes two calls to `@_setjmp`.
+tests/dialect/defer.pas
+tests/dialect/handle.pas
+tests/goto_files.pas
 tests/goto_nonlocal.pas
+
+# --- 3 cases: a foreign name this target has not got ---------------------------
+#
+# Not always a link error: wasm-ld may leave an unresolved function as an
+# *undefined weak* symbol, so the module links and traps on `unreachable` the
+# first time the call is reached. All three of these bind a C routine by name
+# for the sake of testing the boundary itself, and the name is not in wasi's
+# libc. The trap is the right outcome and the case is not portable, which is
+# what this row says.
+#
+# `handle_bare_call.pas` is the one with the joke in it: the parameterless C
+# routine it binds to exercise AP 6.7.7.6's bare call is `tmpfile`. ADR-0390
+# took `tmpfile` out of the *runtime* and cannot take it out of a program
+# that asks for it by name, which is exactly the line that decision draws.
+tests/dialect/foreign_int64_handle.pas
+tests/dialect/foreign_slice.pas
+tests/dialect/handle_bare_call.pas
+
+# --- 2 cases: a relative path, in a module granted only `/` --------------------
+#
+# **A WASI module reaches no directory it was not handed**, and a preopen is
+# a directory rather than a working directory. The engine here is given
+# `--dir /:/`, so an absolute path resolves and a relative one does not:
+# probed directly, `fopen("owned_scratch.tmp", "w")` answers NULL under
+# wasmedge and `fopen("/tmp/owned_scratch.tmp", "w")` answers a stream, on
+# the same run. Both programs open a scratch file beside themselves by a bare
+# name, so the handle comes back empty and the trap that follows says so.
+#
+# Adding `--dir .:.` to the engine does *not* close it -- measured, both
+# still fail -- because the preopen is resolved where the engine was started
+# and a case is run somewhere else. What would close it is a runner that
+# grants the case's own working directory by absolute path, which is a
+# question about `tests/checks/wasi_run.py` and ADR-0384's fixed prefix, and
+# is left as the port's next piece of work rather than guessed at here.
+tests/dialect/owned.pas
+tests/dialect/take.pas
 
 # --- 1 cases: a 2 GB allocation ------------------------------------------------
 #

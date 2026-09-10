@@ -825,7 +825,7 @@ static void pas_check_open(struct pas_file *f, int mode, const char *op) {
 
 /* Is this file a string transfer rather than a stream? (ADR-0370) A file
  * that is open has a `FILE *` -- `reset` and `rewrite` error out rather than
- * leave one null, and an internal file falls back to `tmpfile()` -- and
+ * leave one null, and an internal file falls back to `pas_tmpfile()` -- and
  * `readstr`/`writestr` are the only makers of one. Asked only after
  * `pas_check_open`, so a closed file never reaches it. */
 #define PAS_ISMEM(f) ((f)->fp == NULL)
@@ -1043,6 +1043,86 @@ void pas_file_done(void *v) {
   }
 }
 
+/* --- an auxiliary file, and no `tmpfile` (ADR-0390) -----------------------
+ *
+ * ISO/IEC 10206:1991 §6.7.5.5's auxiliary file is what `rewrite(f)` makes of a
+ * file variable bound to no external name, and ISO C's `tmpfile()` is the
+ * obvious way to get one. It is what stood at the three sites below, and it
+ * was the single largest thing between this corpus and WebAssembly:
+ * wasi-libc *declares* `tmpfile` -- with a deprecation attribute reading
+ * "tmpfile is not defined on WASI" -- and does not define it, so the whole
+ * unit linked with an undefined symbol and 52 of 598 corpus programs stopped
+ * at the link (ADR-0385).
+ *
+ * **The fix is not a conditional.** This file holds no `#if` and that is a
+ * claim `runtime-isoc` compares against an empty catalogue in both
+ * directions; an `#ifdef __wasi__` here would reverse ADR-0380, which dropped
+ * a whole *target* rather than keep one such row. What closes it instead is
+ * that `tmpfile` was the only part of an auxiliary file that could not be
+ * written in ISO C, and the rest of it can:
+ *
+ *   - C11 7.21.5.3 gives `fopen` the exclusive mode: with `x` it "fails if
+ *     the file exists or cannot be created", so composing a name and creating
+ *     nobody else's is a retry loop and not a race. `pasx_temp_name`
+ *     (ADR-0243) already rests on that sentence, and the counter is shared
+ *     with it rather than written twice.
+ *   - `remove` is C11 7.21.4.1, and called on the open file immediately it
+ *     gives `tmpfile`'s own contract back: the stream stays usable, and the
+ *     name is gone before any other program can see it. Where `remove`
+ *     refuses, the file is closed and the directory abandoned, so no
+ *     candidate ever leaves something behind.
+ *
+ * **The directories are fixed and there are two.** Reading `TMPDIR` would be
+ * a fifth name this runtime passes to `getenv`, and `wasm32` holds that set
+ * against what a WASI engine is told to forward, in both directions -- a
+ * variable that silently stops arriving is a wrong answer and not a failure.
+ * `/tmp` is glibc's own `P_tmpdir` and is what a WASI module reaches through
+ * a preopen; `.` is the fallback for a sandbox granted the working directory
+ * and nothing else, which is a place `tmpfile` could never have looked.
+ *
+ * Measured on both: `/tmp` answers on the first attempt under wasmedge and
+ * natively, and `.` is refused by a WASI engine that mapped only `/`, which
+ * is why the retry count is small -- a directory that is not there costs that
+ * many failed `fopen`s before the next candidate.
+ */
+#define PAS_TMP_TRIES 32
+
+/* The counter both makers of a temporary name walk. Seeded from the clock so
+ * two processes starting together do not walk the same names for long; the
+ * exclusive create is what makes that an optimisation rather than the
+ * guarantee. */
+static unsigned long pas_temp_tick(void) {
+  static unsigned long next = 0;
+  if (next == 0)
+    next = (unsigned long)time(NULL);
+  return next++;
+}
+
+static FILE *pas_tmpfile(void) {
+  static const char *const dirs[2] = {"/tmp", "."};
+  size_t d;
+  for (d = 0; d < sizeof dirs / sizeof dirs[0]; d++) {
+    int tries;
+    for (tries = 0; tries < PAS_TMP_TRIES; tries++) {
+      char name[64];
+      FILE *f;
+      if (snprintf(name, sizeof name, "%s/pas-aux-%08lx", dirs[d],
+                   pas_temp_tick() & 0xffffffffUL) < 0)
+        return NULL;
+      f = fopen(name, "w+bxe");
+      if (!f)
+        continue; /* taken, or this directory is not there */
+      if (remove(name) == 0)
+        return f;
+      /* The name would outlive the program. Give the file up rather than
+       * leave one behind, and try the other directory. */
+      fclose(f);
+      break;
+    }
+  }
+  return NULL;
+}
+
 void pas_reset(void *v) {
   struct pas_file *f = v;
   /* §6.11.4.2 (and ISO 7185 §6.10) make the effect of `reset` on the required
@@ -1092,7 +1172,7 @@ void pas_reset(void *v) {
   }
   default: /* an internal file: reread what rewrite wrote */
     if (!f->fp)
-      f->fp = tmpfile();
+      f->fp = pas_tmpfile();
     else {
       fflush(f->fp);
       rewind(f->fp);
@@ -1142,7 +1222,7 @@ void pas_rewrite(void *v) {
   default:
     if (f->fp)
       fclose(f->fp);
-    f->fp = tmpfile();
+    f->fp = pas_tmpfile();
     if (!f->fp)
       pas_runtime_error("cannot create a temporary file");
     f->atbol = 1;
@@ -1287,7 +1367,7 @@ void pas_extend(void *v) {
     /* An internal file has no name to reopen, so `extend` is `rewrite` that
      * keeps what is there: seek to the end of the temporary already in hand. */
     if (!f->fp) {
-      f->fp = tmpfile();
+      f->fp = pas_tmpfile();
       if (!f->fp)
         pas_runtime_error("cannot create a temporary file");
     } else {
@@ -3567,7 +3647,9 @@ int pasx_errno(void) { return errno; }
  * the exclusive mode: with `x`, it "fails if the file exists or cannot be
  * created". So the loop below is the whole mechanism -- compose a name, try to
  * create it and nobody else's, and go round again on the one that lost. The
- * counter is seeded from the clock so two processes starting together do not
+ * counter is `pas_temp_tick`'s, shared with the auxiliary file of ADR-0390
+ * because two counters walking the same names would be the same claim written
+ * twice; it is seeded from the clock so two processes starting together do not
  * walk the same names for long, and the exclusive create is what makes that an
  * optimisation rather than the guarantee.
  *
@@ -3588,7 +3670,6 @@ static char pasx_temp_buf[PASX_TEMP_MAX + 1];
 
 const char *pasx_temp_name(const char *dir, const char *prefix, int cap,
                            int *status) {
-  static unsigned long pasx_temp_next = 0;
   int tries;
   if (!status)
     return NULL;
@@ -3596,14 +3677,11 @@ const char *pasx_temp_name(const char *dir, const char *prefix, int cap,
     *status = 2;
     return NULL;
   }
-  if (pasx_temp_next == 0)
-    pasx_temp_next = (unsigned long)time(NULL);
   for (tries = 0; tries < PASX_TEMP_TRIES; tries++) {
     FILE *f;
     int n = snprintf(pasx_temp_buf, sizeof pasx_temp_buf, "%s%s%s%08lx", dir,
                      (*dir && dir[strlen(dir) - 1] == '/') ? "" : "/", prefix,
-                     pasx_temp_next & 0xffffffffUL);
-    pasx_temp_next++;
+                     pas_temp_tick() & 0xffffffffUL);
     if (n < 0) {
       *status = 2;
       return NULL;

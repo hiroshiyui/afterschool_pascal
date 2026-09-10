@@ -47,8 +47,13 @@ _longjmp
 # now written into and read out of directly, and the read and write primitives
 # branch once on which destination they have. They were two of the three names
 # that stopped this translation unit compiling for a target that is not POSIX
-# (ADR-0369), and `tmpfile()` -- ISO C, and used here for an internal file --
-# was measured at 88 times the cost and refused.
+# (ADR-0369), and `tmpfile()` -- ISO C, and used then for an internal file --
+# was measured at 88 times the cost and refused. **`tmpfile` is not used here
+# any more either** (ADR-0390): wasi-libc declares it and does not define it,
+# so an internal file is now an exclusive `fopen` and a `remove`, both of
+# them ISO C as well. That changes nothing about this list, which never held
+# an ISO C name; it is noted because the sentence above would otherwise send
+# a reader looking for a call that is gone.
 
 # ISO/IEC 10206:1991 §6.7.5.6's bind: "the binding shall be
 # implementation-defined", and this processor's is that the attempt succeeds

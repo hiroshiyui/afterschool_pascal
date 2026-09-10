@@ -398,3 +398,4 @@ the alternatives that were rejected and why.
 | [0387](0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md) | An undo is a journal, and a prompt is a mode of the model | Accepted |
 | [0388](0388-a-document-with-no-name-asks-for-one.md) | A document with no name asks for one | Accepted |
 | [0389](0389-a-cell-carries-a-role-and-not-a-colour.md) | A cell carries a role, and not a colour | Accepted |
+| [0390](0390-an-auxiliary-file-without-tmpfile.md) | An auxiliary file, without `tmpfile` | Accepted |

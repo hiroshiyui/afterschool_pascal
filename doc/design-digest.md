@@ -185,18 +185,39 @@ own exception and compare by length instead.
   target on the terms every target is admitted on — the compiler lays it out
   correctly and clang assembles what it emits — and that says nothing about
   whether a program *works*: ADR-0325's lesson, since both defects the i386
-  port found were in neither a layout rule nor a frame. **519 of 598 answer
+  port found were in neither a layout rule nor a frame. **558 of 598 answer
   their golden** under a WASI engine, linked against only the two runtime units
   `nonposix_headers.txt` says compile, so what a program can reach is what a
   port has got and one wanting more fails at the link with the symbol named.
-  The 79 that do not are a work queue with six causes, 52 of them `tmpfile`,
-  which wasi declares and does not define. It found two things no other oracle
+  The 40 that do not are a work queue with six causes. It was 519 and 79, and
+  the 52 that moved were one function — ADR-0390 below. It found two things no other oracle
   could, and both were **wrong answers rather than failures to start**: a 64 KB
   default stack that printed stray spaces into the middle of a line, and a
   `SOURCE_DATE_EPOCH` a WASI runtime does not pass on unless told to — which is
   why `tests/checks/wasi_run.py` sits between the fixed runner prefix and the
   engine, forwarding exactly the names `runtime/*.c` passes to `getenv`, in
   both directions.
+- **An auxiliary file, without `tmpfile`** (ADR-0390). §6.7.5.5's auxiliary
+  file — `rewrite(f)` on a file variable bound to no external name — came from
+  ISO C's `tmpfile()` at three sites, and that one function was the largest
+  single thing between this corpus and WebAssembly: wasi-libc *declares* it and
+  does not define it, so `runtime/pasrt.c` compiled and 52 of 598 programs
+  failed at the **link**. The fix could not be an `#ifdef __wasi__` — this file
+  holds no preprocessor conditional and `runtime-isoc` compares that set
+  against an empty catalogue both ways, ADR-0380 having dropped a whole target
+  rather than keep one row. It did not have to be: `tmpfile` was the only part
+  that could not be written in ISO C. C11 7.21.5.3's exclusive `fopen` makes
+  composing a name a retry loop rather than a race, and 7.21.4.1's `remove`,
+  called on the open file immediately, gives `tmpfile`'s contract back — the
+  stream stays usable, the name is gone, and where `remove` refuses the file is
+  closed rather than left behind. **The directories are fixed and there are
+  two**, `/tmp` then `.`, because reading `TMPDIR` would be a fifth name this
+  runtime hands to `getenv` and `wasm32` holds that set against what the engine
+  is told to forward, in both directions. The counter is `pasx_temp_name`'s
+  (ADR-0243), shared rather than written twice. Thirty-nine of the 52 pass;
+  **thirteen were behind a second cause and moved rows**, which is why the
+  catalogue is grouped by cause and not counted — one of them binds C
+  `tmpfile` by name itself, and no runtime change can reach that.
 - **...and the toolchain has to name `i128`.** clang *overrides* the module's
   `target datalayout` with its own for the `--target=` it is given (ADR-0156),
   so the two must agree about every field this compiler models. Debian trixie's
@@ -2063,7 +2084,8 @@ able to make.
     embedding `struct pas_file`, because a file *variable* is `PAS_FILE_SIZE`
     bytes and the seed was built with that number; a string transfer's file is
     the one the runtime allocates itself. `tmpfile()` would have been ISO C and
-    is 88 times slower, measured.
+    is 88 times slower, measured — and is not in this runtime at all since
+    ADR-0390.
   - `WriteStmt::str`/`ReadStmt::str` say which statement it is; Sema then
     skips the leading-argument-is-a-file detection and leaves `file` null, and
     CodeGen asks the runtime for the handle. `emitWriteArgs`/`emitReadArgs`
