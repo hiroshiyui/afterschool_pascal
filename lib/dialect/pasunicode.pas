@@ -55,7 +55,7 @@ module PasUnicode;
 
 export PasUnicode = (Scalar, ScalarMax, ScalarBytes, Utf8Char, CaseMax,
                      ToText, NextScalar, ScalarCount, Encode,
-                     Fold, Upper, Lower, ElementEnd);
+                     Fold, Upper, Lower, ElementEnd, Columns);
 
 import PasError;
 
@@ -174,6 +174,29 @@ function Lower(s: string; var out: string): ErrorCode;
   pieces back to the original (ADR-0192). }
 function ElementEnd(s: string; at: integer): integer;
 
+{ **How many columns this value occupies when a terminal draws it**
+  (AP 6.4.15.13, ADR-0395), and -1 where the bytes are not a text value.
+
+  It is the one question in this module that is about *display* rather than
+  about the value, and the module was written saying this language does not
+  answer it -- AP 6.4.15 NOTE 14 put the number of columns outside the
+  language, on the grounds that it is a property of a rendering and not of a
+  text. The note was right about a rendering in general and wrong about the
+  case that has a standard answer: UAX #11 assigns East_Asian_Width to every
+  code point precisely so that a *fixed-pitch* display can lay text out, and a
+  program with a terminal in front of it has no other way to reach it.
+
+  So what is answered is narrow and says so: a **cell** of a fixed-pitch
+  display, under UAX #11, where Wide and Fullwidth take two, a mark or a
+  format character takes none, and everything else takes one -- Ambiguous
+  included, which is the choice `doc/implementation-defined.md` records. The
+  unit is the *element* and not the code point, and an element's width is its
+  first scalar's: a base and its marks are one thing a person sees.
+
+  A proportional font makes every one of those numbers wrong, and no
+  arithmetic here can help with that. }
+function Columns(s: string): integer;
+
 { One scalar value as its UTF-8 bytes.
 
   The null-string for a surrogate or for anything above ScalarMax, neither of
@@ -200,6 +223,11 @@ function ExtScalar(s: string; at: integer; var cp: integer): integer;
   same argument the decoder is bound for rather than written here. }
 function ExtElement(s: string; at: integer): integer;
   external 'pasx_text_element';
+
+{ -1 for bytes that are not a text value, and the boundary reports it here
+  rather than answering a plausible number -- see `Columns` above. }
+function ExtColumns(s: string): integer;
+  external 'pasx_text_columns';
 
 { The three cases, and the shape is PasDir.NextEntry's: the value comes back
   through an optional and the *caller's* capacity goes in, so the bound checked
@@ -312,6 +340,11 @@ begin
     out := got^;
     Lower := errNone
   end
+end;
+
+function Columns;
+begin
+  Columns := ExtColumns(s)
 end;
 
 function ElementEnd;

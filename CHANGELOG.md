@@ -34,6 +34,20 @@ appears below in the release where it still existed.
   hint bar now reads `F2 Save  F9 Build  …`.
 
 ### Added
+- **`PasUnicode.Columns`, and AP 6.4.15.13 to define it** (ADR-0395). How many
+  cells a text value occupies when a fixed-pitch terminal draws it: Wide and
+  Fullwidth take two, a mark or a format character takes none, and the unit is
+  the **element**, so `e` with a combining acute is one cell and a family
+  emoji is two rather than six. AP 6.4.15 NOTE 14 had put this outside the
+  language and is amended to point at the clause — it was right that no
+  property of a character answers for a proportional font, and wrong that
+  nothing was left to answer.
+- **The editor edits East Asian text correctly** (ADR-0395). A column is a
+  cell rather than a byte, the arrows and Backspace and Delete move by
+  element, and a wide character occupies two cells with the second holding
+  nothing. `ed.col` is still a byte and the status line still shows one,
+  because `pascalc` reports a diagnostic's column in bytes and Ctrl-B has to
+  land on it.
 - **`PasTerm.SetRgb`, twenty-four-bit colour** (ADR-0394). SGR's direct
   `38;2;r;g;b` form over an `Octet` subrange, beside the eight ANSI colours
   the module has had. It has no `clDefault` and cannot — the terminal's own

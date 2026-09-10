@@ -101,5 +101,6 @@ long long pas_text_scalar_at(const char *s, long long n, long long at,
 /* How many extended grapheme clusters s[0..n) has -- AP 6.4.15.8's `length`,
  * and not a constant-time operation (that clause's NOTE 11). */
 long long pas_text_count(const char *s, long long n);
+long long pas_text_columns(const char *s, long long n);
 
 #endif /* APASCAL_PASRT_UNICODE_H */

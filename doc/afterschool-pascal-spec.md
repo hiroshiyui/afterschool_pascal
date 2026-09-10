@@ -1840,8 +1840,9 @@ is present the value shall be padded on the left with spaces to that number of
 
 NOTE 14 — The width is in elements and is therefore not the number of columns
 a display device gives the value: a character of East Asian wide width occupies
-two and a combining mark occupies none. Display width is a further property of
-the Unicode Character Database this language does not provide (ADR-0189).
+two and a combining mark occupies none. 6.4.15.13 is how a program asks for
+that number; this clause does not use it, a field-width being about a file and
+not about a display.
 
 **6.4.15.11 Read.** A value of a text-type shall not be a read-parameter.
 
@@ -1864,6 +1865,40 @@ conformance file — `GraphemeBreakTest.txt` and `NormalizationTest.txt` — so
 this is the one area of this language whose correctness is settled by an oracle
 written by neither this processor's author nor its specification's. ADR-0086's
 argument for the BSI suite, in the place it is needed most.
+
+**6.4.15.13 Display width [added].** The *display width* of a value of a
+text-type shall be the number of cells a fixed-pitch display device gives it,
+determined as follows. The value shall be divided into its elements
+(6.4.15.3). The width of an element shall be the width of its first code
+point, and the width of a code point shall be
+
+  a) two, where its East_Asian_Width property is Wide or Fullwidth;
+
+  b) zero, where its General_Category is Mn, Me, Cf or Cc;
+
+  c) one otherwise.
+
+The display width of the value shall be the sum of the widths of its elements.
+The version of the Unicode Standard whose data determines these properties
+shall be the one 6.4.15.12 names.
+
+NOTE 18 — This is a narrower question than *how wide is this on a screen*, and
+deliberately. A proportional font makes every number above wrong, and no
+property of a character can answer for one. What is answered is the case that
+has a defined answer: UAX #11 assigns East_Asian_Width to every code point
+precisely so that a fixed-pitch device can lay text out, and a program with a
+terminal in front of it has no other way to reach that assignment.
+
+NOTE 19 — Where a code point's East_Asian_Width is Ambiguous, the width is one
+by c). UAX #11 leaves the choice to the context, and this language has no
+context to consult: it is implementation-defined and the processor states it
+(5.1).
+
+NOTE 20 — The unit is the element and not the code point, so that the number
+counts things a person sees. An element's width is its *first* code point's
+rather than the sum of its code points', because the sum makes an emoji joined
+out of three people six cells wide where a device that renders the sequence at
+all gives it one glyph.
 
 #### 6.4.7 Schemata [extended]
 

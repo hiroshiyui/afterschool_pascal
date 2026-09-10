@@ -255,6 +255,7 @@ answer in one place, whichever document required it.
 | Clause | Feature | This processor |
 |---|---|---|
 | AP 6.4.15.12 | the version of the Unicode Standard and of ISO/IEC 10646 determining Normalization Form C and the extent of an extended grapheme cluster | **Unicode 17.0.0** (2025-08-15). `pas_text_unicode_version()` reports it, `runtime/unicode/fetch.py` pins it, and `runtime/pasrt_unicode_data.h` is generated from that version's database. |
+| AP 6.4.15.13 NOTE 19 | the display width of a code point whose East_Asian_Width is Ambiguous | **One cell.** UAX #11 leaves the choice to the context — the same code point is drawn wide beside East Asian text and narrow beside Latin — and this language consults no locale (ADR-0189), so there is no context to read. One is what a device that was told nothing does. 198 ranges of the six values are Ambiguous; a program laying out East Asian text in a terminal configured for it will place them one cell to the left of where that terminal draws them, and there is no property of the character that can say otherwise. |
 
 **This is the one answer in this document that moves for a reason outside this
 repository**, and AP 6.4.15.12's NOTE is why it has to be stated at all: which

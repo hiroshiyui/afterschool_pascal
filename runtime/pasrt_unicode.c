@@ -78,8 +78,8 @@ enum { INCB_NONE = 0, INCB_CONSONANT, INCB_EXTEND, INCB_LINKER };
 
 /* --- the tables, by bisection ------------------------------------------- */
 
-static unsigned int range_lookup(const struct pas_u_range *tbl, size_t n,
-                                 unsigned int cp) {
+static unsigned int range_lookup_or(const struct pas_u_range *tbl, size_t n,
+                                    unsigned int cp, unsigned int dflt) {
   size_t lo = 0, hi = n;
   while (lo < hi) {
     size_t mid = lo + (hi - lo) / 2;
@@ -90,7 +90,17 @@ static unsigned int range_lookup(const struct pas_u_range *tbl, size_t n,
     else
       return tbl[mid].v;
   }
-  return 0;
+  return dflt;
+}
+
+/* Every table here but one has zero as its default, so absent and zero are
+ * the same answer and the caller cannot tell them apart. The width table is
+ * the one where they differ -- absent means *one* column and a listed zero
+ * means none -- which is why the default is a parameter above rather than a
+ * `return 0` here. */
+static unsigned int range_lookup(const struct pas_u_range *tbl, size_t n,
+                                 unsigned int cp) {
+  return range_lookup_or(tbl, n, cp, 0);
 }
 
 static unsigned int u_ccc(unsigned int cp) {
@@ -621,6 +631,33 @@ long long pas_text_scalar_at(const char *s, long long n, long long at,
   if (at < 0 || at >= n || out == NULL)
     return 0;
   return u8dec((const unsigned char *)s, n, at, out);
+}
+
+/* How many columns a text value occupies when a terminal draws it, which is
+ * AP 6.4.15.13 and is the only question here that is about *display* rather
+ * than about the value.
+ *
+ * The unit is the element, not the code point: a base and the marks after it
+ * are one thing a person sees and take one position. An element's width is
+ * its **first** scalar's -- not the sum of its scalars', which would make an
+ * emoji joined out of three people six columns wide, where a terminal that
+ * renders the sequence at all draws one glyph.
+ *
+ * A code point that is not well-formed UTF-8 counts one, matching
+ * `pas_text_next`, which hands such a byte back as an element of its own so
+ * that a caller still terminates. */
+long long pas_text_columns(const char *s, long long n) {
+  const unsigned char *u = (const unsigned char *)s;
+  long long i = 0, cols = 0;
+
+  while (i < n) {
+    unsigned int cp;
+    long long k = u8dec(u, n, i, &cp);
+    cols += k ? (long long)range_lookup_or(pas_u_width, PAS_U_WIDTH_N, cp, 1)
+              : 1;
+    i = pas_text_next(s, n, i);
+  }
+  return cols;
 }
 
 long long pas_text_count(const char *s, long long n) {

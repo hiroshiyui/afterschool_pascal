@@ -245,11 +245,20 @@ go-to-line ([ADR-0387](adr/0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md))
 and each of those three turned out to be a design question rather than a
 feature, which is the argument for using the thing you are building.
 
+**Display width was on this list and is closed** (ADR-0395), and it went the
+way the list said it would — a *language* question first. AP 6.4.15 NOTE 14
+had put the number of columns a value occupies outside this language, and that
+was half right: no property of a character can say how wide it is in a
+proportional font, but UAX #11 assigns East_Asian_Width precisely so a
+fixed-pitch device can lay text out, and declining to provide it only moved
+the problem into the editor. AP 6.4.15.13 defines it, `PasUnicode.Columns`
+answers it, and a column in the editor is a cell.
+
 **What is open**, in no order and none of it decided: replace; more than one
 file at once, which is what actually makes it usable on this compiler, since a
 diagnostic often names a component that is not on screen; horizontal
-scrolling; display width, which is a *language* question first (AP 6.4.15
-NOTE 14 puts the number of columns a value occupies outside this language);
+scrolling; a shaping model, which is what East_Asian_Width is *not* — Arabic
+and Devanagari are laid out by rules no per-code-point property expresses;
 resize, which needs a signal facility this language does not have; and mouse.
 The four milestone-one exclusions and the milestone-two ones are listed in
 `tui/README.md` with the reason for each.

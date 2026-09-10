@@ -67,10 +67,15 @@ PINNED = "17.0.0"
 #                                caseless comparison correct
 #   SpecialCasing.txt            the case mappings that are not one-to-one --
 #                                the German sharp s uppercasing to two letters
+#   EastAsianWidth.txt           UAX #11's East_Asian_Width, which AP 6.4.15.13
+#                                is written over -- the *only* property here
+#                                that a caller reads to lay a value out rather
+#                                than to compare two of them
 #   NormalizationTest.txt        the oracle for normalisation
 #   auxiliary/GraphemeBreakTest.txt  the oracle for segmentation
 FILES = [
     "UnicodeData.txt",
+    "EastAsianWidth.txt",
     "DerivedNormalizationProps.txt",
     "DerivedCoreProperties.txt",
     "CaseFolding.txt",

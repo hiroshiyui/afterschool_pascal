@@ -212,5 +212,30 @@ begin
     at the end of the string -- which is the difference between a loop that
     terminates and one that reports. }
   writeln('ill-formed: element 1 ends at ', ElementEnd(bad, 1):1,
-          ', and from there ', ElementEnd(bad, 2):1)
+          ', and from there ', ElementEnd(bad, 2):1);
+
+  { **How wide the value is when a terminal draws it** (AP 6.4.15.13,
+    ADR-0395), which is the one question in this module about a *rendering*
+    rather than about the value, and is answered for a fixed-pitch cell
+    under UAX #11.
+
+    Each of these is a different reason for the answer it gives. `abc` is the
+    ordinary case. `日本語` is three Wide code points and so six columns, which
+    is the whole reason the property exists. `e` and a combining acute are
+    one *element*, so one column and not two -- the unit is what a person
+    sees, and a scalar count would say two here. The family is one element
+    too, of five code points, and is two columns rather than six because an
+    element's width is its **first** scalar's: a terminal that renders the
+    sequence at all draws one glyph. A lone combining mark is an element of
+    no width at all. And the ill-formed bytes are the one place this reports
+    a failure instead of an end -- a column count is a number a caller does
+    arithmetic with, and a plausible answer for bytes that are not a text
+    value would put the wrongness somewhere else. }
+  writeln('columns of abc          = ', Columns('abc'):1);
+  writeln('columns of 日本語       = ', Columns('日本語'):1);
+  writeln('columns of e+acute      = ', Columns('é'):1);
+  writeln('columns of the family   = ', Columns('👨‍👩‍👧'):1);
+  writeln('columns of a bare mark  = ', Columns('́'):1);
+  writeln('columns of ───          = ', Columns('───'):1);
+  writeln('columns of ill-formed   = ', Columns(bad):1)
 end.

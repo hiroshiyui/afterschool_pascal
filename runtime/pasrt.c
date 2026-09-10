@@ -3097,6 +3097,28 @@ int pasx_text_element(const char *src, int at) {
   return (int)(next + 1);
 }
 
+/* How many columns a value occupies when a terminal draws it (AP 6.4.15.13).
+ *
+ * -1 where the bytes are not a well-formed text value, which is the one place
+ * this boundary reports a failure rather than an end: a column count is a
+ * number a caller does arithmetic with, so answering a plausible one for
+ * bytes that are not a text value would put the wrongness somewhere else --
+ * a cursor two columns from where the person is looking, with nothing to say
+ * why. `pas_text_columns` itself counts an ill-formed byte as one column and
+ * goes on, which is right for it: it is what keeps a *caller's* walk
+ * terminating, and the validation is this wrapper's job for the same reason
+ * it is in `pasx_text_element` above. */
+int pasx_text_columns(const char *src) {
+  long long len;
+
+  if (src == NULL)
+    return 0;
+  len = (long long)strlen(src);
+  if (pas_text_validate(src, len) != -1)
+    return -1;
+  return (int)pas_text_columns(src, len);
+}
+
 /* Where the element beginning at `at` ends, in bytes.
  *
  * A wrapper on pasrt_unicode.c's own, and it exists for the width: that file

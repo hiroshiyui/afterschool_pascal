@@ -53,6 +53,12 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
 import PasError;
        PasStrVec;
        PasParse;
+       { **`only`, because this module has a `Fold` of its own** (6.11.2).
+         `PasUnicode.Fold` is case folding and this one folds a line for a
+         caseless search; 6.11.2 puts every imported name in one scope, so one
+         of the two has to give way, and naming what is wanted is better than
+         renaming a routine to avoid a name it does not use. }
+       PasUnicode only (Scalar, NextScalar, ElementEnd, Columns);
 
 const
   { A screen wider or taller than this is drawn to these bounds and the rest
@@ -65,10 +71,18 @@ const
     (`ItemMax`) and not a second one -- the buffer is a StrVec, so saying a
     larger number here would be saying it twice and wrongly. }
   LineMax = ItemMax;
-  { The bytes one *display column* of drawing may hold: enough for a box
-    character (three) with room to spare, and a bound in ADR-0012's sense
-    rather than a guess. }
-  CellMax = 8;
+  { The bytes one *display column* of drawing may hold. A bound in ADR-0012's
+    sense rather than a guess, and since ADR-0395 it has to hold a whole
+    **element** and not a box character: a base with three combining marks is
+    seven bytes, which is what sixteen is sized for.
+
+    An element longer than this is drawn as the longest run of **whole
+    scalars** that fits, so what a cell holds is always a text value -- a cut
+    in the middle of a UTF-8 sequence would put bytes on the terminal that are
+    not a character at all. An emoji joined out of three people is eighteen
+    bytes and comes out as the first of them, which is a visible degradation
+    and not a wrong screen. `wide.keys` records it. }
+  CellMax = 16;
 
 type
   EditLine = StrItem;
@@ -511,14 +525,74 @@ end;
   than at each site, because the six ways to move share one rule -- a column
   is 1..length+1, the last being the position after the final character where
   typing appends. }
+{ **Where the element containing byte `at` begins** (ADR-0395), and `at`
+  itself when that byte begins one or is past the end.
+
+  `PasUnicode` answers the forward question and not this one, and it is right
+  not to: a text has no back-pointer, so the only honest way to a boundary
+  behind you is from the front. Lines here are bounded by `LineMax`, so this
+  is a walk over at most 255 bytes and is what a left arrow costs.
+
+  A byte that begins no element -- which means the line is not a text value,
+  and a person editing a file of arbitrary bytes will meet that -- is stepped
+  over one at a time, so this terminates and answers something for every
+  input. }
+function ElementAt(s: EditLine; at: integer): integer;
+var i, e: integer;
+begin
+  ElementAt := at;
+  if (at >= 1) and (at <= length(s)) then begin
+    i := 1;
+    while i < at do begin
+      e := ElementEnd(s, i);
+      if e <= i then e := i + 1;
+      if e > at then begin
+        ElementAt := i;
+        i := at
+      end
+      else i := e
+    end
+  end
+end;
+
+{ Where the element *before* `at` begins, which is one question later: the
+  element containing the byte before it. What Backspace and a left arrow
+  need. }
+function ElementBack(s: EditLine; at: integer): integer;
+begin
+  if at <= 1 then ElementBack := 1
+  else ElementBack := ElementAt(s, at - 1)
+end;
+
+{ How many columns the first `n` bytes of a line occupy, which is where the
+  cursor goes. Falls back to counting *bytes* where the line is not a text
+  value: that is exactly the case where a column has no meaning, and one
+  column per byte is what the terminal will do with it. }
+function ColumnOf(s: EditLine; n: integer): integer;
+var w: integer;
+begin
+  if n < 1 then n := 1;
+  w := Columns(Left(s, n - 1));
+  if w < 0 then w := n - 1;
+  ColumnOf := w + 1
+end;
+
 procedure Clamp(var ed: Editor);
-var n: integer;
+var n: integer; cur: EditLine;
 begin
   if ed.row < 1 then ed.row := 1;
   if ed.row > SVecLen(ed.lines) then ed.row := SVecLen(ed.lines);
-  n := length(SVecGet(ed.lines, ed.row));
+  cur := SVecGet(ed.lines, ed.row);
+  n := length(cur);
   if ed.col < 1 then ed.col := 1;
-  if ed.col > n + 1 then ed.col := n + 1
+  if ed.col > n + 1 then ed.col := n + 1;
+  { **And it lands on an element boundary** (ADR-0395). Moving down a line
+    keeps the byte and the new line is not the old one, so without this the
+    cursor can come to rest inside a character -- where Delete would take the
+    joiner out of the middle of an emoji and leave the two halves to join
+    with their neighbours. Every other route into `ed.col` is already a
+    boundary by construction; this is the one that is not. }
+  ed.col := ElementAt(cur, ed.col)
 end;
 
 { A jump, and it is `MoveTo` because `GoTo` folds to a word-symbol -- every
@@ -873,6 +947,96 @@ begin
   end
 end;
 
+{ The last scalar of a value, which is what a truncated cell may have to give
+  back. There is no backwards decoding here for `ElementBack`'s reason, so it
+  is a walk from the front over at most `CellMax` bytes. }
+function LastScalar(s: ScreenCell): ScreenCell;
+var i, j: integer; cp: Scalar;
+begin
+  LastScalar := '';
+  i := 1;
+  while i <= length(s) do begin
+    j := NextScalar(s, i, cp);
+    if j <= i then j := i + 1;
+    LastScalar := substr(s, i, j - i);
+    i := j
+  end
+end;
+
+{ **One line of the document, an element to a cell** (ADR-0395).
+
+  This is where a column stops being a byte. A line is walked by element;
+  each element goes whole into one cell and the cells its width covers after
+  it are the null-string, which `PutRow` skips -- the terminal has already
+  advanced past them, so writing a blank there would push the rest of the row
+  one column right.
+
+  Three cases the loop has to answer and each was met by probing:
+
+  - an element too long for a cell is cut to whole scalars (`CellMax`);
+  - an element of **no** width -- a combining mark with no base, which is what
+    the second byte of a broken line looks like -- is added to the cell before
+    it rather than given one of its own, and starts a cell only if it is the
+    first thing on the line;
+  - a **wide** element that would hang over the right edge is dropped rather
+    than half-drawn, which is the no-horizontal-scrolling rule made
+    element-aware: a terminal handed the first half of a wide character does
+    not draw half of it. }
+procedure PutLine(var scr: Screen; r: integer; s: EditLine; cols: integer);
+var i, e, j, k, m, c, w: integer; one, prev: ScreenCell; cp: Scalar; fits: boolean;
+begin
+  c := 1;
+  i := 1;
+  while (i <= length(s)) and (c <= cols) do begin
+    e := ElementEnd(s, i);
+    if (e <= i) or (e > length(s) + 1) then e := i + 1;
+
+    { The element's bytes, cut at a scalar boundary if it does not fit. }
+    one := '';
+    j := i;
+    fits := true;
+    while (j < e) and fits do begin
+      k := NextScalar(s, j, cp);
+      if (k <= j) or (k > e) then k := j + 1;
+      if length(one) + (k - j) <= CellMax then begin
+        for m := j to k - 1 do one := one + s[m];
+        j := k
+      end
+      else fits := false
+    end;
+
+    { A **truncated** element must not end in a scalar of no width. A joiner
+      left dangling at the end of a cell is an instruction to join with
+      whatever is drawn next, so the cut would reach into the cell beside it
+      -- which is the one way this could put something on the terminal that
+      is worse than a missing character. }
+    while (not fits) and (one <> '') and (Columns(LastScalar(one)) = 0) do
+      one := Left(one, length(one) - length(LastScalar(one)));
+
+    w := Columns(one);
+    if w < 0 then w := 1;
+    if w = 0 then begin
+      { No width: it belongs to whatever is already in the cell before it. }
+      if c > 1 then begin
+        prev := scr.cell[r][c - 1];
+        if length(prev) + length(one) <= CellMax then
+          PutCell(scr, r, c - 1, prev + one, crText)
+      end
+      else begin
+        PutCell(scr, r, c, one, crText);
+        c := c + 1
+      end
+    end
+    else if c + w - 1 > cols then c := cols + 1   { it would hang over }
+    else begin
+      PutCell(scr, r, c, one, crText);
+      for m := 1 to w - 1 do PutCell(scr, r, c + m, '', crText);
+      c := c + w
+    end;
+    i := e
+  end
+end;
+
 { A frame, with its title let into the top edge Turbo Pascal's way. The
   inside is *cleared* to the frame's role, which is what makes a panel opaque
   -- a dialog over a document must hide it rather than show through. }
@@ -1049,6 +1213,7 @@ end;
 
 procedure EditKey;
 var cur, rest, one: EditLine; k2: integer; keep: boolean;
+    b, e2: integer;   { an element's first and one-past-last byte }
 begin
   { **The message is about the last key**, so it is cleared here and set by
     whichever arm has something to say. The alternative -- leaving it until
@@ -1108,11 +1273,17 @@ begin
       ed.dirty := true
     end;
     kkBack: begin
+      { **Backspace removes an element and not a byte** (ADR-0395). Removing
+        one byte of `æ¥` leaves two bytes that are not a character, and the
+        undo journal would then hold a fragment that is not one either --
+        which is why this is the model's business and not the shell's. `b`
+        is where the element before the cursor begins. }
       if ed.col > 1 then begin
+        b := ElementBack(cur, ed.col);
         ed.open := keep;
-        Note(ed, ekDelete, ed.row, ed.col - 1, substr(cur, ed.col - 1, 1));
-        DoRemove(ed, ed.row, ed.col - 1, 1);
-        ed.col := ed.col - 1;
+        Note(ed, ekDelete, ed.row, b, substr(cur, b, ed.col - b));
+        DoRemove(ed, ed.row, b, ed.col - b);
+        ed.col := b;
         ed.dirty := true
       end
       else if ed.row > 1 then begin
@@ -1130,10 +1301,13 @@ begin
       end
     end;
     kkDelete: begin
+      { The same, forwards: `e` is where the element under the cursor ends. }
       if ed.col <= length(cur) then begin
+        e2 := ElementEnd(cur, ed.col);
+        if (e2 <= ed.col) or (e2 > length(cur) + 1) then e2 := ed.col + 1;
         ed.open := keep;
-        Note(ed, ekDelete, ed.row, ed.col, substr(cur, ed.col, 1));
-        DoRemove(ed, ed.row, ed.col, 1);
+        Note(ed, ekDelete, ed.row, ed.col, substr(cur, ed.col, e2 - ed.col));
+        DoRemove(ed, ed.row, ed.col, e2 - ed.col);
         ed.dirty := true
       end
       else if ed.row < SVecLen(ed.lines) then begin
@@ -1145,15 +1319,23 @@ begin
         ed.dirty := true
       end
     end;
+    { **The arrows move by element** (ADR-0395), so one press crosses one
+      thing a person sees. A byte step would put the cursor inside a
+      character, where the next Backspace would break it and the status line
+      would name a position no edit can be made at. }
     kkLeft: begin
-      if ed.col > 1 then ed.col := ed.col - 1
+      if ed.col > 1 then ed.col := ElementBack(cur, ed.col)
       else if ed.row > 1 then begin
         ed.row := ed.row - 1;
         ed.col := length(SVecGet(ed.lines, ed.row)) + 1
       end
     end;
     kkRight: begin
-      if ed.col <= length(cur) then ed.col := ed.col + 1
+      if ed.col <= length(cur) then begin
+        e2 := ElementEnd(cur, ed.col);
+        if (e2 <= ed.col) or (e2 > length(cur) + 1) then e2 := ed.col + 1;
+        ed.col := e2
+      end
       else if ed.row < SVecLen(ed.lines) then begin
         ed.row := ed.row + 1;
         ed.col := 1
@@ -1265,8 +1447,12 @@ begin
     { No horizontal scrolling: a line wider than the window is cut, and the
       cursor stops at the last column rather than following the text off the
       edge. It is a milestone-one limitation and a person meets it on a long
-      line, so the *cursor* is what says so rather than a message. }
-    PutAt(scr, r + 1, 1, Left(s, cols), crText)
+      line, so the *cursor* is what says so rather than a message.
+
+      **Cut by column and not by byte** since ADR-0395: `PutLine` walks the
+      line an element at a time, so the window holds `cols` columns of text
+      rather than `cols` bytes of it. }
+    PutLine(scr, r + 1, s, cols)
   end;
 
   { The message line, or the question when one is open. **The cursor goes
@@ -1391,7 +1577,14 @@ begin
   end
   else begin
     scr.atRow := ed.row - ed.top + 2;
-    scr.atCol := ed.col
+    { **`ed.col` is a byte and `atCol` is a column**, and this is the one line
+      that converts between them (ADR-0395). The model counts bytes because
+      every edit does and because `pascalc` reports a diagnostic's column in
+      bytes -- so landing on an error means landing on a byte. What a terminal
+      is told is where that byte *appears*. }
+    if ed.row <= SVecLen(ed.lines) then
+      scr.atCol := ColumnOf(SVecGet(ed.lines, ed.row), ed.col)
+    else scr.atCol := ed.col
   end;
   if scr.atCol > cols then scr.atCol := cols
 end;

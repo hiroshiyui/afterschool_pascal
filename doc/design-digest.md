@@ -5110,6 +5110,48 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
+**A column stops being a byte** (ADR-0395). ADR-0391 made the screen an
+array of cells and left the buffer alone on purpose; this is the half it
+deferred. What was wrong was one sentence in three places: `日本語` drew in
+nine cells rather than three, one right arrow moved a third of a
+character, and one Backspace left two bytes that are not a character --
+which the undo journal then held as an edit, faithfully, because ADR-0387
+made it complete by construction.
+
+**The language question came first.** AP 6.4.15 NOTE 14 had put display
+width outside this language, and it was half right: no property of a
+character can say how wide it is in a proportional font. It was wrong that
+nothing was left to answer -- UAX #11 assigns East_Asian_Width precisely so
+a fixed-pitch device can lay text out, and declining to provide it only
+moved the problem into the editor, where it would have been solved with a
+private table. AP 6.4.15.13 defines it, `PasUnicode.Columns` answers it
+over a table generated from `EastAsianWidth.txt`, and the note now points
+at the clause instead of disclaiming it.
+
+**The model still counts bytes**, and that is the load-bearing half.
+`pascalc` reports a diagnostic's column in bytes, so Ctrl-B landing on an
+error means landing on a byte; `ed.col` is a byte, every edit is at a byte,
+and the conversion to a column happens in exactly one line, where the
+cursor is handed to the terminal. What moved to elements is the two arrows,
+Backspace, Delete and `Clamp` -- that last one found by writing the session
+rather than by design, moving between lines keeping the byte while the new
+line is not the old one, so the cursor could come to rest inside a
+character.
+
+**Fifteen of the sixteen goldens are unchanged**, which is the evidence
+that this is not a rewrite: they are ASCII, where an element, a byte and a
+column are one thing. The sixteenth is the only session that can tell them
+apart, and the four mutations -- a width forced to one, a byte-wise arrow,
+a byte-wise Backspace, no boundary snap -- each kill it and nothing else.
+
+**A dead transcription was written and removed, and the check stayed.**
+`EastAsianWidth.txt`'s header gives five blocks' unassigned code points the
+value W; the generator transcribed that, and removing it produced a
+byte-identical header, 17.0.0 listing every one of them as
+`<reserved-...> ; W`. It is an assertion now rather than a table, so a
+release that stops listing them says so. A transcription nothing depends on
+is dead code that reads like a fact.
+
 **The palette a terminal can show** (ADR-0394). `PasTerm` had eight
 colours by decision, on the grounds that a small palette every terminal has
 had since the 1970s is what tells one region of a screen from another. That

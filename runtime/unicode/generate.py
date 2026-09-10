@@ -142,6 +142,98 @@ for cp, to in decomp.items():
         die(f"U+{cp:04X} has a canonical decomposition of {len(to)} code "
             "points; the C side assumes at most two")
 
+# --- UnicodeData.txt again: the general category, for what occupies nothing -
+
+# A `<..., First>` line and the `<..., Last>` after it are one range, which is
+# how UnicodeData.txt writes a block it will not list a code point at a time.
+category = []
+first = None
+for text in lines("UnicodeData.txt"):
+    f = text.split(";")
+    cp = int(f[0], 16)
+    if f[1].endswith(", First>"):
+        first = (cp, f[2])
+        continue
+    if f[1].endswith(", Last>"):
+        if first is None:
+            die(f"U+{cp:04X} ends a range that never began")
+        category.append((first[0], cp, first[1]))
+        first = None
+        continue
+    category.append((cp, cp, f[2]))
+if first is not None:
+    die("UnicodeData.txt has a range that begins and does not end")
+
+# --- EastAsianWidth.txt: how many columns a value occupies -----------------
+
+# UAX #11 assigns a *property* and this table is that property read straight
+# out of the file; what the property means in columns is AP 6.4.15.13's
+# decision and lives there, not here (ADR-0395).
+#
+# Two things about this file are stated in its header rather than in its rows,
+# and only one of them needs code.  Unlisted code points are N, which is why
+# the array starts as 1s.  And the *unassigned* code points of five blocks
+# default to W -- but in 17.0.0 every one of them is listed anyway, as
+# `<reserved-2FA20>..<reserved-2FFFD> ; W` and its like, so transcribing that
+# default decides nothing.  It was written first and a mutation that removed
+# it produced a byte-identical header, which is the finding: a transcription
+# nothing depends on is dead code that reads like a fact.
+#
+# So it is an **assertion** instead of a table.  If a release stops listing
+# those reserved points, the rows will make them N, this will say so, and the
+# default becomes code again -- with the check that made it necessary already
+# written.  That is the difference between a claim and a comment.
+EAW_DEFAULT_W = (
+    (0x3400, 0x4DBF),    # CJK Unified Ideographs Extension A
+    (0x4E00, 0x9FFF),    # CJK Unified Ideographs
+    (0xF900, 0xFAFF),    # CJK Compatibility Ideographs
+    (0x20000, 0x2FFFD),  # Plane 2, designated or not
+    (0x30000, 0x3FFFD),  # Plane 3, designated or not
+)
+
+# The zero-column part is not in that file at all.  A nonspacing or enclosing
+# mark and a format character advance no cursor, and East_Asian_Width has an
+# opinion about them anyway -- U+0300 is A -- so the general category is what
+# decides it, and it is applied last.
+NOCOLUMN = ("Mn", "Me", "Cf", "Cc")
+
+widths = bytearray([1]) * 0x110000
+seen = set()
+for text in lines("EastAsianWidth.txt"):
+    parts = [f.strip() for f in text.split(";")]
+    if len(parts) < 2:
+        continue
+    value = parts[1].split()[0]
+    seen.add(value)
+    span = parts[0].split("..")
+    lo, hi = int(span[0], 16), int(span[-1], 16)
+    for cp in range(lo, hi + 1):
+        widths[cp] = 2 if value in ("W", "F") else 1
+if seen != {"A", "F", "H", "N", "Na", "W"}:
+    die(f"EastAsianWidth.txt has values {sorted(seen)}, not UAX #11's six")
+
+for lo, hi in EAW_DEFAULT_W:
+    for cp in range(lo, hi + 1):
+        if widths[cp] != 2:
+            die(f"U+{cp:04X} is in a block whose unassigned code points that "
+                "file's header gives the value W, and its rows do not give it "
+                "that value. Until now every one of them was listed; apply the "
+                "header's default here, and this check is what will say when "
+                "it has stopped being needed again")
+
+for lo, hi, gc in category:
+    if gc in NOCOLUMN:
+        for cp in range(lo, hi + 1):
+            widths[cp] = 0
+
+# U+0000 is Cc and so is already zero; the surrogates cannot appear in a text
+# value at all (6.4.15.1), and a run of them in the table would only be
+# entries nothing can reach.
+eaw = coalesce([(cp, cp, widths[cp]) for cp in range(0x110000)
+                if widths[cp] != 1])
+if not eaw:
+    die("no code point has a width other than one -- wrong file?")
+
 # --- DerivedNormalizationProps.txt: which decompositions do not compose ----
 
 excluded = set()
@@ -375,6 +467,15 @@ emit_ranges("pas_u_combines_back", combines_back,
             " * composite, so that a normalisation segment must NOT be taken to\n"
             " * begin at one. Derived from the composition table; Hangul V and T\n"
             " * are the same case and pasrt_unicode.c adds them. */")
+
+emit_ranges("pas_u_width", eaw,
+            "/* How many columns a code point occupies, from\n"
+            " * EastAsianWidth.txt and UnicodeData.txt's general category.\n"
+            " * **Absent means one**, which is both UAX #11's default for an\n"
+            " * unlisted code point and the overwhelming majority, so only the\n"
+            " * zeroes and the twos are here. The blocks whose *unassigned*\n"
+            " * code points default to W are written out by the generator:\n"
+            " * they are in that file's header and not in all of its rows. */")
 
 emit_ranges("pas_u_extpict", extpict,
             "/* Extended_Pictographic, from emoji/emoji-data.txt, which GB11\n"

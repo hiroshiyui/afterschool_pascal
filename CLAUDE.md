@@ -156,7 +156,16 @@ is the shell that reads `PasTerm.ReadKey` and writes `CursorTo`, and that is a
 **named** as a root — `format-check`, `variant-check`, `warning-free` and
 `coverage.py` all name it — and by no glob, and `tui/build.py` honours
 `AFTERSCHOOL_PASCAL_OPT` for `lsp/build.py`'s reason: an editor's whole shape
-is a loop. **Two things about the model are decisions and not features**
+is a loop. **A column is a cell and not a byte** (ADR-0395): AP 6.4.15.13 defines
+display width and `PasUnicode.Columns` answers it, so a wide character takes
+two cells with the second holding nothing, and the arrows, Backspace, Delete
+and the clamp that runs when the cursor changes line all move by **element**.
+The model still counts *bytes* -- `ed.col` is one, every edit is at one, and
+the status line shows one -- because `pascalc` reports a diagnostic's column
+in bytes and landing on an error means landing on a byte; the conversion
+happens in the single line that hands the cursor to the terminal.
+
+**Two things about the model are decisions and not features**
 (ADR-0387): an edit is one of *four* operations — insert, remove, split,
 join — and the four routines that perform them are the only code that touches
 the buffer, which is what makes the undo journal complete by construction

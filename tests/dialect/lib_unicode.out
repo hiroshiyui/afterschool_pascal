@@ -38,3 +38,10 @@ elements 2..4 = b👨‍👩‍👧c (20 bytes)
 back to a text: no error
 common prefix with ab👨‍👩‍👧xy = 3 elements
 ill-formed: element 1 ends at 2, and from there 0
+columns of abc          = 3
+columns of 日本語       = 6
+columns of e+acute      = 1
+columns of the family   = 2
+columns of a bare mark  = 0
+columns of ───          = 3
+columns of ill-formed   = -1

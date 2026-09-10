@@ -189,9 +189,16 @@ It refuses to start where its standard input is not a terminal, and says so.
 - **No horizontal scrolling.** A line wider than the window is cut and the
   cursor stops at the last column while the status line goes on counting in
   the document. `sessions/wide.keys` is that limitation, written down.
-- **No display width.** AP 6.4.15 NOTE 14 puts the number of columns a value
-  occupies outside this language, so a column here is a byte. A program
-  drawing East Asian text will draw it wrongly.
+- ~~**No display width.**~~ Closed by ADR-0395. AP 6.4.15.13 defines it and
+  `PasUnicode.Columns` answers it, so a column here is a **cell**: `日本語` is
+  three cells and six columns, the arrows and Backspace move by element, and
+  the cursor lands where the character is. `sessions/wide_text.keys` is the
+  one session that can tell a byte, an element and a column apart — the other
+  fifteen are ASCII, where the three are the same thing.
+
+  What is still true is narrower and is in that record: this is the
+  fixed-pitch cell count and not a shaping model, so Arabic and Devanagari
+  are laid out by rules no per-code-point property expresses.
 - **No resize.** `SIGWINCH` is a signal and a signal has no shape in this
   language; the caller passes the size on every render, so a shell that wants
   to notice asks `PasTerm.TermSize` again.

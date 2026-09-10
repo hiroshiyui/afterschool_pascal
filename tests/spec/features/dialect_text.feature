@@ -301,3 +301,29 @@ Feature: Text
       """
       must be a text
       """
+
+  @afterschool:6.4.15.13
+  Scenario: display width counts cells, and the unit is the element
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      import PasUnicode;
+      begin
+        { a) Wide takes two, and c) everything else takes one. }
+        writeln(Columns('ab'):1, ' ', Columns('日本'):1);
+        { The unit is the element: `e` and a combining acute are one thing a
+          person sees, so one cell -- and by b) the mark itself takes none. }
+        writeln(Columns('é'):1, ' ', Columns('́'):1);
+        { An element's width is its first code point's, so a sequence joined
+          out of three people is two cells and not six. }
+        writeln(Columns('👨‍👩‍👧'):1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      2 4
+      1 0
+      2
+      """

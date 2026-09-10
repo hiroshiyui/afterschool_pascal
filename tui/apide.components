@@ -5,6 +5,7 @@
 ../lib/dialect/pasterm.pas
 ../lib/dialect/pasenv.pas
 ../lib/pasfile.pas
+../lib/dialect/pasunicode.pas
 ../lib/dialect/pasparse.pas
 ../lib/dialect/pasprocess.pas
 apedit.pas

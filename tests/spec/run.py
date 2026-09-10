@@ -76,6 +76,7 @@ import sys
 import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
+ROOT = HERE.parent.parent
 TAG = re.compile(r"@(iso7185|extended|afterschool):(\d+(?:\.\d+)*)")
 
 STANDARD_OF = {
@@ -214,8 +215,19 @@ def compile_and_maybe_run(out, pascalcc, work, run_it):
     # which document the scenario is written against -- it still selects the
     # clause inventory a citation is checked in, and no longer selects a
     # language.
+    # **A scenario may import a library module** (ADR-0395). Until AP 6.4.15.13
+    # there was no clause here whose only reach into the language was through
+    # one, and every scenario had been a program that imports nothing -- so
+    # the search path was never passed and `import PasUnicode` could not
+    # resolve. What is added is where to *look*, which is ADR-0244's own
+    # mechanism and not a second idea of what a module is: a scenario that
+    # imports nothing is compiled exactly as before.
+    env = dict(os.environ)
+    env["AFTERSCHOOL_PASCAL_PATH"] = os.pathsep.join(
+        str(ROOT / part) for part in ("lib", "lib/dialect"))
     proc = subprocess.run([str(pascalcc), str(src), "-o", str(exe)],
-                          capture_output=True, text=True, timeout=300)
+                          capture_output=True, text=True, timeout=300,
+                          env=env)
     # pascalcc puts the compiler's diagnostics on stderr; take both so a
     # scenario cannot pass by matching the wrong stream.
     out.diagnostic = proc.stdout + proc.stderr
