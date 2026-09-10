@@ -1,17 +1,31 @@
 +------------+
 |abcdefghijkl|
 |~           |
-|~           |
 |            |
 |wide.pas 1:1|
+|^S Save  ^B |
++------------+
++------------+
+|............|
+|............|
+|mmmmmmmmmmmm|
+|ssssssssssss|
+|hhhhhhhhhhhh|
 +------------+
 cursor 1,1
 +------------+
 |abcdefghijkl|
 |~           |
-|~           |
 |            |
 |wide.pas1:27|
+|^S Save  ^B |
++------------+
++------------+
+|............|
+|............|
+|mmmmmmmmmmmm|
+|ssssssssssss|
+|hhhhhhhhhhhh|
 +------------+
 cursor 1,12
 lines 1 dirty FALSE

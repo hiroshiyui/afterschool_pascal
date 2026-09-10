@@ -4,9 +4,19 @@
 |  writeln(x)                |
 |end.                        |
 |~                           |
-|~                           |
 |                            |
 |p.pas                    1:1|
+|^S Save  ^B Build  ^F Find  |
++----------------------------+
++----------------------------+
+|............................|
+|............................|
+|............................|
+|............................|
+|............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------+
 cursor 1,1
 +----------------------------+
@@ -15,9 +25,19 @@ cursor 1,1
 |  writeln(x)                |
 |end.                        |
 |~                           |
-|~                           |
 |error: 'x' is not declared  |
 |p.pas                   3:11|
+|^S Save  ^B Build  ^F Find  |
++----------------------------+
++----------------------------+
+|............................|
+|............................|
+|............................|
+|............................|
+|............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------+
 cursor 3,11
 +----------------------------+
@@ -26,9 +46,19 @@ cursor 3,11
 |  writeln(x)                |
 |end.                        |
 |~                           |
-|~                           |
 |error: past the end         |
 |p.pas                    4:1|
+|^S Save  ^B Build  ^F Find  |
++----------------------------+
++----------------------------+
+|............................|
+|............................|
+|............................|
+|............................|
+|............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------+
 cursor 4,1
 +----------------------------+
@@ -37,9 +67,19 @@ cursor 4,1
 |  writeln(x)                |
 |end.                        |
 |~                           |
-|~                           |
 |error: past the line        |
 |p.pas                   1:19|
+|^S Save  ^B Build  ^F Find  |
++----------------------------+
++----------------------------+
+|............................|
+|............................|
+|............................|
+|............................|
+|............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------+
 cursor 1,19
 +----------------------------+
@@ -48,9 +88,19 @@ cursor 1,19
 |  writeln(x)                |
 |end.                        |
 |~                           |
-|~                           |
 |no diagnostic in that       |
 |p.pas                   1:19|
+|^S Save  ^B Build  ^F Find  |
++----------------------------+
++----------------------------+
+|............................|
+|............................|
+|............................|
+|............................|
+|............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------+
 cursor 1,19
 lines 4 dirty FALSE

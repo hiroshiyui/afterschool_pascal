@@ -36,6 +36,8 @@
 module ApEdit;
 
 export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
+                 CellRole, crText, crStatus, crHint, crMessage, crPrompt,
+                 ScreenRoles,
                  KeyKind, kkNone, kkChar, kkEnter, kkBack, kkDelete,
                  kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
                  kkSave, kkQuit, kkBuild, kkUnknown,
@@ -67,6 +69,18 @@ type
   EditLine = StrItem;
   ScreenRow = string(ColsMax);
 
+  { **What a cell is for, which is not what colour it is** (ADR-0389). The
+    model names a role and the shell owns the palette, so `ApEdit` still names
+    no terminal capability -- it has no terminal in it and now no vocabulary
+    from one either -- and a golden holds `sssss` under the status line rather
+    than a row of SGR numbers nobody reads. Changing what colour a role is
+    touches neither this file nor any recorded screen.
+
+    `crText` is the document and is what a cell is unless something says
+    otherwise, which is why it is first. }
+  CellRole = (crText, crStatus, crHint, crMessage, crPrompt);
+  ScreenRoles = array [1..ColsMax] of CellRole;
+
   { What the caller draws. `rows` and `cols` are what was asked for and are
     what a reader of a golden counts; `at` is the cell the cursor belongs in,
     in the same coordinates, so the shell writes one `CursorTo` and no
@@ -74,6 +88,11 @@ type
   Screen = record
     rows, cols: integer;
     line: array [1..RowsMax] of ScreenRow;
+    { One role per cell, in the same coordinates as `line`. A plane beside the
+      characters rather than a record per cell: a `ScreenRow` is a string and
+      the whole program is written to treat it as one, and a cell record would
+      have made every row a construction. }
+    role: array [1..RowsMax] of ScreenRoles;
     atRow, atCol: integer
   end;
 
@@ -243,6 +262,11 @@ end;
 
 const
   Esc = 27;
+  { What the hint bar says. One place, because it is a claim about the
+    bindings and the decoder is the other half of that claim -- a key here
+    that `DecodeByte` does not answer would be the editor lying about itself
+    on every frame. }
+  Hints = '^S Save  ^B Build  ^F Find  ^L Next  ^G Line  ^Z Undo  ^Q Quit';
 
 procedure EditInit;
 begin
@@ -872,18 +896,26 @@ begin
 end;
 
 procedure EditRender;
-var r, h, n, wide, pcol: integer; s: EditLine; row: ScreenRow; num: EditLine;
+var r, c, h, n, wide, pcol: integer; s: EditLine; row: ScreenRow;
+    num: EditLine;
 begin
-  { The size the caller asked for, held to what this can draw. Three rows is
-    the least that has a document in it, the last two being the message and
-    the status. }
+  { The size the caller asked for, held to what this can draw. **Four rows is
+    the least that has a document in it** since ADR-0389 -- the last three
+    being the message, the status and the hint bar. }
   if rows > RowsMax then rows := RowsMax;
-  if rows < 3 then rows := 3;
+  if rows < 4 then rows := 4;
   if cols > ColsMax then cols := ColsMax;
   if cols < 8 then cols := 8;
   scr.rows := rows;
   scr.cols := cols;
-  h := rows - 2;
+  h := rows - 3;
+
+  { Every cell is document text until something below says otherwise, which is
+    why `crText` is the role's first value and why this is one loop rather
+    than a rule at each site. }
+  for r := 1 to rows do
+    for c := 1 to cols do
+      scr.role[r][c] := crText;
 
   { Scroll so the cursor is on screen. This is why the editor is a `var`
     parameter of a routine that only draws: where the window sits is a
@@ -908,15 +940,23 @@ begin
     into the question**, because a person typing an answer has to see where
     it is going -- and that is the only thing on this screen that is not
     where the document says it is. }
+  { **A message and a question are not the same row wearing one name.** The
+    editor telling you what happened and the editor waiting for an answer are
+    different states, and the role is what says which -- so the plane a golden
+    holds changes when the mode does, and a prompt that failed to open is a
+    visible difference rather than an invisible one. }
   pcol := 0;
-  if ed.mode = mdEdit then
-    scr.line[rows - 1] := Left(ed.says, cols)
+  if ed.mode = mdEdit then begin
+    for c := 1 to cols do scr.role[rows - 2][c] := crMessage;
+    scr.line[rows - 2] := Left(ed.says, cols)
+  end
   else begin
+    for c := 1 to cols do scr.role[rows - 2][c] := crPrompt;
     if ed.mode = mdFind then s := 'Find: '
     else if ed.mode = mdSaveAs then s := 'Save as: '
     else s := 'Line: ';
     s := s + ed.prompt;
-    scr.line[rows - 1] := Left(s, cols);
+    scr.line[rows - 2] := Left(s, cols);
     pcol := length(s) + 1
   end;
 
@@ -930,10 +970,21 @@ begin
   if wide < 1 then wide := 1;
   row := Left(s, wide);
   while length(row) < wide do row := row + ' ';
-  scr.line[rows] := Left(row + num, cols);
+  scr.line[rows - 1] := Left(row + num, cols);
+  for c := 1 to cols do scr.role[rows - 1][c] := crStatus;
+
+  { **The hint bar** (ADR-0389). The bindings were discoverable by reading
+    `tui/README.md`, which is not where a person sits when they are looking at
+    the editor. It names the keys this editor has, which are control keys --
+    Turbo Pascal's were function keys and those want decoder arms that do not
+    exist yet, so this says what is true today rather than what it would like
+    to say. It is cut to the window like everything else, so a narrow terminal
+    loses the right-hand end rather than wrapping. }
+  scr.line[rows] := Left(Hints, cols);
+  for c := 1 to cols do scr.role[rows][c] := crHint;
 
   if pcol > 0 then begin
-    scr.atRow := rows - 1;
+    scr.atRow := rows - 2;
     scr.atCol := pcol
   end
   else begin

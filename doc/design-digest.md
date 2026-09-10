@@ -4999,6 +4999,33 @@ again. And **Escape cannot close a prompt, so Ctrl-C does** — a fact about the
 decoder rather than a preference: it is handed one byte at a time, and a bare
 Escape and the start of an arrow are the same byte.
 
+**A cell carries a role and not a colour** (ADR-0389), which is the change
+that makes a Turbo Pascal-shaped screen possible at all. `PasTerm` gained
+`Colour` and `SetColour` for the editor with ADR-0381 and the editor could not
+express any of it: `Screen` was characters and nothing else, so a library
+feature stood built for a client with no way to reach it — and nothing fails
+when a capability is merely unreachable. The model now names what a cell is
+*for* — `crText`, `crStatus`, `crHint`, `crMessage`, `crPrompt` — and the
+shell maps a role to a foreground and a background. Three things follow, and
+each is why it is roles: `ApEdit` still imports no `PasTerm`, so the part with
+no terminal in it names no terminal's vocabulary either; a golden stays
+readable, holding `sssss` under the status line rather than SGR numbers; and a
+palette is the shell's, so changing what the status line looks like touches no
+recorded screen. A message and a question are separate roles because they are
+separate states, which the goldens now assert — `find` alone holds three
+prompt frames against six message ones. The bottom row is a **hint bar**,
+which is what the roles immediately buy: the bindings were discoverable only
+by reading `tui/README.md`, which is not where a person sits when looking at
+the editor.
+
+**`ncurses` was declined, and the record says why** (ADR-0389): it owns the
+screen and the terminal, so drawing through it makes the drawing no longer a
+value anything can diff — ADR-0262's argument against a pseudo-terminal
+arriving a third time, with the unchecked surface growing from thirty lines of
+shell to the whole drawing layer plus the binding. What it would genuinely
+have bought is a key database for function and Alt keys; that is a table of
+escape sequences rather than a library.
+
 What no oracle here reaches is the shell itself — `doc/sop.md` §7 carries the
 row, which ADR-0262 owed and never wrote. It was checked by hand under a
 pseudo-terminal: the alternate screen entered and left, the cursor hidden

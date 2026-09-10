@@ -26,7 +26,7 @@ something, which is the model and not the shell.
 | `build.py` | builds either program from its sidecar; `lsp/build.py` with the program as an argument, since `tui/` has two over one model |
 | `run.py` | replays every session and compares the screens |
 | `sessions/*.keys` | a script, one directive per line |
-| `sessions/*.screen` | what it drew, exactly |
+| `sessions/*.screen` | what it drew, exactly — the characters, then the **roles**, one letter per cell |
 
 ## Why it can be tested at all
 
@@ -106,6 +106,9 @@ tui/build.py '' session.pas   # the session replayer
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
 | Ctrl-G | go to a line by number |
 | Ctrl-C | close the question a prompt is asking |
+
+The bindings are on the **hint bar** along the bottom now (ADR-0389), so the
+table above is a reference rather than the only place they are written down.
 | arrows, Home, End | move |
 | Enter, Backspace, Delete | the three that change the shape of the document |
 

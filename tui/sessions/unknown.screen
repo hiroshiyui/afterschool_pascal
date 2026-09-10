@@ -2,36 +2,68 @@
 |text                |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |keys.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 +--------------------+
 |text                |
 |~                   |
 |~                   |
-|~                   |
 |unknown key 90      |
 |keys.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 +--------------------+
 |.text               |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |keys.pas *       1:2|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,2
 +--------------------+
 |.text               |
 |~                   |
 |~                   |
-|~                   |
 |unknown key 1       |
 |keys.pas *       1:2|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,2
 lines 1 dirty TRUE

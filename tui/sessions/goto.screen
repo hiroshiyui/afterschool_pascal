@@ -3,9 +3,18 @@
 |two                 |
 |three               |
 |four                |
-|five                |
 |                    |
 |goto.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 +--------------------+
@@ -13,51 +22,96 @@ cursor 1,1
 |two                 |
 |three               |
 |four                |
-|five                |
 |Line:               |
 |goto.pas         1:1|
+|^S Save  ^B Build  ^|
 +--------------------+
-cursor 6,7
++--------------------+
+|....................|
+|....................|
+|....................|
+|....................|
+|pppppppppppppppppppp|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
++--------------------+
+cursor 5,7
 +--------------------+
 |one                 |
 |two                 |
 |three               |
 |four                |
-|five                |
 |                    |
 |goto.pas         4:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 4,1
 +--------------------+
-|one                 |
 |two                 |
 |three               |
 |four                |
 |five                |
 |                    |
 |goto.pas         5:1|
+|^S Save  ^B Build  ^|
 +--------------------+
-cursor 5,1
++--------------------+
+|....................|
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
++--------------------+
+cursor 4,1
 +------------------------------+
-|one                           |
 |two                           |
 |three                         |
 |four                          |
 |five                          |
 |not a line number: 4x         |
 |goto.pas                   5:1|
+|^S Save  ^B Build  ^F Find  ^L|
 +------------------------------+
-cursor 5,1
 +------------------------------+
-|one                           |
+|..............................|
+|..............................|
+|..............................|
+|..............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++------------------------------+
+cursor 4,1
++------------------------------+
 |two                           |
 |three                         |
 |four                          |
 |five                          |
 |nothing to find again         |
 |goto.pas                   5:1|
+|^S Save  ^B Build  ^F Find  ^L|
 +------------------------------+
-cursor 5,1
++------------------------------+
+|..............................|
+|..............................|
+|..............................|
+|..............................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++------------------------------+
+cursor 4,1
 lines 5 dirty FALSE
   1: [one]
   2: [two]

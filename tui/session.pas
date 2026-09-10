@@ -82,6 +82,21 @@ end;
 { The screen, with a border so that a trailing blank is visible in the golden
   -- a line that ends in spaces and one that does not are different drawings
   and a diff of bare text cannot show which is which. }
+{ One letter per role (ADR-0389). **A golden holds what a cell is for**, and
+  a letter is what makes that readable: `sssss` under the status line says the
+  thing a row of SGR numbers would have hidden. Every constant is named, so a
+  fifth role stops this program rather than printing as a blank. }
+function RoleChar(k: CellRole): char;
+begin
+  case k of
+    crText: RoleChar := '.';
+    crStatus: RoleChar := 's';
+    crHint: RoleChar := 'h';
+    crMessage: RoleChar := 'm';
+    crPrompt: RoleChar := 'p';
+  end
+end;
+
 procedure Print;
 var r, c: integer; bar: ScreenRow;
 begin
@@ -91,6 +106,18 @@ begin
   for r := 1 to scr.rows do begin
     line := scr.line[r];
     while length(line) < scr.cols do line := line + ' ';
+    writeln('|', line, '|')
+  end;
+  writeln('+', bar, '+');
+  { The roles, in the same coordinates, so a reader can lay one block over
+    the other. Printed always rather than only when something is coloured: a
+    plane that appeared and disappeared would be a golden whose *shape*
+    carried information, and the frame where it vanished would be the one
+    nobody noticed. }
+  writeln('+', bar, '+');
+  for r := 1 to scr.rows do begin
+    line := '';
+    for c := 1 to scr.cols do line := line + RoleChar(scr.role[r][c]);
     writeln('|', line, '|')
   end;
   writeln('+', bar, '+');

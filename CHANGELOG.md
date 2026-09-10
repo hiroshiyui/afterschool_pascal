@@ -15,6 +15,13 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The editor has colour and a hint bar** (ADR-0389). A cell carries a
+  *role* — document text, status, hint, message, prompt — and the shell maps a
+  role to a colour, so `ApEdit` still names no terminal capability and a
+  palette change touches no recorded screen. The bottom row now lists the
+  bindings, which were discoverable only by reading the README. `PasTerm` had
+  gained colour for the editor with ADR-0381 and the editor had no way to
+  express it; this is what connects them.
 - **A document with no name asks for one** (ADR-0388). Ctrl-S on a new
   document opens a `Save as:` prompt instead of advising a restart, which is
   what the fileless start needed to be usable: run `afterschool`, type, save.

@@ -61,11 +61,38 @@ var
 { One row of the drawing, put where it belongs and padded to the window's
   width so that what a shorter line replaces is erased rather than left
   showing. `ClearLine` would be a second sequence per row and this is one. }
-procedure PutRow(r: integer; s: ScreenRow; width: integer);
-var out: IOLine; e2: ErrorCode;
+{ **The palette, and it lives here** (ADR-0389). The model says what a cell
+  is for and this says what that looks like, so changing the scheme changes
+  neither `ApEdit` nor one recorded screen -- a role is a fact and a colour is
+  a preference. The scheme is Turbo Pascal's in spirit: the document plain,
+  the chrome reversed out of it.
+
+  A row is one colour today because that is what the roles are; a row of mixed
+  roles is what a panel will bring, and `PutRow` will then break the row into
+  runs instead of taking the first cell's. It takes the first cell's *and says
+  so*, rather than pretending to be general. }
+procedure RoleColour(k: CellRole; var fg, bg: Colour);
+begin
+  case k of
+    crText: begin fg := clDefault; bg := clDefault end;
+    { The status line is what Turbo Pascal put in reverse video, and it is the
+      one row a person looks at without meaning to. }
+    crStatus: begin fg := clBlack; bg := clCyan end;
+    crHint: begin fg := clBlack; bg := clWhite end;
+    { A message is the editor speaking and a question is the editor waiting,
+      so they do not look alike -- which is the whole reason the model tells
+      them apart. }
+    crMessage: begin fg := clYellow; bg := clDefault end;
+    crPrompt: begin fg := clBlack; bg := clYellow end;
+  end
+end;
+
+procedure PutRow(r: integer; s: ScreenRow; width: integer; k: CellRole);
+var out: IOLine; e2: ErrorCode; fg, bg: Colour;
 begin
   while length(s) < width do s := s + ' ';
-  out := CursorTo(r, 1) + s;
+  RoleColour(k, fg, bg);
+  out := CursorTo(r, 1) + SetColour(fg, bg) + s + ResetColour;
   e2 := WriteText(StdOut, out)
 end;
 
@@ -80,7 +107,11 @@ begin
   end;
   EditRender(ed, rows, cols, scr);
   e2 := WriteText(StdOut, HideCursor);
-  for r := 1 to scr.rows do PutRow(r, scr.line[r], scr.cols);
+  { The first cell's role stands for the row, which is true of every row this
+    editor draws today and is checked by nothing -- a `doc/sop.md` §7 row
+    until panels make it false and `PutRow` has to split a row into runs. }
+  for r := 1 to scr.rows do
+    PutRow(r, scr.line[r], scr.cols, scr.role[r][1]);
   e2 := WriteText(StdOut, CursorTo(scr.atRow, scr.atCol));
   e2 := WriteText(StdOut, ShowCursor)
 end;

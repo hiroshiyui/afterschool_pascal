@@ -2,45 +2,85 @@
 |the quick brown     |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |ends.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 +--------------------+
 |the quick brown     |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |ends.pas        1:16|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,16
 +--------------------+
 |the quick brown     |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |ends.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 +--------------------+
 |the quick brown     |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |ends.pas        1:16|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,16
 +--------------------+
 |the quick brown     |
 |~                   |
 |~                   |
-|~                   |
 |                    |
 |ends.pas         1:1|
+|^S Save  ^B Build  ^|
++--------------------+
++--------------------+
+|....................|
+|....................|
+|....................|
+|mmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 cursor 1,1
 lines 1 dirty FALSE
