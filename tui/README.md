@@ -154,7 +154,7 @@ tui/build.py '' session.pas   # the session replayer
 | F6 | go to the next open document, wrapping |
 | F2, Ctrl-S | save — and on a document with no name, ask for one first |
 | F9, Ctrl-B | compile, and land on the first diagnostic — or **report** it, where it names one of the other program-components rather than this file |
-| Ctrl-Q | quit — twice when the document has changes in it |
+| Ctrl-Q | quit — twice when **any** open document has changes in it (ADR-0401) |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
 | Ctrl-G | go to a line by number |
@@ -211,8 +211,12 @@ It refuses to start where its standard input is not a terminal, and says so.
 - **No replace, no search backwards and no regular expressions.** Milestone
   two is a search that finds, and says so when it wraps and when it does not.
 - **No prompt to save another document on quitting.** The dirty mark travels
-  with each document and Ctrl-Q takes two presses over unsaved work, but the
-  second press asks about the one on screen only. ADR-0396 records it.
+  with each document and Ctrl-Q takes two presses over unsaved work, and since
+  ADR-0401 it asks about **every** open document rather than the one on
+  screen — the message counts them and F6 is how a person reaches them. What
+  is still missing is the offer to *save*: two presses discard, as they always
+  have. ADR-0396 recorded the guard as a gap and it was a regression; the
+  measurement is in ADR-0401.
 - **No window list, no split and no tiling.** F6 cycles and the status line
   says which of how many; a list is worth having when eight documents is a
   number people reach.

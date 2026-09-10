@@ -153,7 +153,7 @@ cursor 2,19
 |1-28h |
 +----------------------------+
 cursor 2,19
-lines 4 dirty FALSE
+lines 4 dirty FALSE unsaved 0
   1: [program p(output);]
   2: [begin]
   3: [  writeln(x)]

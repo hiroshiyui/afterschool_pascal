@@ -1,0 +1,38 @@
+# **The document on screen is not the editor** (ADR-0401). ADR-0396 put eight
+# documents behind one screen and left one question asked of the wrong one:
+# the shell's quit guard read `EditDirty`, which answers about the document
+# being drawn. That was the whole editor before there was a second document,
+# and afterwards it was a *silent* loss of work -- type into `a.pas`, open a
+# clean `b.pas` over it, press Ctrl-Q once, and the editor took you at your
+# word.
+#
+# Ctrl-Q is the shell's and no session can press it, so what this pins is the
+# question the guard now asks. Two claims, and the last line of the golden is
+# where both are read:
+#
+#   - `dirty` and `unsaved` are different answers about the same editor --
+#     the session ends on `c.pas`, which was never typed into, so the mark on
+#     the status line says nothing and two other documents hold changes;
+#   - and `unsaved` counts them rather than answering a boolean, which is
+#     what the second dirty document is here for. A count that stopped at the
+#     current document reads 0 and a count that stopped at the first one it
+#     found reads 1.
+#
+# `push` fills a buffer the way loading a file does and leaves no mark, which
+# is what makes `b.pas` clean until a key is pressed in it.
+name a.pas
+size 10 30
+push program a(output);
+keys X
+draw
+func 3
+keys b.pas
+ctrl M
+draw
+push program b(output);
+keys Y
+draw
+func 3
+keys c.pas
+ctrl M
+draw

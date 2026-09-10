@@ -215,7 +215,7 @@ cursor 3,1
 |1-20h |
 +--------------------+
 cursor 3,4
-lines 3 dirty TRUE
+lines 3 dirty TRUE unsaved 1
   1: [al]
   2: [pha]
   3: [beta]

@@ -122,5 +122,5 @@ cursor 2,4
 |1-20h |
 +--------------------+
 cursor 2,7
-lines 1 dirty TRUE
+lines 1 dirty TRUE unsaved 1
   1: [abcdefghi]

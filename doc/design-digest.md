@@ -5180,6 +5180,21 @@ ADR-0381's line again. A file already open is switched to rather than
 opened twice, two buffers over one file being two answers to *is this
 saved*.
 
+**A guard that asked the wrong document** (ADR-0401), which is the cost of
+the paragraph above written down. The shell's quit guard read `EditDirty`,
+which answers about the document *being drawn*; that was the whole editor
+until there was a second one, and afterwards Ctrl-Q pressed once over a
+clean document discarded another's changes with no prompt and exit status
+0. ADR-0396 recorded it as a gap. `EditDirtyCount` is the question the
+shell now asks -- the live `ed.doc` plus every bank slot but `ed.cur`,
+which is stale by construction and is skipped for `EditFind`'s reason.
+**It answers a count and not a boolean** because the message names how many,
+a person looking at an unmarked document having nothing else to tell them
+what is being asked about. The evidence is that `tui/session.pas` prints
+`dirty` and `unsaved` side by side on every golden, so the two answers
+differing is a thing a session can hold; the *guard* is held by nothing but
+a person at a terminal, which is `doc/sop.md` §7's oldest open row.
+
 **A column stops being a byte** (ADR-0395). ADR-0391 made the screen an
 array of cells and left the buffer alone on purpose; this is the half it
 deferred. What was wrong was one sentence in three places: `日本語` drew in

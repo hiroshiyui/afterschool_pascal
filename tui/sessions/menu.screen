@@ -428,7 +428,7 @@ cursor 2,1
 |1-40h |
 +----------------------------------------+
 cursor 2,1
-lines 3 dirty FALSE
+lines 3 dirty FALSE unsaved 0
   1: [program p(output);]
   2: [begin]
   3: [end.]

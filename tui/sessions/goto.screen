@@ -166,7 +166,7 @@ cursor 4,1
 |1-30h |
 +------------------------------+
 cursor 4,1
-lines 5 dirty FALSE
+lines 5 dirty FALSE unsaved 0
   1: [one]
   2: [two]
   3: [three]

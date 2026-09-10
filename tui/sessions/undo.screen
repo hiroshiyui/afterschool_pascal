@@ -308,7 +308,7 @@ cursor 2,4
 |1-30h |
 +------------------------------+
 cursor 2,1
-lines 3 dirty TRUE
+lines 3 dirty TRUE unsaved 1
   1: [program p(output);]
   2: [begin]
   3: [end.]

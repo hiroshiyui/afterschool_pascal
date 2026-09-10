@@ -343,6 +343,7 @@ begin
 end;
 
 var c: char; k: Key; e2: ErrorCode; cmd: Key; ct: EnvText;
+    n: integer; says: EditLine;
 begin
   if argcount >= 1 then path := argument(1) else path := '';
   { **`COLORTERM` is the only thing a terminal tells you about this**
@@ -411,11 +412,31 @@ begin
         { A document with changes in it takes two presses, and the second has
           to be the *next* key -- which is what `asked` being cleared below
           says. An editor that quit on one press over unsaved work is the one
-          thing a person never forgives. }
-        if (not EditDirty(ed)) or asked then running := false
+          thing a person never forgives.
+
+          **The question is about every open document and not the one on
+          screen** (ADR-0401). It asked `EditDirty` for the life of ADR-0396,
+          which was the whole editor before there was a second document and
+          was a *silent* loss of work after: a person typing into `a.pas`,
+          opening a clean `b.pas` over it and pressing Ctrl-Q once was taken
+          at their word. }
+        n := EditDirtyCount(ed);
+        if (n = 0) or asked then running := false
         else begin
           asked := true;
-          EditSay(ed, 'modified -- Ctrl-Q again to quit')
+          { The count is named, because a person looking at a document with
+            no mark on it has nothing else to tell them what is being asked
+            about. F6 is how they reach it. }
+          if (n = 1) and EditDirty(ed) then
+            EditSay(ed, 'modified -- Ctrl-Q again to quit')
+          else begin
+            if n = 1 then
+              writestr(says, '1 document has changes -- Ctrl-Q again to quit')
+            else
+              writestr(says, n:1,
+                       ' documents have changes -- Ctrl-Q again to quit');
+            EditSay(ed, says)
+          end
         end
       end
       else begin

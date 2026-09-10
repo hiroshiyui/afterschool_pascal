@@ -213,7 +213,12 @@ begin
   { What the document became, after every frame has been compared. A session
     that only drew could pass over an editor that draws one thing and holds
     another. }
-  writeln('lines ', EditLines(ed):1, ' dirty ', EditDirty(ed));
+  { `dirty` is the document on screen and `unsaved` is the editor -- two
+    questions that were one until ADR-0396 put a second document behind the
+    first, and whose being one is what ADR-0401 fixed. Printing both on every
+    session is what makes the difference between them visible in a golden. }
+  writeln('lines ', EditLines(ed):1, ' dirty ', EditDirty(ed),
+          ' unsaved ', EditDirtyCount(ed):1);
   for n := 1 to EditLines(ed) do
     writeln('  ', n:1, ': [', EditLine_(ed, n), ']');
   EditFree(ed)

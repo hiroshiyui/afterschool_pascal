@@ -50,7 +50,7 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  EditName, EditSetName, EditSay, EditSaved, EditFault,
                  EditModal, EditTakeCommand, RowRuns, RowRun,
                  Document, DocMax, EditWhich, EditCount, EditFind,
-                 EditGo, EditAdd,
+                 EditGo, EditAdd, EditDirtyCount,
                  DecodeInit, DecodeByte);
 
 import PasError;
@@ -372,6 +372,15 @@ function EditTakeCommand(var ed: Editor; var k: Key): boolean;
   opening a file is, and the bytes are read by the side that has files. }
 function EditWhich(var ed: Editor): integer;
 function EditCount(var ed: Editor): integer;
+
+{ **How many open documents have changes in them** (ADR-0401), which is a
+  different question from `EditDirty` and became one the day there was more
+  than one document. `EditDirty` answers about the document *on screen* and
+  is what the status line's mark means; this answers about the editor, and
+  is what a shell deciding whether to quit has to ask. Before ADR-0396 the
+  two were the same question, which is why the guard that asked the first
+  one was complete and then quietly was not. }
+function EditDirtyCount(var ed: Editor): integer;
 function EditFind(var ed: Editor; nm: EditLine): integer;
 procedure EditGo(var ed: Editor; n: integer);
 function EditAdd(var ed: Editor): boolean;
@@ -487,6 +496,21 @@ end;
 function EditCount;
 begin
   EditCount := ed.docs
+end;
+
+{ **The document on screen is live and the bank holds the others** -- `ed.doc`
+  is written back into `ed.bank[ed.cur]` only when `EditGo` or `EditAdd` moves
+  away from it, so that slot is a stale copy while it is current and must be
+  skipped rather than read. `EditFind` above is written the same way and for
+  the same reason. }
+function EditDirtyCount;
+var i, n: integer;
+begin
+  n := 0;
+  if ed.doc.dirty then n := 1;
+  for i := 1 to ed.docs do
+    if (i <> ed.cur) and ed.bank[i].dirty then n := n + 1;
+  EditDirtyCount := n
 end;
 
 { Which open document has this name, or 0. What lets a diagnostic about

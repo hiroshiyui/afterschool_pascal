@@ -138,6 +138,6 @@ cursor 3,12
 |1-12h |
 +------------+
 cursor 3,6
-lines 2 dirty FALSE
+lines 2 dirty FALSE unsaved 0
   1: [abcdefghijklmnopqrstuvwxyz]
   2: [日本語を編集するときの横スクロール]

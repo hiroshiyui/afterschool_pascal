@@ -153,7 +153,7 @@ cursor 4,1
 |1-20h |
 +--------------------+
 cursor 3,1
-lines 3 dirty FALSE
+lines 3 dirty FALSE unsaved 0
   1: [alpha]
   2: [be]
   3: [gamma]

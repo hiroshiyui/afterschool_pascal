@@ -123,5 +123,5 @@ cursor 2,16
 |1-20h |
 +--------------------+
 cursor 2,1
-lines 1 dirty FALSE
+lines 1 dirty FALSE unsaved 0
   1: [the quick brown]

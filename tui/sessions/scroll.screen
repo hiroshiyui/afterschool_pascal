@@ -110,7 +110,7 @@ cursor 4,1
 |1-12h |
 +------------+
 cursor 2,1
-lines 6 dirty FALSE
+lines 6 dirty FALSE unsaved 0
   1: [one]
   2: [two]
   3: [three]

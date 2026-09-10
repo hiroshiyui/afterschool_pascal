@@ -202,7 +202,7 @@ cursor 4,3
 |1-20h |
 +--------------------+
 cursor 5,1
-lines 4 dirty TRUE
+lines 4 dirty TRUE unsaved 1
   1: [日語]
   2: [ab日]
   3: [éx]

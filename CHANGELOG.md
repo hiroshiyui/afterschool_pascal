@@ -13,6 +13,16 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The editor no longer discards another document's changes on one Ctrl-Q.**
+  Since eight documents landed in v3.10.0, the quit guard asked whether the
+  document *on screen* was modified, so typing into one file, opening a clean
+  second over it and pressing Ctrl-Q once exited with no prompt and no
+  message. It now asks about every open document and the message says how
+  many hold changes (ADR-0401). Two presses still discard, as they always
+  have.
+
 ## [3.10.0] - 2026-09-11
 
 **A text value knows how wide it is, and the editor is one you can work in.**

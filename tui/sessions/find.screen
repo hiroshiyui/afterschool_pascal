@@ -304,7 +304,7 @@ cursor 4,3
 |1-30h |
 +------------------------------+
 cursor 4,3
-lines 5 dirty FALSE
+lines 5 dirty FALSE unsaved 0
   1: [program p(output);]
   2: [begin]
   3: [  writeln(1);]

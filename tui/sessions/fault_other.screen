@@ -91,7 +91,7 @@ cursor 5,11
 |1-34h |
 +----------------------------------+
 cursor 5,11
-lines 5 dirty FALSE
+lines 5 dirty FALSE unsaved 0
   1: [program p(output);]
   2: [import q;]
   3: [begin]

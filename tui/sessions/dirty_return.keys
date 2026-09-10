@@ -1,0 +1,27 @@
+# The other half of ADR-0401's count, and the one that is a fact about how
+# ADR-0396 stores a document rather than about dirtiness.
+#
+# `ed.doc` is the document being edited and `ed.bank[ed.cur]` is a *stale
+# copy* of it: `EditGo` writes the live one back only as it moves away, so
+# the slot the cursor is in holds whatever that document looked like the last
+# time it was left. `EditDirtyCount` therefore skips it, exactly as `EditFind`
+# does and for the same reason.
+#
+# This session comes back to where it started, which is the only way to make
+# that slot hold something: `a.pas` is typed into, left for `b.pas`, and
+# returned to. It ends with two documents holding changes and one of them
+# under the cursor -- so a count that read the bank without skipping the
+# current slot would see `a.pas` twice and answer 3.
+name a.pas
+size 10 30
+push program a(output);
+keys X
+draw
+func 3
+keys b.pas
+ctrl M
+push program b(output);
+keys Y
+draw
+func 6
+draw
