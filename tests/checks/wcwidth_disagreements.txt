@@ -1,0 +1,61 @@
+# Where AP 6.4.15.13's table and the C library's `wcwidth` disagree, and which
+# is right (ADR-0398).
+#
+# **The C library is not an authority here**, which is `fpc-differential`'s
+# rule and its reason: where the two differ, the clause decides and the
+# disagreement is written down with which way and why. What a second table
+# buys is that it was made by somebody else from the same database, so a
+# transcription error in ours shows up as a row that has no explanation --
+# and East_Asian_Width is the one Unicode property in this tree with no
+# conformance file, so it is the only second opinion available at all.
+#
+# Five fields: the first and last code point of a range, what AP 6.4.15.13
+# says, what `wcwidth` says, and the cause. Both directions: a range that
+# stops disagreeing fails as loudly as a new one, because either is a table
+# that moved.
+#
+# The causes, and none of them is a defect in this table:
+#
+# format    A format character (General_Category Cf). AP 6.4.15.13 b) gives it
+#           no cell, which is what a terminal does with a soft hyphen it is not
+#           breaking at and with an Arabic number sign. glibc gives it one.
+#           UAX #11 has no opinion; the clause does, and it is the one that
+#           makes `Columns` agree with what is drawn.
+#
+# jamo      A conjoining Hangul jamo, and **the two agree about every text and
+#           disagree about every code point**. glibc's table is per code point,
+#           so it gives the leading jamo two cells and the medial and final
+#           none, summing to two for a syllable. AP 6.4.15.13's unit is the
+#           **element**, and UAX #29's GB6, GB7 and GB8 put L, V and T into one
+#           cluster -- so the syllable is one element of two cells and the
+#           parts are never measured on their own. Probed: `Columns` of
+#           U+1100 U+1161 is 2, and so is 2 + 0. A jamo alone is a defective
+#           sequence, where one cell is a better answer than none.
+#
+# filler    U+3164 and U+FFA0, the Hangul fillers, which are the same case one
+#           step further: East_Asian_Width calls them W and Na and glibc gives
+#           them nothing at all.
+#
+# ambiguous East_Asian_Width is Ambiguous and AP 6.4.15.13 NOTE 19 takes one
+#           cell, which `doc/implementation-defined.md` records. glibc takes
+#           two in an East Asian locale and one otherwise; this run is in a
+#           UTF-8 locale that is not East Asian, and it still says two, which
+#           is that library's own choice and not a reading of UAX #11.
+#
+# lo    hi     ours theirs cause
+00AD  00AD   0 1 format
+0600  0605   0 1 format
+06DD  06DD   0 1 format
+070F  070F   0 1 format
+0890  0891   0 1 format
+08E2  08E2   0 1 format
+1160  11FF   1 0 jamo
+3164  3164   2 0 filler
+3248  324F   1 2 ambiguous
+D7B0  D7C6   1 0 jamo
+D7CB  D7FB   1 0 jamo
+FFA0  FFA0   1 0 filler
+FFF9  FFFB   0 1 format
+110BD 110BD  0 1 format
+110CD 110CD  0 1 format
+13430 1343F  0 1 format

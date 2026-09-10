@@ -5110,6 +5110,25 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
+**A second opinion about width** (ADR-0398). East_Asian_Width is the one
+Unicode property in this tree with no conformance file, so
+`unicode-conformance` regenerating the header and diffing it is a check
+that the *generator* is stable and not that the table is right. The C
+library has a table built by other people from the same database, and
+`wcwidth` is how a program asks it -- **not an authority**, which is
+`fpc-differential`'s rule, so where the two differ the clause decides and
+the disagreement is catalogued with which way and why. Sixteen ranges, four
+causes, both directions, and a floor of 100 000 code points compared
+because glibc answers -1 outside the locale's charmap and the `C` locale
+would agree with everything it never looked at.
+
+**The Hangul rows are evidence and not only disagreement.** `wcwidth` is
+per code point and gives a leading jamo two cells and a medial none;
+AP 6.4.15.13's unit is the *element*, and GB6 to GB8 put L, V and T in one
+cluster, so the syllable is one element of two cells here and 2 + 0 there.
+The two agree about every text and disagree about every code point, which
+is the closest thing to independent confirmation the element rule has.
+
 **The window moves sideways too** (ADR-0397). A line wider than the window
 was cut, and `sessions/wide.keys` recorded that as a limitation with an
 argument for it. ADR-0395 is what made scrolling cheap: `PutLine` already

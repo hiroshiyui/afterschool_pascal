@@ -1299,6 +1299,17 @@ set_tests_properties(tui-sessions PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
 add_test(NAME tui-palette
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/palette.py)
 
+# A second opinion about East_Asian_Width (ADR-0398). Normalisation and
+# segmentation each have a conformance file Unicode publishes; the width
+# property has none, so `unicode-conformance` regenerating the header and
+# diffing it checks that the *generator* is stable and not that the table is
+# right. The C library has a table of its own built by other people from the
+# same database, and `wcwidth` is how a program asks it -- not an authority,
+# so where the two differ the clause decides and the disagreement is
+# catalogued with which way and why, both directions.
+add_test(NAME wcwidth
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/wcwidth.py)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

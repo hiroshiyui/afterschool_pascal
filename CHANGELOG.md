@@ -34,6 +34,13 @@ appears below in the release where it still existed.
   hint bar now reads `F2 Save  F9 Build  …`.
 
 ### Added
+- **A second opinion about display width** (ADR-0398). East_Asian_Width is the
+  one Unicode property here with no conformance file, so the new `wcwidth`
+  case puts the C library's own table beside AP 6.4.15.13's: sixteen
+  catalogued disagreements in four causes, both directions. The Hangul ones
+  are the interesting ones — the two agree about every text and disagree about
+  every code point, because `wcwidth` measures code points where this clause
+  measures elements.
 - **The editor scrolls sideways** (ADR-0397). A line wider than the window
   was cut; the window follows the cursor now, by **column** rather than by
   byte, so a line of Japanese scrolls by what a person sees and a wide

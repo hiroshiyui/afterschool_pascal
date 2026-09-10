@@ -190,6 +190,16 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
 
+      # `wcwidth` is the *other* half of the text tables' oracle (ADR-0398):
+      # East_Asian_Width has no conformance file, so what stands beside it is
+      # the C library's own table. It needs a UTF-8 locale, which this image
+      # has and a bare checkout may not, so the require variable belongs here
+      # with the one below it.
+      - name: A second opinion about width, and refuse to pass by skipping
+        env:
+          WCWIDTH_REQUIRE: '1'
+        run: ctest --test-dir build -R '^wcwidth$' --output-on-failure
+
       - name: Run it, and refuse to pass by skipping
         env:
           UNICODE_CONFORMANCE_REQUIRE: '1'

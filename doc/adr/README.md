@@ -406,3 +406,4 @@ the alternatives that were rejected and why.
 | [0395](0395-a-column-stops-being-a-byte.md) | A column stops being a byte | Accepted |
 | [0396](0396-more-than-one-document.md) | More than one document | Accepted |
 | [0397](0397-the-window-moves-sideways-too.md) | The window moves sideways too | Accepted |
+| [0398](0398-a-second-opinion-about-width.md) | A second opinion about width | Accepted |
