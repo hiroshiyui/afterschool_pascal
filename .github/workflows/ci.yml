@@ -174,7 +174,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang libclang-rt-dev git python3 curl
+            ca-certificates cmake make clang libclang-rt-dev git python3 curl \
+            libicu-dev pkg-config
 
       - uses: actions/checkout@v4
 
@@ -190,15 +191,19 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
 
-      # `wcwidth` is the *other* half of the text tables' oracle (ADR-0398):
+      # `icu-width` is the *other* half of the text tables' oracle (ADR-0400):
       # East_Asian_Width has no conformance file, so what stands beside it is
-      # the C library's own table. It needs a UTF-8 locale, which this image
-      # has and a bare checkout may not, so the require variable belongs here
-      # with the one below it.
-      - name: A second opinion about width, and refuse to pass by skipping
+      # ICU's own reading of the same database. It needs `libicu-dev`, which
+      # this job installs above and a bare checkout may not have, so the
+      # require variable belongs here with the one below it -- and the gate
+      # abstains anyway when ICU's Unicode version is not the pinned one,
+      # which is a *skip* that this variable deliberately does not override
+      # into a failure, two readings of different releases not being a
+      # disagreement about the reading.
+      - name: A second reading of the width properties, and refuse to skip
         env:
-          WCWIDTH_REQUIRE: '1'
-        run: ctest --test-dir build -R '^wcwidth$' --output-on-failure
+          ICU_WIDTH_REQUIRE: '1'
+        run: ctest --test-dir build -R '^icu-width$' --output-on-failure
 
       - name: Run it, and refuse to pass by skipping
         env:

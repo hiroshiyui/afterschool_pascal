@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted, superseding [ADR-0398](0398-a-second-opinion-about-width.md), whose
-oracle and argument stand and whose catalogue did not survive contact with a
-second machine.
+**Superseded by [ADR-0400](0400-icu-reads-the-same-database.md).** Every
+correction here was a real finding about comparing against a C library, and
+the conclusion -- that such a comparison can bound divergence and not forbid
+it -- is true and was the wrong problem to solve. ICU reads the same database
+and names its version, so exact agreement is available after all.
 
 ## Context
 

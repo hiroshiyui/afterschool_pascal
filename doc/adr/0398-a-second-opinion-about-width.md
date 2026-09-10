@@ -2,7 +2,9 @@
 
 ## Status
 
-**Superseded by [ADR-0399](0399-a-differential-oracle-catalogues-causes.md).**
+**Superseded by [ADR-0399](0399-a-differential-oracle-catalogues-causes.md),
+and then by [ADR-0400](0400-icu-reads-the-same-database.md), which replaced
+the oracle itself.**
 The decision to hold an enumerated list of disagreeing *code points* was wrong
 and CI said so within the hour: a range list is a fact about one C library's
 table, and this one passed where it was written and failed on macOS and on

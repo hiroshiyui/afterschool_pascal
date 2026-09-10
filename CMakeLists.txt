@@ -1299,16 +1299,18 @@ set_tests_properties(tui-sessions PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
 add_test(NAME tui-palette
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/palette.py)
 
-# A second opinion about East_Asian_Width (ADR-0398). Normalisation and
-# segmentation each have a conformance file Unicode publishes; the width
-# property has none, so `unicode-conformance` regenerating the header and
-# diffing it checks that the *generator* is stable and not that the table is
-# right. The C library has a table of its own built by other people from the
-# same database, and `wcwidth` is how a program asks it -- not an authority,
-# so where the two differ the clause decides and the disagreement is
-# catalogued with which way and why, both directions.
-add_test(NAME wcwidth
-         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/wcwidth.py)
+# A second reading of the width properties (ADR-0400). Normalisation and
+# segmentation each have a conformance file Unicode publishes; East_Asian_Width
+# has none, so `unicode-conformance` regenerating the header and diffing it
+# checks that the *generator* is stable rather than the table right. ICU is
+# another project's reading of the same two files, and it is the right oracle
+# rather than the C library's `wcwidth` for two reasons that are properties of
+# the oracle: it exposes the **properties** the clause is written over instead
+# of a width policy of its own, and it says which Unicode version it was built
+# from -- so the comparison can be exact, and can abstain when the versions
+# differ.
+add_test(NAME icu-width
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/icu_width.py)
 
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})

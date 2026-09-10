@@ -42,15 +42,14 @@ names, and draws in twenty-four-bit colour where the terminal has it.
   hint bar now reads `F2 Save  F9 Build  …`.
 
 ### Added
-- **A second opinion about display width** (ADR-0398, ADR-0399).
+- **A second reading of the width properties** (ADR-0400).
   East_Asian_Width is the one Unicode property here with no conformance
-  file, so the new `wcwidth` case puts the C library's own table beside
-  AP 6.4.15.13's. What it catalogues is a **cause** and not a code point:
-  every machine has a libc and they differ, so what can be written down is
-  the reason two implementations are allowed to. The Hangul cause is the
-  interesting one — the two agree about every text and disagree about every
-  code point, because `wcwidth` measures code points where this clause
-  measures elements.
+  file, so the new `icu-width` case compares AP 6.4.15.13's table against
+  **ICU's** reading of the same two files — applying the clause's own rules
+  to `UCHAR_EAST_ASIAN_WIDTH` and `u_charType`, so what is compared is two
+  transcriptions and not two opinions about rendering. 1 112 064 code
+  points, exact agreement. It abstains when ICU's Unicode version is not
+  the pinned one, which is what makes exactness a claim worth making.
 - **The editor scrolls sideways** (ADR-0397). A line wider than the window
   was cut; the window follows the cursor now, by **column** rather than by
   byte, so a line of Japanese scrolls by what a person sees and a wide

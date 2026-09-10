@@ -5110,61 +5110,36 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
-**A second opinion about width** (ADR-0398). East_Asian_Width is the one
+**ICU reads the same database** (ADR-0400). East_Asian_Width is the one
 Unicode property in this tree with no conformance file, so
 `unicode-conformance` regenerating the header and diffing it is a check
-that the *generator* is stable and not that the table is right. The C
-library has a table built by other people from the same database, and
-`wcwidth` is how a program asks it -- **not an authority**, which is
-`fpc-differential`'s rule, so where the two differ the clause decides and
-the disagreement is written down.
+that the *generator* is stable and not that the table is right. ICU is
+another project's reading of the same two files, and the probe applies
+AP 6.4.15.13's own three rules to `UCHAR_EAST_ASIAN_WIDTH` and
+`u_charType` -- so what is compared is two independent transcriptions and
+not two opinions about rendering. 1 112 064 code points, exact agreement,
+no catalogue at all.
 
-**What is written down is a cause and not a code point** (ADR-0399), and
-that correction came from CI the same day: the first version enumerated
-sixteen ranges, passed on the machine that generated it, and failed on macOS
-and ubuntu:24.04. A range list is a fact about *one* libc's table.
-`fpc-differential` may enumerate because Free Pascal is absent or present; a
-libc is always present and never the same one, so what can be written down
-is the *reason* two implementations are allowed to differ. Five causes, two of
-them read off the `pas_u_gcb` table the header already carries for
-segmentation, two written out as ranges generated from the database, and two
-named code points. **Spacing marks are a class of their own**, which is CI's
-second correction of this gate in a day: UAX #29 does not put every Mc in
-SpacingMark -- the Myanmar ones are Other -- so the break classes alone still
-failed on macOS. Ambiguous is 179 **ranges** rather than the rule *one against
-two*, which would also have excused a generator that made every Wide code
-point one cell -- mutating the committed table so the CJK range measures one
-is caught now and would have passed before. Floors beside it: 100 000 code
-points compared, because glibc answers -1 outside the locale's charmap and
-the `C` locale would agree with everything it never looked at, and 300
-generated ranges, so neither range class can excuse everything by being
-empty.
+**It replaced a gate that was wrong three times in a day**, and the record
+of that is worth more than the gate. ADR-0398 compared against the C
+library's `wcwidth` and enumerated sixteen disagreeing ranges; macOS and
+ubuntu:24.04 failed it at once, a range list being a fact about one libc's
+table. ADR-0399 catalogued *causes* instead, and macOS failed again --
+UAX #29 does not put every Mc in `SpacingMark`. Then ubuntu failed on the
+trigrams, because its glibc predates the release that made them Wide, and
+**which code points a library is behind on is a property of its age**, which
+no catalogue closes; so exact agreement was given up for a measured bound of
+500. That was coherent and it was a retreat, leaving a single wrong code
+point and a whole dropped class both invisible.
 
-**Exact agreement is not the claim and cannot be**, which was the third
-correction and the one that changed the shape rather than the data: two C
-libraries are built from different Unicode versions -- ubuntu:24.04's
-predates the release that made the trigrams U+2630..U+2637 Wide -- and which
-code points a library is behind on is a property of its age and of no
-property of the character. So divergence is **bounded** at 500 uncatalogued
-code points, every one of them printed whether or not the run fails, and the
-bound is measured: the smallest systematic error this table could hold is
-2307 code points and the largest 182 869, where a version skew is tens.
-Replayed against synthesised libraries before it is trusted -- the macOS
-shape, the ubuntu shape, a whole block a release behind, and two systematic
-errors that must fail.
-
-**What it cannot see is an error inside a class the clause declares open.**
-A generator that stopped giving marks no cell would have every disagreement
-explained by `cluster`, because a library giving a mark one cell is exactly
-what that cause permits. `doc/sop.md` §7 carries it, with the two other
-limits measured beside it.
-
-**The Hangul rows are evidence and not only disagreement.** `wcwidth` is
-per code point and gives a leading jamo two cells and a medial none;
-AP 6.4.15.13's unit is the *element*, and GB6 to GB8 put L, V and T in one
-cluster, so the syllable is one element of two cells here and 2 + 0 there.
-The two agree about every text and disagree about every code point, which
-is the closest thing to independent confirmation the element rule has.
+**The defect was the choice of oracle.** `wcwidth` answers a *width*, which
+is a policy about what the standard leaves open; it names no version; every
+machine has one and they differ. ICU has none of those problems, and the
+version it reports is what lets the gate **abstain** rather than compare two
+releases -- ADR-0282's shape, and the reason `ICU_WIDTH_REQUIRE` covers a
+missing ICU and deliberately not a version mismatch. The general form:
+before writing a differential, ask what the second implementation is a
+second implementation *of*.
 
 **The window moves sideways too** (ADR-0397). A line wider than the window
 was cut, and `sessions/wide.keys` recorded that as a limitation with an
