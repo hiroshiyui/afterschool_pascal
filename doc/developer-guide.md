@@ -362,6 +362,16 @@ per-case timeout — a program there may open a socket, and a readiness defect
 makes a server block rather than print the wrong thing. Put a new case wherever
 its subject belongs.
 
+**A harness starts the program through `AFTERSCHOOL_PASCAL_RUNNER` if one is
+set** (ADR-0384) — a command, split on blanks and prepended, so that a program
+built for a target this machine cannot execute is handed to a runtime instead.
+`tests/run_test.py` and `selfhost/irtest.py` read it and no other harness does,
+which `doc/sop.md` §7 records; the runtime's own flags belong to the command
+(`wasmtime --dir=.` for the two scratch paths a case is handed), and the
+toolchain is never wrapped. `runner-seam` is what holds all of that, with a
+wrapper that records the command and `exec`s it — there being no wasm program
+here to run yet.
+
 **The suite is run in parallel** — `ctest --test-dir build -j"$(nproc)"`, 86 s
 against 290 (ADR-0281) — so a case has one obligation beyond printing the right
 thing: **it must not depend on a name another case could want.** An ordinary

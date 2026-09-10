@@ -1098,6 +1098,25 @@ set_tests_properties(foreign-layout PROPERTIES
 if(Python3_FOUND)
 endif()
 
+# Does a harness start the program under test through the runner? (ADR-0384)
+# Every harness here executes what it built, which is right until what it
+# built is for another target -- `--target=` admits `wasm32-wasi` since
+# ADR-0383, and a `.wasm` is started by a runtime. The seam is
+# `AFTERSCHOOL_PASCAL_RUNNER`, and nothing in this tree uses it yet: the
+# runtime does not build for that target, so the corpus gate that would
+# exercise it does not exist. **A seam with no user is plumbing**, so this
+# exercises it with a wrapper that records the command and execs it -- what is
+# checked is the shape of the invocation, which is the half a real runtime
+# depends on.
+if(Python3_FOUND)
+  add_test(NAME runner-seam
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/runner_seam.py)
+  set_tests_properties(runner-seam PROPERTIES
+                       TIMEOUT 600
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+endif()
+
 if(Python3_FOUND)
   add_test(NAME target-layout
            COMMAND ${Python3_EXECUTABLE}

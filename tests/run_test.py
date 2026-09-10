@@ -70,6 +70,29 @@ from pathlib import Path
 sys.stdout.reconfigure(line_buffering=True)
 
 
+def runner(env):
+    """What starts the program under test, if it is not started directly.
+
+    **A command and not a program** (ADR-0384), split on blanks, prepended to
+    the invocation: `AFTERSCHOOL_PASCAL_RUNNER='wasmtime --dir=.'`. Every
+    harness here has executed what it built, which is right for as long as
+    what it built runs on the machine that built it -- and `--target=` admits
+    `wasm32-wasi` since ADR-0383, where it does not.
+
+    **The sandbox flags belong to the operator's command**, not here. A WASI
+    runtime reaches no directory it was not given, and this harness hands the
+    program two scratch paths as arguments (`file1` and `file2`), so a runner
+    for that target needs a `--dir` naming the directory they are in. Writing
+    that here would be this file holding an opinion about one runtime; the
+    variable holds the whole command so it can hold the opinion instead.
+
+    The program is what is wrapped and the *toolchain* never is: `pascalc` and
+    `pascalcc` are programs for the machine this runs on whatever they are
+    emitting for.
+    """
+    return (env.get('AFTERSCHOOL_PASCAL_RUNNER') or '').split()
+
+
 def gnu_date(p):
     ns = os.stat(p).st_mtime_ns
     t = time.localtime(ns // 10**9)
@@ -222,6 +245,7 @@ def case(pascalc, source_file, d, name, stem, expected_out, expected_err,
             run_env['PASHEAP_BALANCE'] = heap_balance
         with open(stdin_file, 'rb') as fin:
             r = subprocess.run(
+                runner(env) +
                 [str(work / name), str(work / 'file1'), str(work / 'file2')],
                 stdin=fin, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT if merge else subprocess.PIPE,

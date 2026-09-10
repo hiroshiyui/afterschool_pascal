@@ -174,6 +174,21 @@ def die(message, status=1):
     sys.exit(status)
 
 
+def runner():
+    """What starts a *program* this harness compiled, if it is not started
+    directly -- `AFTERSCHOOL_PASCAL_RUNNER`, a command split on blanks
+    (ADR-0384).
+
+    **The compilers this script builds are never wrapped**, and that is the
+    whole care needed here: `build()` produces a stage-1 `pascalc` and then
+    *runs* it over the corpus, and that compiler is a program for the machine
+    this script is running on however the corpus is being emitted. Wrapping it
+    would hand a native binary to a runtime for another target, which fails in
+    a way that looks like the compiler being broken.
+    """
+    return (os.environ.get("AFTERSCHOOL_PASCAL_RUNNER") or "").split()
+
+
 def run(argv, *, stdout=None, stderr=None, stdin=None, env=None,
         timeout=None):
     """The toolchain, with a bound on how long it may take. coreutils'
@@ -556,8 +571,9 @@ def sweep(seedcc, args, here, root, work):
             with open(stdin_file, "rb") as si, \
                     open(work / "actual", "wb") as so, \
                     open(work / "actual.err", "wb") as se:
-                status = run([str(work / name), str(work / "file1"),
-                              str(work / "file2")],
+                status = run(runner() + [str(work / name),
+                                         str(work / "file1"),
+                                         str(work / "file2")],
                              stdin=si, stdout=so, stderr=se, timeout=60)
             if status == 124:
                 err("--- %s/%s: the program did not terminate ---\n"

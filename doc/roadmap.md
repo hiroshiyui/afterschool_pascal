@@ -25,7 +25,7 @@ headline: a command injection in the language server found, closed, audited
 and audited again (ADR-0362 – ADR-0364), a TOML library and the project reader
 rewritten over it (ADR-0360, ADR-0361) — none of it a change to the language.
 The compiler builds itself, stage 2 equals stage 3 in every
-program-component, and the suite is 918 cases green at `-O2` and at `-O0`.
+program-component, and the suite is 919 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |

@@ -392,3 +392,4 @@ the alternatives that were rejected and why.
 | [0381](0381-the-ide-is-un-withdrawn.md) | The IDE is un-withdrawn, and the reason is a different one | Accepted |
 | [0382](0382-the-non-posix-target-is-wasm.md) | The non-POSIX target is WebAssembly | Accepted |
 | [0383](0383-a-word-size-does-not-decide-a-layout.md) | wasm32 is admitted, and a word size does not decide a layout | Accepted |
+| [0384](0384-a-harness-does-not-always-run-what-it-built.md) | A harness does not always run what it built | Accepted |
