@@ -260,8 +260,7 @@ about another program-component jumped to that line number in whatever
 document was open. Eight documents, F3 to open and F6 to cycle, and a
 diagnostic naming an open one is landed on.
 
-**What is open**, in no order and none of it decided: replace; horizontal
-scrolling; a shaping model, which is what East_Asian_Width is *not* — Arabic
+**What is open**, in no order and none of it decided: replace; a shaping model, which is what East_Asian_Width is *not* — Arabic
 and Devanagari are laid out by rules no per-code-point property expresses;
 resize, which needs a signal facility this language does not have; and mouse.
 The four milestone-one exclusions and the milestone-two ones are listed in

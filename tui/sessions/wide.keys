@@ -1,12 +1,42 @@
-# A line wider than the window, which milestone one cuts rather than scrolls
-# sideways (ADR-0381). Two things are claimed: what is drawn stops at the
-# window's width, and the *cursor* stops with it -- the status line goes on
-# counting in the document, so a person can see that the cursor is at column
-# 30 while the drawing stops at 12. That disagreement is the limitation
-# showing itself, and it is better than a cursor that vanishes.
+# A line wider than the window. Milestone one cut it and let the cursor stop
+# at the edge; ADR-0397 scrolls it, which is `top`'s rule on the other axis --
+# where the window sits is a property of the last drawing, so `left` lives
+# beside `top` in the document and `EditRender` is what moves it.
+#
+# Four claims:
+#
+#   - End scrolls the window so the cursor is on it, and what is drawn is the
+#     *last* twelve columns rather than the first;
+#   - Home scrolls back, and the first twelve return;
+#   - the `~` filler stays at column one however far the window has scrolled.
+#     It says *past the end of the document* and is not text at a column, so
+#     scrolling it away would make a scrolled window look like a longer
+#     document;
+#   - a wide character straddling the left edge is **not half-drawn** -- the
+#     last frame starts with a blank where half of one would have been,
+#     because a terminal handed the first half of a wide character does
+#     not draw half of it;
+#   - and it scrolls by **column** and not by byte, which the second line is
+#     for: fifteen wide characters are thirty columns, so the window holding
+#     twelve of them holds six characters. A byte-wise scroll would put the
+#     window inside a character and draw half of one.
+#
+# The status line goes on counting bytes throughout -- 1:27 for the end of the
+# Latin line and 1:46 for the end of the Japanese one -- which is ADR-0395's
+# decision and is what makes Ctrl-B land where `pascalc` says.
 name wide.pas
-size 5 12
+size 7 12
 push abcdefghijklmnopqrstuvwxyz
+push 日本語を編集するときの横スクロール
 draw
 esc F
+draw
+esc H
+draw
+esc B
+esc F
+draw
+esc D
+esc D
+esc D
 draw

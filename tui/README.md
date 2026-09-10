@@ -189,9 +189,11 @@ It refuses to start where its standard input is not a terminal, and says so.
 
 ## What the two milestones leave out, on purpose
 
-- **No horizontal scrolling.** A line wider than the window is cut and the
-  cursor stops at the last column while the status line goes on counting in
-  the document. `sessions/wide.keys` is that limitation, written down.
+- ~~**No horizontal scrolling.**~~ Closed by ADR-0397. The window follows the
+  cursor sideways as it already did vertically, by **column** rather than by
+  byte, and a wide character straddling the left edge is dropped rather than
+  half-drawn. `sessions/wide.keys` changed from recording the limitation to
+  driving the feature.
 - ~~**No display width.**~~ Closed by ADR-0395. AP 6.4.15.13 defines it and
   `PasUnicode.Columns` answers it, so a column here is a **cell**: `日本語` is
   three cells and six columns, the arrows and Backspace move by element, and

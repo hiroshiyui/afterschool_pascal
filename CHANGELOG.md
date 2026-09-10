@@ -34,6 +34,10 @@ appears below in the release where it still existed.
   hint bar now reads `F2 Save  F9 Build  …`.
 
 ### Added
+- **The editor scrolls sideways** (ADR-0397). A line wider than the window
+  was cut; the window follows the cursor now, by **column** rather than by
+  byte, so a line of Japanese scrolls by what a person sees and a wide
+  character straddling the edge is dropped rather than half-drawn.
 - **The editor opens more than one file at once** (ADR-0396). F3 opens, F6
   goes to the next, up to eight — each with its own cursor, scroll, dirty mark
   and undo journal, and the status line says which of how many. This is what

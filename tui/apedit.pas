@@ -228,7 +228,11 @@ type
   Document = record
     lines: StrVecPtr;
     row, col: integer;  { 1-based, in the document }
-    top: integer;
+    { The first line drawn and the first *column* drawn, both 1-based.
+      Where the window sits is a property of the last drawing and not of
+      the document, which is why `EditRender` takes the editor by `var`;
+      `left` is `top`'s other axis and arrived with it in mind (ADR-0397). }
+    top, left: integer;
     dirty: boolean;
     name: EditLine;
     { The journal. `undos` is what has been done, newest first, and `redos`
@@ -415,6 +419,7 @@ begin
   d.row := 1;
   d.col := 1;
   d.top := 1;
+  d.left := 1;
   d.dirty := false;
   d.name := '';
   d.undos := nil;
@@ -1132,12 +1137,17 @@ end;
     than half-drawn, which is the no-horizontal-scrolling rule made
     element-aware: a terminal handed the first half of a wide character does
     not draw half of it. }
-procedure PutLine(var scr: Screen; r: integer; s: EditLine; cols: integer);
+procedure PutLine(var scr: Screen; r: integer; s: EditLine;
+                  cols, first: integer);
 var i, e, j, k, m, c, w: integer; one, prev: ScreenCell; cp: Scalar; fits: boolean;
 begin
+  { `c` is the **document's** column and `c - first + 1` is the screen's, so
+    the walk is the same walk and only the placing moved (ADR-0397). A cell
+    first of the window is stepped over, which is what makes this a scroll
+    and not a second renderer. }
   c := 1;
   i := 1;
-  while (i <= length(s)) and (c <= cols) do begin
+  while (i <= length(s)) and (c - first + 1 <= cols) do begin
     e := ElementEnd(s, i);
     if (e <= i) or (e > length(s) + 1) then e := i + 1;
 
@@ -1156,7 +1166,7 @@ begin
     end;
 
     { A **truncated** element must not end in a scalar of no width. A joiner
-      left dangling at the end of a cell is an instruction to join with
+      first dangling at the end of a cell is an instruction to join with
       whatever is drawn next, so the cut would reach into the cell beside it
       -- which is the one way this could put something on the terminal that
       is worse than a missing character. }
@@ -1166,21 +1176,29 @@ begin
     w := Columns(one);
     if w < 0 then w := 1;
     if w = 0 then begin
-      { No width: it belongs to whatever is already in the cell before it. }
-      if c > 1 then begin
-        prev := scr.cell[r][c - 1];
+      { No width: it belongs to whatever is already in the cell before it,
+        and only if that cell is on the screen. }
+      if (c > 1) and (c - first >= 1) then begin
+        prev := scr.cell[r][c - first];
         if length(prev) + length(one) <= CellMax then
-          PutCell(scr, r, c - 1, prev + one, crText)
+          PutCell(scr, r, c - first, prev + one, crText)
       end
-      else begin
-        PutCell(scr, r, c, one, crText);
+      else if c = 1 then begin
+        PutCell(scr, r, c - first + 1, one, crText);
         c := c + 1
       end
     end
-    else if c + w - 1 > cols then c := cols + 1   { it would hang over }
+    else if c + w - 1 < first then c := c + w   { wholly left of the window }
+    { **Straddling the left edge, and dropped rather than half-drawn**: a
+      terminal handed the second column of a wide character does not draw the
+      right half of it, and the blank this leaves is what a person reads as
+      *there is more over there*. The same rule as the right edge below, one
+      line earlier. }
+    else if c < first then c := c + w
+    else if c - first + w > cols then c := first + cols   { over the right }
     else begin
-      PutCell(scr, r, c, one, crText);
-      for m := 1 to w - 1 do PutCell(scr, r, c + m, '', crText);
+      PutCell(scr, r, c - first + 1, one, crText);
+      for m := 1 to w - 1 do PutCell(scr, r, c - first + 1 + m, '', crText);
       c := c + w
     end;
     i := e
@@ -1603,19 +1621,32 @@ begin
   if ed.doc.row > ed.doc.top + h - 1 then ed.doc.top := ed.doc.row - h + 1;
   if ed.doc.top < 1 then ed.doc.top := 1;
 
+  { **And sideways** (ADR-0397), which is the same rule on the other axis and
+    for the same reason: `left` is where the window sits and that is a
+    property of the drawing. The cursor's *column* is what it follows, not its
+    byte -- a line of Japanese scrolls by what a person sees. }
+  if ed.doc.row <= SVecLen(ed.doc.lines) then
+    n := ColumnOf(SVecGet(ed.doc.lines, ed.doc.row), ed.doc.col)
+  else n := 1;
+  if n < ed.doc.left then ed.doc.left := n;
+  if n > ed.doc.left + cols - 1 then ed.doc.left := n - cols + 1;
+  if ed.doc.left < 1 then ed.doc.left := 1;
+
   for r := 1 to h do begin
     n := ed.doc.top + r - 1;
     if n > SVecLen(ed.doc.lines) then s := '~'
     else s := SVecGet(ed.doc.lines, n);
-    { No horizontal scrolling: a line wider than the window is cut, and the
-      cursor stops at the last column rather than following the text off the
-      edge. It is a milestone-one limitation and a person meets it on a long
-      line, so the *cursor* is what says so rather than a message.
+    { **A line wider than the window scrolls now** (ADR-0397), where milestone
+      one cut it and let the cursor stop at the edge. `PutLine` walks the line
+      an element at a time and places each at `c - left + 1`, so what moved is
+      where a cell is put and not how the line is read.
 
-      **Cut by column and not by byte** since ADR-0395: `PutLine` walks the
-      line an element at a time, so the window holds `cols` columns of text
-      rather than `cols` bytes of it. }
-    PutLine(scr, r + 1, s, cols)
+      The `~` filler is drawn at column one whatever the window has scrolled
+      to: it says *past the end of the document* and is not text at a column,
+      so scrolling it away would make a scrolled window look like a longer
+      document. }
+    if n > SVecLen(ed.doc.lines) then PutLine(scr, r + 1, s, cols, 1)
+    else PutLine(scr, r + 1, s, cols, ed.doc.left)
   end;
 
   { The message line, or the question when one is open. **The cursor goes
@@ -1756,6 +1787,7 @@ begin
       is told is where that byte *appears*. }
     if ed.doc.row <= SVecLen(ed.doc.lines) then
       scr.atCol := ColumnOf(SVecGet(ed.doc.lines, ed.doc.row), ed.doc.col)
+                   - ed.doc.left + 1
     else scr.atCol := ed.doc.col
   end;
   if scr.atCol > cols then scr.atCol := cols

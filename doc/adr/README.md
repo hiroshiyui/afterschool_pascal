@@ -405,3 +405,4 @@ the alternatives that were rejected and why.
 | [0394](0394-the-palette-a-terminal-can-show.md) | The palette a terminal can show | Accepted |
 | [0395](0395-a-column-stops-being-a-byte.md) | A column stops being a byte | Accepted |
 | [0396](0396-more-than-one-document.md) | More than one document | Accepted |
+| [0397](0397-the-window-moves-sideways-too.md) | The window moves sideways too | Accepted |

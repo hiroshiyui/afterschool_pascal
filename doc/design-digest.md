@@ -5110,6 +5110,20 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
+**The window moves sideways too** (ADR-0397). A line wider than the window
+was cut, and `sessions/wide.keys` recorded that as a limitation with an
+argument for it. ADR-0395 is what made scrolling cheap: `PutLine` already
+walks a line an element at a time and places each at a computed column, so
+`left` beside `top` in the document is the whole feature -- where the window
+sits being a property of the last drawing, which is why `EditRender` takes
+the editor by `var`. It follows the cursor's **column** and not its byte, so
+a line of Japanese scrolls by what a person sees; a wide element straddling
+the left edge is dropped rather than half-drawn, the right edge's rule one
+line earlier; and the `~` filler stays at column one, since it says *past
+the end of the document* and is not text at a column. The session changed
+from asserting the limitation to asserting the feature, which is the honest
+shape -- a golden proving something no longer true is worse than none.
+
 **More than one document** (ADR-0396), and it closed a defect as well as a
 gap. `EditFault` split `file:line:col:` into three fields and used two --
 the filename was compared to nothing, so a diagnostic about another
