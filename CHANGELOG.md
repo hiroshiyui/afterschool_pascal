@@ -34,14 +34,17 @@ appears below in the release where it still existed.
   than a loop in the shell**, which is what lets a session drive one and a
   golden hold it; Ctrl-C closes it, because a decoder handed one byte at a
   time cannot tell a bare Escape from the start of an arrow.
-- **Programs run as WebAssembly** (ADR-0385). 519 of the 598 programs in this
+- **Programs run as WebAssembly** (ADR-0385, ADR-0388). 558 of the 598 programs in this
   repository's corpus compile for `wasm32-wasi`, link, and print what they
   print everywhere else under a WASI runtime. `tools/pascalcc` knows what the
   target needs — the SjLj lowering the non-local goto compiles through,
   `libsetjmp`, no `-pthread`, and a stack of a megabyte rather than wasm's
-  64 KB default. What is not there yet is the runtime: `tmpfile` is undefined
-  on wasi and that is 52 of the 79 programs that do not run, with channels,
-  tasks, processes and sockets accounting for most of the rest.
+  64 KB default. It was 519 until the runtime stopped calling `tmpfile`, which
+  is ISO C and which wasi declares and does not define: an exclusive `fopen`
+  and a `remove` are both ISO C and do the same job, so 39 more programs run
+  with no preprocessor conditional added anywhere (ADR-0388). What is not
+  there yet is still the runtime -- channels, tasks, processes and sockets are
+  30 of the 40 that do not run.
 - **A seventh target: `--target=wasm64-wasi`** (ADR-0386), WebAssembly's
   memory64. It is admitted on the layout claim alone — the emitted module
   states the target's layout and clang assembles it — because no sysroot for

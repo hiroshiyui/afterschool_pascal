@@ -396,3 +396,4 @@ the alternatives that were rejected and why.
 | [0385](0385-a-pascal-program-runs-as-webassembly.md) | A Pascal program runs as WebAssembly | Accepted |
 | [0386](0386-wasm64-costs-nothing-and-that-is-the-finding.md) | wasm64 costs nothing, and that is the finding | Accepted |
 | [0387](0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md) | An undo is a journal, and a prompt is a mode of the model | Accepted |
+| [0388](0388-an-auxiliary-file-without-tmpfile.md) | An auxiliary file, without `tmpfile` | Accepted |

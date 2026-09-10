@@ -382,8 +382,8 @@ by default, then `aarch64-linux-gnu`, `i386-pc-linux-gnu`,
 `arm64-apple-macosx`, `x86_64-apple-macosx` and — since ADR-0383 and
 ADR-0386 — `wasm32-wasi` and `wasm64-wasi`, which are not machines at all.
 Five of the seven are POSIX (ADR-0380); the other two are what this project is
-aiming at. **`wasm32-wasi` runs**: 519 of the corpus compile, link and answer
-their goldens under a WASI engine (ADR-0385). **`wasm64-wasi` is admitted on
+aiming at. **`wasm32-wasi` runs**: 558 of the corpus compile, link and answer
+their goldens under a WASI engine (ADR-0385, ADR-0388). **`wasm64-wasi` is admitted on
 the layout claim alone** — the compiler lays it out correctly and clang
 assembles what it emits — because memory64 has no sysroot to link against
 yet, so every gate needing one abstains and says so.
@@ -447,7 +447,7 @@ system's own directories, so what is attached is a compiler a user can move.
 
 **WebAssembly (`wasm32-wasi`) is the third**, and it is a tier of a different
 shape: there is no machine here, and what is claimed is measured rather than
-assumed. **519 of the 598 corpus programs compile, link and answer their
+assumed. **558 of the 598 corpus programs compile, link and answer their
 goldens** under a WASI engine on every push, and the job refuses to pass by
 skipping (ADR-0385). What a program can reach there is what a port has got —
 two of the four runtime units build, so a program wanting a thread, a process
@@ -485,12 +485,16 @@ the point of the machinery below:
   the commands that build and run a Windows program end to end; ADR-0380 is
   the decision that followed them.
 
-**519 of the 598 programs in this corpus run as WebAssembly** (ADR-0385) --
+**558 of the 598 programs in this corpus run as WebAssembly** (ADR-0385) --
 compiled for `wasm32-wasi`, linked against the runtime units that build for
-it, and printing what they print everywhere else under a WASI runtime. What
-stands between that and all of them is the runtime rather than the language:
-`tmpfile` is undefined on wasi and accounts for 52 of the 79, and channels,
-tasks, processes and sockets for most of the rest.
+it, and printing what they print everywhere else under a WASI runtime. It was
+519 until ADR-0388, and what moved was one function: `tmpfile` is ISO C, wasi
+declares it and does not define it, and the runtime no longer calls it -- an
+exclusive `fopen` and a `remove` are both ISO C and are the whole of what it
+was doing, so the fix cost no preprocessor conditional and applies on every
+target. What stands between 558 and all of them is still the runtime rather
+than the language: channels, tasks, processes and sockets account for 30 of
+the 40.
 
 **It asks one thing of the toolchain**: an LLVM that names `i128` for the
 target. clang overrides the module's own `target datalayout` with its own for

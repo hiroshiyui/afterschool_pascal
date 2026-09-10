@@ -108,11 +108,15 @@
 # reported the language's concurrency as portable to a platform that cannot
 # run it. What a port pays here is the whole task facility, not a header.
 #
-# One warning `pasrt.c` carries that no exit status does, and it is real:
-# `tmpfile` is *deprecated on WASI* at three sites -- §6.7.5.5's auxiliary
-# file and the two scratch files -- so that unit compiles and would fail at
-# run time. And the `-mllvm -wasm-enable-sjlj` in the command is what makes
-# `<setjmp.h>` usable at all, which is a build flag and not a source change.
+# `pasrt.c` carried one warning that no exit status did, and it was real:
+# `tmpfile` is *deprecated on WASI* -- wasi-libc declares it and does not
+# define it -- so the unit compiled and failed at the **link**, at three
+# sites, which is `wasm32`'s largest single row until ADR-0388 stopped
+# calling it. **The lesson stands with the warning gone**: this gate reads
+# exit statuses, a deprecation attribute is not one, and a unit catalogued
+# `compiles` can still be a unit nothing can link. And the
+# `-mllvm -wasm-enable-sjlj` in the command is what makes `<setjmp.h>` usable
+# at all, which is a build flag and not a source change.
 unit  pasrt.c            compiles
 unit  pasrt_posix.c      blocked
 unit  pasrt_task.c       blocked
