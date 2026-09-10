@@ -101,7 +101,20 @@ CATALOGUE = HERE / "nonposix_headers.txt"
 # The path is Debian's. Another layout overrides the whole command through
 # `APASCAL_NONPOSIX_CC`, and a wrong one fails loudly with the command
 # printed rather than answering quietly.
+# **And the third flag is the target telling the truth about threads.**
+# wasi-libc's `<pthread.h>` has two moods and Debian ships both of them: the
+# sysroot in trixie refuses `pthread_create` with a static assertion, and a
+# newer one declares it unless `_WASI_STRICT_PTHREAD` says otherwise. So
+# `pasrt_task.c` was catalogued `compiles` from one machine and reported
+# blocked from another, which is one row that cannot be true of both. The
+# macro is wasi-libc's own way of being asked at compile time, and its answer
+# is the substance both moods agree on -- *"This function is not available on
+# a single-threaded target"*: wasm32-wasi without the threads proposal cannot
+# create one, and `-fsyntax-only` is otherwise blind to that. Same argument as
+# the two flags above: a flag that stops a shallower answer standing in for
+# the real one.
 DEFAULT_CC = ("clang --target=wasm32-wasi -mllvm -wasm-enable-sjlj "
+              "-D_WASI_STRICT_PTHREAD "
               "-nostdlibinc -isystem /usr/include/wasm32-wasi")
 
 # The runtime is four translation units and the count is a claim of its own:
@@ -183,7 +196,7 @@ def main():
     # a reason that is about this machine.
     work = Path(tempfile.mkdtemp())
     try:
-        return check(cc, work)
+        return check(cc, work, require)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -216,17 +229,34 @@ def probe(cc, work, text):
 probe.n = 0
 
 
-def check(cc, work):
+def check(cc, work, require=""):
     units, headers = read_catalogue()
 
     ok, err = probe(cc, work, "#include <stdio.h>\nint main(void){return 0;}\n")
     if not ok:
-        print("runtime-nonposix: %s is on PATH and cannot compile a program "
-              "that includes <stdio.h>, so its C library is not installed. "
-              "That is this machine and not the runtime:" % said(cc),
-              file=sys.stderr)
-        sys.stderr.write("".join(err.splitlines(True)[:10]))
-        return 1
+        # **This is the skip, and it used to be a failure.** With mingw-w64
+        # the toolchain was a driver of its own, so `which` answered the
+        # whole question and a driver that could not find <stdio.h> was a
+        # half-installed machine worth failing on. `clang --target=wasm32-wasi`
+        # is a command whose first word is on every machine that builds this
+        # compiler, so `which` now answers yes everywhere and the sysroot is
+        # the only thing that distinguishes a machine that can be asked from
+        # one that cannot. Failing here made the gate red on the three
+        # container jobs and on macOS the moment the toolchain changed
+        # (ADR-0382) -- a gate reporting about a machine rather than about
+        # the runtime, which is the shape ADR-0330's `*_REQUIRE` exists to
+        # make safe: skip, and let the one job that installs the sysroot
+        # refuse the skip.
+        if require:
+            print("runtime-nonposix: NONPOSIX_REQUIRE is set and %s cannot "
+                  "compile a program that includes <stdio.h>, so this "
+                  "target's C library is not installed. That is this machine "
+                  "and not the runtime:" % said(cc), file=sys.stderr)
+            sys.stderr.write("".join(err.splitlines(True)[:10]))
+            return 1
+        print("runtime-nonposix: skipped, %s has no sysroot here (it cannot "
+              "compile a program that includes <stdio.h>)" % said(cc))
+        return 77
 
     sources = sorted((ROOT / "runtime").glob("*.c"),
                      key=lambda p: p.name)
@@ -262,17 +292,19 @@ def check(cc, work):
         # file is one a reader cannot act on.
         ok, err = compiles(cc, src, ["-I", str(ROOT / "runtime"), "-O2"])
         status_found[name] = "compiles" if ok else "blocked"
-        if not ok and units.get(name, (None,))[0] == "blocked":
+        if not ok:
             # Shown, never parsed. A reader wants to know why; the claim
             # above rests on the exit status alone.
             #
-            # `units[name]` is a pair -- the status and the CRT macro where
-            # there is one -- and this arm compared the pair against a string
-            # for the whole of its life, so it had never printed anything. It
-            # was found by a unit going backwards on purpose (ADR-0380) and
-            # the reason not being shown: *the reader wants to know why* was
-            # written down here and then not delivered, which is a comment
-            # describing a mechanism that is not there.
+            # **Every unit that fails, not every unit the catalogue expects
+            # to fail.** This arm read `units[name]`, so the one failure a
+            # reader most needs explained -- a unit catalogued `compiles`
+            # that has stopped -- was the one it said nothing about. CI
+            # reported `pasrt_task.c ... the port went backwards` and printed
+            # no reason, and the reason had to be reproduced in a container
+            # to be read. Twice now this arm has been written to serve a
+            # reader and not done it: before that it compared a pair against
+            # a string, so it had never printed anything at all.
             # From the first line that says `error`, not from the first
             # line: this toolchain warns three times about `tmpfile` before
             # it refuses, and a reader shown those learns nothing. **Display

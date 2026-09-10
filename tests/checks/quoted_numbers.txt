@@ -32,7 +32,15 @@ CLAUDE.md   | sanitize[valgrind] | \. (\d+) clean, 0 flagged
 CLAUDE.md   | sanitize[address]  | green at a level it had not asked for — (\d+) of them today
 CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify
 CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
+CLAUDE.md   | runtime-nonposix   | on its own and \*\*(five)\*\* come back, of seventeen
 doc/roadmap.md | ctest           | the suite is (\d+) cases green
+
+# **CLAUDE.md's row was added after the sentence went stale, which is the
+# argument for it.** That file's gate table said `pasrt_posix.c` wants seven of
+# seventeen headers -- mingw-w64's answer -- for as long as the wasi column
+# existed, because the switch edited the catalogue and README and not the table
+# a session loads before every change. README's sentence had a row here and was
+# right; the one nothing watched was the one that drifted.
 
 # The roadmap's Windows row quoted the same seven and had a row here; ADR-0380
 # moved that row to `doc/history.md` whole, and a number a *record* quotes is

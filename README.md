@@ -470,9 +470,11 @@ the point of the machinery below:
 
 **The shape of a port, measured against `wasm32-wasi`:**
 `runtime/pasrt_unicode.c` compiles, which is the whole of the text model, and
-so does `runtime/pasrt_task.c` — though that is a compile and not a link, and
-whether a thread can be created is a further question.
-`runtime/pasrt.c` is blocked on **`_longjmp`**, which POSIX declares and
+it is the only unit of the four that does. `runtime/pasrt_task.c` is blocked
+on **threads**: wasm32-wasi without the threads proposal cannot create one,
+and wasi-libc says so from its own header, so AP 6.4.16's channels and AP
+6.9.3.12's tasks are what a port on this target gives up — the whole facility
+rather than a header. `runtime/pasrt.c` is blocked on **`_longjmp`**, which POSIX declares and
 neither of the two non-POSIX targets measured here does; that one name is what
 stands between this runtime and a port, and the catalogue says what it would
 cost. `runtime/pasrt_posix.c` wants five of the seventeen headers it names:

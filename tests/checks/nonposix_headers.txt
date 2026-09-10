@@ -21,7 +21,7 @@
 # legitimately disagree with a row below, and what that means is that the
 # blocker is that toolchain's and not this runtime's.
 #
-# **The command carries two flags and both are load-bearing.**
+# **The command carries three flags and every one is load-bearing.**
 # `-mllvm -wasm-enable-sjlj` is there because without it wasi-libc's
 # `<setjmp.h>` refuses outright -- *"Setjmp/longjmp support requires Exception
 # handling support"* -- and `pasrt.c` would be blocked by a header that a
@@ -31,7 +31,9 @@
 # clang's search path for this target: a header wasi-libc has not got and
 # glibc has would be found and reported present. Every answer below was taken
 # both ways and none differed -- glibc's copies fail on their own `bits/`
-# internals -- but "it happens not to bite" is not a claim.
+# internals -- but "it happens not to bite" is not a claim. And
+# `-D_WASI_STRICT_PTHREAD` is what makes two wasi-libc sysroots give one
+# answer about threads, for the reason `pasrt_task.c`'s row below sets out.
 #
 # `runtime-isoc` bounds each translation unit by the headers it may include;
 # this asks the question that one cannot: **are those headers there on a
@@ -71,20 +73,27 @@
 
 # --- which translation units compile for the target -----------------------
 #
-# **Two of four, and the two that compile are the interesting half.**
+# **One of four compiles, and what blocks the other three is three
+# different kinds of thing** -- a name, a set of headers, and a target
+# capability. That spread is the finding: no single change ports this
+# runtime.
 #
 # `pasrt_unicode.c` compiling clean is the whole of AP 6.4.15 -- normalisation
 # and grapheme segmentation over tables, and nothing else. It is the one unit
 # a port gets for free, and it is measured here rather than hoped for. It was
 # free on mingw-w64 too.
 #
-# `pasrt_task.c` **compiles for wasi**, and that is worth reading carefully
-# rather than celebrating: this gate's whole claim is `-fsyntax-only`, and
-# wasi-libc ships a `<pthread.h>` whose declarations are there whether or not
-# a thread can be created. AP 6.4.16's channels and AP 6.9.3.12's tasks want
-# the threads proposal and a runtime that implements it; what this row says is
-# that nothing in *this source* stands in the way, which is a smaller and
-# still useful thing. A port learns the rest by linking.
+# `pasrt_task.c` is blocked on **threads**, and it took two machines to say
+# so. It was catalogued `compiles` for one commit, measured on a checkout
+# whose wasi-libc declares `pthread_create` freely; CI's trixie sysroot
+# refuses it with a static assertion, and one row cannot be true of both. The
+# macro `_WASI_STRICT_PTHREAD` is what makes them agree, and it is the newer
+# header's own way of being asked -- *"This function is not available on a
+# single-threaded target"*. That is the substance: AP 6.4.16's channels and
+# AP 6.9.3.12's tasks want the threads proposal, a target without it cannot
+# create a thread, and `-fsyntax-only` on a permissive header would have
+# reported the language's concurrency as portable to a platform that cannot
+# run it. What a port pays here is the whole task facility, not a header.
 #
 # `pasrt.c` is blocked by **`_longjmp`**, and it is the second non-POSIX
 # target in a row to lack that name. mingw-w64 declares `longjmp` and no
@@ -104,14 +113,15 @@
 # above is what makes `<setjmp.h>` usable at all.
 unit  pasrt.c            blocked
 unit  pasrt_posix.c      blocked
-unit  pasrt_task.c       compiles
+unit  pasrt_task.c       blocked
 unit  pasrt_unicode.c    compiles
 
 # --- the headers the target has not got -----------------------------------
 #
 # `pasrt.c`, `pasrt_task.c` and `pasrt_unicode.c` have every header they name;
-# what blocks the first is a name *inside* those headers, which is a different
-# claim and is not this file's.
+# what blocks the first two is *inside* those headers -- a name in one case
+# and a refusal to declare in the other -- which is a different claim and is
+# not this file's.
 #
 # **Five, and the shape of them is the finding.** `pasrt_posix.c` names
 # seventeen headers and twelve are here: the directory walk, the file

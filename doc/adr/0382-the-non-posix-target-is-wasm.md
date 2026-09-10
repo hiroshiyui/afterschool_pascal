@@ -38,7 +38,9 @@ and every other LLVM target is reached. `APASCAL_NONPOSIX_CC` is split on
 blanks; `which` asks about the first word. One line, and it is what let this
 change be made at all.
 
-**Two flags are part of the command and both are load-bearing.**
+**Three flags are part of the command and every one is load-bearing.**
+The third was added the day after this record, and its argument is the
+other two's — see *What the first CI run found* below.
 
 - `-mllvm -wasm-enable-sjlj`, because without it wasi-libc's `<setjmp.h>`
   refuses outright — *"Setjmp/longjmp support requires Exception handling
@@ -53,14 +55,18 @@ change be made at all.
 
 ## Consequences
 
-**Two of four units compile, and the two that do are the interesting half.**
+**One of four units compiles, and what blocks the other three is three
+different kinds of thing.**
 
 | Unit | wasm32-wasi | mingw-w64, before |
 | --- | --- | --- |
 | `pasrt_unicode.c` | compiles | compiled |
-| `pasrt_task.c` | **compiles** | wanted `-D_UCRT` |
+| `pasrt_task.c` | blocked: no threads | wanted `-D_UCRT` |
 | `pasrt.c` | blocked: `_longjmp` | blocked: `_longjmp` |
 | `pasrt_posix.c` | blocked: 5 of 17 headers | blocked: 7 of 17 headers |
+
+The `pasrt_task.c` row read `compiles` when this record was written, measured
+on one machine. It was wrong, and *What the first CI run found* below is how.
 
 **The finding is `_longjmp`, and it is the second target in a row to lack
 it.** mingw-w64 declares `longjmp` and no `_longjmp`; wasi-libc does the same.
@@ -73,12 +79,13 @@ named: the jump emitted by the compiler, where `_setjmp` already is, which
 waits on a reseed because the committed seed declares and calls
 `@pas_jump_go`.
 
-**`pasrt_task.c` compiling is not the good news it looks like.** This gate's
-whole claim is `-fsyntax-only`, and wasi-libc ships a `<pthread.h>` whose
-declarations are there whether or not a thread can be created. What the row
-says is that nothing in *this source* stands in the way of AP 6.4.16's
-channels; a port learns the rest by linking. The catalogue says so where a
-reader will meet it.
+**`pasrt_task.c` compiling was not the good news it looked like, and then it
+turned out not to be true either.** The caution written here was that this
+gate's whole claim is `-fsyntax-only` and wasi-libc ships a `<pthread.h>`
+whose declarations are there whether or not a thread can be created — so the
+row said only that nothing in *this source* stands in the way of AP 6.4.16's
+channels. The caution was right and too gentle: on the sysroot CI installs,
+the header does not declare them at all.
 
 **The port's shape is different from Windows'.** `<poll.h>`, `<sys/socket.h>`
 and `<sys/ioctl.h>` are all present — wasi has a socket API of its own — while
@@ -118,3 +125,46 @@ honest with them: `'netdb.h' file not found` rather than a failure inside
 true row and a shallower one, and the gate's own §7 row says why that is bad:
 one bit per unit means a second blocker hides behind the first. Here the
 hidden one is the finding.
+
+## What the first CI run found
+
+The push carrying this record turned four jobs red, and the three defects
+behind them are worth more than the catalogue was.
+
+**The gate failed where it should have skipped, on every ordinary job.** With
+mingw-w64 the toolchain was a driver of its own, so `which` answered the whole
+question: a machine without the cross compiler skipped, and a machine with the
+driver but no runtime package was half-installed and worth failing on.
+`clang --target=wasm32-wasi` is a command whose first word is on *every*
+machine that builds this compiler, so `which` says yes everywhere and the
+sysroot became the only thing separating a machine that can be asked from one
+that cannot — and that state returned 1. The three container jobs and macOS
+went red on a gate reporting about a machine. It now skips there, which is
+what `NONPOSIX_REQUIRE` in the `non-posix` job exists to make safe (ADR-0330).
+**The decision to make the toolchain a command is what carried this in**: the
+presence test was written for the other shape and nothing here re-asked it.
+
+**The one failure a reader needed explained was the one the gate would not
+explain.** The diagnostic echo fired for a unit the *catalogue* called
+blocked, so a unit catalogued `compiles` that had stopped — the exact shape of
+`the port went backwards` — printed no reason. CI said `pasrt_task.c` had gone
+backwards and nothing else, and the reason had to be reproduced in a container
+to be read. Twice now that arm has been written to serve a reader and not done
+it; before this it compared a pair against a string and had never printed
+anything at all. It now shows every unit that fails.
+
+**And `pasrt_task.c` is blocked on threads, which one machine could not have
+told us.** Debian trixie's wasi-libc refuses `pthread_create` with a static
+assertion — *"This mode of WASI does not have threads enabled"* — and the
+newer one on the machine this was measured on declares it unless
+`_WASI_STRICT_PTHREAD` is defined, whereupon it says the same thing in its own
+words: *"This function is not available on a single-threaded target"*. One row
+cannot be true of both, so the macro joins the command, and both sysroots now
+print the same summary line. The substance is the one the caution above
+gestured at: wasm32-wasi without the threads proposal cannot create a thread,
+and a permissive header plus `-fsyntax-only` would have reported this
+language's whole concurrency facility as portable to a platform that cannot
+run it.
+
+So what a port pays is a name (`_longjmp`), a set of headers, and a target
+capability — three kinds of thing and no single change that closes them.
