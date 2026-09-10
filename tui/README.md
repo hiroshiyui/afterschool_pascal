@@ -76,15 +76,21 @@ argue for in a commit message rather than a step.
 ## Running it
 
 ```sh
-cmake --build build -j        # build/bin/afterschool
-build/bin/afterschool         # a new document, no argument needed
-build/bin/afterschool hello.pas
+cmake --build build -j        # build/bin/apide
+build/bin/apide               # a new document, no argument needed
+build/bin/apide hello.pas
 ```
 
-The binary is **`afterschool`** and the source is `apide.pas`, which is the
-tree's own convention — `pascalc` comes from `selfhost/compiler.pas`. It is a
-CMake target and an installed program because the editor is the one thing here
-written to be *used*, and `cmake --install` puts it beside `pascalc`.
+The binary is **`apide`** and so is the source, `apide.pas`. It was
+`afterschool` in v3.9.0, on the convention `pascalc` sets over
+`selfhost/compiler.pas`; what that cost here is that `build.py` names its
+default output after the program it was given, so the script wrote
+`build/bin/apide` and the CMake target wrote `build/bin/afterschool` — one
+program under two names, with nothing to say which one a document meant. The
+script's default is what keeps `build.py '' session.pas` off the editor and
+could not move, so the binary did. It is a CMake target and an installed
+program because the editor is the one thing here written to be *used*, and
+`cmake --install` puts it beside `pascalc`.
 
 `tui/build.py` is still what builds it, and the target drives that script
 rather than repeating it: the script reads the `.components` sidecar and

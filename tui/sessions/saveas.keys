@@ -1,5 +1,5 @@
 # Ctrl-S on a document that has no name asks for one (ADR-0388). The editor
-# starts fileless whenever `afterschool` is run with no argument, so this is
+# starts fileless whenever `apide` is run with no argument, so this is
 # the ordinary way to write a new program, not a corner.
 size 8 30
 draw

@@ -637,13 +637,13 @@ it, and runs the compiler with the cursor landing on the first diagnostic —
 and since ADR-0387 it undoes, searches, and goes to a line.
 
 ```sh
-cmake --build build -j        # build/bin/afterschool falls out with the rest
-build/bin/afterschool         # a new document
-build/bin/afterschool hello.pas
+cmake --build build -j        # build/bin/apide falls out with the rest
+build/bin/apide               # a new document
+build/bin/apide hello.pas
 ```
 
-`cmake --install` puts it in `<prefix>/bin/afterschool` beside `pascalc`, so
-after that it is just `afterschool`. **It needs no argument**: with none it
+`cmake --install` puts it in `<prefix>/bin/apide` beside `pascalc`, so
+after that it is just `apide`. **It needs no argument**: with none it
 starts on a new unnamed document, and a document with no name says so rather
 than failing at the first Ctrl-S. To build it without CMake — or at `-O0`,
 which is what `AFTERSCHOOL_PASCAL_OPT` is for — `tui/build.py` takes the same

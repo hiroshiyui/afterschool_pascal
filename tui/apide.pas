@@ -239,7 +239,7 @@ begin
   DecodeInit(dec);
   { **No file is a new document and not a usage error.** It used to answer
     with what looked like a usage line, which is the wrong thing to say to a
-    person who typed `afterschool` on purpose: the editor starts on an empty
+    person who typed `apide` on purpose: the editor starts on an empty
     unnamed buffer, and Ctrl-S is the only thing that then needs a name. }
   if path <> '' then Load
   else EditSay(ed, 'a new document -- Ctrl-Q to quit');

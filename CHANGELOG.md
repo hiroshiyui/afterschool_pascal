@@ -33,6 +33,17 @@ appears below in the release where it still existed.
   decoded and reported by number (`F5 is not bound`) rather than ignored. The
   hint bar now reads `F2 Save  F9 Build  …`.
 
+### Changed
+- **The editor is `apide`, and that is now its only name.** v3.9.0 installed
+  it as `afterschool`, on the convention `pascalc` sets over
+  `selfhost/compiler.pas` — but `tui/build.py` names its default output after
+  the program it was given, so the script wrote `build/bin/apide` and the
+  CMake target wrote `build/bin/afterschool`, leaving one program under two
+  names with nothing to say which one a document meant. The script's default
+  is what keeps `build.py '' session.pas` from overwriting the editor and so
+  could not move; the binary did. `cmake --build` now produces
+  `build/bin/apide` and `cmake --install` puts it in `<prefix>/bin/apide`.
+
 ## [3.9.0] - 2026-09-10
 
 **Two more targets and a program that runs on one of them**, and **an editor

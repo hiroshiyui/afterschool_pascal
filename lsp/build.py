@@ -28,7 +28,7 @@ This is not a CMake target, and **the reason it gives for that used to be a
 premise that is now false three times over**. It said nothing in this tree
 installs a library or a second program; `cmake --install` puts
 `lib/afterschool/` and `bin/apconfig` (ADR-0361) in the prefix, and since the
-editor became `afterschool` it installs a second program in this language too.
+editor landed as `bin/apide` it installs a second program in this language too.
 
 So what is left is the *other* half of the old argument, and it points the
 other way: a server needs a binary a **user** can point an editor at rather

@@ -5002,8 +5002,8 @@ milestone a person most notices being wrong into the one part no oracle here
 reaches — this entry's own first decision, met again.
 
 **A third prompt cost almost nothing** (ADR-0388), which is the argument for
-having built the first one here. The editor started fileless when it became
-`afterschool`, and Ctrl-S then answered *start with a file to save it* — advice
+having built the first one here. The editor started fileless as soon as it was
+a program people run, and Ctrl-S then answered *start with a file to save it* — advice
 to quit and begin again, at the first thing anybody does with a new document.
 `mdSaveAs` is one more arm on the mode, one more label, and one request the
 shell takes once (`EditTakeSave`) before it writes. `kkSave` had been a key the

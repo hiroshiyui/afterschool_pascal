@@ -1203,7 +1203,7 @@ begin
       document with no name cannot be written and has to be asked about* is a
       decision about the document, so it is here, where a session drives it
       and a golden holds it. Starting fileless is the ordinary way to write a
-      new program since the editor became `afterschool`, so this is the path
+      new program since the editor started fileless, so this is the path
       most people meet first. }
     kkSave: if ed.name = '' then begin
       ed.mode := mdSaveAs;
