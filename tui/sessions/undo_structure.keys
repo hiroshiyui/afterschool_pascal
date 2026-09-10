@@ -1,0 +1,36 @@
+# The two edits that change the *shape* of a document -- a split and a join --
+# each undone, and backspaces coalescing the way typing does (ADR-0387).
+name shape.pas
+push alpha
+push beta
+size 8 20
+
+# Split: Enter in the middle of a line.
+esc C
+esc C
+ctrl M
+draw
+
+# Undo puts the line back together and the cursor where the split was.
+ctrl Z
+draw
+
+# Redo splits it again.
+ctrl Y
+draw
+
+# Join, by backspacing at the start of the lower line.
+ctrl H
+draw
+ctrl Z
+draw
+
+# Backspaces coalesce: three characters go in one entry, and one undo brings
+# all three back.
+esc F
+ctrl H
+ctrl H
+ctrl H
+draw
+ctrl Z
+draw

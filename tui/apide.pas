@@ -182,7 +182,18 @@ begin
     if e <> errNone then
       running := false
     else if DecodeByte(dec, c, k) then begin
-      if k.kind = kkQuit then begin
+      { **A question owns the keyboard while it is open** (ADR-0387). Ctrl-S
+        inside a search is part of what is being searched for, not a write to
+        disc, and Ctrl-Q there must not quit -- so the shell asks the model
+        whether it is asking something and, if it is, does nothing of its own
+        with the key. It is the only thing about a prompt the shell knows,
+        and keeping it to one question is what stops the mode leaking out of
+        the model it belongs to. }
+      if EditPrompting(ed) then begin
+        asked := false;
+        EditKey(ed, k)
+      end
+      else if k.kind = kkQuit then begin
         { A document with changes in it takes two presses, and the second has
           to be the *next* key -- which is what `asked` being cleared below
           says. An editor that quit on one press over unsaved work is the one

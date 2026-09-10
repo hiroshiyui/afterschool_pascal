@@ -1,0 +1,66 @@
++--------------------+
+|one                 |
+|two                 |
+|three               |
+|four                |
+|five                |
+|                    |
+|goto.pas         1:1|
++--------------------+
+cursor 1,1
++--------------------+
+|one                 |
+|two                 |
+|three               |
+|four                |
+|five                |
+|Line:               |
+|goto.pas         1:1|
++--------------------+
+cursor 6,7
++--------------------+
+|one                 |
+|two                 |
+|three               |
+|four                |
+|five                |
+|                    |
+|goto.pas         4:1|
++--------------------+
+cursor 4,1
++--------------------+
+|one                 |
+|two                 |
+|three               |
+|four                |
+|five                |
+|                    |
+|goto.pas         5:1|
++--------------------+
+cursor 5,1
++------------------------------+
+|one                           |
+|two                           |
+|three                         |
+|four                          |
+|five                          |
+|not a line number: 4x         |
+|goto.pas                   5:1|
++------------------------------+
+cursor 5,1
++------------------------------+
+|one                           |
+|two                           |
+|three                         |
+|four                          |
+|five                          |
+|nothing to find again         |
+|goto.pas                   5:1|
++------------------------------+
+cursor 5,1
+lines 5 dirty FALSE
+  1: [one]
+  2: [two]
+  3: [three]
+  4: [four]
+  5: [five]

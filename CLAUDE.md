@@ -156,7 +156,15 @@ is the shell that reads `PasTerm.ReadKey` and writes `CursorTo`, and that is a
 **named** as a root — `format-check`, `variant-check`, `warning-free` and
 `coverage.py` all name it — and by no glob, and `tui/build.py` honours
 `AFTERSCHOOL_PASCAL_OPT` for `lsp/build.py`'s reason: an editor's whole shape
-is a loop.
+is a loop. **Two things about the model are decisions and not features**
+(ADR-0387): an edit is one of *four* operations — insert, remove, split,
+join — and the four routines that perform them are the only code that touches
+the buffer, which is what makes the undo journal complete by construction
+rather than by inspection; and a prompt is a **mode of the model**, so a
+search is something a session drives and a golden holds, where a prompt loop
+in the shell would have put the half of the editor a person most notices being
+wrong into the one part no oracle here reaches. A typed run is one undo, and
+every key that is not more of the same run closes the group.
 
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009) and finds
 `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and `PASCALC`

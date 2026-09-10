@@ -1,0 +1,48 @@
+# Find, find-again, and what a search says when it does not find (ADR-0387).
+name find.pas
+push program p(output);
+push begin
+push   writeln(1);
+push   WriteLn(2);
+push end.
+size 9 30
+draw
+
+# **A prompt is a mode of the model and not of the shell**, so a session can
+# drive it and a golden can hold it: while it is open the cursor is in the
+# prompt and not in the document.
+ctrl F
+draw
+keys writelnX
+draw
+
+# Backspace edits the prompt.
+ctrl H
+draw
+
+# Enter commits, and the cursor lands on the first match after the cursor.
+ctrl M
+draw
+
+# Ctrl-L finds the next -- and the match is case-insensitive, because this is
+# an editor for a language whose identifiers are.
+ctrl L
+draw
+
+# Past the last match it wraps, and says so rather than sitting still.
+ctrl L
+draw
+
+# A search with no match leaves the cursor where it was.
+ctrl F
+keys nosuchthing
+ctrl M
+draw
+
+# Ctrl-C closes a prompt without searching. Escape cannot do it: the decoder
+# is handed one byte at a time and cannot tell a bare Escape from the start
+# of an arrow without a timeout, which is written down in `apedit.pas`.
+ctrl F
+keys begin
+ctrl C
+draw

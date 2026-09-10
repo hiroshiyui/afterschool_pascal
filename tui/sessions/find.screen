@@ -1,0 +1,114 @@
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|                              |
+|find.pas                   1:1|
++------------------------------+
+cursor 1,1
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|Find:                         |
+|find.pas                   1:1|
++------------------------------+
+cursor 8,7
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|Find: writelnX                |
+|find.pas                   1:1|
++------------------------------+
+cursor 8,15
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|Find: writeln                 |
+|find.pas                   1:1|
++------------------------------+
+cursor 8,14
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|                              |
+|find.pas                   3:3|
++------------------------------+
+cursor 3,3
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|                              |
+|find.pas                   4:3|
++------------------------------+
+cursor 4,3
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|search wrapped                |
+|find.pas                   3:3|
++------------------------------+
+cursor 3,3
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|not found: nosuchthing        |
+|find.pas                   3:3|
++------------------------------+
+cursor 3,3
++------------------------------+
+|program p(output);            |
+|begin                         |
+|  writeln(1);                 |
+|  WriteLn(2);                 |
+|end.                          |
+|~                             |
+|~                             |
+|cancelled                     |
+|find.pas                   3:3|
++------------------------------+
+cursor 3,3
+lines 5 dirty FALSE
+  1: [program p(output);]
+  2: [begin]
+  3: [  writeln(1);]
+  4: [  WriteLn(2);]
+  5: [end.]

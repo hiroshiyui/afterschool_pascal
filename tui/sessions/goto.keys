@@ -1,0 +1,36 @@
+# Go to a line, and what happens when the line is not there (ADR-0387).
+name goto.pas
+push one
+push two
+push three
+push four
+push five
+size 7 20
+draw
+
+ctrl G
+draw
+keys 4
+ctrl M
+draw
+
+# Past the end lands on the last line rather than nowhere -- `MoveTo`'s
+# clamping, which the arrows already had.
+ctrl G
+keys 99
+ctrl M
+draw
+
+# Wider from here on, so the two messages below are read rather than cut --
+# a golden that ends mid-word states half a claim.
+size 7 30
+
+# Something that is not a number is refused by name.
+ctrl G
+keys 4x
+ctrl M
+draw
+
+# And find-again with nothing to find again says so.
+ctrl L
+draw

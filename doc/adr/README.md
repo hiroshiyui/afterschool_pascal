@@ -395,3 +395,4 @@ the alternatives that were rejected and why.
 | [0384](0384-a-harness-does-not-always-run-what-it-built.md) | A harness does not always run what it built | Accepted |
 | [0385](0385-a-pascal-program-runs-as-webassembly.md) | A Pascal program runs as WebAssembly | Accepted |
 | [0386](0386-wasm64-costs-nothing-and-that-is-the-finding.md) | wasm64 costs nothing, and that is the finding | Accepted |
+| [0387](0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md) | An undo is a journal, and a prompt is a mode of the model | Accepted |

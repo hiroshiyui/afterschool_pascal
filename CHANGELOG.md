@@ -15,6 +15,16 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The editor gains undo, find and go-to-line** (ADR-0387), milestone two of
+  `tui/`. Ctrl-Z and Ctrl-Y over a journal in which every edit is one of four
+  named operations — insert, remove, split, join — so one entry both reverses
+  an edit and performs it again; a typed run is one undo and not one per
+  character. Ctrl-F and Ctrl-L search, case-insensitively because this is an
+  editor for a language whose identifiers are, wrapping round the end and
+  saying so. Ctrl-G goes to a line. **A prompt is a mode of the model rather
+  than a loop in the shell**, which is what lets a session drive one and a
+  golden hold it; Ctrl-C closes it, because a decoder handed one byte at a
+  time cannot tell a bare Escape from the start of an arrow.
 - **Programs run as WebAssembly** (ADR-0385). 519 of the 598 programs in this
   repository's corpus compile for `wasm32-wasi`, link, and print what they
   print everywhere else under a WASI runtime. `tools/pascalcc` knows what the

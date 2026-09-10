@@ -1,0 +1,41 @@
+# Undo and redo, over the journal of edits the editor keeps (ADR-0387).
+name undo.pas
+push program p(output);
+push begin
+push end.
+size 8 30
+draw
+
+# **A run of typing is one entry and not one per character.** A person who
+# typed a word expects the word back, and that is the whole reason the
+# journal coalesces at all.
+keys abc
+draw
+ctrl Z
+draw
+
+# ...and redo puts the run back, cursor included.
+ctrl Y
+draw
+
+# **Undo closes the group**, so what follows it is a second entry and this
+# undo leaves `abc` standing.
+keys de
+draw
+ctrl Z
+draw
+
+# A movement closes it too: two runs on one line, and two undos.
+keys de
+esc C
+keys fg
+draw
+ctrl Z
+draw
+ctrl Z
+draw
+
+# Nothing left to undo is said rather than done silently.
+ctrl Z
+ctrl Z
+draw

@@ -8,6 +8,13 @@ server — and it is the first whose whole shape is a screen.
 **Milestone one is: open, edit, save, compile, land on the error.** What is
 here now is the half that decides things.
 
+**Milestone two is undo, find and go-to-line**
+([ADR-0387](../doc/adr/0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md)),
+and each of the three turned out to be a design question rather than a
+feature: what an edit *is* — one of four operations, held in a journal that
+can reverse it — and who owns the keyboard while the editor is asking
+something, which is the model and not the shell.
+
 ## What is in it
 
 | File | What it is |
@@ -53,6 +60,10 @@ say   <text>     what the shell would have put on the message line
 fault <text>     a compiler's output, landed on as Ctrl-B lands on it
 ```
 
+`ctrl M` is Enter and `ctrl H` is Backspace: those are the two keys a session
+presses through their control bytes rather than through a directive of their
+own.
+
 A screen is printed inside a border, so that a line ending in blanks and one
 that does not are visibly different in the golden — a diff of bare text cannot
 show which is which.
@@ -74,12 +85,21 @@ tui/build.py tools/pascalcc apide.pas /tmp/apide
 | Ctrl-S | save |
 | Ctrl-Q | quit — twice when the document has changes in it |
 | Ctrl-B | run the compiler and land the cursor on the first diagnostic |
+| Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
+| Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
+| Ctrl-G | go to a line by number |
+| Ctrl-C | close the question a prompt is asking |
 | arrows, Home, End | move |
 | Enter, Backspace, Delete | the three that change the shape of the document |
 
+**Ctrl-C and not Escape** closes a prompt, and that is a fact about the
+decoder rather than a preference: it is handed one byte at a time, and a bare
+Escape and the start of an arrow (`ESC [ A`) are the same byte. Only a timeout
+tells them apart, and milestone one decided not to have one.
+
 It refuses to start where its standard input is not a terminal, and says so.
 
-## What milestone one leaves out, on purpose
+## What the two milestones leave out, on purpose
 
 - **No horizontal scrolling.** A line wider than the window is cut and the
   cursor stops at the last column while the status line goes on counting in
@@ -90,4 +110,6 @@ It refuses to start where its standard input is not a terminal, and says so.
 - **No resize.** `SIGWINCH` is a signal and a signal has no shape in this
   language; the caller passes the size on every render, so a shell that wants
   to notice asks `PasTerm.TermSize` again.
-- **No mouse, and no undo.**
+- **No mouse.**
+- **No replace, no search backwards and no regular expressions.** Milestone
+  two is a search that finds, and says so when it wraps and when it does not.
