@@ -233,16 +233,30 @@ end;
 
 { Load, if there is anything there. A path that names nothing is not an
   error: it is a new file, which is what an editor is for. }
-procedure Load;
+procedure LoadInto(nm: FilePath);
 var n, i: integer; line: EditLine;
 begin
-  EditSetName(ed, path);
-  if not LineCount(path, n) then begin
+  EditSetName(ed, nm);
+  if not LineCount(nm, n) then begin
     EditSay(ed, 'new file');
     n := 0
   end;
   for i := 1 to n do
-    if ReadLine(path, i, line) then EditPush(ed, line)
+    if ReadLine(nm, i, line) then EditPush(ed, line)
+end;
+
+procedure Load;
+begin
+  LoadInto(path)
+end;
+
+{ **The shell's half of Open** (ADR-0396). The model has already made an
+  empty document current and put the name in the request; this reads the
+  bytes, which is the side that has files. The division is ADR-0381's and the
+  same one `Save` is on. }
+procedure Open(nm: FilePath);
+begin
+  LoadInto(nm)
 end;
 
 { Save. Written a line at a time rather than as one value, because the whole
@@ -254,7 +268,7 @@ procedure Save;
 var i: integer; ok: boolean; msg: EditLine; path: FilePath;
 begin
   { **The name is the model's, and this reads it rather than keeping a second
-    copy** (ADR-0388). It used to hold a `path` of its own beside `ed.name`,
+    copy** (ADR-0388). It used to hold a `path` of its own beside `ed.doc.name`,
     set once from the command line -- two names for one thing, and save-as is
     what made them able to disagree: the person answers a prompt, the model
     knows the new name and the shell would have gone on writing the old one.
@@ -324,6 +338,7 @@ procedure Obey(k: Key);
 begin
   if k.kind = kkSave then Save
   else if k.kind = kkBuild then Build
+  else if k.kind = kkOpen then Open(EditName(ed))
   else if k.kind = kkQuit then running := false
 end;
 

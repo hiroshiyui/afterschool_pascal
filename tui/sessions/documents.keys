@@ -1,0 +1,48 @@
+# More than one document at once (ADR-0396), which is what makes this editor
+# usable on the compiler it was written for: `pascalc` translates every 6.13
+# program-component, and this compiler is three of them, so a diagnostic
+# naming a file that is not on screen is the ordinary case.
+#
+# The claims, in the order the keys drive them:
+#
+#   - F3 asks for a name, in the same framed box `Find` and `Save as` use --
+#     a fourth user of ADR-0391's primitives and no new machinery;
+#   - answering it makes a *second* document current, and the status line
+#     starts saying which of how many, having said nothing while there was
+#     only one;
+#   - F6 goes to the next and wraps, and each document keeps its own cursor,
+#     its own scroll and its own dirty mark, because switching is one
+#     whole-record assignment each way and cannot drop a field;
+#   - an undo does **not** reach across a switch: the journal is per document,
+#     so Ctrl-Z here reverses the edit made here and not the one made there;
+#   - and a diagnostic naming an *open* document is landed on -- the cursor
+#     goes to the other file and the status line follows it.
+#
+# The session drives no files: `push` fills a buffer the way loading one
+# does, and `open` is what the shell would have been asked to do. That is
+# ADR-0381's line -- the model decides which document, the shell reads bytes.
+name a.pas
+size 10 30
+push program a(output);
+push begin
+push   writeln(1)
+push end.
+draw
+func 3
+draw
+keys b.pas
+ctrl M
+draw
+push program b(output);
+push begin
+push end.
+esc B
+esc B
+keys X
+draw
+func 6
+draw
+ctrl Z
+draw
+fault b.pas:2:3: error: something in the other file
+draw

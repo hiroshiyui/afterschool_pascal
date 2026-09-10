@@ -404,3 +404,4 @@ the alternatives that were rejected and why.
 | [0393](0393-a-role-nothing-draws-is-a-colour-nobody-sees.md) | A role nothing draws is a colour nobody sees | Accepted |
 | [0394](0394-the-palette-a-terminal-can-show.md) | The palette a terminal can show | Accepted |
 | [0395](0395-a-column-stops-being-a-byte.md) | A column stops being a byte | Accepted |
+| [0396](0396-more-than-one-document.md) | More than one document | Accepted |

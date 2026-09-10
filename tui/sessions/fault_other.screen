@@ -6,7 +6,7 @@
 |  writeln(x)                      |
 |                                  |
 |p.pas                          1:1|
-|F10 Menu  F2 Save  F9 Build  ^F Fi|
+|F10 Menu  F3 Open  F2 Save  F9 Bui|
 +----------------------------------+
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -37,7 +37,7 @@ cursor 2,1
 |  writeln(x)                      |
 |error: 'x' is not declared        |
 |p.pas                         4:11|
-|F10 Menu  F2 Save  F9 Build  ^F Fi|
+|F10 Menu  F3 Open  F2 Save  F9 Bui|
 +----------------------------------+
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -68,7 +68,7 @@ cursor 5,11
 |  writeln(x)                      |
 |q.pas:12:3: error: 'y' is not decl|
 |p.pas                         4:11|
-|F10 Menu  F2 Save  F9 Build  ^F Fi|
+|F10 Menu  F3 Open  F2 Save  F9 Bui|
 +----------------------------------+
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|

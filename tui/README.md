@@ -150,6 +150,8 @@ tui/build.py '' session.pas   # the session replayer
 | Key | |
 | --- | --- |
 | F10, Ctrl-O | the menu bar — arrows move, Enter chooses, Ctrl-C closes |
+| F3 | open a file into a **second document**, up to eight (ADR-0396) |
+| F6 | go to the next open document, wrapping |
 | F2, Ctrl-S | save — and on a document with no name, ask for one first |
 | F9, Ctrl-B | compile, and land on the first diagnostic — or **report** it, where it names one of the other program-components rather than this file |
 | Ctrl-Q | quit — twice when the document has changes in it |
@@ -168,8 +170,9 @@ Build, in Turbo Pascal's positions, and arrive through either spelling a
 terminal uses — `ESC O Q` and `ESC [ 1 2 ~` are the same key. The other ten
 are decoded and *reported by number* (`F5 is not bound`) rather than ignored,
 because a key that does nothing and a key that was misread look alike to a
-person. F3 and F10 will be Open and Menu when there is something for them to
-open and a menu to show.
+person. F3 and F10 are Open and Menu now (ADR-0391, ADR-0396) — that sentence was
+written when there was neither a menu to show nor a second document to open
+into.
 
 **Some terminals keep F10 for themselves.** GNOME Terminal and Konsole open
 their own menu on it; `Ctrl-O` is the same key here, and the terminal's own
@@ -205,6 +208,12 @@ It refuses to start where its standard input is not a terminal, and says so.
 - **No mouse.**
 - **No replace, no search backwards and no regular expressions.** Milestone
   two is a search that finds, and says so when it wraps and when it does not.
+- **No prompt to save another document on quitting.** The dirty mark travels
+  with each document and Ctrl-Q takes two presses over unsaved work, but the
+  second press asks about the one on screen only. ADR-0396 records it.
+- **No window list, no split and no tiling.** F6 cycles and the status line
+  says which of how many; a list is worth having when eight documents is a
+  number people reach.
 - **No overwrite confirmation.** `Save as:` writes the name it is given, as
   `>` does and as Ctrl-S on a named document already did (ADR-0388). No
   directory completion and no browsing either.

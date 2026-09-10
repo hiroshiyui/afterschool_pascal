@@ -5,7 +5,7 @@
 |three               |
 |                    |
 |goto.pas         1:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -33,7 +33,7 @@ cursor 2,1
 |th└──────────────┘  |
 |                    |
 |goto.pas         1:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -61,7 +61,7 @@ cursor 3,5
 |four                |
 |                    |
 |goto.pas         4:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -89,7 +89,7 @@ cursor 4,1
 |five                |
 |                    |
 |goto.pas         5:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -117,7 +117,7 @@ cursor 4,1
 |five                          |
 |not a line number: 4x         |
 |goto.pas                   5:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -145,7 +145,7 @@ cursor 4,1
 |five                          |
 |nothing to find again         |
 |goto.pas                   5:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|

@@ -6,7 +6,7 @@
 |~                   |
 |                    |
 |move.pas         1:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -37,7 +37,7 @@ cursor 2,1
 |~                   |
 |                    |
 |move.pas         2:3|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -68,7 +68,7 @@ cursor 3,3
 |~                   |
 |                    |
 |move.pas         3:2|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -99,7 +99,7 @@ cursor 4,2
 |~                   |
 |                    |
 |move.pas         3:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
@@ -130,7 +130,7 @@ cursor 4,1
 |~                   |
 |                    |
 |move.pas         2:1|
-|F10 Menu  F2 Save  F|
+|F10 Menu  F3 Open  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|

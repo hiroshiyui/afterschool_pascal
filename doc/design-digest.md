@@ -5110,6 +5110,31 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
+**More than one document** (ADR-0396), and it closed a defect as well as a
+gap. `EditFault` split `file:line:col:` into three fields and used two --
+the filename was compared to nothing, so a diagnostic about another
+program-component jumped to that line number in whatever was open and the
+message read exactly like a landing. `pascalc` translates every component
+and this compiler is three of them, so that was the ordinary case for the
+editor's own development.
+
+**The shape is what makes it safe.** A `Document` is a record and the editor
+*embeds* one, so a switch is `ed.bank[ed.cur] := ed.doc` and
+`ed.doc := ed.bank[n]` -- two whole-record assignments, one copy each way
+(ADR-0017), and **no list of fields written twice anywhere**. A `SaveDoc`
+beside a `LoadDoc` is the *fact stated twice* ADR-0388 removed from this
+program once already; the mutation that hand-copies six fields and forgets
+the two journals is caught by a golden, which is the evidence for the
+choice rather than the argument for it.
+
+**The journal is per document**, an undo reaching across a switch being one
+that reverses an edit in a file nobody is looking at. F3 opens into a
+framed box -- the fourth user of ADR-0391's primitives, no new drawing --
+and F6 cycles; the model makes room and the shell reads the bytes, which is
+ADR-0381's line again. A file already open is switched to rather than
+opened twice, two buffers over one file being two answers to *is this
+saved*.
+
 **A column stops being a byte** (ADR-0395). ADR-0391 made the screen an
 array of cells and left the buffer alone on purpose; this is the half it
 deferred. What was wrong was one sentence in three places: `日本語` drew in

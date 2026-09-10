@@ -5,7 +5,7 @@
 |three       |
 |            |
 |long.pas 1:1|
-|F10 Menu  F2|
+|F10 Menu  F3|
 +------------+
 +------------+
 |uuuuuuuuuuuu|
@@ -33,7 +33,7 @@ cursor 2,1
 |five        |
 |            |
 |long.pas 5:1|
-|F10 Menu  F2|
+|F10 Menu  F3|
 +------------+
 +------------+
 |uuuuuuuuuuuu|
@@ -61,7 +61,7 @@ cursor 4,1
 |six         |
 |            |
 |long.pas 6:1|
-|F10 Menu  F2|
+|F10 Menu  F3|
 +------------+
 +------------+
 |uuuuuuuuuuuu|
@@ -89,7 +89,7 @@ cursor 4,1
 |three       |
 |            |
 |long.pas 1:1|
-|F10 Menu  F2|
+|F10 Menu  F3|
 +------------+
 +------------+
 |uuuuuuuuuuuu|

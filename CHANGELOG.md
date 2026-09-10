@@ -34,6 +34,12 @@ appears below in the release where it still existed.
   hint bar now reads `F2 Save  F9 Build  …`.
 
 ### Added
+- **The editor opens more than one file at once** (ADR-0396). F3 opens, F6
+  goes to the next, up to eight — each with its own cursor, scroll, dirty mark
+  and undo journal, and the status line says which of how many. This is what
+  makes it usable on this compiler: `pascalc` translates every
+  program-component and this compiler is three of them, so **a diagnostic
+  naming an open document is now landed on**, switching to that file.
 - **`PasUnicode.Columns`, and AP 6.4.15.13 to define it** (ADR-0395). How many
   cells a text value occupies when a fixed-pitch terminal draws it: Wide and
   Fullwidth take two, a mark or a format character takes none, and the unit is

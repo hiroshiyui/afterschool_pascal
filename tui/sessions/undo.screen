@@ -6,7 +6,7 @@
 |~                             |
 |                              |
 |undo.pas                   1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -37,7 +37,7 @@ cursor 2,1
 |~                             |
 |                              |
 |undo.pas *                 1:4|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -68,7 +68,7 @@ cursor 2,4
 |~                             |
 |                              |
 |undo.pas *                 1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -99,7 +99,7 @@ cursor 2,1
 |~                             |
 |                              |
 |undo.pas *                 1:4|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -130,7 +130,7 @@ cursor 2,4
 |~                             |
 |                              |
 |undo.pas *                 1:6|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -161,7 +161,7 @@ cursor 2,6
 |~                             |
 |                              |
 |undo.pas *                 1:4|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -192,7 +192,7 @@ cursor 2,4
 |~                             |
 |                              |
 |undo.pas *                 1:9|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -223,7 +223,7 @@ cursor 2,9
 |~                             |
 |                              |
 |undo.pas *                 1:7|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -254,7 +254,7 @@ cursor 2,7
 |~                             |
 |                              |
 |undo.pas *                 1:4|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -285,7 +285,7 @@ cursor 2,4
 |~                             |
 |nothing to undo               |
 |undo.pas *                 1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|

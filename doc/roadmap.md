@@ -254,9 +254,13 @@ fixed-pitch device can lay text out, and declining to provide it only moved
 the problem into the editor. AP 6.4.15.13 defines it, `PasUnicode.Columns`
 answers it, and a column in the editor is a cell.
 
-**What is open**, in no order and none of it decided: replace; more than one
-file at once, which is what actually makes it usable on this compiler, since a
-diagnostic often names a component that is not on screen; horizontal
+**More than one file at once is closed** (ADR-0396), and it closed a *defect*
+as well as a gap: `EditFault` was throwing the filename away, so a diagnostic
+about another program-component jumped to that line number in whatever
+document was open. Eight documents, F3 to open and F6 to cycle, and a
+diagnostic naming an open one is landed on.
+
+**What is open**, in no order and none of it decided: replace; horizontal
 scrolling; a shaping model, which is what East_Asian_Width is *not* — Arabic
 and Devanagari are laid out by rules no per-code-point property expresses;
 resize, which needs a signal facility this language does not have; and mouse.

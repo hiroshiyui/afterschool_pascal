@@ -7,7 +7,7 @@
 |end.                          |
 |                              |
 |find.pas                   1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -41,7 +41,7 @@ cursor 2,1
 |end.                          |
 |                              |
 |find.pas                   1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -75,7 +75,7 @@ cursor 4,5
 |end.                          |
 |                              |
 |find.pas                   1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -109,7 +109,7 @@ cursor 4,13
 |end.                          |
 |                              |
 |find.pas                   1:1|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -143,7 +143,7 @@ cursor 4,12
 |end.                          |
 |                              |
 |find.pas                   3:3|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -177,7 +177,7 @@ cursor 4,3
 |end.                          |
 |                              |
 |find.pas                   4:3|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -211,7 +211,7 @@ cursor 5,3
 |end.                          |
 |search wrapped                |
 |find.pas                   3:3|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -245,7 +245,7 @@ cursor 4,3
 |end.                          |
 |not found: nosuchthing        |
 |find.pas                   3:3|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -279,7 +279,7 @@ cursor 4,3
 |end.                          |
 |cancelled                     |
 |find.pas                   3:3|
-|F10 Menu  F2 Save  F9 Build  ^|
+|F10 Menu  F3 Open  F2 Save  F9|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|

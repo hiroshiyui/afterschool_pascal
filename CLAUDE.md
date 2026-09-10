@@ -156,7 +156,17 @@ is the shell that reads `PasTerm.ReadKey` and writes `CursorTo`, and that is a
 **named** as a root — `format-check`, `variant-check`, `warning-free` and
 `coverage.py` all name it — and by no glob, and `tui/build.py` honours
 `AFTERSCHOOL_PASCAL_OPT` for `lsp/build.py`'s reason: an editor's whole shape
-is a loop. **A column is a cell and not a byte** (ADR-0395): AP 6.4.15.13 defines
+is a loop. **The editor holds up to eight documents** (ADR-0396), and the shape is the
+decision: a `Document` is a record the editor *embeds*, so changing which
+one is edited is two whole-record assignments and **no field list is
+written twice** -- a save routine beside a load routine being exactly the
+*fact stated twice* ADR-0388 removed from this program once. The journal is
+per document, the model makes room while the shell reads the bytes, and a
+diagnostic naming an open document is landed on, which is what the feature
+is for: `pascalc` translates every program-component and this compiler is
+three of them.
+
+**A column is a cell and not a byte** (ADR-0395): AP 6.4.15.13 defines
 display width and `PasUnicode.Columns` answers it, so a wide character takes
 two cells with the second holding nothing, and the arrows, Backspace, Delete
 and the clamp that runs when the cursor changes line all move by **element**.

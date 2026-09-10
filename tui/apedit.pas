@@ -43,11 +43,14 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
                  kkSave, kkQuit, kkBuild, kkUnknown,
                  kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu,
+                 kkOpen, kkNextDoc,
                  Key, Decoder, Editor,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
                  EditDirty, EditLines, EditLine_, EditRow, EditCol,
                  EditName, EditSetName, EditSay, EditSaved, EditFault,
                  EditModal, EditTakeCommand, RowRuns, RowRun,
+                 Document, DocMax, EditWhich, EditCount, EditFind,
+                 EditGo, EditAdd,
                  DecodeInit, DecodeByte);
 
 import PasError;
@@ -71,6 +74,12 @@ const
     (`ItemMax`) and not a second one -- the buffer is a StrVec, so saying a
     larger number here would be saying it twice and wrongly. }
   LineMax = ItemMax;
+  { **How many documents may be open at once** (ADR-0396). A bound in
+    ADR-0012's sense: eight is more than a person tracks by name on one status
+    line, and the compiler this editor was written for is three
+    program-components, so a diagnostic naming one that is not on screen is
+    the case it has to cover. }
+  DocMax = 8;
   { The bytes one *display column* of drawing may hold. A bound in ADR-0012's
     sense rather than a guess, and since ADR-0395 it has to hold a whole
     **element** and not a box character: a base with three combining marks is
@@ -138,7 +147,12 @@ type
   KeyKind = (kkNone, kkChar, kkEnter, kkBack, kkDelete,
              kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
              kkSave, kkQuit, kkBuild, kkUnknown,
-             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu);
+             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu,
+             { **Open a file, and go to the next one open** (ADR-0396). F3
+               and F6 are Turbo Pascal's positions, and `tui/README.md` had
+               promised F3 would be Open `when there is something for it to
+               open` -- which there now is. }
+             kkOpen, kkNextDoc);
 
   Key = record
     kind: KeyKind;
@@ -198,24 +212,45 @@ type
     owned would be behaviour no session could drive and no golden could
     hold, and it is the half of an editor where a person is most likely to
     notice something wrong. }
-  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs, mdMenu);
+  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs, mdOpen, mdMenu);
 
   { The document and where the caller is in it. `top` is the first line drawn,
     so scrolling is a property of the render and not of the cursor. }
-  Editor = record
+  { **A document is everything an editor is editing** (ADR-0396), and a record
+    of its own so that changing which one is being edited is *two whole-record
+    assignments* and no list of fields written twice. A structured assignment
+    is a copy (ADR-0017), so `ed.doc := ed.bank[n]` moves the buffer pointer,
+    the cursor, the scroll, the mark and both journals in one statement, and a
+    field added here joins them without a second site to remember. That is the
+    whole reason the editor *embeds* one rather than indexing an array
+    everywhere: `a fact stated twice will disagree with itself` (ADR-0388) is
+    the rule, and a save routine beside a load routine is exactly that fact. }
+  Document = record
     lines: StrVecPtr;
     row, col: integer;  { 1-based, in the document }
     top: integer;
     dirty: boolean;
     name: EditLine;
-    says: EditLine;     { the message line: what just happened }
     { The journal. `undos` is what has been done, newest first, and `redos`
       what has been undone; a fresh edit drops `redos` entirely, because a
       document that has changed since has no future left to return to.
       `open` says the newest entry is still taking characters, and it is the
-      whole of what makes a typed run one undo instead of eight. }
+      whole of what makes a typed run one undo instead of eight.
+
+      It is **per document** and has to be: an undo that reached across a
+      switch would reverse an edit in a file the person is not looking at. }
     undos, redos: EditRecPtr;
-    open: boolean;
+    open: boolean
+  end;
+
+  Editor = record
+    { The one being edited, and the others. `bank[cur]` is stale while `doc`
+      is live -- it is written on the way out of a document and read on the
+      way in, and nothing else looks at it. }
+    doc: Document;
+    bank: array [1..DocMax] of Document;
+    cur, docs: integer;
+    says: EditLine;     { the message line: what just happened }
     { What is being asked, what has been typed into the question, and the
       last thing searched for -- which outlives the prompt, Ctrl-L being a
       repeat of it. }
@@ -321,6 +356,22 @@ function EditModal(var ed: Editor): boolean;
   screen. }
 function EditTakeCommand(var ed: Editor; var k: Key): boolean;
 
+{ **More than one document at once** (ADR-0396). `EditWhich` and `EditCount`
+  are what the status line says; `EditFind` answers which open document has a
+  name, or 0, which is what lets a diagnostic about another file be landed on
+  rather than only reported; `EditGo` changes which is being edited; `EditAdd`
+  starts an empty one and makes it current, answering false where there is no
+  room.
+
+  **Filling a new document is still the shell's**, which is ADR-0381's line
+  and not a convenience: `EditAdd` then `EditSetName` and `EditPush` is what
+  opening a file is, and the bytes are read by the side that has files. }
+function EditWhich(var ed: Editor): integer;
+function EditCount(var ed: Editor): integer;
+function EditFind(var ed: Editor; nm: EditLine): integer;
+procedure EditGo(var ed: Editor; n: integer);
+function EditAdd(var ed: Editor): boolean;
+
 { No bytes in hand. }
 procedure DecodeInit(var d: Decoder);
 
@@ -346,27 +397,37 @@ const
     exists is listed: a menu of things that do nothing is worse than no menu,
     which is why there is no Help and no File>Open yet. }
   MenuCount = 4;
-  ItemMost = 3;
+  ItemMost = 3;   { the longest menu, in items }
 
   { What the hint bar says. One place, because it is a claim about the
     bindings and the decoder is the other half of that claim -- a key here
     that `DecodeByte` does not answer would be the editor lying about itself
     on every frame. }
-  Hints = 'F10 Menu  F2 Save  F9 Build  ^F Find  ^Z Undo  ^Q Quit';
+  Hints = 'F10 Menu  F3 Open  F2 Save  F9 Build  F6 Next  ^F Find  ^Q Quit';
+
+{ One empty document, which is what `EditInit` starts with and what
+  `EditAdd` makes. Written once because both need it and because a field
+  added to `Document` must be initialised in one place, not two. }
+procedure BlankDoc(var d: Document);
+begin
+  SVecNew(d.lines, 64);
+  SVecPush(d.lines, '');
+  d.row := 1;
+  d.col := 1;
+  d.top := 1;
+  d.dirty := false;
+  d.name := '';
+  d.undos := nil;
+  d.redos := nil;
+  d.open := false
+end;
 
 procedure EditInit;
 begin
-  SVecNew(ed.lines, 64);
-  SVecPush(ed.lines, '');
-  ed.row := 1;
-  ed.col := 1;
-  ed.top := 1;
-  ed.dirty := false;
-  ed.name := '';
+  BlankDoc(ed.doc);
+  ed.cur := 1;
+  ed.docs := 1;
   ed.says := '';
-  ed.undos := nil;
-  ed.redos := nil;
-  ed.open := false;
   ed.mode := mdEdit;
   ed.prompt := '';
   ed.seek := '';
@@ -392,10 +453,76 @@ begin
 end;
 
 procedure EditFree;
+var i: integer;
 begin
-  SVecFree(ed.lines);
-  Drop(ed.undos);
-  Drop(ed.redos)
+  { **Every document and not the current one** (ADR-0396). The bank holds the
+    others' buffers and journals, and freeing only what is on screen would
+    leak one heap per file the person opened -- which `heap-balance` counts
+    and which nothing else here would have noticed. `bank[cur]` is stale
+    while `doc` is live, so it is skipped. }
+  SVecFree(ed.doc.lines);
+  Drop(ed.doc.undos);
+  Drop(ed.doc.redos);
+  for i := 1 to ed.docs do
+    if i <> ed.cur then begin
+      SVecFree(ed.bank[i].lines);
+      Drop(ed.bank[i].undos);
+      Drop(ed.bank[i].redos)
+    end;
+  ed.docs := 0
+end;
+
+{ **Which document is on screen, and how many there are.** Two numbers the
+  status line needs and the shell must not derive for itself. }
+function EditWhich;
+begin
+  EditWhich := ed.cur
+end;
+
+function EditCount;
+begin
+  EditCount := ed.docs
+end;
+
+{ Which open document has this name, or 0. What lets a diagnostic about
+  another file be *landed on* rather than only reported. }
+function EditFind;
+var i: integer;
+begin
+  EditFind := 0;
+  if nm = '' then exit;
+  if ed.doc.name = nm then EditFind := ed.cur
+  else
+    for i := 1 to ed.docs do
+      if (i <> ed.cur) and (ed.bank[i].name = nm) then EditFind := i
+end;
+
+{ **Change which document is being edited**, and the whole of it is two
+  whole-record assignments (ADR-0396). Out of range or already current is a
+  no-op rather than an error: the callers are a key and a diagnostic, and
+  neither has anything to do with a refusal. }
+procedure EditGo;
+begin
+  if (n >= 1) and (n <= ed.docs) and (n <> ed.cur) then begin
+    ed.bank[ed.cur] := ed.doc;
+    ed.doc := ed.bank[n];
+    ed.cur := n
+  end
+end;
+
+{ A new empty document, made current. False where there is no room, and the
+  caller says so -- this side does not write the message, `EditSay` being the
+  one place a message is set. }
+function EditAdd;
+begin
+  EditAdd := false;
+  if ed.docs < DocMax then begin
+    ed.bank[ed.cur] := ed.doc;
+    ed.docs := ed.docs + 1;
+    ed.cur := ed.docs;
+    BlankDoc(ed.doc);
+    EditAdd := true
+  end
 end;
 
 function EditModal;
@@ -449,46 +576,46 @@ begin
   { The line an empty editor starts with is not a line of the document: the
     first push replaces it rather than sitting under it, or every loaded file
     would gain a blank first line. }
-  if (SVecLen(ed.lines) = 1) and (SVecGet(ed.lines, 1) = '') then
-    SVecSet(ed.lines, 1, s)
+  if (SVecLen(ed.doc.lines) = 1) and (SVecGet(ed.doc.lines, 1) = '') then
+    SVecSet(ed.doc.lines, 1, s)
   else
-    SVecPush(ed.lines, s)
+    SVecPush(ed.doc.lines, s)
 end;
 
 function EditDirty;
 begin
-  EditDirty := ed.dirty
+  EditDirty := ed.doc.dirty
 end;
 
 function EditLines;
 begin
-  EditLines := SVecLen(ed.lines)
+  EditLines := SVecLen(ed.doc.lines)
 end;
 
 function EditRow;
 begin
-  EditRow := ed.row
+  EditRow := ed.doc.row
 end;
 
 function EditCol;
 begin
-  EditCol := ed.col
+  EditCol := ed.doc.col
 end;
 
 function EditName;
 begin
-  EditName := ed.name
+  EditName := ed.doc.name
 end;
 
 function EditLine_;
 begin
-  if (n < 1) or (n > SVecLen(ed.lines)) then EditLine_ := ''
-  else EditLine_ := SVecGet(ed.lines, n)
+  if (n < 1) or (n > SVecLen(ed.doc.lines)) then EditLine_ := ''
+  else EditLine_ := SVecGet(ed.doc.lines, n)
 end;
 
 procedure EditSetName;
 begin
-  ed.name := s
+  ed.doc.name := s
 end;
 
 procedure EditSay;
@@ -498,7 +625,7 @@ end;
 
 procedure EditSaved;
 begin
-  ed.dirty := false
+  ed.doc.dirty := false
 end;
 
 { The first `n` characters, and everything from the `i`th. Both answer the
@@ -580,19 +707,19 @@ end;
 procedure Clamp(var ed: Editor);
 var n: integer; cur: EditLine;
 begin
-  if ed.row < 1 then ed.row := 1;
-  if ed.row > SVecLen(ed.lines) then ed.row := SVecLen(ed.lines);
-  cur := SVecGet(ed.lines, ed.row);
+  if ed.doc.row < 1 then ed.doc.row := 1;
+  if ed.doc.row > SVecLen(ed.doc.lines) then ed.doc.row := SVecLen(ed.doc.lines);
+  cur := SVecGet(ed.doc.lines, ed.doc.row);
   n := length(cur);
-  if ed.col < 1 then ed.col := 1;
-  if ed.col > n + 1 then ed.col := n + 1;
+  if ed.doc.col < 1 then ed.doc.col := 1;
+  if ed.doc.col > n + 1 then ed.doc.col := n + 1;
   { **And it lands on an element boundary** (ADR-0395). Moving down a line
     keeps the byte and the new line is not the old one, so without this the
     cursor can come to rest inside a character -- where Delete would take the
     joiner out of the middle of an emoji and leave the two halves to join
-    with their neighbours. Every other route into `ed.col` is already a
+    with their neighbours. Every other route into `ed.doc.col` is already a
     boundary by construction; this is the one that is not. }
-  ed.col := ElementAt(cur, ed.col)
+  ed.doc.col := ElementAt(cur, ed.doc.col)
 end;
 
 { A jump, and it is `MoveTo` because `GoTo` folds to a word-symbol -- every
@@ -610,41 +737,41 @@ procedure MoveTo(var ed: Editor; ln, cl: integer); forward;
 procedure DoInsert(var ed: Editor; row, col: integer; s: EditLine);
 var cur: EditLine;
 begin
-  cur := SVecGet(ed.lines, row);
-  SVecSet(ed.lines, row, Left(cur, col - 1) + s + From(cur, col))
+  cur := SVecGet(ed.doc.lines, row);
+  SVecSet(ed.doc.lines, row, Left(cur, col - 1) + s + From(cur, col))
 end;
 
 procedure DoRemove(var ed: Editor; row, col, n: integer);
 var cur: EditLine;
 begin
-  cur := SVecGet(ed.lines, row);
-  SVecSet(ed.lines, row, Left(cur, col - 1) + From(cur, col + n))
+  cur := SVecGet(ed.doc.lines, row);
+  SVecSet(ed.doc.lines, row, Left(cur, col - 1) + From(cur, col + n))
 end;
 
 procedure DoSplit(var ed: Editor; row, col: integer);
 var cur, rest: EditLine; i: integer;
 begin
-  cur := SVecGet(ed.lines, row);
+  cur := SVecGet(ed.doc.lines, row);
   rest := From(cur, col);
-  SVecSet(ed.lines, row, Left(cur, col - 1));
+  SVecSet(ed.doc.lines, row, Left(cur, col - 1));
   { `PasStrVec` has no insert, so the lines below move down by one and the
     hole is written into -- what a vector costs, and invisible at the sizes a
     person edits at. }
-  SVecPush(ed.lines, '');
-  for i := SVecLen(ed.lines) - 1 downto row + 1 do
-    SVecSet(ed.lines, i + 1, SVecGet(ed.lines, i));
-  SVecSet(ed.lines, row + 1, rest)
+  SVecPush(ed.doc.lines, '');
+  for i := SVecLen(ed.doc.lines) - 1 downto row + 1 do
+    SVecSet(ed.doc.lines, i + 1, SVecGet(ed.doc.lines, i));
+  SVecSet(ed.doc.lines, row + 1, rest)
 end;
 
 procedure DoJoin(var ed: Editor; row: integer);
 var i: integer; gone: EditLine;
 begin
-  SVecSet(ed.lines, row, SVecGet(ed.lines, row) + SVecGet(ed.lines, row + 1));
-  for i := row + 1 to SVecLen(ed.lines) - 1 do
-    SVecSet(ed.lines, i, SVecGet(ed.lines, i + 1));
+  SVecSet(ed.doc.lines, row, SVecGet(ed.doc.lines, row) + SVecGet(ed.doc.lines, row + 1));
+  for i := row + 1 to SVecLen(ed.doc.lines) - 1 do
+    SVecSet(ed.doc.lines, i, SVecGet(ed.doc.lines, i + 1));
   { The vector is one shorter, and what came off it is already in the line
     above. `PasStrVec` has no drop, so the value is taken and let go. }
-  gone := SVecPop(ed.lines)
+  gone := SVecPop(ed.doc.lines)
 end;
 
 { Put an edit in the journal, joining it to the newest entry where it
@@ -665,23 +792,23 @@ begin
     returned to. That is every editor's rule, and it is why redo is a stack
     that gets emptied rather than a second journal that has to be kept
     consistent with this one. }
-  Drop(ed.redos);
-  if ed.open and (ed.undos <> nil) and (ed.undos^.kind = kind) and
-     (ed.undos^.row = row) then begin
-    if (kind = ekInsert) and (ed.undos^.col + length(ed.undos^.text) = col) then begin
-      ed.undos^.text := ed.undos^.text + s;
+  Drop(ed.doc.redos);
+  if ed.doc.open and (ed.doc.undos <> nil) and (ed.doc.undos^.kind = kind) and
+     (ed.doc.undos^.row = row) then begin
+    if (kind = ekInsert) and (ed.doc.undos^.col + length(ed.doc.undos^.text) = col) then begin
+      ed.doc.undos^.text := ed.doc.undos^.text + s;
       exit
     end
-    else if (kind = ekDelete) and (ed.undos^.col = col + length(s)) then begin
+    else if (kind = ekDelete) and (ed.doc.undos^.col = col + length(s)) then begin
       { Backspace: the run grows leftwards, so the entry's column follows it
         and the text goes on the front. }
-      ed.undos^.text := s + ed.undos^.text;
-      ed.undos^.col := col;
+      ed.doc.undos^.text := s + ed.doc.undos^.text;
+      ed.doc.undos^.col := col;
       exit
     end
-    else if (kind = ekDelete) and (ed.undos^.col = col) then begin
+    else if (kind = ekDelete) and (ed.doc.undos^.col = col) then begin
       { Delete: the run grows rightwards and the column stays where it is. }
-      ed.undos^.text := ed.undos^.text + s;
+      ed.doc.undos^.text := ed.doc.undos^.text + s;
       exit
     end
   end;
@@ -694,11 +821,11 @@ begin
     Getting that order wrong puts the cursor one keystroke ahead on every
     undo, which is the kind of wrongness a golden shows and a reading does
     not. }
-  e^.atRow := ed.row;
-  e^.atCol := ed.col;
-  e^.next := ed.undos;
-  ed.undos := e;
-  ed.open := true
+  e^.atRow := ed.doc.row;
+  e^.atCol := ed.doc.col;
+  e^.next := ed.doc.undos;
+  ed.doc.undos := e;
+  ed.doc.open := true
 end;
 
 { Undo one entry: perform its opposite, move it to the redo stack, and put
@@ -706,27 +833,27 @@ end;
 procedure Undo(var ed: Editor);
 var e: EditRecPtr;
 begin
-  if ed.undos = nil then begin
+  if ed.doc.undos = nil then begin
     ed.says := 'nothing to undo';
     exit
   end;
-  e := ed.undos;
-  ed.undos := e^.next;
+  e := ed.doc.undos;
+  ed.doc.undos := e^.next;
   case e^.kind of
     ekInsert: DoRemove(ed, e^.row, e^.col, length(e^.text));
     ekDelete: DoInsert(ed, e^.row, e^.col, e^.text);
     ekSplit: DoJoin(ed, e^.row);
     ekJoin: DoSplit(ed, e^.row, e^.col)
   end;
-  ed.row := e^.atRow;
-  ed.col := e^.atCol;
-  e^.next := ed.redos;
-  ed.redos := e;
+  ed.doc.row := e^.atRow;
+  ed.doc.col := e^.atCol;
+  e^.next := ed.doc.redos;
+  ed.doc.redos := e;
   { **Undoing back to what was on disc still counts as a change**, and that
     is deliberate: this editor does not track which entry the last save was
     at, so it says the document differs rather than claiming it does not. The
     honest direction to be wrong in is the one that offers to save. }
-  ed.dirty := true
+  ed.doc.dirty := true
 end;
 
 { ...and redo performs the same entry again. There is one description of an
@@ -734,30 +861,30 @@ end;
 procedure Redo(var ed: Editor);
 var e: EditRecPtr;
 begin
-  if ed.redos = nil then begin
+  if ed.doc.redos = nil then begin
     ed.says := 'nothing to redo';
     exit
   end;
-  e := ed.redos;
-  ed.redos := e^.next;
-  ed.row := e^.row;
-  ed.col := e^.col;
+  e := ed.doc.redos;
+  ed.doc.redos := e^.next;
+  ed.doc.row := e^.row;
+  ed.doc.col := e^.col;
   case e^.kind of
     ekInsert: begin
       DoInsert(ed, e^.row, e^.col, e^.text);
-      ed.col := e^.col + length(e^.text)
+      ed.doc.col := e^.col + length(e^.text)
     end;
     ekDelete: DoRemove(ed, e^.row, e^.col, length(e^.text));
     ekSplit: begin
       DoSplit(ed, e^.row, e^.col);
-      ed.row := e^.row + 1;
-      ed.col := 1
+      ed.doc.row := e^.row + 1;
+      ed.doc.col := 1
     end;
     ekJoin: DoJoin(ed, e^.row)
   end;
-  e^.next := ed.undos;
-  ed.undos := e;
-  ed.dirty := true
+  e^.next := ed.doc.undos;
+  ed.doc.undos := e;
+  ed.doc.dirty := true
 end;
 
 { Case-insensitive, and that is the one thing this editor knows about the
@@ -818,7 +945,7 @@ begin
   fc := col;
   if pat = '' then exit;
   needle := Fold(pat);
-  n := SVecLen(ed.lines);
+  n := SVecLen(ed.doc.lines);
   for i := 0 to n do begin
     r := row + i;
     if r > n then begin
@@ -826,7 +953,7 @@ begin
       wrapped := true
     end;
     if i = 0 then start := col else start := 1;
-    at := IndexFrom(Fold(SVecGet(ed.lines, r)), needle, start);
+    at := IndexFrom(Fold(SVecGet(ed.doc.lines, r)), needle, start);
     if at > 0 then begin
       fr := r;
       fc := at;
@@ -846,8 +973,8 @@ begin
     ed.says := 'nothing to find again';
     exit
   end;
-  if again then from := ed.col + 1 else from := ed.col;
-  if Seek(ed, ed.seek, ed.row, from, fr, fc, wrapped) then begin
+  if again then from := ed.doc.col + 1 else from := ed.doc.col;
+  if Seek(ed, ed.seek, ed.doc.row, from, fr, fc, wrapped) then begin
     MoveTo(ed, fr, fc);
     if wrapped then ed.says := 'search wrapped'
   end
@@ -897,8 +1024,31 @@ begin
         if ed.prompt = '' then
           ed.says := 'a document needs a name to be saved'
         else begin
-          ed.name := ed.prompt;
+          ed.doc.name := ed.prompt;
           ed.pend.kind := kkSave;
+          ed.hasPend := true
+        end
+      end;
+      { **The model makes room and the shell reads the file** (ADR-0396),
+        which is ADR-0381's line drawn again: a document is a decision and
+        bytes are not. An already-open file is *switched to* rather than
+        opened twice -- two buffers over one file would be two answers to
+        `is this saved`. }
+      mdOpen: begin
+        ed.mode := mdEdit;
+        if ed.prompt = '' then ed.says := 'no name, nothing to open'
+        else if EditFind(ed, ed.prompt) <> 0 then begin
+          EditGo(ed, EditFind(ed, ed.prompt));
+          ed.says := 'already open'
+        end
+        else if not EditAdd(ed) then
+          ed.says := 'no room for another document'
+        else begin
+          { The name goes on the new document *here*, as `Save as` puts one on
+            this one, so the shell reads it back with `EditName` and holds no
+            second copy of it (ADR-0388). }
+          ed.doc.name := ed.prompt;
+          ed.pend.kind := kkOpen;
           ed.hasPend := true
         end
       end;
@@ -1080,7 +1230,7 @@ end;
 function MenuItems(m: integer): integer;
 begin
   case m of
-    1: MenuItems := 2;
+    1: MenuItems := 3;
     2: MenuItems := 2;
     3: MenuItems := 3;
     4: MenuItems := 1;
@@ -1100,8 +1250,9 @@ begin
     it. }
   ItemCaption := '';
   if m = 1 then begin
-    if i = 1 then ItemCaption := 'Save  F2'
-    else if i = 2 then ItemCaption := 'Quit  ^Q'
+    if i = 1 then ItemCaption := 'Open  F3'
+    else if i = 2 then ItemCaption := 'Save  F2'
+    else if i = 3 then ItemCaption := 'Quit  ^Q'
   end
   else if m = 2 then begin
     if i = 1 then ItemCaption := 'Undo  ^Z'
@@ -1124,8 +1275,9 @@ begin
   k.num := 0;
   k.kind := kkNone;
   if m = 1 then begin
-    if i = 1 then k.kind := kkSave
-    else if i = 2 then k.kind := kkQuit
+    if i = 1 then k.kind := kkOpen
+    else if i = 2 then k.kind := kkSave
+    else if i = 3 then k.kind := kkQuit
   end
   else if m = 2 then begin
     if i = 1 then k.kind := kkUndo
@@ -1241,10 +1393,10 @@ begin
     it and an undo comes out smaller than the person expected, which they can
     see and repeat; the other way round gives them one that swallows an
     action they never performed, which they cannot get back. }
-  keep := ed.open;
-  ed.open := false;
+  keep := ed.doc.open;
+  ed.doc.open := false;
 
-  cur := SVecGet(ed.lines, ed.row);
+  cur := SVecGet(ed.doc.lines, ed.doc.row);
   case k.kind of
     kkChar: begin
       { A line that is full swallows the key rather than losing its tail:
@@ -1256,21 +1408,21 @@ begin
       else begin
         one := '';
         one := one + k.ch;
-        ed.open := keep;
-        Note(ed, ekInsert, ed.row, ed.col, one);
-        DoInsert(ed, ed.row, ed.col, one);
-        ed.col := ed.col + 1;
-        ed.dirty := true
+        ed.doc.open := keep;
+        Note(ed, ekInsert, ed.doc.row, ed.doc.col, one);
+        DoInsert(ed, ed.doc.row, ed.doc.col, one);
+        ed.doc.col := ed.doc.col + 1;
+        ed.doc.dirty := true
       end
     end;
     kkEnter: begin
       { Split: the tail moves to a new line after this one. It never joins a
         group, so the `keep` above is deliberately not handed back. }
-      Note(ed, ekSplit, ed.row, ed.col, '');
-      DoSplit(ed, ed.row, ed.col);
-      ed.row := ed.row + 1;
-      ed.col := 1;
-      ed.dirty := true
+      Note(ed, ekSplit, ed.doc.row, ed.doc.col, '');
+      DoSplit(ed, ed.doc.row, ed.doc.col);
+      ed.doc.row := ed.doc.row + 1;
+      ed.doc.col := 1;
+      ed.doc.dirty := true
     end;
     kkBack: begin
       { **Backspace removes an element and not a byte** (ADR-0395). Removing
@@ -1278,45 +1430,45 @@ begin
         undo journal would then hold a fragment that is not one either --
         which is why this is the model's business and not the shell's. `b`
         is where the element before the cursor begins. }
-      if ed.col > 1 then begin
-        b := ElementBack(cur, ed.col);
-        ed.open := keep;
-        Note(ed, ekDelete, ed.row, b, substr(cur, b, ed.col - b));
-        DoRemove(ed, ed.row, b, ed.col - b);
-        ed.col := b;
-        ed.dirty := true
+      if ed.doc.col > 1 then begin
+        b := ElementBack(cur, ed.doc.col);
+        ed.doc.open := keep;
+        Note(ed, ekDelete, ed.doc.row, b, substr(cur, b, ed.doc.col - b));
+        DoRemove(ed, ed.doc.row, b, ed.doc.col - b);
+        ed.doc.col := b;
+        ed.doc.dirty := true
       end
-      else if ed.row > 1 then begin
+      else if ed.doc.row > 1 then begin
         { Join with the line above, and the cursor lands where the join is
           rather than at either end -- which is where the person was
           looking. That column is also what undoes it: a join is reversed by
           splitting at the point the two lines met. }
-        rest := SVecGet(ed.lines, ed.row - 1);
+        rest := SVecGet(ed.doc.lines, ed.doc.row - 1);
         k2 := length(rest) + 1;
-        Note(ed, ekJoin, ed.row - 1, k2, '');
-        DoJoin(ed, ed.row - 1);
-        ed.row := ed.row - 1;
-        ed.col := k2;
-        ed.dirty := true
+        Note(ed, ekJoin, ed.doc.row - 1, k2, '');
+        DoJoin(ed, ed.doc.row - 1);
+        ed.doc.row := ed.doc.row - 1;
+        ed.doc.col := k2;
+        ed.doc.dirty := true
       end
     end;
     kkDelete: begin
       { The same, forwards: `e` is where the element under the cursor ends. }
-      if ed.col <= length(cur) then begin
-        e2 := ElementEnd(cur, ed.col);
-        if (e2 <= ed.col) or (e2 > length(cur) + 1) then e2 := ed.col + 1;
-        ed.open := keep;
-        Note(ed, ekDelete, ed.row, ed.col, substr(cur, ed.col, e2 - ed.col));
-        DoRemove(ed, ed.row, ed.col, e2 - ed.col);
-        ed.dirty := true
+      if ed.doc.col <= length(cur) then begin
+        e2 := ElementEnd(cur, ed.doc.col);
+        if (e2 <= ed.doc.col) or (e2 > length(cur) + 1) then e2 := ed.doc.col + 1;
+        ed.doc.open := keep;
+        Note(ed, ekDelete, ed.doc.row, ed.doc.col, substr(cur, ed.doc.col, e2 - ed.doc.col));
+        DoRemove(ed, ed.doc.row, ed.doc.col, e2 - ed.doc.col);
+        ed.doc.dirty := true
       end
-      else if ed.row < SVecLen(ed.lines) then begin
+      else if ed.doc.row < SVecLen(ed.doc.lines) then begin
         { At the end of a line, Delete is the same join Backspace makes from
-          the other side -- and `Clamp` has already made `ed.col` exactly
+          the other side -- and `Clamp` has already made `ed.doc.col` exactly
           `length(cur) + 1`, which is where the two lines meet. }
-        Note(ed, ekJoin, ed.row, ed.col, '');
-        DoJoin(ed, ed.row);
-        ed.dirty := true
+        Note(ed, ekJoin, ed.doc.row, ed.doc.col, '');
+        DoJoin(ed, ed.doc.row);
+        ed.doc.dirty := true
       end
     end;
     { **The arrows move by element** (ADR-0395), so one press crosses one
@@ -1324,27 +1476,27 @@ begin
       character, where the next Backspace would break it and the status line
       would name a position no edit can be made at. }
     kkLeft: begin
-      if ed.col > 1 then ed.col := ElementBack(cur, ed.col)
-      else if ed.row > 1 then begin
-        ed.row := ed.row - 1;
-        ed.col := length(SVecGet(ed.lines, ed.row)) + 1
+      if ed.doc.col > 1 then ed.doc.col := ElementBack(cur, ed.doc.col)
+      else if ed.doc.row > 1 then begin
+        ed.doc.row := ed.doc.row - 1;
+        ed.doc.col := length(SVecGet(ed.doc.lines, ed.doc.row)) + 1
       end
     end;
     kkRight: begin
-      if ed.col <= length(cur) then begin
-        e2 := ElementEnd(cur, ed.col);
-        if (e2 <= ed.col) or (e2 > length(cur) + 1) then e2 := ed.col + 1;
-        ed.col := e2
+      if ed.doc.col <= length(cur) then begin
+        e2 := ElementEnd(cur, ed.doc.col);
+        if (e2 <= ed.doc.col) or (e2 > length(cur) + 1) then e2 := ed.doc.col + 1;
+        ed.doc.col := e2
       end
-      else if ed.row < SVecLen(ed.lines) then begin
-        ed.row := ed.row + 1;
-        ed.col := 1
+      else if ed.doc.row < SVecLen(ed.doc.lines) then begin
+        ed.doc.row := ed.doc.row + 1;
+        ed.doc.col := 1
       end
     end;
-    kkUp: ed.row := ed.row - 1;
-    kkDown: ed.row := ed.row + 1;
-    kkHome: ed.col := 1;
-    kkEnd: ed.col := length(cur) + 1;
+    kkUp: ed.doc.row := ed.doc.row - 1;
+    kkDown: ed.doc.row := ed.doc.row + 1;
+    kkHome: ed.doc.col := 1;
+    kkEnd: ed.doc.col := length(cur) + 1;
     { **The shell acts on these and the model does not**, which is what keeps
       the model free of files and processes: saving is a write and building
       is a `PasProcess.Execute`, and neither is a decision about a document.
@@ -1387,10 +1539,21 @@ begin
       and a golden holds it. Starting fileless is the ordinary way to write a
       new program since the editor started fileless, so this is the path
       most people meet first. }
-    kkSave: if ed.name = '' then begin
+    kkSave: if ed.doc.name = '' then begin
       ed.mode := mdSaveAs;
       ed.prompt := ''
     end;
+    { **Open asks for a name and Next is immediate.** Neither reads a file:
+      one puts a question on the screen and the other is arithmetic over what
+      is already open. }
+    kkOpen: begin
+      ed.mode := mdOpen;
+      ed.prompt := ''
+    end;
+    kkNextDoc:
+      if ed.docs < 2 then ed.says := 'only one document is open'
+      else if ed.cur = ed.docs then EditGo(ed, 1)
+      else EditGo(ed, ed.cur + 1);
     kkQuit, kkBuild: ;
     { A sequence nothing here knows. Reported **with the byte in it**,
       because a key that does nothing and a key that was misread look alike
@@ -1436,14 +1599,14 @@ begin
     parameter of a routine that only draws: where the window sits is a
     property of the last drawing and not of the document, and keeping it
     anywhere else would mean the caller had to know the height. }
-  if ed.row < ed.top then ed.top := ed.row;
-  if ed.row > ed.top + h - 1 then ed.top := ed.row - h + 1;
-  if ed.top < 1 then ed.top := 1;
+  if ed.doc.row < ed.doc.top then ed.doc.top := ed.doc.row;
+  if ed.doc.row > ed.doc.top + h - 1 then ed.doc.top := ed.doc.row - h + 1;
+  if ed.doc.top < 1 then ed.doc.top := 1;
 
   for r := 1 to h do begin
-    n := ed.top + r - 1;
-    if n > SVecLen(ed.lines) then s := '~'
-    else s := SVecGet(ed.lines, n);
+    n := ed.doc.top + r - 1;
+    if n > SVecLen(ed.doc.lines) then s := '~'
+    else s := SVecGet(ed.doc.lines, n);
     { No horizontal scrolling: a line wider than the window is cut, and the
       cursor stops at the last column rather than following the text off the
       edge. It is a milestone-one limitation and a person meets it on a long
@@ -1475,10 +1638,17 @@ begin
 
   { The status line, and it is the same shape a Turbo Pascal one was: what is
     being edited, whether it has been changed, and where the cursor is. }
-  s := ed.name;
+  s := ed.doc.name;
   if s = '' then s := '(no name)';
-  if ed.dirty then s := s + ' *';
-  writestr(num, ed.row:1, ':', ed.col:1);
+  if ed.doc.dirty then s := s + ' *';
+  { **Which document, when there is more than one** (ADR-0396). Absent while
+    one is open, because a `1/1` on every screen is a number that never says
+    anything; present the moment it can differ, which is the first time a
+    person can be looking at a file they did not mean to. }
+  if ed.docs > 1 then
+    writestr(num, ed.cur:1, '/', ed.docs:1, ' ', ed.doc.row:1, ':',
+             ed.doc.col:1)
+  else writestr(num, ed.doc.row:1, ':', ed.doc.col:1);
   wide := cols - length(num);
   if wide < 1 then wide := 1;
   row := Left(s, wide);
@@ -1503,10 +1673,12 @@ begin
     *before* the menu, because a menu opened over a dialog would be the case
     that finally needs a stack and there is deliberately no way to reach it. }
   pcol := 0;
-  if (ed.mode = mdFind) or (ed.mode = mdGoto) or (ed.mode = mdSaveAs) then
+  if (ed.mode = mdFind) or (ed.mode = mdGoto) or (ed.mode = mdSaveAs)
+     or (ed.mode = mdOpen) then
   begin
     if ed.mode = mdFind then s := 'Find'
     else if ed.mode = mdSaveAs then s := 'Save as'
+    else if ed.mode = mdOpen then s := 'Open'
     else s := 'Go to line';
     wide := 34;
     if wide > cols - 4 then wide := cols - 4;
@@ -1576,15 +1748,15 @@ begin
     end
   end
   else begin
-    scr.atRow := ed.row - ed.top + 2;
-    { **`ed.col` is a byte and `atCol` is a column**, and this is the one line
+    scr.atRow := ed.doc.row - ed.doc.top + 2;
+    { **`ed.doc.col` is a byte and `atCol` is a column**, and this is the one line
       that converts between them (ADR-0395). The model counts bytes because
       every edit does and because `pascalc` reports a diagnostic's column in
       bytes -- so landing on an error means landing on a byte. What a terminal
       is told is where that byte *appears*. }
-    if ed.row <= SVecLen(ed.lines) then
-      scr.atCol := ColumnOf(SVecGet(ed.lines, ed.row), ed.col)
-    else scr.atCol := ed.col
+    if ed.doc.row <= SVecLen(ed.doc.lines) then
+      scr.atCol := ColumnOf(SVecGet(ed.doc.lines, ed.doc.row), ed.doc.col)
+    else scr.atCol := ed.doc.col
   end;
   if scr.atCol > cols then scr.atCol := cols
 end;
@@ -1600,19 +1772,19 @@ var k: Key;
 begin
   k.ch := ' ';
   k.kind := kkUp;
-  while ed.row > ln do EditKey(ed, k);
+  while ed.doc.row > ln do EditKey(ed, k);
   k.kind := kkDown;
-  while (ed.row < ln) and (ed.row < SVecLen(ed.lines)) do EditKey(ed, k);
+  while (ed.doc.row < ln) and (ed.doc.row < SVecLen(ed.doc.lines)) do EditKey(ed, k);
   k.kind := kkHome;
   EditKey(ed, k);
   k.kind := kkRight;
-  while (ed.col < cl) and (ed.col <= length(SVecGet(ed.lines, ed.row))) do
+  while (ed.doc.col < cl) and (ed.doc.col <= length(SVecGet(ed.doc.lines, ed.doc.row))) do
     EditKey(ed, k)
 end;
 
 function EditFault;
 var i, start, field, ln, cl: integer; part: EditLine; r: IntResult;
-    who: EditLine;
+    who: EditLine; at: integer;
 begin
   EditFault := false;
   start := 1;
@@ -1653,7 +1825,15 @@ begin
           the cursor where the person left it. The message carries the
           position it names, because a line number with no file is the thing
           that was wrong before. }
-        if who = ed.name then begin
+        { **A diagnostic about another *open* document is landed on**
+          (ADR-0396), which is what more than one document was for: this
+          compiler is three program-components and building one of them
+          reports about the others. A file that is not open is still reported
+          and not jumped to -- opening it here would be this side reading a
+          file, which is the shell's. }
+        at := EditFind(ed, who);
+        if at <> 0 then begin
+          EditGo(ed, at);
           MoveTo(ed, ln, cl);
           ed.says := From(text, start + 1)
         end
@@ -1696,6 +1876,8 @@ procedure FuncKey(var k: Key; n: integer);
 begin
   k.num := n;
   if n = 2 then k.kind := kkSave
+  else if n = 3 then k.kind := kkOpen
+  else if n = 6 then k.kind := kkNextDoc
   else if n = 9 then k.kind := kkBuild
   else if n = 10 then k.kind := kkMenu
   else k.kind := kkFunc

@@ -6,7 +6,7 @@
 |end.                        |
 |                            |
 |p.pas                    1:1|
-|F10 Menu  F2 Save  F9 Build |
+|F10 Menu  F3 Open  F2 Save  |
 +----------------------------+
 +----------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -37,7 +37,7 @@ cursor 2,1
 |end.                        |
 |error: 'x' is not declared  |
 |p.pas                   3:11|
-|F10 Menu  F2 Save  F9 Build |
+|F10 Menu  F3 Open  F2 Save  |
 +----------------------------+
 +----------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -68,7 +68,7 @@ cursor 4,11
 |end.                        |
 |error: past the end         |
 |p.pas                    4:1|
-|F10 Menu  F2 Save  F9 Build |
+|F10 Menu  F3 Open  F2 Save  |
 +----------------------------+
 +----------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -99,7 +99,7 @@ cursor 5,1
 |end.                        |
 |error: past the line        |
 |p.pas                   1:19|
-|F10 Menu  F2 Save  F9 Build |
+|F10 Menu  F3 Open  F2 Save  |
 +----------------------------+
 +----------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuu|
@@ -130,7 +130,7 @@ cursor 2,19
 |end.                        |
 |no diagnostic in that       |
 |p.pas                   1:19|
-|F10 Menu  F2 Save  F9 Build |
+|F10 Menu  F3 Open  F2 Save  |
 +----------------------------+
 +----------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuu|
