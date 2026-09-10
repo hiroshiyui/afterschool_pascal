@@ -44,7 +44,7 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
                  EditDirty, EditLines, EditLine_, EditRow, EditCol,
                  EditName, EditSetName, EditSay, EditSaved, EditFault,
-                 EditPrompting,
+                 EditPrompting, EditTakeSave,
                  DecodeInit, DecodeByte);
 
 import PasError;
@@ -133,7 +133,7 @@ type
     owned would be behaviour no session could drive and no golden could
     hold, and it is the half of an editor where a person is most likely to
     notice something wrong. }
-  EditMode = (mdEdit, mdFind, mdGoto);
+  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs);
 
   { The document and where the caller is in it. `top` is the first line drawn,
     so scrolling is a property of the render and not of the cursor. }
@@ -156,7 +156,11 @@ type
       repeat of it. }
     mode: EditMode;
     prompt: EditLine;
-    seek: EditLine
+    seek: EditLine;
+    { A name was just given to a document that had none, and the write has not
+      happened yet -- the shell's half, which this is how it hears about.
+      Cleared by the asking, so it is a request and not a state. }
+    wantSave: boolean
   end;
 
 { An editor holding one empty line, which is what an empty document is: a
@@ -219,6 +223,14 @@ function EditFault(var ed: Editor; text: EditLine): boolean;
   a prompt the shell is told. }
 function EditPrompting(var ed: Editor): boolean;
 
+{ Did the person just name a document that had none? **Answers true once**,
+  and clears -- it is a request the shell takes rather than a flag it reads,
+  so a second key cannot save a second time. The shell writes the file and
+  calls `EditSaved`; where the name came from is this side's business and the
+  writing is that side's, which is the same line ADR-0381 drew for the
+  screen. }
+function EditTakeSave(var ed: Editor): boolean;
+
 { No bytes in hand. }
 procedure DecodeInit(var d: Decoder);
 
@@ -247,7 +259,8 @@ begin
   ed.open := false;
   ed.mode := mdEdit;
   ed.prompt := '';
-  ed.seek := ''
+  ed.seek := '';
+  ed.wantSave := false
 end;
 
 { Give a journal back. Written once and called three times -- freeing the
@@ -273,6 +286,12 @@ end;
 function EditPrompting;
 begin
   EditPrompting := ed.mode <> mdEdit
+end;
+
+function EditTakeSave;
+begin
+  EditTakeSave := ed.wantSave;
+  ed.wantSave := false
 end;
 
 procedure EditPush;
@@ -659,6 +678,19 @@ begin
         ed.seek := ed.prompt;
         FindFrom(ed, false)
       end;
+      { **A name is not judged here**, and that is the division of labour:
+        whether a path can be written is something only the write finds out,
+        and this side has no file in it at all. An empty answer is the one
+        thing it can judge, since it would name nothing. }
+      mdSaveAs: begin
+        ed.mode := mdEdit;
+        if ed.prompt = '' then
+          ed.says := 'a document needs a name to be saved'
+        else begin
+          ed.name := ed.prompt;
+          ed.wantSave := true
+        end
+      end;
       mdGoto: begin
         ed.mode := mdEdit;
         r := ParseInt(ed.prompt);
@@ -812,7 +844,18 @@ begin
     { Nothing is open, so there is nothing to cancel -- said rather than
       ignored, for `kkUnknown`'s reason. }
     kkCancel: ed.says := 'nothing to cancel';
-    kkSave, kkQuit, kkBuild: ;
+    { **Ctrl-S is the shell's, except when there is no name to save under.**
+      Which key writes a file is the shell's business and stays there; *a
+      document with no name cannot be written and has to be asked about* is a
+      decision about the document, so it is here, where a session drives it
+      and a golden holds it. Starting fileless is the ordinary way to write a
+      new program since the editor became `afterschool`, so this is the path
+      most people meet first. }
+    kkSave: if ed.name = '' then begin
+      ed.mode := mdSaveAs;
+      ed.prompt := ''
+    end;
+    kkQuit, kkBuild: ;
     { A sequence nothing here knows. Reported **with the byte in it**,
       because a key that does nothing and a key that was misread look alike
       to a person -- and because the first thing anybody asks is *which*
@@ -869,7 +912,9 @@ begin
   if ed.mode = mdEdit then
     scr.line[rows - 1] := Left(ed.says, cols)
   else begin
-    if ed.mode = mdFind then s := 'Find: ' else s := 'Line: ';
+    if ed.mode = mdFind then s := 'Find: '
+    else if ed.mode = mdSaveAs then s := 'Save as: '
+    else s := 'Line: ';
     s := s + ed.prompt;
     scr.line[rows - 1] := Left(s, cols);
     pcol := length(s) + 1

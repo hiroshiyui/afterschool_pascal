@@ -99,7 +99,7 @@ tui/build.py '' session.pas   # the session replayer
 
 | Key | |
 | --- | --- |
-| Ctrl-S | save |
+| Ctrl-S | save — and on a document with no name, ask for one first |
 | Ctrl-Q | quit — twice when the document has changes in it |
 | Ctrl-B | run the compiler and land the cursor on the first diagnostic |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
@@ -130,3 +130,6 @@ It refuses to start where its standard input is not a terminal, and says so.
 - **No mouse.**
 - **No replace, no search backwards and no regular expressions.** Milestone
   two is a search that finds, and says so when it wraps and when it does not.
+- **No overwrite confirmation.** `Save as:` writes the name it is given, as
+  `>` does and as Ctrl-S on a named document already did (ADR-0388). No
+  directory completion and no browsing either.

@@ -15,6 +15,14 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A document with no name asks for one** (ADR-0388). Ctrl-S on a new
+  document opens a `Save as:` prompt instead of advising a restart, which is
+  what the fileless start needed to be usable: run `afterschool`, type, save.
+  The decision is the model's and the write is the shell's, so a session
+  drives the prompt and a golden holds it — ADR-0387's division of labour, and
+  the third prompt cost almost nothing because the first was built there. It
+  also removed a second copy of the document's name that the shell had been
+  keeping since milestone one.
 - **The editor is `afterschool`, and it starts with no argument.** It is a
   CMake target and an installed program now — `cmake --build` produces
   `build/bin/afterschool` and `cmake --install` puts it in `<prefix>/bin`

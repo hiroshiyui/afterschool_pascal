@@ -1,0 +1,31 @@
+# Ctrl-S on a document that has no name asks for one (ADR-0388). The editor
+# starts fileless whenever `afterschool` is run with no argument, so this is
+# the ordinary way to write a new program, not a corner.
+size 8 30
+draw
+
+keys program p;
+draw
+
+# **Ctrl-S is the model's here and the shell's everywhere else**: which key
+# saves is the shell's business, but *a document with no name cannot be
+# written and must be asked about* is a decision about the document.
+ctrl S
+draw
+keys new.pas
+draw
+ctrl M
+draw
+
+# Ctrl-C closes the question and leaves the document unnamed, so the status
+# line goes back to saying so.
+name
+ctrl S
+ctrl C
+draw
+
+# A document that *has* a name does not ask -- Ctrl-S there is the shell's and
+# the model does nothing with it, which is what this frame pins.
+name hello.pas
+ctrl S
+draw

@@ -4979,6 +4979,18 @@ in the shell was the obvious shape and would have put the half of the
 milestone a person most notices being wrong into the one part no oracle here
 reaches — this entry's own first decision, met again.
 
+**A third prompt cost almost nothing** (ADR-0388), which is the argument for
+having built the first one here. The editor started fileless when it became
+`afterschool`, and Ctrl-S then answered *start with a file to save it* — advice
+to quit and begin again, at the first thing anybody does with a new document.
+`mdSaveAs` is one more arm on the mode, one more label, and one request the
+shell takes once (`EditTakeSave`) before it writes. `kkSave` had been a key the
+model ignored entirely; it is now handled *only* when the name is empty, so
+which key saves stays the shell's and *a document with no name has to be asked
+about* is the model's. It also removed a defect two milestones old: the shell
+kept a `path` beside `ed.name`, and save-as is exactly what makes two copies of
+one fact disagree.
+
 Two consequences worth knowing. Search is **case-insensitive**, which is the
 one thing this editor knows about the language it edits (§6.1.3 folds every
 letter of an identifier, so `writeln` finds `WriteLn`), and a wrapped search

@@ -50,6 +50,9 @@ var
   ed: Editor;
   dec: Decoder;
   scr: Screen;
+  { The command line's, and `Load`'s. **It is not the document's name** --
+    that is the model's and is read back with `EditName` (ADR-0388), so that a
+    save-as cannot leave the two disagreeing. }
   path: FilePath;
   rows, cols: integer;
   running, asked: boolean;
@@ -102,19 +105,19 @@ end;
   none. What it costs is an open per line, which is invisible at the sizes a
   person edits and would not be for a generated file. }
 procedure Save;
-var i: integer; ok: boolean; msg: EditLine;
+var i: integer; ok: boolean; msg: EditLine; path: FilePath;
 begin
-  { **A document with no name cannot be saved, and that is said rather than
-    attempted.** Starting with no file is an ordinary way to start since the
-    editor became `afterschool`, so this is now reachable: without the guard
-    it wrote to the empty path and reported `could not write `, which names
-    nothing and reads like a permissions problem. What it needs is a name, and
-    asking for one is a prompt mode the model does not have yet -- so it says
-    which key would have worked if there were one. }
-  if path = '' then begin
-    EditSay(ed, 'this document has no name -- start with a file to save it');
-    exit
-  end;
+  { **The name is the model's, and this reads it rather than keeping a second
+    copy** (ADR-0388). It used to hold a `path` of its own beside `ed.name`,
+    set once from the command line -- two names for one thing, and save-as is
+    what made them able to disagree: the person answers a prompt, the model
+    knows the new name and the shell would have gone on writing the old one.
+    A fact stated twice is a fact that will disagree with itself.
+
+    There is no guard for an empty name here any more, because there is no
+    longer a way to arrive with one: Ctrl-S on an unnamed document opens the
+    prompt instead of reaching this at all. }
+  path := EditName(ed);
   ok := WriteAllText(path, '');
   i := 1;
   while ok and (i <= EditLines(ed)) do begin
@@ -137,16 +140,17 @@ end;
 procedure Build;
 var v: ArgV; r: RunResult; out: IOLine;
 begin
-  { The compiler is handed a path, so there has to be one -- `Save`'s guard
-    for `Save`'s reason, and the diagnostic a compiler gives for an empty
-    argument is about the compiler and not about this document. }
-  if path = '' then begin
-    EditSay(ed, 'this document has no name -- nothing to compile');
+  { The compiler is handed a path, so there has to be one, and the diagnostic
+    a compiler gives for an empty argument is about the compiler and not about
+    this document. **Ctrl-S now names one**, so the advice is a key that works
+    rather than a restart. }
+  if EditName(ed) = '' then begin
+    EditSay(ed, 'this document has no name -- Ctrl-S to give it one');
     exit
   end;
   e := NewArgs(v);
   if e = errNone then e := AddArg(v, Compiler);
-  if e = errNone then e := AddArg(v, path);
+  if e = errNone then e := AddArg(v, EditName(ed));
   if e = errNone then e := AddArg(v, '-o');
   if e = errNone then e := AddArg(v, Sink);
   if e <> errNone then begin
@@ -213,7 +217,13 @@ begin
         the model it belongs to. }
       if EditPrompting(ed) then begin
         asked := false;
-        EditKey(ed, k)
+        EditKey(ed, k);
+        { **The answer to `Save as:` is a name, and writing it is this side's
+          half** (ADR-0388). The model takes the request once and clears it,
+          so a second key cannot write a second time -- and the write is here
+          because a file is, which is the line ADR-0381 drew for the screen
+          and this is the same one. }
+        if EditTakeSave(ed) then Save
       end
       else if k.kind = kkQuit then begin
         { A document with changes in it takes two presses, and the second has
@@ -228,7 +238,11 @@ begin
       end
       else begin
         asked := false;
-        if k.kind = kkSave then Save
+        { Ctrl-S is this side's only when there is a name to write under. With
+          none the model is asked instead, and it opens the question -- so the
+          key does the same thing either way from where a person sits, which
+          is the point. }
+        if (k.kind = kkSave) and (EditName(ed) <> '') then Save
         else if k.kind = kkBuild then Build
         else EditKey(ed, k)
       end;
