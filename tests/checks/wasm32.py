@@ -40,19 +40,18 @@ and one that stops failing is progress somebody has to record.
 Skips 77 without the sysroot, without the wasm linker, or without a runtime to
 run the result; `WASM32_REQUIRE` refuses to pass by skipping (ADR-0330).
 
-  APASCAL_WASM_RUNNER   the command that starts a `.wasm`, blanks and all.
-                        The default is `wazero run -mount=/:/ -env-inherit`
-                        -- Debian packages it, it is one binary, and neither
-                        flag is decoration. **A WASI program is given nothing
-                        it is not handed**: no directory, so the two scratch
-                        paths `tests/run_test.py` passes every case would not
-                        open; and no environment, so `SOURCE_DATE_EPOCH` from
-                        a `.epoch` sidecar would not arrive and the case
-                        reading it printed *today* instead of 2001. That one
-                        was a wrong answer rather than a failure to start,
-                        which is the kind a runner's flags cause and a reader
-                        blames on the compiler. It becomes
-                        `AFTERSCHOOL_PASCAL_RUNNER` for the sweep (ADR-0384).
+  APASCAL_WASM_ENGINE   the engine that runs a `.wasm`, blanks and all.
+                        The default is `wasmedge --dir /:/`, which Debian
+                        trixie packages -- the image the wasi sysroot is
+                        pinned to. **A WASI program is given nothing it is not
+                        handed**: the mount is why the two scratch paths
+                        `tests/run_test.py` passes every case can be opened,
+                        and `tests/checks/wasi_run.py` is why the environment
+                        arrives. Without that, the case with a `.epoch`
+                        sidecar printed *today* instead of 2001 -- a wrong
+                        answer rather than a failure to start, which is the
+                        kind an engine's flags cause and a reader blames on
+                        the compiler.
 """
 
 import concurrent.futures
@@ -78,10 +77,21 @@ TARGET = 'wasm32-wasi'
 CC = ('clang --target=' + TARGET + ' -mllvm -wasm-enable-sjlj '
       '-nostdlibinc -isystem /usr/include/wasm32-wasi').split()
 
-# **The one runtime Debian packages**, and the mount is what makes a case's
-# two scratch arguments reachable. Overridable, and the summary says which
-# answered -- *which runtime* being exactly the thing a wasm result must state.
-DEFAULT_RUNNER = 'wazero run -mount=/:/ -env-inherit'
+# **The engine, and it is `wasmedge` because trixie packages it** -- the image
+# the wasi sysroot is pinned to, and an answer here is one toolchain's or it is
+# two answers about two machines (ADR-0382). `wazero` measured this first and
+# gives the same 519 but for two cases, and it is in Debian *testing*: a job
+# cannot install it beside the sysroot, so it is not the one to hold the
+# catalogue.
+#
+# It is reached through `wasi_run.py` rather than named directly, because a
+# WASI program is handed no environment and *this case's* environment is what
+# `run_test.py` built -- which the fixed runner prefix (ADR-0384) never sees.
+# The adapter forwards it; the engine is `APASCAL_WASM_ENGINE`'s and the
+# summary names it, *which runtime* being exactly the thing a wasm result must
+# state.
+ADAPTER = Path(__file__).resolve().parent / 'wasi_run.py'
+DEFAULT_ENGINE = 'wasmedge --dir /:/'
 
 ROOTS = ['tests', 'tests/extended', 'tests/dialect', 'examples']
 FLOOR = 400        # sources swept, or the sweep reached nothing (ADR-0282)
@@ -90,6 +100,18 @@ RUN_FLOOR = 100    # ...and programs that actually ran under the runtime
 
 class Skip(Exception):
     pass
+
+
+GETENV = __import__('re').compile(r'getenv\("([A-Z_][A-Z0-9_]*)"\)')
+
+
+def read_forwarded():
+    """The names `wasi_run.py` passes on, read from its own source rather
+    than imported: it `execvp`s at import time, which is right for a runner
+    and wrong for a module."""
+    text = ADAPTER.read_text()
+    body = text.split('FORWARD = (', 1)[1].split(')', 1)[0]
+    return {w.strip().strip('",\'') for w in body.split() if w.strip(' ,')}
 
 
 def units_that_compile():
@@ -129,10 +151,29 @@ def sweep(pascalcc, work, write):
     if shutil.which('llvm-ar') is None:
         raise Skip('no llvm-ar, which is what archives a wasm object')
 
-    runner = (os.environ.get('APASCAL_WASM_RUNNER') or DEFAULT_RUNNER).split()
-    if shutil.which(runner[0]) is None:
-        raise Skip('no %s to run a .wasm with (Debian packages wazero); '
-                   'APASCAL_WASM_RUNNER names another' % runner[0])
+    engine = (os.environ.get('APASCAL_WASM_ENGINE') or DEFAULT_ENGINE).split()
+    if shutil.which(engine[0]) is None:
+        raise Skip('no %s to run a .wasm with (Debian trixie packages '
+                   'wasmedge); APASCAL_WASM_ENGINE names another' % engine[0])
+    runner = [sys.executable, str(ADAPTER)]
+
+    # **The environment a wasm program is given is exactly what the runtime
+    # reads**, in both directions. The adapter forwards four names and the
+    # runtime calls `getenv` on four; a fifth added to either side without the
+    # other is a variable that silently stops arriving on this target, which
+    # is a *wrong answer* and not a failure -- the `.epoch` case printed
+    # today's date rather than 2001 when this went unnoticed once already.
+    forwarded = read_forwarded()
+    wanted = set()
+    for c in sorted((ROOT / 'runtime').glob('*.c')):
+        wanted |= set(GETENV.findall(c.read_text()))
+    if forwarded != wanted:
+        print('wasm32: %s forwards {%s} and runtime/*.c reads {%s} -- a WASI '
+              'program is handed no environment it is not given, so the two '
+              'have to be the same set'
+              % (ADAPTER.name, ', '.join(sorted(forwarded)),
+                 ', '.join(sorted(wanted))), file=sys.stderr)
+        return 1
 
     # Can this machine compile *anything* for the target? Asked with C and
     # before any of this compiler's work, so an absent sysroot is reported as
@@ -182,6 +223,7 @@ def sweep(pascalcc, work, write):
     env['AFTERSCHOOL_PASCAL_RUNTIME'] = str(rt)
     env['AFTERSCHOOL_PASCAL_TARGET'] = TARGET
     env['AFTERSCHOOL_PASCAL_RUNNER'] = ' '.join(runner)
+    env['APASCAL_WASM_ENGINE'] = ' '.join(engine)
     env.setdefault('PASCALC', str(ROOT / 'build' / 'bin' / 'pascalc'))
 
     known = set()
@@ -232,7 +274,7 @@ def sweep(pascalcc, work, write):
         print('wasm32: only %d program(s) ran under %s, below the floor of %d '
               '-- a gate whose every case fails the same way is measuring the '
               'toolchain and not the corpus'
-              % (ran, runner[0], RUN_FLOOR), file=sys.stderr)
+              % (ran, engine[0], RUN_FLOOR), file=sys.stderr)
         return 1
 
     status = 0
@@ -255,7 +297,7 @@ def sweep(pascalcc, work, write):
         print('wasm32: %d of %d corpus program(s) compile for %s, link '
               'against the %d runtime unit(s) that build for it, and answer '
               'their golden under `%s`; the other %d are catalogued'
-              % (ran, total, TARGET, len(units), ' '.join(runner),
+              % (ran, total, TARGET, len(units), ' '.join(engine),
                  total - ran))
     return status
 

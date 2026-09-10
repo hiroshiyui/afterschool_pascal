@@ -266,7 +266,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang libclang-rt-dev git python3 \
-            wasi-libc libclang-rt-dev-wasm32 llvm lld wazero
+            wasi-libc libclang-rt-dev-wasm32 llvm lld wasmedge
           # **The sysroot and the builtins, and both are needed** (ADR-0382).
           # `wasi-libc` is the headers this measures against; the clang that
           # is already here supplies the target. `target-sizes` learned the
@@ -306,11 +306,19 @@ jobs:
         # failing, and a `SOURCE_DATE_EPOCH` a WASI runtime does not pass on
         # unless it is told to.
         #
-        # `wazero` is the runtime and Debian packages it. What it does not
-        # implement is the exception-handling proposal, which the non-local
-        # goto lowers through on this target, so exactly one corpus case is
-        # catalogued as *this engine cannot run it* -- and the gate's summary
-        # names the runner so that row can be told from a defect.
+        # **`wasmedge` is the engine and the reason is this image.** The
+        # catalogue's answers have to be one toolchain's -- the header of
+        # `nonposix_headers.txt` records that lesson being learned the
+        # expensive way -- and trixie is where the wasi sysroot is pinned, so
+        # the engine has to be one trixie packages. `wazero` measured this
+        # first and gives the same 519, and it is in Debian *testing*: a job
+        # cannot install it beside the sysroot.
+        #
+        # What neither implements is the exception-handling proposal, which
+        # the non-local goto lowers through on this target, so exactly one
+        # corpus case is catalogued as *this engine cannot run it* -- and the
+        # gate's summary names the engine so that row can be told from a
+        # defect.
 
       - name: ...and the one call whose shape is the target's
         env:

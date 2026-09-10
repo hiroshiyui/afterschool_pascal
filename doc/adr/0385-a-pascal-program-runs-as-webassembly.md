@@ -10,6 +10,12 @@ which admitted the triple, and
 [ADR-0384](0384-a-harness-does-not-always-run-what-it-built.md), which built
 the seam this drives.
 
+**The engine below is `wasmedge` and this record says `wazero`.** That is the
+one thing here CI corrected within the hour: `wazero` is in Debian *testing*
+and the job holding the wasi sysroot runs on trixie, so it could not be
+installed beside the thing it was measuring. See *The engine had to be one the
+image has* at the end.
+
 ## Context
 
 ADR-0383 admitted `wasm32-wasi` on the terms every target here is admitted
@@ -152,3 +158,34 @@ copy and paste. It prints the rows now.
 **Ship a JavaScript shim so `node` can be the runtime.** ADR-0384 rejected
 this for the seam and it is worse here: the tree would own a fourth language
 to run a test. `wazero` is one apt line.
+
+## The engine had to be one the image has
+
+`wazero` took the measurement above and the job could not install it: it is in
+Debian testing and the wasi sysroot is pinned to trixie, which is where
+`runtime-nonposix` and this gate must both run — one question, one toolchain,
+one image, which is the lesson `nonposix_headers.txt`'s own header records
+being learned the expensive way.
+
+`wasmedge` is in trixie and answers **519 of 598**, the same programs to the
+case. What differed was two, and the difference was not the engine's
+WebAssembly: `wazero` has `-env-inherit` and `wasmedge` takes `--env NAME=VALUE`
+per variable, so the case with a `.epoch` sidecar printed today's date rather
+than 2001 under it.
+
+**A fixed runner prefix cannot pass an environment it never saw**, and that is
+the structural point. `AFTERSCHOOL_PASCAL_RUNNER` is set once for the sweep
+(ADR-0384); the environment that matters is the one `tests/run_test.py` built
+for *this case*. So `tests/checks/wasi_run.py` sits between them: it forwards
+the variables the program may read and `exec`s the engine.
+
+**The list of them is a claim rather than a guess.** It is every name
+`runtime/*.c` passes to `getenv` — `PASCOV_BRANCHES`, `PASCOV_LINES`,
+`PASHEAP_BALANCE` and `SOURCE_DATE_EPOCH` — and the gate compares the two sets
+in both directions. A fifth added to the runtime without the adapter is a
+variable that silently stops arriving on this target, which shows up as a
+*wrong answer* and not a failure; that already happened once, and the check is
+what stops it happening quietly.
+
+The row about the non-local goto is unchanged and is still the engine's:
+neither implements the exception-handling proposal that SjLj lowers into.

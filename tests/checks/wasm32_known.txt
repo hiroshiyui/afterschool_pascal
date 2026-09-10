@@ -132,9 +132,10 @@ tests/dialect/foreign_slice.pas
 #
 # **The compiler emits this correctly and the runner cannot run it.** A
 # `goto` out of a procedure lowers through LLVM's SjLj on this target, which
-# emits a wasm *tag* -- the exception-handling proposal -- and wazero answers
-# `tag section not supported as feature "exception-handling" is disabled`. A
-# runtime that implements the proposal runs it; that is a fact about which
+# emits a wasm *tag* -- the exception-handling proposal -- and neither engine
+# tried here implements it: wasmedge refuses the module and wazero answers
+# `tag section not supported as feature "exception-handling" is disabled`. An
+# engine that implements the proposal runs it; that is a fact about which
 # `.wasm` engine is installed, and the gate names the one it used in its
 # summary line so a reader can tell this row from a defect.
 tests/goto_nonlocal.pas
