@@ -48,6 +48,20 @@ doc/roadmap.md | ctest           | the suite is (\d+) cases green
 # out of scope on purpose -- history says what was found then. README's
 # sentence above is the live one.
 
+# **These three rows named `target-layout` first and that was wrong**, which
+# CI found on clang 19 and this machine could not: `target-layout` abstains
+# for a target whose layout this clang disagrees about, so on trixie and on
+# Ubuntu it compares *six* and says six, while the documents correctly say
+# seven targets are admitted. The two numbers answer different questions --
+# how many exist, and how many could be compared here -- and a row that holds
+# one against the other is red on exactly the machines where the abstention is
+# working as designed. `setjmp-arity` states `N of 7 admitted target(s)`, and
+# the 7 there comes from the compiler's own `--target=` refusal rather than
+# from what clang can do, so it is the same question the sentences ask.
+# **The lesson is the row's, not the gate's**: choosing what to watch means
+# choosing a gate that answers the sentence's question, and a gate that
+# abstains honestly is the one most likely to expose a mismatched pairing.
+
 # **The admitted-target count went stale in two documents at once** on
 # 2026-09-10 -- `doc/glossary.md` said five and `doc/implementation-defined.md`
 # said six, where `--target=` had admitted seven. Neither was watched, and the
@@ -56,9 +70,9 @@ doc/roadmap.md | ctest           | the suite is (\d+) cases green
 # compiler's own refusal and prints how many it compared, so these three rows
 # are that number held against the three live sentences that quote it. A record
 # quoting it stays out of scope -- an ADR says what was true then.
-doc/glossary.md               | target-layout | ADR-0325\)\. There are \*\*(seven)\*\*
-doc/implementation-defined.md | target-layout | is one of the (seven)\s+targets
-README.md                     | target-layout | Five of the (seven) are POSIX
+doc/glossary.md               | setjmp-arity | ADR-0325\)\. There are \*\*(seven)\*\*
+doc/implementation-defined.md | setjmp-arity | is one of the (seven)\s+targets
+README.md                     | setjmp-arity | Five of the (seven) are POSIX
 
 # The frames `target-layout` actually compared, which moves whenever a target
 # joins the LP64 class or a frame is added to the corpus -- and it moved on the
