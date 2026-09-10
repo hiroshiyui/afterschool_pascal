@@ -15,6 +15,14 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A sixth target: `--target=wasm32-wasi`** (ADR-0383), also spelled
+  `wasm32-unknown-wasi` and `wasm32-wasip1`. The emitted module states
+  WebAssembly's layout and triple, and `clang` assembles it into a `.wasm`
+  object. What this does **not** yet do is link a program: the runtime does
+  not build for the target, and `runtime-nonposix` says how far away that is —
+  two of its four translation units compile, one wants five headers wasi has
+  not got, and one wants threads the target does not have.
+
 - **A text-mode editor**, `tui/apide.pas`, in Turbo Pascal's mould and written
   in this language: open, edit, save, and Ctrl-B to compile with the cursor
   landing on the first diagnostic. Build it with

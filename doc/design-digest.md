@@ -152,7 +152,23 @@ own exception and compare by length instead.
   case and the runtime's only preprocessor conditional — five targets, every
   one POSIX, and `_setjmp` back to one shape. What survives is the
   *mechanism*: the gate still compares each target against its own header, so
-  a sixth that disagrees is caught rather than admitted.
+  a sixth that disagrees is caught rather than admitted. **The sixth is
+  `wasm32-wasi`** (ADR-0383) and it agrees — wasi declares `setjmp` as a
+  function with `_setjmp` beside it, Darwin's shape and not glibc's, at arity
+  1 — but only once the gate is given the sysroot and the SjLj flag, without
+  which the target reported *no headers here* and was silently not compared.
+- **A word size does not decide a layout** (ADR-0383). `WordAlign` answered
+  two questions from ADR-0325 to ADR-0382 — what a pointer aligns to, and what
+  an eight-byte datum aligns to — because i386 was the only ILP32 target and
+  answers 4 to both. wasm32 is ILP32 with `i64:64`, so `WideAlign` came out of
+  it: `tyPointer` follows the word and `tyInt64`, `tyReal`, `tyFile` and
+  `tyHandle` follow the datum. `target-layout`'s claim 2 reported the four
+  wrong numbers on the first run the target was admitted, which is what that
+  claim was built for; `tests/dumps/target_wasm32.dump` is the golden beside
+  it, and reads as i386's twin with `wi64`, `wreal` and `wfile` moved. The
+  gate's claim 1 then had to stop classing by word size — it put the two
+  32-bit targets together and called 337 correct offsets a divergence — and
+  classes by the compiler's whole layout answer instead, derived per run.
 - **A type's storage is a fact about the source program** (ADR-0287), so the
   layout arithmetic lives in ApFront and not in CodeGen, and a size is an
   `int64`. It answered a Pascal `integer` until a channel of an 8 GB element

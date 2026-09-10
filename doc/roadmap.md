@@ -25,11 +25,11 @@ headline: a command injection in the language server found, closed, audited
 and audited again (ADR-0362 – ADR-0364), a TOML library and the project reader
 rewritten over it (ADR-0360, ADR-0361) — none of it a change to the language.
 The compiler builds itself, stage 2 equals stage 3 in every
-program-component, and the suite is 917 cases green at `-O2` and at `-O0`.
+program-component, and the suite is 918 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380): every target this compiler names is POSIX, and what was measured about Windows is in history rather than deleted |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383), which is the compiler emitting for it and not a program running — the runtime is two translation units short |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
@@ -247,11 +247,26 @@ since ADR-0375. **Everything else is unsupported and open to contributors** —
 FreeBSD, OpenBSD, NetBSD, Haiku and Windows — with `README.md`'s *Platform
 tiers* saying what a port starts from.
 
-**Every target this compiler names is POSIX, since 2026-09-10** (ADR-0380).
-Windows was admitted on a measurement and deferred on one, and is now dropped:
-the row that carried its measurements is
+**Windows is dropped, since 2026-09-10** (ADR-0380). It was admitted on a
+measurement and deferred on one; the row that carried its measurements is
 [in history](history.md#windows-measured-and-then-dropped), where a
 contributor who wants it starts from a page of findings rather than nothing.
+
+**And the sixth target is `wasm32-wasi`, admitted the same day** (ADR-0383) —
+the first this compiler names that is not POSIX and not a machine. What it
+means is the front half of a toolchain: the emitted module states
+WebAssembly's layout and clang assembles it into a `.wasm` object. What it does
+not mean is a program, because the runtime does not build for the target yet.
+`runtime-nonposix` is the measurement and it is two units short — five headers
+wasi has not got, and threads it has not got either. Admitting it paid for
+itself immediately: `target-layout` reported four wrong numbers, `WordAlign`
+having answered two questions that i386 gave one answer to.
+
+| Target | What a wasm port still needs |
+| --- | --- |
+| **the runtime** | `pasrt_posix.c` over wasi's own interfaces, or a build that ships neither `PasProcess` nor `PasNet`; `pasrt_task.c` needs the threads proposal, so AP 6.4.16 and AP 6.9.3.12 are what a first port gives up |
+| **the driver** | `tools/pascalcc` links with `clang`, and `-pthread`, `-fPIC` and `wasm-ld`'s own `undefined symbol:` spelling are what a wasm link would differ in |
+| **a runner** | every harness executes what it built; a `.wasm` needs `wasmtime` or `node`, and the two scratch argv paths need preopened directories |
 
 **What is left** is small and specific:
 

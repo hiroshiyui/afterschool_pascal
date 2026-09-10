@@ -379,8 +379,12 @@ M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
 by default, then `aarch64-linux-gnu`, `i386-pc-linux-gnu`,
-`arm64-apple-macosx` and `x86_64-apple-macosx`. **Every one is POSIX**
-(ADR-0380).
+`arm64-apple-macosx`, `x86_64-apple-macosx` and — since ADR-0383 —
+`wasm32-wasi`, which is not a machine at all. Five of the six are POSIX
+(ADR-0380); the sixth is the one this project is aiming at, and what admitting
+it means is that the compiler lays it out correctly and clang assembles what it
+emits, **not** that a program links: the runtime does not build for it yet, and
+ADR-0382 measures how far away that is.
 `pascalcc` hands it to `clang` as well, so with a cross toolchain installed it
 cross-compiles:
 
@@ -468,16 +472,15 @@ the point of the machinery below:
   the commands that build and run a Windows program end to end; ADR-0380 is
   the decision that followed them.
 
-**The shape of a port, measured against `wasm32-wasi`:**
-`runtime/pasrt_unicode.c` compiles, which is the whole of the text model, and
-it is the only unit of the four that does. `runtime/pasrt_task.c` is blocked
+**The shape of a port, measured against `wasm32-wasi`:** two units of the four
+compile. `runtime/pasrt_unicode.c` is the whole of the text model, and
+`runtime/pasrt.c` is the language itself — the traps, the file model, the
+string arena and the non-local goto's jump. `runtime/pasrt_task.c` is blocked
 on **threads**: wasm32-wasi without the threads proposal cannot create one,
 and wasi-libc says so from its own header, so AP 6.4.16's channels and AP
 6.9.3.12's tasks are what a port on this target gives up — the whole facility
-rather than a header. `runtime/pasrt.c` is blocked on **`_longjmp`**, which POSIX declares and
-neither of the two non-POSIX targets measured here does; that one name is what
-stands between this runtime and a port, and the catalogue says what it would
-cost. `runtime/pasrt_posix.c` wants five of the seventeen headers it names:
+rather than a header.
+`runtime/pasrt_posix.c` wants five of the seventeen headers it names:
 `<netdb.h>`, `<spawn.h>`, `<sys/wait.h>`, `<signal.h>` and `<termios.h>` — so
 there are no processes, no terminal and no name resolution, while sockets are
 *half* there, wasi having an interface of its own. The directory walk, the
@@ -493,12 +496,15 @@ emulated TLS the emitted module's native TLS cannot link against; and
 it, so the non-local goto faulted. Both are in `doc/history.md` with the rest
 of that measurement.
 
-**And one finding is about every non-POSIX target, not one of them**: the
-non-local goto reaches its jump through `_longjmp`, which POSIX declares and
-neither mingw-w64 nor wasi-libc does. ADR-0373 answered it with the runtime's
-only preprocessor conditional and ADR-0380 removed that with the platform; a
-port pays for it either with the conditional again or with the jump emitted by
-the compiler, where `_setjmp` already is.
+**And one finding is about the gate rather than about a target** (ADR-0383).
+`_longjmp` was reported missing on wasi and recorded as the second non-POSIX
+target in a row to lack it, which made the non-local goto look like this
+runtime's one portability question. wasi-libc declares both `_setjmp` and
+`_longjmp`, behind `_XOPEN_SOURCE`; what hid them was this gate compiling with
+`-std=c11` where CMake builds the runtime with `-std=gnu11`. mingw-w64 really
+did lack them — which is why one true measurement looked like confirmation of
+a false one, and is worth remembering: **two measurements agreeing is not two
+measurements** when the same instrument is misconfigured for both.
 
 **What a port must not do** is weaken what holds elsewhere. Every gate in
 `doc/sop.md` fails in both directions, and a platform difference belongs in a
@@ -2754,7 +2760,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 917 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 918 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,
