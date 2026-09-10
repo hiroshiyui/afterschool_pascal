@@ -169,31 +169,44 @@ def catalogued():
                              "Grapheme_Cluster_Break value"
                              % (CATALOGUE.name, name))
             causes[cause] = set(rest)
-    for want in ("cluster", "jamo", "ambiguous", "filler"):
+    for want in ("cluster", "jamo", "mark", "ambiguous", "filler"):
         if want not in causes:
             sys.exit("wcwidth: %s has no `%s` cause, and the check below "
                      "names it" % (CATALOGUE.name, want))
-    if len(ranges) < 100:
+    if len(ranges) < 300:
         sys.exit("wcwidth: %s has %d code-point range(s), which is too few "
-                 "to be UAX #11's Ambiguous set -- a class with no members "
-                 "excuses nothing and hides everything"
+                 "to be UAX #11's Ambiguous set beside the spacing marks -- a "
+                 "class with no members excuses nothing and hides everything"
                  % (CATALOGUE.name, len(ranges)))
     return causes, named, ranges
 
 
-def write_ambiguous():
-    """Rewrite the catalogue's Ambiguous ranges from the pinned database.
+def write_classes():
+    """Rewrite the `mark` and `ambiguous` ranges from the pinned database.
 
-    The set moves with the Unicode version, and the database is fetched and
+    Both sets move with the Unicode version, and the database is fetched and
     never committed (ADR-0189), so this is a step a *refresh* takes and not
     something the gate can do for itself on a machine that has no UCD.
     """
-    ucd = ROOT / "runtime" / "unicode" / "ucd" / "EastAsianWidth.txt"
-    if not ucd.is_file():
-        sys.exit("wcwidth: %s is not there; runtime/unicode/fetch.py puts it "
-                 "in place" % ucd)
-    rows = []
-    for line in ucd.read_text(encoding="utf-8").splitlines():
+    ucd = ROOT / "runtime" / "unicode" / "ucd"
+    eaw, udata = ucd / "EastAsianWidth.txt", ucd / "UnicodeData.txt"
+    for f in (eaw, udata):
+        if not f.is_file():
+            sys.exit("wcwidth: %s is not there; runtime/unicode/fetch.py puts "
+                     "it in place" % f)
+
+    def coalesce(rows):
+        rows.sort()
+        out = []
+        for lo, hi in rows:
+            if out and out[-1][1] + 1 == lo:
+                out[-1][1] = hi
+            else:
+                out.append([lo, hi])
+        return out
+
+    amb = []
+    for line in eaw.read_text(encoding="utf-8").splitlines():
         line = line.split("#")[0].strip()
         if not line:
             continue
@@ -201,26 +214,49 @@ def write_ambiguous():
         if value.split()[0] != "A":
             continue
         ends = span.split("..")
-        rows.append([int(ends[0], 16), int(ends[-1], 16)])
-    rows.sort()
-    runs = []
-    for lo, hi in rows:
-        if runs and runs[-1][1] + 1 == lo:
-            runs[-1][1] = hi
-        else:
-            runs.append([lo, hi])
+        amb.append([int(ends[0], 16), int(ends[-1], 16)])
+
+    # A `<..., First>` line and the `<..., Last>` after it are one range, the
+    # way `runtime/unicode/generate.py` reads the same file.
+    mc, first = [], None
+    for line in udata.read_text(encoding="utf-8").splitlines():
+        f = line.split(";")
+        cp = int(f[0], 16)
+        if f[1].endswith(", First>"):
+            first = (cp, f[2])
+            continue
+        if f[1].endswith(", Last>"):
+            if first[1] == "Mc":
+                mc.append([first[0], cp])
+            first = None
+            continue
+        if f[2] == "Mc":
+            mc.append([cp, cp])
+
+    amb, mc = coalesce(amb), coalesce(mc)
+    # Anchored on a line start: the word `mark` also appears in the prose
+    # above, and cutting there once ate half the catalogue's explanation.
     text = CATALOGUE.read_text()
-    head = text[:text.index("ambiguous ")]
-    CATALOGUE.write_text(head + "".join("ambiguous %04X %04X\n" % (lo, hi)
-                                        for lo, hi in runs))
-    print("wcwidth: wrote %d Ambiguous range(s) to %s"
-          % (len(runs), CATALOGUE.name))
+    lines = text.splitlines(True)
+    for n, line in enumerate(lines):
+        if line.startswith("mark ") or line.startswith("ambiguous "):
+            break
+    else:
+        sys.exit("wcwidth: %s has no generated ranges to replace"
+                 % CATALOGUE.name)
+    head = "".join(lines[:n])
+    CATALOGUE.write_text(
+        head
+        + "".join("mark %04X %04X\n" % (lo, hi) for lo, hi in mc)
+        + "".join("ambiguous %04X %04X\n" % (lo, hi) for lo, hi in amb))
+    print("wcwidth: wrote %d spacing-mark and %d Ambiguous range(s) to %s"
+          % (len(mc), len(amb), CATALOGUE.name))
     return 0
 
 
 def main():
-    if "--write-ambiguous" in sys.argv[1:]:
-        return write_ambiguous()
+    if "--write-classes" in sys.argv[1:]:
+        return write_classes()
     cc = os.environ.get("CC", "clang")
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)

@@ -31,15 +31,23 @@ point.** Every disagreement must fall into one, and one that falls into none
 is the transcription error the gate exists to find. Four:
 
 - **cluster** — a code point that is not a base of its own: a control, a
-  format character, a combining mark, a joiner, a prepended sign. Selected by
+  format character, a non-spacing mark, a joiner, a prepended sign. Selected by
   `Grapheme_Cluster_Break`, which the committed header already carries for
   segmentation. A library measuring code points must answer for these with no
   cluster to hang the answer on, and libraries answer differently.
+- **mark** — General_Category is Mc, a *spacing* combining mark, which
+  AP 6.4.15.13 b) gives one cell and the C library on macOS gives none. **A
+  class of its own and not part of `cluster`**, and that is CI's second
+  correction rather than a design: UAX #29 does not put every Mc in
+  SpacingMark — the Myanmar marks are Other — so the break classes alone still
+  failed there. The 193 ranges are written out.
 - **jamo** — a conjoining Hangul jamo, where **the two agree about every text
   and disagree about every code point**. Also a break class, and the same one
   the clause's own unit is defined in terms of.
 - **ambiguous** — East_Asian_Width is Ambiguous, and the 179 ranges are
-  written out.
+  written out. Box-drawing is in it, which is worth knowing: a terminal
+  configured for East Asian text draws `─` two cells wide, and that is not a
+  defect in anybody's table.
 - **filler** — U+3164 and U+FFA0, named, because their break value is Other
   and a rule over two code points hides them.
 
@@ -51,16 +59,27 @@ precisely the error the gate is for. Mutating the committed table so
 `{0x3250, 0xA48C}` measures one cell is caught now and would have passed
 before.
 
-**A floor of 100 ranges** on that set, so the class cannot come to excuse
-everything by being empty.
+**A floor of 300 ranges** over the two generated sets, so neither class can
+come to excuse everything by being empty.
+
+**`--write-classes` regenerates both** from the pinned database, which is a
+step a *refresh* takes: the UCD is fetched and never committed.
 
 ## Consequences
 
 **The gate is machine-independent and was proved so before being committed
-again**, by replaying the comparison against a synthesised table with every
-spacing mark at zero — the shape that broke it — and against tables that
-mis-measure a Latin letter and a CJK ideograph. The first passes; the other
-two fail.
+again** — after being *insufficiently* proved so once. Nine synthesised C
+libraries are replayed against it: one giving every spacing mark no cell (the
+macOS shape), one giving every zero-width character a cell, one widening every
+Ambiguous, one zeroing every jamo — all four pass; and tables that mis-measure
+a Latin letter, a CJK ideograph, or every Wide code point — all fail, naming
+the first code point they got wrong.
+
+**A disagreement in no class is a failure and not a report**, which makes this
+gate hostage to a libc quirk nobody has met yet. That is deliberate and is
+`fpc-differential`'s bargain: a new quirk earns a new cause with an
+explanation, which is the thing worth having, and a gate that only reported
+would have found neither of the two errors this one found in a day.
 
 **A cause with no members on this machine is reported and not a failure.**
 Two libraries decide these differently, so a cause that is idle here is one

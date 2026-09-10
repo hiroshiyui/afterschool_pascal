@@ -5125,15 +5125,21 @@ sixteen ranges, passed on the machine that generated it, and failed on macOS
 and ubuntu:24.04. A range list is a fact about *one* libc's table.
 `fpc-differential` may enumerate because Free Pascal is absent or present; a
 libc is always present and never the same one, so what can be written down
-is the *reason* two implementations are allowed to differ. Four causes,
-three of them read off the `pas_u_gcb` table the header already carries for
-segmentation. Ambiguous is 179 **ranges** rather than the rule *one against
+is the *reason* two implementations are allowed to differ. Five causes, two of
+them read off the `pas_u_gcb` table the header already carries for
+segmentation, two written out as ranges generated from the database, and two
+named code points. **Spacing marks are a class of their own**, which is CI's
+second correction of this gate in a day: UAX #29 does not put every Mc in
+SpacingMark -- the Myanmar ones are Other -- so the break classes alone still
+failed on macOS. Ambiguous is 179 **ranges** rather than the rule *one against
 two*, which would also have excused a generator that made every Wide code
 point one cell -- mutating the committed table so the CJK range measures one
 is caught now and would have passed before. Floors on both: 100 000 code
 points compared, because glibc answers -1 outside the locale's charmap and
-the `C` locale would agree with everything it never looked at, and 100
-ranges, so the Ambiguous class cannot excuse everything by being empty.
+the `C` locale would agree with everything it never looked at, and 300
+generated ranges, so neither range class can excuse everything by being
+empty. Nine synthesised C libraries are replayed against it before it is
+trusted, four that must pass and five that must fail.
 
 **The Hangul rows are evidence and not only disagreement.** `wcwidth` is
 per code point and gives a leading jamo two cells and a medial none;
