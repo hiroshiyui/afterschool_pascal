@@ -69,6 +69,12 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PASCALC = os.environ.get("PASCALC", os.path.join(ROOT, "build", "bin", "pascalc"))
+
+# How many admitted targets must actually be compared. Abstaining is right
+# where this machine's clang cannot answer, and a gate that abstains for
+# everything prints a clean line having asked nothing -- so the floor, and it
+# is set to what the oldest runner here can answer for.
+COMPARE_FLOOR = 4
 CLANG = os.environ.get("APASCAL_CLANG", "clang")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -135,11 +141,47 @@ def datalayout_of(target):
     r = run([CLANG, "--target=" + target, "-x", "c", os.devnull,
              "-S", "-emit-llvm", "-o", "-"])
     if r.returncode != 0:
-        die("clang has no backend for %s:\n%s" % (target, r.stderr))
+        # **None and not a refusal** (ADR-0384). This died until wasm32 was
+        # admitted, and could: every target here was one any clang has. The
+        # macOS runner's clang has no WebAssembly backend at all -- *no
+        # available targets are compatible with triple* -- which is a fact
+        # about that machine and nothing about this compiler, and it turned
+        # the gate red on a runner that cannot answer.
+        return None
     for line in r.stdout.splitlines():
         if line.startswith("target datalayout"):
             return line
-    die("clang stated no datalayout for " + target)
+    return None
+
+
+def emitted_datalayout(target):
+    """The datalayout line *this compiler* writes for the target.
+
+    What claim 2 compares is the compiler's arithmetic against LLVM's for one
+    layout, so the two have to be talking about the same layout. They were, on
+    every target here, until wasm32: its datalayout has grown fields between
+    LLVM releases, and the aarch64 runner's clang names no `i128:128` for it,
+    so an i256 aligns to 8 there and to 16 here. That is not the compiler
+    disagreeing with LLVM -- it is two LLVMs disagreeing with each other, and
+    folding it into claim 2 reported four correct numbers as a defect."""
+    with tempfile.NamedTemporaryFile("w", suffix=".pas", delete=False) as f:
+        f.write("program d(output);\nbegin writeln(1) end.\n")
+        path = f.name
+    out = path + ".ll"
+    try:
+        r = run([PASCALC, "--target=" + target, path, "-o", out])
+        if r.returncode != 0 or not os.path.exists(out):
+            die("this compiler could not emit for %s, which it admits:\n%s"
+                % (target, r.stdout + r.stderr))
+        with open(out) as f:
+            for line in f:
+                if line.startswith("target datalayout"):
+                    return line.rstrip("\n")
+        die("this compiler stated no datalayout for " + target)
+    finally:
+        os.unlink(path)
+        if os.path.exists(out):
+            os.unlink(out)
 
 
 def top_level_fields(body):
@@ -392,7 +434,43 @@ def main():
             "layout gate that compares one target asserts nothing"
             % ", ".join(targets))
 
-    layouts = {t: datalayout_of(t) for t in targets}
+    # **A target this machine's clang cannot answer for is not compared, and
+    # the run says which** (ADR-0384) -- `setjmp-arity`'s rule, met here for
+    # the same reason one release later: a gate that fails where it cannot
+    # ask is one that reports about the machine. Two ways it cannot ask, and
+    # they are different: no backend for the triple, and a *different idea* of
+    # the triple's layout, which is what an older LLVM has for wasm32.
+    layouts, absent, disagree = {}, [], []
+    for t in targets:
+        dl = datalayout_of(t)
+        if dl is None:
+            absent.append(t)
+            continue
+        mine = emitted_datalayout(t)
+        if dl.strip() != mine.strip():
+            disagree.append((t, dl.strip(), mine.strip()))
+            continue
+        layouts[t] = dl
+    targets = [t for t in targets if t in layouts]
+    for t in absent:
+        print("target-layout: %-24s not compared -- this clang has no backend "
+              "for it" % t)
+    for t, theirs, mine in disagree:
+        print("target-layout: %-24s not compared -- this clang states a "
+              "different layout for it than the module does, so the two are "
+              "not talking about one target. **That is a real difference and "
+              "not only this gate's problem**: clang overrides the module's "
+              "line with its own for the --target= it is given (ADR-0156), so "
+              "on this machine a type whose alignment the two disagree about "
+              "is laid out one way by the compiler and another by the "
+              "assembler -- which is the ADR-0028 defect. What this target is "
+              "supported against is the layout below on the `module` line" % t)
+        print("           clang: " + theirs)
+        print("          module: " + mine)
+    if len(targets) < COMPARE_FLOOR:
+        die("only %d of the admitted target(s) could be compared and the "
+            "floor is %d -- a layout gate that abstains for almost everything "
+            "asserts nothing (ADR-0282)" % (len(targets), COMPARE_FLOOR))
 
     # Claim 2 first: it is cheap, it is the half ADR-0325 introduced, and a
     # target whose two varying numbers are wrong would make claim 1's classes
