@@ -33,8 +33,32 @@ appears below in the release where it still existed.
   decoded and reported by number (`F5 is not bound`) rather than ignored. The
   hint bar now reads `F2 Save  F9 Build  …`.
 
+### Added
+- **`PasTerm.SetRgb`, twenty-four-bit colour** (ADR-0394). SGR's direct
+  `38;2;r;g;b` form over an `Octet` subrange, beside the eight ANSI colours
+  the module has had. It has no `clDefault` and cannot — the terminal's own
+  colour has no numeric value to name — so a program drawing a document still
+  writes `SetColour(clDefault, clDefault)` and leaves the person's own colours
+  alone. Whether a terminal understands the form is the caller's policy: there
+  is no query one lacking it answers safely, and `COLORTERM` is what emulators
+  set.
+- **The editor draws a published palette where the terminal can show it**
+  (ADR-0394). `apide` reads `COLORTERM` once and keeps two tables: the eight
+  ANSI colours for every terminal, and five colours of the *LUXE* scheme for
+  one that says it understands twenty-four bits. Five of ten is the finding
+  rather than a compromise — the scheme's rose, khaki, slate, blue and
+  vermilion reach at best 6.7:1 against anything else in it, and every cell of
+  a text editor is text. Both tables are held to the same floor.
+
 ### Fixed
 - **The editor's colour is legible, and a role that nothing draws now fails a gate** (ADR-0393). A drop-down's body was cyan on blue, which is 4.8:1 on xterm's own palette and worse on a muted theme, and the message line was yellow on the terminal's own background, which on a light terminal is yellow on white. Every role but the document's text now pairs black or white with a colour, at 7.5:1 or better. And a dialog's answer is drawn as a **field** again: `crPrompt` — *the editor is waiting for you* — had been declared, coloured and drawn on no screen since the prompts became boxes, with all fifteen session goldens agreeing. The new `tui-palette` case holds both claims in both directions.
+- **A menu that was legible and indistinguishable** (ADR-0394). The fix above
+  put the selected menu title at black on white against a black-on-cyan bar:
+  16.7:1 to read and 1.6:1 away from the four titles beside it, so nothing
+  said which menu was open. A contrast floor cannot see that — both pairs pass
+  it — so `tui-palette` now also requires two regions a person sees at once to
+  differ in their **backgrounds** by 3:1, and the three bars along the bottom
+  were rechosen together.
 
 ### Changed
 - **The editor is `apide`, and that is now its only name.** v3.9.0 installed

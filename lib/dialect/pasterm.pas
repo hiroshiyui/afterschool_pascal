@@ -64,13 +64,14 @@
 
 module PasTerm;
 
-export PasTerm = (SeqMax, TermSeq, Colour,
+export PasTerm = (SeqMax, TermSeq, Colour, Octet,
                   clDefault, clBlack, clRed, clGreen, clYellow,
                   clBlue, clMagenta, clCyan, clWhite,
                   IsTerminal, TermSize, EnterRaw, LeaveRaw, RawActive,
                   ReadKey,
                   CursorTo, ClearScreen, ClearLine, HideCursor, ShowCursor,
-                  EnterScreen, LeaveScreen, SetColour, ResetColour);
+                  EnterScreen, LeaveScreen, SetColour, SetRgb,
+                  ResetColour);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part.
   `PasIO` supplies the descriptors and the one read: a key is a byte off a
@@ -80,10 +81,14 @@ import PasError;
        PasIO;
 
 const
-  { The longest sequence below is six characters, and a cursor address with two
-    four-figure coordinates is twelve. Twenty-four is room for both and for
-    whatever a caller concatenates onto one. }
-  SeqMax = 24;
+  { The longest sequence below **is** `SetRgb`'s, at thirty-six characters:
+    two `38;2;255;255;255` groups, the separator between them, `ESC [` and the
+    `m`. A cursor address with two four-figure coordinates is twelve and every
+    other sequence here is six. Forty-eight is room for the longest and for
+    whatever a caller concatenates onto one -- it was twenty-four until
+    ADR-0394 added the twenty-four-bit form, which is the only sequence in this
+    module that is not a handful of bytes. }
+  SeqMax = 48;
 
   { The eight ANSI colours and a ninth that is not one: `clDefault` means
     *whatever this terminal started with*, which is what SGR 39 and 49 select
@@ -122,6 +127,13 @@ type
     terminal reads as something else. 6.4.2.4's own mechanism, and the trap it
     carries is this module's whole validation of the argument. }
   Colour = clBlack..clDefault;
+
+  { One channel of a twenty-four-bit colour, and a subrange for `Colour`'s
+    reason: a caller handing `SetRgb` a number that is not a channel is
+    refused where it is written. SGR's extended form spells each channel as a
+    decimal parameter, so a value outside 0..255 is not a colour a terminal
+    can be asked for -- it is a parameter it will read as something else. }
+  Octet = 0..255;
 
 { Whether this descriptor is a terminal. A question about the world, and so a
   `boolean` (lib/dialect/README.md): `isatty` fails exactly when the answer is
@@ -239,6 +251,27 @@ function LeaveScreen = s: TermSeq;
   has had since the 1970s, and the wider ones are a caller's `writestr` away
   from this module's shape without being in its interface. }
 function SetColour(fg: Colour; bg: Colour) = s: TermSeq;
+
+{ **The same question in twenty-four bits** (ADR-0394). SGR 38 and 48 are the
+  extended-colour introducers, and `38;2;r;g;b` is the direct form -- so this
+  is `SetColour`'s sequence with the eight-colour table replaced by three
+  channels each, and it is one call for the same reason: a redraw writes one
+  of these per region.
+
+  **There is no `clDefault` here and there cannot be**, the terminal's own
+  colour having no numeric value to name. A caller that wants a region left as
+  the terminal started it writes `SetColour(clDefault, clDefault)`, which is
+  what a program drawing a *document* should do -- painting text the person
+  reads is overriding a choice they made.
+
+  **Whether a terminal understands it is not this module's question**, and
+  there is no reliable way to ask one: a terminal that does not support the
+  direct form may ignore the sequence, approximate it, or take the parameters
+  as something else. What a caller has is `COLORTERM`, which a terminal
+  emulator sets to `truecolor` or `24bit` when it means this, and a fallback
+  to `SetColour` when it does not -- which is a caller's policy and not a
+  service this module should invent. }
+function SetRgb(fr, fg, fb, br, bg, bb: Octet) = s: TermSeq;
 
 { Back to how the terminal was, which a program writes at the end of every
   region it coloured.
@@ -405,6 +438,17 @@ begin
     caller writing them separately would write twice as many bytes for the
     same result and a redraw writes one of these per region. }
   writestr(s, chr(Esc), '[', Sgr(30, fg):1, ';', Sgr(40, bg):1, 'm')
+end;
+
+function SetRgb;
+begin
+  { 38 and 48 are the introducers the constants above warn about -- the whole
+    reason `clDefault` is numbered 8 and not 9 is that a caller must not be
+    able to emit a bare 38 from the eight-colour table and have the terminal
+    swallow what follows. Here the introducer is deliberate and the `2` says
+    *three channels follow*. }
+  writestr(s, chr(Esc), '[38;2;', fr:1, ';', fg:1, ';', fb:1,
+              ';48;2;', br:1, ';', bg:1, ';', bb:1, 'm')
 end;
 
 function ResetColour;

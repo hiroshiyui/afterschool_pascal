@@ -5110,6 +5110,41 @@ without it is the mutation that puts the field back to `crFrame` **and
 regenerates the goldens**, after which `tui-sessions` passes and
 `tui-palette` does not.
 
+**The palette a terminal can show** (ADR-0394). `PasTerm` had eight
+colours by decision, on the grounds that a small palette every terminal has
+had since the 1970s is what tells one region of a screen from another. That
+is right about the chrome and is not an argument against a program naming a
+colour it means, so `SetRgb` puts SGR's direct `38;2;r;g;b` form beside
+`SetColour` over an `Octet` subrange, and `SeqMax` goes to 48 for the
+thirty-six characters that form takes. It has **no `clDefault` and cannot**:
+the terminal's own colour has no numeric value, which is the one place that
+absence is load-bearing — a program drawing a document leaves the person's
+colours alone, and `PutRow` routes `crText` through `SetColour` however
+capable the terminal is.
+
+**Whether the terminal understands it is the caller's policy.** No query a
+terminal lacking the form answers safely exists, so `apide` reads
+`COLORTERM` once and keeps two tables, both held to ADR-0393's floor — a
+fallback nobody looks at is exactly where an unreadable pair survives.
+
+**Five of the ten colours of the scheme are used, and that is the finding.**
+Its middle — rose, khaki, slate, blue and the vermilion accent — reaches
+6.7:1 at best against anything else in it, and every cell of a text editor
+is text, so what is left is the two ends: three lights to separate the bars
+and two darks to reverse out of them, which is what a screen of chrome
+wants.
+
+**And legible is not the same as distinguishable**, which ADR-0393 shipped
+the proof of. It moved the selected menu title to black on white — 16.7:1
+to read — against a black-on-cyan bar whose background is 1.6:1 away, so
+nothing on the screen said which menu was open, and a contrast floor cannot
+see it because both pairs clear it. `tui-palette` now requires two regions
+seen at once to differ in their **backgrounds** by 3:1, in both tables. The
+co-visible set is **pairs and not sets**, measured rather than tidy: with an
+extreme on one side of every pairing, no three of the eight ANSI colours are
+mutually 3:1 apart, so what is required is what a person compares — each
+bar against the bar touching it.
+
 **`ncurses` was declined, and the record says why** (ADR-0389): it owns the
 screen and the terminal, so drawing through it makes the drawing no longer a
 value anything can diff — ADR-0262's argument against a pseudo-terminal

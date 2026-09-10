@@ -111,6 +111,15 @@ begin
   writeln('red on blue: ', Shown(SetColour(clRed, clBlue)));
   writeln('default fg:  ', Shown(SetColour(clDefault, clBlack)));
   writeln('both default:', Shown(SetColour(clDefault, clDefault)));
+  { And the twenty-four-bit form (ADR-0394), where a wrong byte is invisible
+    for the same reason one octave up: 38 and 48 are SGR's *introducers*, so a
+    slip that writes 38 where it meant 48 does not produce a wrong colour --
+    it produces a sequence the terminal reads as the start of something
+    longer, and the parameters that follow are consumed as its arguments. The
+    boundary values are here because each channel is a separate parameter and
+    a zero is the one that looks like an omission. }
+  writeln('rgb:         ', Shown(SetRgb(245, 245, 244, 20, 46, 133)));
+  writeln('rgb bounds:  ', Shown(SetRgb(0, 0, 0, 255, 255, 255)));
   writeln('reset:       ', Shown(ResetColour));
 
   { A byte off the redirected input. Outside raw mode this is what `read`

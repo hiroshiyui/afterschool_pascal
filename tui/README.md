@@ -46,6 +46,25 @@ extreme* survives that. `crText` is exempt and has to be — the document is the
 terminal's own text in the terminal's own colours, and painting it would be
 this editor overriding a choice the person made.
 
+**There are two tables and the terminal picks** (ADR-0394). A terminal that
+sets `COLORTERM` to `truecolor` or `24bit` understands SGR's direct
+twenty-four-bit form and gets five colours of the *LUXE* scheme — `#DDC5B9`,
+`#F5F5F4`, `#E1D6D2`, `#142E85` and `#070B2F`; every other terminal gets the
+eight ANSI colours, which is what a plain `ssh`, a `screen` session and the
+Linux console have. Both tables are held to the same floor, because a fallback
+nobody looks at is exactly where an unreadable pair survives. **Five of the
+scheme's ten and not all of them**: its rose, khaki, slate, blue and vermilion
+reach 6.7:1 at best against anything else in it, and every cell here is text.
+
+**Legible is not the same as distinguishable**, and this project shipped the
+proof. ADR-0393 moved the selected menu title to black on white — 16.7:1 to
+read — against a black-on-cyan bar, whose background is 1.6:1 away from white,
+so nothing said which menu was open. The gate now also requires two regions
+seen at once to differ in their **backgrounds** by 3:1, which is written as
+*pairs* and not as sets: with an extreme on one side of every pairing, no
+three of the eight ANSI colours are mutually 3:1 apart, so what it asks is
+what a person actually compares — each bar against the bar touching it.
+
 Its other claim is that **every role is drawn by some session**, which is not
 a tidiness rule. `crPrompt` — the role meaning *the editor is waiting for
 you* — was declared, coloured, given a letter and drawn on no screen at all

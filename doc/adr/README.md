@@ -402,3 +402,4 @@ the alternatives that were rejected and why.
 | [0391](0391-a-screen-is-cells-and-a-panel-is-a-rectangle.md) | A screen is cells, and a panel is a rectangle | Accepted |
 | [0392](0392-a-question-is-a-box.md) | A question is a box | Accepted |
 | [0393](0393-a-role-nothing-draws-is-a-colour-nobody-sees.md) | A role nothing draws is a colour nobody sees | Accepted |
+| [0394](0394-the-palette-a-terminal-can-show.md) | The palette a terminal can show | Accepted |

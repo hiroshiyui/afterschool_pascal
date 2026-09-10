@@ -3,6 +3,7 @@
 ../lib/dialect/pasio.pas
 ../lib/passtrvec.pas
 ../lib/dialect/pasterm.pas
+../lib/dialect/pasenv.pas
 ../lib/pasfile.pas
 ../lib/dialect/pasparse.pas
 ../lib/dialect/pasprocess.pas

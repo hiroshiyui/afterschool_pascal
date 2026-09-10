@@ -57,6 +57,29 @@ EXTREMES = ('clBlack', 'clWhite')
 # that a pairing cannot drift below it without this failing.
 FLOOR = 7.0
 
+# WCAG 2.1's non-text threshold, applied to two *backgrounds* that a person
+# sees at once.  A pairing can be perfectly legible and still leave a screen
+# unusable: a menu title drawn black-on-white on a black-on-cyan bar is 16.7:1
+# to read and 1.6:1 away from the bar it is meant to stand out from, so
+# nothing tells you which menu is open.  That defect was written and shipped
+# between ADR-0393 and ADR-0394 and found by carrying the analysis further,
+# not by looking.
+APART = 3.0
+
+# Which roles a person sees at once and must be able to tell apart, as pairs
+# rather than as sets -- the three bars along the bottom are adjacent in the
+# order (message, status, hint), and the message and the hint have the status
+# between them, so requiring all three to differ from each other is a rule
+# the eight ANSI colours cannot satisfy at all.  Measured: with black or white
+# on one side of every pair, no three of the eight are mutually 3:1 apart.
+COVISIBLE = (
+    ('crMessage', 'crStatus'),    # the two lowest bars, one above the other
+    ('crStatus', 'crHint'),
+    ('crMenu', 'crChosen'),       # which menu is open
+    ('crFrame', 'crChosen'),      # which item in the drop-down
+    ('crFrame', 'crPrompt'),      # the field inside the dialog
+)
+
 
 def luminance(rgb):
     def chan(v):
@@ -95,7 +118,7 @@ def letters():
 
 
 def palette():
-    """The `RoleColour` arms, as {role: (fg, bg)}."""
+    """The `RoleColour` arms, as {role: (fg, bg)} of `cl` names."""
     src = (ROOT / 'tui' / 'apide.pas').read_text(encoding='utf-8')
     m = re.search(r'procedure RoleColour.*?\bcase\b(.*?)\n  end\b', src, re.S)
     if not m:
@@ -106,6 +129,52 @@ def palette():
             m.group(1)):
         out[role] = (fg, bg)
     return out
+
+
+def rgb_palette():
+    """The `RoleRgb` arms, as {role: (fg hex, bg hex)}.
+
+    The procedure assigns the commonest pair before the `case` and each arm
+    overrides what it differs in, which is how a language with no record
+    literal writes a table -- so the arms are read *in order* over a running
+    default, exactly as the program executes them.  An arm that is bare (`;`)
+    takes the default, and that is a value like any other: reading it as
+    "unset" would let the commonest pair in the table go unchecked.
+    """
+    src = (ROOT / 'tui' / 'apide.pas').read_text(encoding='utf-8')
+    m = re.search(r'procedure RoleRgb.*?\bbegin\b(.*?)\n  end\b', src, re.S)
+    if not m:
+        sys.exit('tui-palette: no RoleRgb dispatch in tui/apide.pas')
+    body = m.group(1)
+    head, _, arms = body.partition('case k of')
+
+    def channels(text):
+        got = {}
+        for var, val in re.findall(r'\b(f[rgb]|b[rgb])\s*:=\s*16#([0-9A-Fa-f]{2})',
+                                   text):
+            got[var] = val.upper()
+        return got
+
+    base = channels(head)
+    if len(base) != 6:
+        sys.exit('tui-palette: RoleRgb has no six-channel default before its '
+                 'case, so an arm that overrides nothing means nothing')
+    out = {}
+    for role, arm in re.findall(r'(cr\w+)\s*:\s*(begin.*?end|)\s*;', arms, re.S):
+        got = dict(base)
+        got.update(channels(arm))
+        out[role] = (got['fr'] + got['fg'] + got['fb'],
+                     got['br'] + got['bg'] + got['bb'])
+    return out
+
+
+def rgb_contrast(a, b):
+    def val(h):
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    la, lb = luminance(val(a)), luminance(val(b))
+    if la < lb:
+        la, lb = lb, la
+    return (la + 0.05) / (lb + 0.05)
 
 
 def drawn(known):
@@ -192,11 +261,61 @@ def main():
             print('tui-palette: ' + b)
         return 1
 
+    # Claim three: the twenty-four-bit table, held to the same floor.  A
+    # fallback nobody looks at is exactly where an unreadable pair survives,
+    # and this is the table most people will actually see.
+    rgb = rgb_palette()
+    rgb_ratios = []
+    for role in names:
+        if role == 'crText':
+            continue
+        if role not in rgb:
+            bad.append(f'{role} has no arm in tui/apide.pas RoleRgb')
+            continue
+        fg, bg = rgb[role]
+        r = rgb_contrast(fg, bg)
+        rgb_ratios.append((role, fg, bg, r))
+        if r < FLOOR:
+            bad.append(f'{role} is #{fg} on #{bg} at {r:.1f}:1 in RoleRgb, '
+                       f'under the {FLOOR:.0f}:1 floor')
+    for role in rgb:
+        if role not in names:
+            bad.append(f'RoleRgb names {role}, which is not a CellRole')
+
+    # Claim four: two regions a person sees at once are told apart by their
+    # backgrounds, in **both** tables.  Legible and indistinguishable is a
+    # real state and this project shipped it once.
+    for a, b in COVISIBLE:
+        if a in colours and b in colours:
+            fa, ba = colours[a]
+            fb, bb = colours[b]
+            if 'clDefault' not in (ba, bb):
+                r = contrast(ba, bb)
+                if r < APART:
+                    bad.append(f'{a} and {b} are seen at once and their '
+                               f'backgrounds are {ba} and {bb} at {r:.1f}:1, '
+                               f'under the {APART:.0f}:1 they must differ by')
+        if a in rgb and b in rgb:
+            r = rgb_contrast(rgb[a][1], rgb[b][1])
+            if r < APART:
+                bad.append(f'{a} and {b} are seen at once and their RoleRgb '
+                           f'backgrounds are #{rgb[a][1]} and #{rgb[b][1]} at '
+                           f'{r:.1f}:1, under the {APART:.0f}:1 they must '
+                           'differ by')
+
+    if bad:
+        for b in bad:
+            print('tui-palette: ' + b)
+        return 1
+
     worst = min(ratios, key=lambda t: t[3])
+    wrgb = min(rgb_ratios, key=lambda t: t[3])
     print(f'tui-palette: {len(names)} cell role(s), each drawn by a session '
-          f'and each legible; {len(ratios)} coloured pair(s) at '
-          f'{worst[3]:.1f}:1 or better ({worst[0]} is {worst[1]} on '
-          f'{worst[2]})')
+          f'and each legible; {len(ratios)} ANSI pair(s) at {worst[3]:.1f}:1 '
+          f'or better ({worst[0]} is {worst[1]} on {worst[2]}) and '
+          f'{len(rgb_ratios)} direct-colour pair(s) at {wrgb[3]:.1f}:1 or '
+          f'better ({wrgb[0]} is #{wrgb[1]} on #{wrgb[2]}); '
+          f'{len(COVISIBLE)} co-visible pair(s) told apart in both')
     return 0
 
 

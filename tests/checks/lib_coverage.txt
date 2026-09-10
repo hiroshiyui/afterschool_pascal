@@ -21,7 +21,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 386
-instrumented 3561
+instrumented 3562
 
 lib/dialect/pascontainer.pas 0/9
 lib/dialect/pasdir.pas 1/21
@@ -43,7 +43,7 @@ lib/dialect/pasprocess.pas 3/94
 lib/dialect/pasregex.pas 6/332
 lib/dialect/passortx.pas 0/0
 lib/dialect/passtream.pas 0/29
-lib/dialect/pasterm.pas 5/37
+lib/dialect/pasterm.pas 5/38
 lib/dialect/pastime.pas 2/147
 lib/dialect/pastls.pas 149/149
 lib/dialect/pastoml.pas 78/928

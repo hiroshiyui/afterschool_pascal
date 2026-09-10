@@ -35,6 +35,7 @@ import PasError;
        PasIO;
        PasStrVec;
        PasTerm;
+       PasEnv;
        PasFile;
        PasProcess;
        ApEdit;
@@ -56,6 +57,10 @@ var
   path: FilePath;
   rows, cols: integer;
   running, asked: boolean;
+  { Whether this terminal said it understands twenty-four-bit colour
+    (ADR-0394). Read once at start, because it is a property of the
+    terminal the program was given and cannot change under it. }
+  wide: boolean;
   e: ErrorCode;
 
 { One row of the drawing, put where it belongs and padded to the window's
@@ -67,10 +72,12 @@ var
   a preference. The scheme is Turbo Pascal's in spirit: the document plain,
   the chrome reversed out of it.
 
-  A row is one colour today because that is what the roles are; a row of mixed
-  roles is what a panel will bring, and `PutRow` will then break the row into
-  runs instead of taking the first cell's. It takes the first cell's *and says
-  so*, rather than pretending to be general. }
+  **There are two tables and the terminal picks** (ADR-0394). A terminal that
+  sets `COLORTERM` means it understands SGR's direct twenty-four-bit form, and
+  gets the palette named there; every other terminal gets the eight ANSI
+  colours, which every terminal has had since the 1970s. Both are held to the
+  same floor by `tui/palette.py`, because a fallback nobody looks at is
+  exactly where an unreadable pair survives. }
 { **Every role but the document pairs black or white with a colour, and
   never a colour with a colour** (ADR-0393). `PasTerm` offers the eight ANSI
   colours and no bright ones, and what a terminal makes of the eight is its
@@ -92,22 +99,81 @@ begin
     crText: begin fg := clDefault; bg := clDefault end;
     { The status line is what Turbo Pascal put in reverse video, and it is the
       one row a person looks at without meaning to. }
-    crStatus: begin fg := clBlack; bg := clCyan end;
+    crStatus: begin fg := clWhite; bg := clBlue end;
     crHint: begin fg := clBlack; bg := clWhite end;
-    { A message is the editor speaking and a question is the editor waiting.
-      They share a colour and never a screen -- a message is the row above the
-      status line and a question is a box in the middle -- so what tells them
-      apart is still the model, which is the whole reason it tells them
-      apart. }
+    { A message is the editor speaking and a question is the editor waiting,
+      so they do not look alike. A question also has to differ from the panel
+      it is *inside*, which is the constraint that put it on blue: the field
+      is reversed out of the frame around it. }
     crMessage: begin fg := clBlack; bg := clYellow end;
-    crPrompt: begin fg := clBlack; bg := clYellow end;
+    crPrompt: begin fg := clWhite; bg := clBlue end;
     { A panel is white on blue and the menu bar is black on cyan, so a
       drop-down is visibly *not* the bar it hangs from; the item under the
       cursor is plain reverse video, which is the one pairing that cannot be
       mistaken for either. }
-    crFrame: begin fg := clWhite; bg := clBlue end;
+    crFrame: begin fg := clBlack; bg := clCyan end;
     crMenu: begin fg := clBlack; bg := clCyan end;
-    crChosen: begin fg := clBlack; bg := clWhite end;
+    crChosen: begin fg := clWhite; bg := clBlue end;
+  end
+end;
+
+{ **The same eight roles in twenty-four bits** (ADR-0394), for a terminal that
+  says it understands them. The colours are five of a published ten-colour
+  scheme -- 1, 4, 7, 8 and 9 of *LUXE*, the beige-and-blue one -- and five and
+  not ten is the finding rather than a compromise: the scheme's middle, its
+  rose, khaki, slate, blue and vermilion, sit at luminances that cannot carry
+  text against anything else in it at 7:1. The best any of them manages is
+  6.7:1 and the accent's best is 4.9:1. **Every cell here is text**, so a
+  colour that cannot be read on is a colour this editor has no place for, and
+  saying that is more useful than using all ten badly.
+
+  What is left is the scheme's two ends, and they are exactly what a screen of
+  chrome wants: three lights to separate the bars and two darks to reverse out
+  of them. The worst pairing is 10.9:1.
+
+  There is no arm for `crText` and there cannot be one -- see `RoleColour`. }
+procedure RoleRgb(k: CellRole; var fr, fg, fb, br, bg, bb: Octet);
+begin
+  { Written as `Set(...)` would be if this language had a record literal. Six
+    var parameters is the shape `RoleColour` already has, one channel at a
+    time, and a record would be six assignments at every arm instead. }
+  fr := 16#07; fg := 16#0B; fb := 16#2F;      { #070B2F, the near-black navy }
+  br := 16#DD; bg := 16#C5; bb := 16#B9;      { #DDC5B9, the base beige }
+  case k of
+    { Never reached -- `PutRow` writes the document through `SetColour`. The
+      arm exists because a `case` over an enumeration that omits a constant
+      stops the program (ADR-0018), and the defaults above are what it would
+      get. }
+    crText: ;
+    { The three bars along the bottom, and they must differ from the row
+      *above* as well as be legible: #142E85 between #DDC5B9 and #F5F5F4 is
+      what keeps the message, the status and the hints from reading as one
+      band. }
+    crMessage: ;                                              { #070B2F on #DDC5B9 }
+    crStatus: begin
+      fr := 16#F5; fg := 16#F5; fb := 16#F4;
+      br := 16#14; bg := 16#2E; bb := 16#85                    { #F5F5F4 on #142E85 }
+    end;
+    crHint: begin
+      br := 16#E1; bg := 16#D6; bb := 16#D2                    { #070B2F on #E1D6D2 }
+    end;
+    { A dialog's field, reversed out of the panel it sits in. }
+    crPrompt: begin
+      fr := 16#F5; fg := 16#F5; fb := 16#F4;
+      br := 16#14; bg := 16#2E; bb := 16#85                    { #F5F5F4 on #142E85 }
+    end;
+    { A panel is the palest thing on the screen and a menu bar is the beige,
+      so a drop-down does not read as more of the bar it hangs from. }
+    crFrame: begin
+      br := 16#E1; bg := 16#D6; bb := 16#D2                    { #070B2F on #E1D6D2 }
+    end;
+    crMenu: ;                                                 { #070B2F on #DDC5B9 }
+    { ...and the item under the cursor is the dark, which is 11.6:1 clear of
+      the bar and 13.4:1 clear of the panel. }
+    crChosen: begin
+      fr := 16#F5; fg := 16#F5; fb := 16#F4;
+      br := 16#07; bg := 16#0B; bb := 16#2F                    { #F5F5F4 on #070B2F }
+    end;
   end
 end;
 
@@ -122,11 +188,21 @@ end;
 procedure PutRow(r: integer);
 var i, lo, hi, c: integer; out: IOLine; e2: ErrorCode;
     k: CellRole; fg, bg: Colour;
+    fr, fg2, fb, br, bg2, bb: Octet;
 begin
   for i := 1 to RowRuns(scr, r) do begin
     RowRun(scr, r, i, lo, hi, k);
-    RoleColour(k, fg, bg);
-    out := CursorTo(r, lo) + SetColour(fg, bg);
+    { The document is written through `SetColour` whatever the terminal can
+      do, `clDefault` being a colour only the eight-colour form can name and
+      the right answer for text a person is reading. }
+    if wide and (k <> crText) then begin
+      RoleRgb(k, fr, fg2, fb, br, bg2, bb);
+      out := CursorTo(r, lo) + SetRgb(fr, fg2, fb, br, bg2, bb)
+    end
+    else begin
+      RoleColour(k, fg, bg);
+      out := CursorTo(r, lo) + SetColour(fg, bg)
+    end;
     { A continuation cell is the null-string and contributes nothing, which
       is right: the terminal has already advanced past the wide cell that
       owns it. }
@@ -251,9 +327,17 @@ begin
   else if k.kind = kkQuit then running := false
 end;
 
-var c: char; k: Key; e2: ErrorCode; cmd: Key;
+var c: char; k: Key; e2: ErrorCode; cmd: Key; ct: EnvText;
 begin
   if argcount >= 1 then path := argument(1) else path := '';
+  { **`COLORTERM` is the only thing a terminal tells you about this**
+    (ADR-0394). There is no query for the direct twenty-four-bit form that a
+    terminal without it answers safely, so what is available is the variable
+    an emulator sets when it means it -- `truecolor` or `24bit` -- and the
+    eight-colour table for everything else. Read once: it is a property of
+    the terminal this program was handed. }
+  ct := LookupOr('COLORTERM', '');
+  wide := (ct = 'truecolor') or (ct = '24bit');
   EditInit(ed);
   DecodeInit(dec);
   { **No file is a new document and not a usage error.** It used to answer
