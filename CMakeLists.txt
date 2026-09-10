@@ -217,6 +217,49 @@ add_custom_command(
 add_custom_target(apconfig ALL DEPENDS ${APASCAL_APCONFIG})
 add_dependencies(apconfig pascalc pasrt)
 
+# ---- The editor ----
+#
+# **`afterschool` is the editor, and it is a binary a person types the name
+# of** (ADR-0381, ADR-0387). `tui/build.py` remains what builds it -- it reads
+# the `.components` sidecar and honours `AFTERSCHOOL_PASCAL_OPT`, which
+# ADR-0102 makes load-bearing for a program whose whole shape is a loop -- so
+# this target *drives* that script rather than repeating it, the way the
+# script's own header says the two halves divide.
+#
+# It is a target because of what the alternative costs a *user*: the editor is
+# the one program here written to be used rather than to be tested, and
+# `build.py` with three arguments and an output path they invent is a worse
+# front door than the one `pascalc` already has. The source stays `apide.pas`;
+# the binary is `afterschool`, which is the tree's own convention -- `pascalc`
+# comes from `selfhost/compiler.pas`.
+file(GLOB APASCAL_TUI_SOURCES ${CMAKE_SOURCE_DIR}/tui/*.pas)
+set(APASCAL_AFTERSCHOOL ${CMAKE_BINARY_DIR}/bin/afterschool)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+  add_custom_command(
+    OUTPUT ${APASCAL_AFTERSCHOOL}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_AFTERSCHOOL}
+    COMMAND ${CMAKE_COMMAND} -E env
+            PASCALC=${APASCAL_PASCALC}
+            AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib
+            ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/build.py
+            ${CMAKE_SOURCE_DIR}/tools/pascalcc
+            apide.pas
+            ${APASCAL_AFTERSCHOOL}
+    DEPENDS ${CMAKE_SOURCE_DIR}/tui/build.py
+            ${CMAKE_SOURCE_DIR}/tui/apide.components
+            ${CMAKE_SOURCE_DIR}/tools/pascalcc
+            ${APASCAL_TUI_SOURCES}
+            ${APASCAL_SOURCES}
+            ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
+            ${APASCAL_LIB_SOURCES}
+    COMMENT "Building afterschool, the editor, with pascalcc"
+    VERBATIM
+  )
+  add_custom_target(afterschool ALL DEPENDS ${APASCAL_AFTERSCHOOL})
+  add_dependencies(afterschool pascalc pasrt)
+endif()
+
 # ---- Install ----
 #
 # **The compiler can be put anywhere** (ADR-0244), and what makes that true is
@@ -230,6 +273,7 @@ add_dependencies(apconfig pascalc pasrt)
 #   <prefix>/bin/pascalc                 the compiler, which writes IR
 #   <prefix>/bin/pascalcc                the driver, which assembles and links
 #   <prefix>/bin/apconfig                the project-file reader it calls
+#   <prefix>/bin/afterschool             the editor, which needs no argument
 #   <prefix>/lib/libpasrt.a              the runtime
 #   <prefix>/lib/afterschool/*.pas       the library
 #   <prefix>/lib/afterschool/dialect/*.pas
@@ -244,6 +288,9 @@ add_dependencies(apconfig pascalc pasrt)
 install(PROGRAMS ${APASCAL_PASCALC} ${CMAKE_SOURCE_DIR}/tools/pascalcc
                 ${APASCAL_APCONFIG}
         DESTINATION bin)
+if(Python3_FOUND)
+  install(PROGRAMS ${APASCAL_AFTERSCHOOL} DESTINATION bin)
+endif()
 install(TARGETS pasrt ARCHIVE DESTINATION lib)
 file(GLOB APASCAL_LIB ${CMAKE_SOURCE_DIR}/lib/*.pas)
 file(GLOB APASCAL_LIB_DIALECT ${CMAKE_SOURCE_DIR}/lib/dialect/*.pas)

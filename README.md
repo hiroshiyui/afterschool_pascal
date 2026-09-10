@@ -445,6 +445,17 @@ release ships an `arm64-darwin` archive built and tested on that runner, and
 the job that builds it fails on a dynamic link to anything outside the
 system's own directories, so what is attached is a compiler a user can move.
 
+**WebAssembly (`wasm32-wasi`) is the third**, and it is a tier of a different
+shape: there is no machine here, and what is claimed is measured rather than
+assumed. **519 of the 598 corpus programs compile, link and answer their
+goldens** under a WASI engine on every push, and the job refuses to pass by
+skipping (ADR-0385). What a program can reach there is what a port has got —
+two of the four runtime units build, so a program wanting a thread, a process
+or a socket fails at the link with the symbol named rather than at run time.
+It asks one thing of the toolchain, an LLVM that names `i128` for the target.
+`wasm64-wasi` is admitted on the layout claim alone (ADR-0386): no sysroot for
+memory64 exists, so nothing links and nothing runs there yet.
+
 **Everything else is unsupported, and contributions are very welcome.**
 Windows, FreeBSD, OpenBSD, NetBSD and Haiku — practical compatibility work on
 any of them, from anyone who wants to run it there.
@@ -622,9 +633,17 @@ it, and runs the compiler with the cursor landing on the first diagnostic —
 and since ADR-0387 it undoes, searches, and goes to a line.
 
 ```sh
-tui/build.py tools/pascalcc apide.pas ~/bin/apide
-~/bin/apide hello.pas
+cmake --build build -j        # build/bin/afterschool falls out with the rest
+build/bin/afterschool         # a new document
+build/bin/afterschool hello.pas
 ```
+
+`cmake --install` puts it in `<prefix>/bin/afterschool` beside `pascalc`, so
+after that it is just `afterschool`. **It needs no argument**: with none it
+starts on a new unnamed document, and a document with no name says so rather
+than failing at the first Ctrl-S. To build it without CMake — or at `-O0`,
+which is what `AFTERSCHOOL_PASCAL_OPT` is for — `tui/build.py` takes the same
+three arguments it always did and now defaults every one of them.
 
 | Key | |
 | --- | --- |

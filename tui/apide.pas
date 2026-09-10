@@ -104,6 +104,17 @@ end;
 procedure Save;
 var i: integer; ok: boolean; msg: EditLine;
 begin
+  { **A document with no name cannot be saved, and that is said rather than
+    attempted.** Starting with no file is an ordinary way to start since the
+    editor became `afterschool`, so this is now reachable: without the guard
+    it wrote to the empty path and reported `could not write `, which names
+    nothing and reads like a permissions problem. What it needs is a name, and
+    asking for one is a prompt mode the model does not have yet -- so it says
+    which key would have worked if there were one. }
+  if path = '' then begin
+    EditSay(ed, 'this document has no name -- start with a file to save it');
+    exit
+  end;
   ok := WriteAllText(path, '');
   i := 1;
   while ok and (i <= EditLines(ed)) do begin
@@ -126,6 +137,13 @@ end;
 procedure Build;
 var v: ArgV; r: RunResult; out: IOLine;
 begin
+  { The compiler is handed a path, so there has to be one -- `Save`'s guard
+    for `Save`'s reason, and the diagnostic a compiler gives for an empty
+    argument is about the compiler and not about this document. }
+  if path = '' then begin
+    EditSay(ed, 'this document has no name -- nothing to compile');
+    exit
+  end;
   e := NewArgs(v);
   if e = errNone then e := AddArg(v, Compiler);
   if e = errNone then e := AddArg(v, path);
@@ -155,8 +173,12 @@ begin
   if argcount >= 1 then path := argument(1) else path := '';
   EditInit(ed);
   DecodeInit(dec);
+  { **No file is a new document and not a usage error.** It used to answer
+    with what looked like a usage line, which is the wrong thing to say to a
+    person who typed `afterschool` on purpose: the editor starts on an empty
+    unnamed buffer, and Ctrl-S is the only thing that then needs a name. }
   if path <> '' then Load
-  else EditSay(ed, 'apide <file.pas>');
+  else EditSay(ed, 'a new document -- Ctrl-Q to quit');
 
   { The terminal, and putting it back. `defer` is what makes the restore
     unconditional (AP 6.9.3.11): every way out of this block below -- the
@@ -166,7 +188,7 @@ begin
     knows it entered one. }
   e := EnterRaw(StdIn);
   if e <> errNone then begin
-    e2 := WriteText(StdErr, 'apide: this is not a terminal' + chr(10));
+    e2 := WriteText(StdErr, 'afterschool: this is not a terminal' + chr(10));
     halt(1)
   end;
   defer e2 := WriteText(StdOut, ShowCursor);

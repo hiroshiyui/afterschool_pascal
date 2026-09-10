@@ -15,6 +15,15 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The editor is `afterschool`, and it starts with no argument.** It is a
+  CMake target and an installed program now — `cmake --build` produces
+  `build/bin/afterschool` and `cmake --install` puts it in `<prefix>/bin`
+  beside `pascalc` — where launching it used to mean `tui/build.py` with three
+  arguments and an output path a person had to invent and then remember. With
+  no file it opens a new unnamed document rather than printing what looked
+  like a usage line, and a document with no name says so instead of failing at
+  the first Ctrl-S. `tui/build.py` is still what builds it, and every one of
+  its arguments now has a default.
 - **The editor gains undo, find and go-to-line** (ADR-0387), milestone two of
   `tui/`. Ctrl-Z and Ctrl-Y over a journal in which every edit is one of four
   named operations — insert, remove, split, join — so one entry both reverses

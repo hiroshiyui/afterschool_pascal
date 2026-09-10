@@ -76,8 +76,25 @@ argue for in a commit message rather than a step.
 ## Running it
 
 ```sh
-tui/build.py tools/pascalcc apide.pas /tmp/apide
-/tmp/apide hello.pas
+cmake --build build -j        # build/bin/afterschool
+build/bin/afterschool         # a new document, no argument needed
+build/bin/afterschool hello.pas
+```
+
+The binary is **`afterschool`** and the source is `apide.pas`, which is the
+tree's own convention — `pascalc` comes from `selfhost/compiler.pas`. It is a
+CMake target and an installed program because the editor is the one thing here
+written to be *used*, and `cmake --install` puts it beside `pascalc`.
+
+`tui/build.py` is still what builds it, and the target drives that script
+rather than repeating it: the script reads the `.components` sidecar and
+honours `AFTERSCHOOL_PASCAL_OPT`, which ADR-0102 makes load-bearing for a
+program whose whole shape is a loop. Every one of its arguments now has a
+default, so building by hand is:
+
+```sh
+tui/build.py                  # the editor, to build/bin/apide
+tui/build.py '' session.pas   # the session replayer
 ```
 
 | Key | |
