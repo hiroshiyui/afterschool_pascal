@@ -151,7 +151,7 @@ tui/build.py '' session.pas   # the session replayer
 | --- | --- |
 | F10, Ctrl-O | the menu bar — arrows move, Enter chooses, Ctrl-C closes |
 | F2, Ctrl-S | save — and on a document with no name, ask for one first |
-| F9, Ctrl-B | compile, and land on the first diagnostic |
+| F9, Ctrl-B | compile, and land on the first diagnostic — or **report** it, where it names one of the other program-components rather than this file |
 | Ctrl-Q | quit — twice when the document has changes in it |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |

@@ -1,0 +1,27 @@
+# A diagnostic about a file that is not the one on screen.
+#
+# `pascalc` translates every program-component, and this compiler is three of
+# them, so an error in a component is the ordinary case and not the corner.
+# The filename was parsed off and thrown away: the cursor jumped to that line
+# number *in whatever was open*, and the message arrived looking as though it
+# had been landed on -- a wrong position in the wrong file with nothing
+# saying so.
+#
+# Three claims here. A diagnostic naming this document still lands, which is
+# the half that must not regress. One naming another file moves nothing and
+# reports the diagnostic **as the compiler wrote it**, position and all,
+# because a line number with no file is exactly what was wrong before. And
+# the comparison is on the name the document has -- the shell compiles
+# `EditName(ed)`, so that is the name a diagnostic about this file carries.
+name p.pas
+size 8 34
+push program p(output);
+push import q;
+push begin
+push   writeln(x)
+push end.
+draw
+fault p.pas:4:11: error: 'x' is not declared
+draw
+fault q.pas:12:3: error: 'y' is not declared
+draw

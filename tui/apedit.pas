@@ -1612,12 +1612,14 @@ end;
 
 function EditFault;
 var i, start, field, ln, cl: integer; part: EditLine; r: IntResult;
+    who: EditLine;
 begin
   EditFault := false;
   start := 1;
   field := 0;
   ln := 0;
   cl := 0;
+  who := '';
   for i := 1 to length(text) do
     if text[i] = chr(10) then
       { One line at a time, and the *first* that is a diagnostic wins: a
@@ -1627,7 +1629,16 @@ begin
       part := substr(text, start, i - start);
       start := i + 1;
       field := field + 1;
-      if field = 2 then begin
+      { **Field one is the file the diagnostic is about, and it was thrown
+        away**. The shell compiles `EditName(ed)`, so an error in
+        the document itself names it -- but `pascalc` translates the other
+        program-components too, and this compiler is three of them, so a
+        diagnostic naming a file that is not the one on screen is the
+        ordinary case rather than the corner. The cursor used to jump to that
+        line number *here*, in whatever was open, and the message arrived
+        looking like it had been landed on. }
+      if field = 1 then who := part
+      else if field = 2 then begin
         r := ParseInt(part);
         if not r.ok then exit;
         ln := r.val
@@ -1636,8 +1647,17 @@ begin
         r := ParseInt(part);
         if not r.ok then exit;
         cl := r.val;
-        MoveTo(ed, ln, cl);
-        ed.says := From(text, start + 1);
+        { A diagnostic about another file is **reported and not landed on**.
+          Opening it is a second document and this editor holds one; until it
+          holds two, the honest answer is to say where the error is and leave
+          the cursor where the person left it. The message carries the
+          position it names, because a line number with no file is the thing
+          that was wrong before. }
+        if who = ed.name then begin
+          MoveTo(ed, ln, cl);
+          ed.says := From(text, start + 1)
+        end
+        else ed.says := Left(text, start - 1) + From(text, start);
         EditFault := true;
         exit
       end

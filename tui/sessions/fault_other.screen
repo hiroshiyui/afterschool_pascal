@@ -1,0 +1,99 @@
++----------------------------------+
+| File  Edit  Search  Run          |
+|program p(output);                |
+|import q;                         |
+|begin                             |
+|  writeln(x)                      |
+|                                  |
+|p.pas                          1:1|
+|F10 Menu  F2 Save  F9 Build  ^F Fi|
++----------------------------------+
++----------------------------------+
+|uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..................................|
+|..................................|
+|..................................|
+|..................................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++----------------------------------+
++----------------------------------+
+|1-34u |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34m |
+|1-34s |
+|1-34h |
++----------------------------------+
+cursor 2,1
++----------------------------------+
+| File  Edit  Search  Run          |
+|program p(output);                |
+|import q;                         |
+|begin                             |
+|  writeln(x)                      |
+|error: 'x' is not declared        |
+|p.pas                         4:11|
+|F10 Menu  F2 Save  F9 Build  ^F Fi|
++----------------------------------+
++----------------------------------+
+|uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..................................|
+|..................................|
+|..................................|
+|..................................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++----------------------------------+
++----------------------------------+
+|1-34u |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34m |
+|1-34s |
+|1-34h |
++----------------------------------+
+cursor 5,11
++----------------------------------+
+| File  Edit  Search  Run          |
+|program p(output);                |
+|import q;                         |
+|begin                             |
+|  writeln(x)                      |
+|q.pas:12:3: error: 'y' is not decl|
+|p.pas                         4:11|
+|F10 Menu  F2 Save  F9 Build  ^F Fi|
++----------------------------------+
++----------------------------------+
+|uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..................................|
+|..................................|
+|..................................|
+|..................................|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
+|ssssssssssssssssssssssssssssssssss|
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++----------------------------------+
++----------------------------------+
+|1-34u |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34. |
+|1-34m |
+|1-34s |
+|1-34h |
++----------------------------------+
+cursor 5,11
+lines 5 dirty FALSE
+  1: [program p(output);]
+  2: [import q;]
+  3: [begin]
+  4: [  writeln(x)]
+  5: [end.]
