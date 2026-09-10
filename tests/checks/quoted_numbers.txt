@@ -27,7 +27,7 @@
 
 README.md   | target32           | \*\*(\d+) of the (\d+) programs in this repository's
 README.md   | ctest              | Beside that: (\d+) cases under
-README.md   | runtime-nonposix   | wants (seven) headers
+README.md   | runtime-nonposix   | wants (five) of the seventeen headers it names
 CLAUDE.md   | sanitize[valgrind] | \. (\d+) clean, 0 flagged
 CLAUDE.md   | sanitize[address]  | green at a level it had not asked for — (\d+) of them today
 CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify

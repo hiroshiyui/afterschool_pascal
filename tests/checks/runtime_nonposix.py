@@ -57,7 +57,10 @@ them.
 Skips (77) without a cross compiler for a non-POSIX target;
 NONPOSIX_REQUIRE refuses to pass by skipping (ADR-0330).
 
-  APASCAL_NONPOSIX_CC   the compiler to ask; default x86_64-w64-mingw32-gcc
+  APASCAL_NONPOSIX_CC   the **command** to ask, blanks and all -- a driver of
+                        its own like mingw-w64's, or a clang with a
+                        `--target=` and whatever that target needs. The
+                        default is `wasm32-wasi` (ADR-0382).
 """
 
 import os
@@ -75,6 +78,31 @@ sys.stderr.reconfigure(line_buffering=True)
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 CATALOGUE = HERE / "nonposix_headers.txt"
+
+# **The toolchain, and the flag is part of it** (ADR-0382). `wasm32-wasi` is
+# the non-POSIX target this project cares about since ADR-0380 dropped
+# Windows, and `-mllvm -wasm-enable-sjlj` belongs in the command rather than
+# being left off, for a reason `doc/sop.md` §7 already names: without it
+# wasi-libc's `<setjmp.h>` refuses outright -- *"Setjmp/longjmp support
+# requires Exception handling support"* -- and `pasrt.c` is then blocked by a
+# header a build flag would have satisfied, with the real blocker hidden
+# behind it. With the flag the unit gets as far as `_longjmp`, which is the
+# answer worth having.
+#
+# **And the host's headers are hidden**, which is `target-sizes`' lesson in a
+# second place (ADR-0345): `/usr/include` is on clang's search path for this
+# target, so a header wasi-libc has not got but glibc has would be found and
+# reported *present*. Every answer here was compared with and without the two
+# flags below and none differed -- glibc's copies fail on their own `bits/`
+# internals -- but "it happens not to bite" is not a claim, and the
+# diagnostic is honest with them: `'netdb.h' file not found` rather than a
+# failure inside `/usr/include/netdb.h`.
+#
+# The path is Debian's. Another layout overrides the whole command through
+# `APASCAL_NONPOSIX_CC`, and a wrong one fails loudly with the command
+# printed rather than answering quietly.
+DEFAULT_CC = ("clang --target=wasm32-wasi -mllvm -wasm-enable-sjlj "
+              "-nostdlibinc -isystem /usr/include/wasm32-wasi")
 
 # The runtime is four translation units and the count is a claim of its own:
 # a fifth appearing with no row is a unit nobody asked this question of.
@@ -127,17 +155,25 @@ def read_catalogue():
 
 
 def main():
-    cc = os.environ.get("APASCAL_NONPOSIX_CC", "x86_64-w64-mingw32-gcc")
+    # **A command and not a program**, since ADR-0382. A cross compiler for a
+    # target that is not POSIX arrives in two shapes here: a driver of its
+    # own, which is mingw-w64's `x86_64-w64-mingw32-gcc`, and a `--target=`
+    # handed to the clang that is already installed, which is how wasi and
+    # every other LLVM target is reached. Splitting on blanks admits both and
+    # costs one line; `which` asks about the first word, because that is the
+    # part a PATH can answer for.
+    cc = os.environ.get("APASCAL_NONPOSIX_CC", DEFAULT_CC).split()
     require = os.environ.get("NONPOSIX_REQUIRE", "")
+    said = " ".join(cc)
 
-    if shutil.which(cc) is None:
+    if not cc or shutil.which(cc[0]) is None:
         if require:
             print("runtime-nonposix: NONPOSIX_REQUIRE is set and there is no "
-                  "%s -- install a mingw-w64 cross compiler" % cc,
-                  file=sys.stderr)
+                  "%s -- install a cross compiler for a target that is not "
+                  "POSIX" % said, file=sys.stderr)
             return 1
         print("runtime-nonposix: skipped, no %s (a cross compiler for a "
-              "target that is not POSIX)" % cc)
+              "target that is not POSIX)" % said)
         return 77
 
     # A driver on PATH that cannot compile anything is a third state, and
@@ -152,10 +188,17 @@ def main():
         shutil.rmtree(work, ignore_errors=True)
 
 
+def said(cc):
+    """The command, for a message. A list is what is run and a string is what
+    a reader acts on."""
+    return " ".join(cc)
+
+
 def compiles(cc, src, args=()):
     """Does this translation unit compile for the target? An exit status and
     the first lines of the failure, never the words of a diagnostic."""
-    r = subprocess.run([cc, "-std=c11", "-fsyntax-only", str(src)] + list(args),
+    r = subprocess.run(list(cc) + ["-std=c11", "-fsyntax-only", str(src)]
+                       + list(args),
                        capture_output=True, text=True, env=ENV,
                        errors="surrogateescape")
     return r.returncode == 0, r.stderr
@@ -180,7 +223,7 @@ def check(cc, work):
     if not ok:
         print("runtime-nonposix: %s is on PATH and cannot compile a program "
               "that includes <stdio.h>, so its C library is not installed. "
-              "That is this machine and not the runtime:" % cc,
+              "That is this machine and not the runtime:" % said(cc),
               file=sys.stderr)
         sys.stderr.write("".join(err.splitlines(True)[:10]))
         return 1
@@ -230,7 +273,14 @@ def check(cc, work):
             # the reason not being shown: *the reader wants to know why* was
             # written down here and then not delivered, which is a comment
             # describing a mechanism that is not there.
-            head = "".join(err.splitlines(True)[:3]).rstrip("\n")
+            # From the first line that says `error`, not from the first
+            # line: this toolchain warns three times about `tmpfile` before
+            # it refuses, and a reader shown those learns nothing. **Display
+            # only** -- the claim above rests on the exit status alone, and
+            # a diagnostic with no such line still shows its opening.
+            lines = err.splitlines(True)
+            at = next((i for i, ln in enumerate(lines) if "error" in ln), 0)
+            head = "".join(lines[at:at + 3]).rstrip("\n")
             if head:
                 print("runtime-nonposix: %s is blocked, and it begins:" % name)
                 for line in head.split("\n"):
@@ -283,11 +333,11 @@ def check(cc, work):
                 fails.append("runtime/%s is catalogued `blocked` and now "
                              "compiles for %s. That is progress and it has to "
                              "be recorded: change the row to `compiles` and "
-                             "remove its header rows" % (name, cc))
+                             "remove its header rows" % (name, said(cc)))
             else:
                 fails.append("runtime/%s is catalogued `compiles` and no "
                              "longer does under %s -- the port went backwards"
-                             % (name, cc))
+                             % (name, said(cc)))
         elif want == "blocked":
             # The third direction, and the one a plain pair of statuses could
             # not see: `blocked` is true of a unit that only wants a different
@@ -315,11 +365,11 @@ def check(cc, work):
         for h in sorted(got - want):
             fails.append("runtime/%s includes <%s>, which %s has not got and "
                          "the catalogue does not name -- add a `header` row"
-                         % (name, h, cc))
+                         % (name, h, said(cc)))
 
     if fails:
         print("runtime-nonposix: the runtime and %s disagree with %s:"
-              % (cc, CATALOGUE.name), file=sys.stderr)
+              % (said(cc), CATALOGUE.name), file=sys.stderr)
         for f in fails:
             print("        " + f, file=sys.stderr)
         return 1
@@ -343,7 +393,8 @@ def check(cc, work):
     print("runtime-nonposix: %s -- %d of %d translation unit(s) compile, %d "
           "want only a different C runtime, %d are blocked, and %d header(s) "
           "across %d probe(s) %s"
-          % (cc, n_ok, len(units), n_crt, n_blocked, n_hdr, probed, tail))
+          % (said(cc), n_ok, len(units), n_crt, n_blocked, n_hdr,
+             probed, tail))
     return 0
 
 

@@ -457,34 +457,46 @@ the point of the machinery below:
   runtime's four translation units for a target that is not POSIX and reports
   which of them build, which want only a different C runtime, and — for one
   that does not build — *every* header the target lacks rather than the first,
-  because a missing header is a fatal error and stops the compile. Point it at
-  another toolchain with `APASCAL_NONPOSIX_CC`.
+  because a missing header is a fatal error and stops the compile. It measures
+  against **`wasm32-wasi`** (ADR-0382); point it at another toolchain with
+  `APASCAL_NONPOSIX_CC`, which takes a whole command so that a driver of its
+  own and a `clang --target=` both work.
 - **`tests/checks/nonposix_headers.txt`** is what it holds that against, and
   the answers are pinned to one toolchain on purpose: two mingw-w64 versions
-  disagreed about a name and the catalogue said so.
+  once disagreed about a name and the catalogue said so.
 - **`doc/adr/0369` to `0374`** are the working, in order, and ADR-0374 carries
   the commands that build and run a Windows program end to end; ADR-0380 is
   the decision that followed them.
 
-**The shape of a port, measured against mingw-w64:**
-`runtime/pasrt_unicode.c` compiles, which is the whole of the text model;
-`runtime/pasrt_task.c` wants only the platform's modern C runtime;
-`runtime/pasrt.c` compiled until ADR-0380 and now names `_longjmp`, which
-POSIX declares and that target does not — one line, and the catalogue records
-it going backwards on purpose; `runtime/pasrt_posix.c` is the POSIX half and
-wants seven headers — sockets, the terminal and `posix_spawn`. Ten of the
-seventeen it names are already there, so the directory walk, the file
-information and the file model are *not* what is missing. Whether a first port
-ships `PasNet` at all is the open question, and a port without it is a much
-smaller thing.
+**The shape of a port, measured against `wasm32-wasi`:**
+`runtime/pasrt_unicode.c` compiles, which is the whole of the text model, and
+so does `runtime/pasrt_task.c` — though that is a compile and not a link, and
+whether a thread can be created is a further question.
+`runtime/pasrt.c` is blocked on **`_longjmp`**, which POSIX declares and
+neither of the two non-POSIX targets measured here does; that one name is what
+stands between this runtime and a port, and the catalogue says what it would
+cost. `runtime/pasrt_posix.c` wants five of the seventeen headers it names:
+`<netdb.h>`, `<spawn.h>`, `<sys/wait.h>`, `<signal.h>` and `<termios.h>` — so
+there are no processes, no terminal and no name resolution, while sockets are
+*half* there, wasi having an interface of its own. The directory walk, the
+file information and the file model are not what is missing. Whether a first
+port ships `PasProcess` or `PasNet` at all is the open question, and one that
+ships neither is a much smaller thing.
 
-**Two findings are worth knowing before starting**, both from running rather
-than compiling. The runtime has to be built by `clang` on Windows, because
-mingw-gcc compiles `_Thread_local` to emulated TLS that the emitted module's
-native TLS cannot link against. And `_setjmp` on Win64 needs a 16-byte-aligned
-buffer, which this compiler does not yet give it — the non-local goto faults,
-and the fix moves frame offsets that `target-layout` compares. Both are in
-`doc/sop.md` §7 and ADR-0374.
+**Two findings are worth knowing before starting**, both from the Windows
+work and both about *running* rather than compiling: the runtime had to be
+built by `clang` there, because mingw-gcc compiles `_Thread_local` to
+emulated TLS the emitted module's native TLS cannot link against; and
+`_setjmp` on Win64 wants a 16-byte-aligned buffer this compiler does not give
+it, so the non-local goto faulted. Both are in `doc/history.md` with the rest
+of that measurement.
+
+**And one finding is about every non-POSIX target, not one of them**: the
+non-local goto reaches its jump through `_longjmp`, which POSIX declares and
+neither mingw-w64 nor wasi-libc does. ADR-0373 answered it with the runtime's
+only preprocessor conditional and ADR-0380 removed that with the platform; a
+port pays for it either with the conditional again or with the jump emitted by
+the compiler, where `_setjmp` already is.
 
 **What a port must not do** is weaken what holds elsewhere. Every gate in
 `doc/sop.md` fails in both directions, and a platform difference belongs in a

@@ -215,14 +215,17 @@ jobs:
     # all nine are Linux, so nothing here noticed the runtime drifting further
     # from a platform without those headers.
     #
-    # **The question is about the runtime, not about Windows** -- which is why
-    # this job survives ADR-0380 dropping that platform. mingw-w64 is the
-    # non-POSIX toolchain Debian packages, so it is the one that can ask; what
-    # it answers about is whether `runtime/*.c` still depends only on what
-    # each unit is allowed to depend on. The answer moved when Windows was
-    # dropped: `pasrt.c` names `_longjmp` unconditionally now, so it is
-    # catalogued `blocked` here, on purpose and with the argument in
-    # `nonposix_headers.txt`.
+    # **The question is about the runtime, not about any one platform** --
+    # which is why this job survives ADR-0380 dropping Windows. It asks
+    # whether `runtime/*.c` still depends only on what each unit is allowed to
+    # depend on, and it needs some non-POSIX toolchain to ask with. Since
+    # ADR-0382 that is **wasm32-wasi**, the target this project now cares
+    # about; the mingw-w64 answers are in `doc/history.md`.
+    #
+    # The answer that carried over is the interesting one: `pasrt.c` is
+    # blocked on `_longjmp` here too. Two non-POSIX targets in a row lack that
+    # name, which is what makes the non-local goto the runtime's one real
+    # portability question rather than a Windows quirk.
     #
     # A job of its own for `unicode-conformance`'s reason: a red bar should
     # name the question. This one is cheap -- four translation units and 34
@@ -239,8 +242,9 @@ jobs:
     # no use for it.
     #
     # **That spreading is what this job exists to prevent, and it was tried
-    # the other way first.** Installing mingw-w64 in the container matrix job
-    # made `runtime-nonposix` run there too, against a *different* mingw-w64 --
+    # the other way first.** Installing the toolchain in the container matrix
+    # job made `runtime-nonposix` run there too, against a *different*
+    # mingw-w64 -- that being the toolchain at the time --
     # and Ubuntu 24.04's has `_longjmp` where Debian trixie's has not, so the
     # catalogue's row for `runtime/pasrt.c` was true on one image and false on
     # the other. One question, one toolchain, one image.
@@ -254,19 +258,22 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang libclang-rt-dev git python3 \
-            gcc-mingw-w64-x86-64
-          # The cross compiler *and* its headers. `target-sizes` learned this
-          # the hard way -- Debian ships a driver and its C library
-          # separately, and with --no-install-recommends the driver can arrive
-          # alone, run, fail to find <stdio.h>, and make every unit look
-          # blocked for a reason that is about the runner. The check tells
-          # that state apart and says so; this line is what keeps it from
-          # arising.
+            wasi-libc libclang-rt-dev-wasm32
+          # **The sysroot and the builtins, and both are needed** (ADR-0382).
+          # `wasi-libc` is the headers this measures against; the clang that
+          # is already here supplies the target. `target-sizes` learned the
+          # general shape the hard way -- Debian ships a driver and its C
+          # library separately, so a toolchain can arrive half-installed, run,
+          # find no <stdio.h>, and make every unit look blocked for a reason
+          # that is about the runner. The check tells that state apart and
+          # says so; this line is what keeps it from arising.
 
       - uses: actions/checkout@v4
 
       - name: Record which toolchain measured it
-        run: x86_64-w64-mingw32-gcc --version | head -1
+        run: |
+          clang --version | head -1
+          dpkg-query -W -f='wasi-libc ${Version}\n' wasi-libc
 
       - name: Run it, and refuse to pass by skipping
         env:
@@ -883,8 +890,8 @@ jobs:
     #                      skipped for the reason it exists to report
     #   valgrind-corpus    no valgrind on arm64
     #   runtime-coverage   no llvm-profdata and no llvm-cov
-    #   runtime-nonposix   no mingw-w64; the `non-posix` job is where that one
-    #                      is required to answer (ADR-0369)
+    #   runtime-nonposix   no wasi-libc; the `non-posix` job is where that
+    #                      one is required to answer (ADR-0369, ADR-0382)
     #   fpc-differential   no fpc
     #   tls                no OpenSSL headers; the system `openssl` is
     #                      LibreSSL, which is a different transcription

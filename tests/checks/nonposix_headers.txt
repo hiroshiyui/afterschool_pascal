@@ -1,33 +1,51 @@
 # What the runtime asks of a target that is not POSIX, measured against
-# mingw-w64 (ADR-0369).
+# **wasm32-wasi** (ADR-0369, ADR-0382).
+#
+# It was mingw-w64 until 2026-09-10. ADR-0380 dropped Windows as a target, and
+# what this gate asks was never about Windows -- it asks whether the runtime
+# still depends only on what each unit is *allowed* to depend on, and it needs
+# some non-POSIX toolchain to ask with. WebAssembly is the one this project
+# now cares about, so the column is wasi's and the mingw answers are in
+# `doc/history.md` with the rest of the Windows measurements.
 #
 # **The answers here are a toolchain's as well as this source's, and that was
-# learned the hard way.** `runtime-nonposix` runs wherever a mingw-w64 cross
-# compiler is installed, and for one commit that included the container matrix
-# job -- where Ubuntu 24.04's mingw-w64 reported `runtime/pasrt.c` as
-# *compiling* while Debian trixie's and this developer's (GCC 14-win32 and
-# 16-win32) report it blocked on `_longjmp`. One row cannot be true of both.
+# learned the hard way** under the old column: for one commit the gate ran in
+# the container matrix job as well, where Ubuntu 24.04's mingw-w64 reported
+# `runtime/pasrt.c` as *compiling* while Debian trixie's reported it blocked
+# on `_longjmp`. One row cannot be true of both.
 #
 # So the toolchain is pinned the way ADR-0189 pins a Unicode version: an
 # oracle that changes under you is not one. The `non-posix` CI job is the only
-# place mingw-w64 is installed, it is a single Debian image, and it is where
-# NONPOSIX_REQUIRE is set. A checkout with a different mingw-w64 may
+# place it is installed, it is a single Debian image, and it is where
+# NONPOSIX_REQUIRE is set. A checkout with a different wasi-libc may
 # legitimately disagree with a row below, and what that means is that the
-# blocker is that toolchain's and not this runtime's -- doc/roadmap.md's
-# Windows row is where such a difference gets written down.
+# blocker is that toolchain's and not this runtime's.
+#
+# **The command carries two flags and both are load-bearing.**
+# `-mllvm -wasm-enable-sjlj` is there because without it wasi-libc's
+# `<setjmp.h>` refuses outright -- *"Setjmp/longjmp support requires Exception
+# handling support"* -- and `pasrt.c` would be blocked by a header that a
+# build flag satisfies, with the real blocker hidden behind it, which is
+# exactly the §7 row about one bit per unit. And `-nostdlibinc -isystem
+# /usr/include/wasm32-wasi` hides the *host's* headers, which are otherwise on
+# clang's search path for this target: a header wasi-libc has not got and
+# glibc has would be found and reported present. Every answer below was taken
+# both ways and none differed -- glibc's copies fail on their own `bits/`
+# internals -- but "it happens not to bite" is not a claim.
 #
 # `runtime-isoc` bounds each translation unit by the headers it may include;
 # this asks the question that one cannot: **are those headers there on a
 # platform that is not POSIX**, and does the unit compile once they are. Every
 # target this tree compiles the runtime for is `*-linux-gnu` -- `target-sizes`
 # builds it for nine triples and all nine are Linux -- so until this file the
-# answer was a measurement somebody took by hand once and wrote into
-# doc/roadmap.md.
+# answer was a measurement somebody took by hand once and wrote into a
+# roadmap row.
 #
 # **The whole point is that a floor becomes a list.** A missing header is a
 # *fatal* error, so compiling the unit tells you the first one and nothing
-# about the rest: doc/roadmap.md's Windows row said `pasrt_posix.c` stops at
-# `netdb.h` and that "the rest of its 1 177 lines was never reached". Each
+# about the rest: the hand measurement said `pasrt_posix.c` stops at
+# `netdb.h` and that "the rest of its 1 177 lines was never reached" -- and
+# on this target it stops at `netdb.h` too, five headers being absent. Each
 # `#include <...>` is therefore probed on its own, one one-line translation
 # unit per header, and what comes back is every header the target lacks.
 #
@@ -53,75 +71,64 @@
 
 # --- which translation units compile for the target -----------------------
 #
-# pasrt_unicode.c compiling clean is the whole of AP 6.4.15 -- normalisation
+# **Two of four, and the two that compile are the interesting half.**
+#
+# `pasrt_unicode.c` compiling clean is the whole of AP 6.4.15 -- normalisation
 # and grapheme segmentation over tables, and nothing else. It is the one unit
-# a port gets for free, and it is measured here rather than hoped for.
+# a port gets for free, and it is measured here rather than hoped for. It was
+# free on mingw-w64 too.
 #
-# **pasrt.c compiled here for one week and no longer does, and that is a
-# decision rather than a regression** (ADR-0380). It reaches the non-local
-# goto's jump through `_longjmp`, which POSIX declares and mingw-w64 does not;
-# ADR-0373 bought this row with the runtime's only preprocessor conditional,
-# and dropping Windows as a target bought the conditional back. The row is
-# `blocked` because that is what is true, and the gate prints the first lines
-# of the diagnostic beside it so the reason is read rather than remembered.
+# `pasrt_task.c` **compiles for wasi**, and that is worth reading carefully
+# rather than celebrating: this gate's whole claim is `-fsyntax-only`, and
+# wasi-libc ships a `<pthread.h>` whose declarations are there whether or not
+# a thread can be created. AP 6.4.16's channels and AP 6.9.3.12's tasks want
+# the threads proposal and a runtime that implements it; what this row says is
+# that nothing in *this source* stands in the way, which is a smaller and
+# still useful thing. A port learns the rest by linking.
 #
-# It is worth being plain about what that costs, since a row moving backwards
-# is exactly what this catalogue exists to make impossible to do quietly:
-# **the runtime's ISO C unit is no longer portable to a target whose C library
-# declares no `_longjmp`.** Every target this compiler admits declares one. A
-# port to one that does not gets the conditional back, with a record.
+# `pasrt.c` is blocked by **`_longjmp`**, and it is the second non-POSIX
+# target in a row to lack that name. mingw-w64 declares `longjmp` and no
+# `_longjmp`; wasi-libc does the same. ADR-0373 bought the row with the
+# runtime's only preprocessor conditional and ADR-0380 bought the conditional
+# back by dropping the platform that needed it -- so the honest statement is
+# that **the non-local goto is what stands between this runtime and a
+# non-POSIX target**, twice measured, and that a wasm port pays for it either
+# with the conditional again or with the tidier shape ADR-0373 named: the
+# jump emitted by the compiler, where `_setjmp` already is, which waits on a
+# reseed because the committed seed declares and calls `@pas_jump_go`.
+#
+# Two more things `pasrt.c` says under this toolchain that no exit status
+# carries, both warnings and both real: `tmpfile` is *deprecated on WASI* at
+# three sites -- §6.7.5.5's auxiliary file and the two scratch files -- so the
+# unit would compile and fail at run time; and the `-mllvm -wasm-enable-sjlj`
+# above is what makes `<setjmp.h>` usable at all.
 unit  pasrt.c            blocked
 unit  pasrt_posix.c      blocked
-unit  pasrt_task.c       crt _UCRT
+unit  pasrt_task.c       compiles
 unit  pasrt_unicode.c    compiles
 
 # --- the headers the target has not got -----------------------------------
 #
-# `pasrt.c` and `pasrt_task.c` have every header they name; what blocks them
-# is names inside those headers, which is a different claim and is not this
-# file's.
+# `pasrt.c`, `pasrt_task.c` and `pasrt_unicode.c` have every header they name;
+# what blocks the first is a name *inside* those headers, which is a different
+# claim and is not this file's.
 #
-# `pasrt.c` **compiles here since ADR-0373**, and getting it there took three
-# records. ADR-0370 removed `fmemopen` and `open_memstream`, neither of which
-# §6.7.5.5 had ever asked for. ADR-0371 closed the emitter's half of the
-# non-local goto: `_setjmp` is an *arity* and not a spelling, `setjmp(x)`
-# expanding to `_setjmp(x)` on glibc and `_setjmp((x), frame)` on mingw, and
-# the compiler now writes whichever its target wants. ADR-0373 closed the
-# runtime's half, which is the jump -- `_longjmp` where POSIX declares one and
-# `longjmp` where it does not, the one catalogued conditional in this runtime.
+# **Five, and the shape of them is the finding.** `pasrt_posix.c` names
+# seventeen headers and twelve are here: the directory walk, the file
+# information, the file model, and -- unlike mingw-w64 -- `<poll.h>`,
+# `<sys/socket.h>` and `<sys/ioctl.h>`, wasi having a socket API of its own.
+# What is missing is `<netdb.h>` (name resolution), `<spawn.h>` and
+# `<sys/wait.h>` (there are no processes), `<signal.h>` and `<termios.h>`
+# (there is no terminal and no signal).
 #
-# **The name it needed was present in some mingw-w64 builds and not others**,
-# which is why the toolchain is pinned above: Ubuntu 24.04's declares
-# `_longjmp` and Debian trixie's v14 does not. That difference is now
-# irrelevant to whether this unit compiles, which is the better place for it
-# to be.
-#
-# For `pasrt_task.c` it was `timespec_get`/`TIME_UTC`, and measurement settled
-# it: both are `#ifdef _UCRT` in mingw's own <time.h>, and the unit compiles
-# clean under `-D_UCRT`. **Confirmed against a real UCRT sysroot on
-# 2026-09-09** rather than only against the macro: with
-# `mingw-w64-ucrt64-dev` installed, `__MSVCRT_VERSION__` is 0xE00, the
-# headers define `_UCRT` themselves, and the unit compiles with no `-D` at
-# all. The row below is checked with the macro because that needs no sysroot
-# and every machine can run it; the sysroot is what says the macro is not a
-# fiction. The same sysroot leaves `pasrt.c` blocked on `_longjmp`, so that
-# name is not a CRT question either. So it is a CRT selection and not a gap, which is what
-# the `crt` row above says and what the gate now proves on every run. Debian's
-# packaged toolchain here is msvcrt-based (`-win32` and `-posix` are threading
-# variants, both msvcrt), which is why the default compile still fails.
-#
-# **Seven, and the shape of them is the finding.** `pasrt_posix.c` names ten
-# headers that ARE there -- dirent.h, errno.h, fcntl.h, signal.h, stdio.h,
-# stdlib.h, string.h, sys/stat.h, time.h, unistd.h -- so the directory walk,
-# the file information and the process plumbing are not what is missing. What
-# is missing is sockets, the terminal and `posix_spawn`, which is the layer
-# doc/roadmap.md says nobody had costed. A first target that ships without
-# PasNet is therefore a much smaller thing than "port pasrt_posix.c", and
-# this file is how that stays true rather than being re-argued.
+# So a port's shape is different from Windows': the sockets are half there and
+# the *processes* are not there at all. `PasProcess.Execute` has nothing to be
+# implemented over, and `PasNet` would need whatever wasi's own socket
+# interface calls resolution. Which of those a first port ships is the open
+# question, and a port that ships neither is much smaller than "port
+# pasrt_posix.c".
 header  pasrt_posix.c  netdb.h
-header  pasrt_posix.c  poll.h
+header  pasrt_posix.c  signal.h
 header  pasrt_posix.c  spawn.h
-header  pasrt_posix.c  sys/ioctl.h
-header  pasrt_posix.c  sys/socket.h
 header  pasrt_posix.c  sys/wait.h
 header  pasrt_posix.c  termios.h

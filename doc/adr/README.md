@@ -390,3 +390,4 @@ the alternatives that were rejected and why.
 | [0379](0379-a-number-a-document-quotes-is-a-gates-answer.md) | A number a document quotes is a gate's answer | Accepted |
 | [0380](0380-the-target-is-posix.md) | The target is POSIX | Accepted |
 | [0381](0381-the-ide-is-un-withdrawn.md) | The IDE is un-withdrawn, and the reason is a different one | Accepted |
+| [0382](0382-the-non-posix-target-is-wasm.md) | The non-POSIX target is WebAssembly | Accepted |
