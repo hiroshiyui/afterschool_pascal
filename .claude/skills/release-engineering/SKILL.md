@@ -1,6 +1,6 @@
 ---
 name: release-engineering
-description: Manage the full software release process for Afterschool Pascal — version bumps, changelogs, Git tags, and (when applicable) GitHub releases.
+description: Manage the full software release process for Afterschool Pascal — a documentation sync via docs-engineering, version bumps, changelogs, the seed refresh, Git tags, and (when applicable) GitHub releases.
 ---
 
 When performing release engineering, always follow these steps:
@@ -54,9 +54,47 @@ When performing release engineering, always follow these steps:
    translate every program-component — each module's IR must be byte-identical to what the
    clang-built compiler produced, since the two are the same program.
 
-4. **Determine the release type** — review all unreleased commits since the last
-   tag (`git log --oneline $(git describe --tags --abbrev=0 2>/dev/null)..HEAD`,
-   otherwise `git log --oneline`) and classify as `major`, `minor`, or `patch`
+4. **Bring the documentation up to date — invoke `docs-engineering`** and carry
+   it out in full, before anything below. A release is the moment the
+   documentation is *published*, and it is the last moment it can still be
+   changed cheaply, for two reasons this project has paid for:
+
+   - **The reseed freezes the compiler's sources** (step 6). Documentation
+     lives in the sources too — the header comment on each program-component,
+     the doc comment beside each module-heading, `Usage`'s flag list, and the
+     comments in `tests/*.pas` that pin a rule. A comment corrected after the
+     reseed is *usually* free and is not always: a reworded diagnostic is a
+     string constant in the emitted module, and version 3 needed a second full
+     15 MB refresh for exactly that. Do the documentation pass first and the
+     question does not arise.
+   - **A tag is what a reader arrives at.** `README.md`'s accepted-language
+     blocks, the "not accepted yet" list, `doc/roadmap.md` and
+     `doc/afterschool-pascal-spec.md` are the contract someone downloading the
+     archive reads, and a feature landed without its `docs:` commit is
+     invisible to `git log --grep='^docs'` — the cadence CLAUDE.md describes,
+     which has been missed for nine features and repaired only by a sweep like
+     this one.
+
+   Two of that skill's steps are load-bearing here in particular. Its step 1
+   surveys every commit since the last tag that could change what the compiler
+   *accepts* — `fix:` included — which is the same survey step 5 below needs to
+   classify the release, so do it once and use it twice. And its §7 rule
+   applies: **read `doc/sop.md` §7 end to end and date the audit**, since a
+   release is the periodic sync that rule was written for.
+
+   Land the result as its own `docs:` commit (or commits) *before* the `chore:
+   release` one — the release commit is the version bump and the changelog, and
+   nothing else. Then run the suite again — `markdown-links` and
+   `markdown-tables` are ctest cases, so a document edited here is checked by
+   the same bar as the code — and then `tests/checks/quoted_numbers.py`, which
+   is not a ctest case and cannot be (ADR-0379): it reads the summaries the
+   gates just printed, so it runs *after* the suite and skips against a log
+   older than what the gates measured.
+
+5. **Determine the release type** — from the survey step 4 already ran: all
+   unreleased commits since the last tag
+   (`git log --oneline $(git describe --tags --abbrev=0 2>/dev/null)..HEAD`,
+   otherwise `git log --oneline`), classified as `major`, `minor`, or `patch`
    per [Semantic Versioning](https://semver.org/).
 
    For a compiler, the public interface is **the accepted language, the
@@ -70,7 +108,7 @@ When performing release engineering, always follow these steps:
 
    Present the recommendation to the user and confirm before proceeding.
 
-5. **Update the version** — it is written in **two** places that must agree:
+6. **Update the version** — it is written in **two** places that must agree:
    the `VERSION` of `project()` in `CMakeLists.txt`, and what `pascalc
    --version` prints, which comes from `selfhost/compiler.pas`. `pascalc-product`
    compares them, so a mismatch fails the suite rather than shipping — let it
@@ -102,7 +140,9 @@ When performing release engineering, always follow these steps:
    `tests/checks/seed_current.py` is the earlier chance and the release has to
    take it deliberately.
 
-6. **Update `CHANGELOG.md`** — add a new version entry at the top following
+7. **Update `CHANGELOG.md`** — `docs-engineering` has kept `Unreleased`
+   honest; this step is the one edit it does not make, promoting that section
+   to a version. Add a new version entry at the top following
    [Keep a Changelog](https://keepachangelog.com/), grouped under `Added`,
    `Changed`, `Fixed`, `Removed`, or `Security`. For this project:
    - **`Added` leads with language features**, in the words a user would search
@@ -112,27 +152,32 @@ When performing release engineering, always follow these steps:
    - Note which bootstrap milestone the release reaches.
    - Create `CHANGELOG.md` if it doesn't yet exist.
 
-7. **Commit the release** — stage `CMakeLists.txt`, `CHANGELOG.md`, and any
-   README/ADR updates together and commit as `chore: release vX.Y.Z`.
+8. **Commit the release** — stage `CMakeLists.txt`, `CHANGELOG.md` and the
+   refreshed `seed/` and commit as `chore: release vX.Y.Z`. Documentation is
+   *not* in it: step 4 landed that as its own `docs:` commit, which is what
+   keeps `git log --grep='^docs'` readable as a changelog of what the compiler
+   accepts. If the documentation pass finds something after this point, land
+   the `docs:` commit before the tag and redo the reseed if it touched a
+   compiler source.
 
-8. **Rehearse the archive before tagging** (ADR-0296). The tag job runs
+9. **Rehearse the archive before tagging** (ADR-0296). The tag job runs
    `tools/release.py`, and the same text runs here:
    ```sh
    tools/release.py --notes vX.Y.Z              # the CHANGELOG section, or a refusal
    tools/release.py --archive build-rel vX.Y.Z  # refuses a tag that is not --version
    tools/release.py --check afterschool-pascal-vX.Y.Z-x86_64-linux.tar.gz
    ```
-   `--notes` refusing means step 6 was skipped; `--archive` refusing means
-   step 5 was. `--check` is what the job runs against the archive it is about
+   `--notes` refusing means step 7 was skipped; `--archive` refusing means
+   step 6 was. `--check` is what the job runs against the archive it is about
    to upload, and `release-archive` runs both halves under `ctest` on every
    push, so a script that has stopped working is found before this step.
 
-9. **Tag the release** — create an annotated tag
+10. **Tag the release** — create an annotated tag
    (`git tag -a vX.Y.Z -m "vX.Y.Z"`) and push both the commit and the tag
    (`git push && git push --tags`). Skip if no remote is configured and report
    the local tag instead.
 
-10. **The tag does the rest** (ADR-0296, `.github/workflows/ci.yml`). Once
+11. **The tag does the rest** (ADR-0296, `.github/workflows/ci.yml`). Once
     every oracle job is green, `release` creates the GitHub release **as a
     draft** with the CHANGELOG section as its notes, `package` builds a
     statically linked compiler on an x86-64 and an arm64 runner, runs the
