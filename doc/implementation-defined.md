@@ -97,7 +97,7 @@ C++ front end this compiler replaced, which is how the claim was checked before
 ADR-0232 removed it.
 
 **An i386 this compiler emits for has SSE2**, and that is a decision rather
-than an observation (ADR-0346). `i386-pc-linux-gnu` is one of the six
+than an observation (ADR-0346). `i386-pc-linux-gnu` is one of the seven
 targets `--target=` admits, and clang's own default processor for it is
 `i686`, whose x87 registers are eighty bits wide — so an intermediate value
 would be wider than the type holding it, and two of this document's own

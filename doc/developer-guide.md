@@ -483,6 +483,21 @@ not what a compiled program wrote:
   `lsp/README.md` says how to add one; they are
   all one `ctest` case, `lsp-server`, because the harness builds the server once
   and ten program-components is most of the cost.
+* **`tui/sessions/`** is a *screen* rather than a program (ADR-0381): a script
+  of directives in `name.keys` — `push` a line, `size` the terminal, `keys`,
+  `ctrl` and `esc` for the three ways a key arrives, `draw` to render — and
+  what the editor drew in `name.screen`, compared byte for byte. `ctrl M` is
+  Enter and `ctrl H` is Backspace, which is how a session presses the two keys
+  with no directive of their own. Each screen is printed inside a border so
+  that a line ending in blanks and one that does not are visibly different in
+  the golden, and the buffer is printed once at the end, so a session cannot
+  pass over an editor that draws correctly and holds something else. A
+  `name.note` is the standard error the session is allowed to write, absent
+  meaning none — `lsp/sessions/`'s rule and its reason. `session.pas`
+  **refuses** a directive it does not know, since one that silently did nothing
+  would be a session asserting less than it appears to. They are all one
+  `ctest` case, `tui-sessions`, and `tui/README.md` says how to add one — the
+  standing rule being to *read what it drew* before saving it as the golden.
 * **Two sidecars name a *search* rather than a file** (ADR-0244).
   `name.importpath` lists directories, one per line, relative to the case's own
   directory, and becomes `--import-path`; `name.importenv` holds one line, the

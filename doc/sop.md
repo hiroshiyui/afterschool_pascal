@@ -294,9 +294,23 @@ where there are 33, and two triage counts; plus an ADR index row pointing at a
 filename that had been renamed, two glossary terms defined twice in one file,
 and a roadmap that said in one line what it contradicted in another).
 
+2026-09-10 (after the WebAssembly increment and the editor's second
+milestone: **the register was current again and every stale thing was outside
+it** — the third time an audit has found that. `doc/glossary.md`'s **Admitted
+target** entry said there were *five* and that *every one is POSIX* where there
+are seven and two are not machines at all; the editor and the WebAssembly
+corpus had no entry in `doc/design-digest.md`, which is where a landed
+mechanism belongs; `tui/sessions/` was a corpus the developer guide did not
+list; README's platform tiers stopped at macOS though a third tier runs on
+every push; and the roadmap had no row for `tui/` at all, so open work read as
+absent. One row here *had* had its own closing condition partly met —
+`AFTERSCHOOL_PASCAL_*` and the harnesses that ignore what they are handed,
+where ADR-0384 made exactly the judgement the row asked for, for one variable,
+and gated it in both directions).
+
 **Verified on each audit rather than assumed**: the string-arena producer
 count — **eight** `strTemps := strTemps + 1` in `selfhost/compiler.pas`,
-re-counted 2026-09-09 — and the `-O1`/`-O3` row, still a judgement.
+re-counted 2026-09-10 — and the `-O1`/`-O3` row, still a judgement.
 
 | Blind spot | Consequence | Recorded |
 | --- | --- | --- |
@@ -349,7 +363,7 @@ re-counted 2026-09-09 — and the `-O1`/`-O3` row, still a judgement.
 | **Four readings of the concurrency clauses are unsettled** | A `goto` out of a task's block compiles and hangs with no diagnostic; a `send` arm on a closed channel raises its error only when the select's rotation reaches that arm, where an *empty* channel-variable is an error every time; `after` refuses an `int64`; a trailing `;` before a select's `end` is accepted. Each admits two readings, so none takes a scenario | ADR-0365 |
 | A task's ban on non-local variables is **not transitive** | AP 6.7.8.2 refuses a non-local in a task's own block; a task may call a procedure declared outside it that names a global. Closing it needs the call graph across component boundaries, which is why the clause states the limit | ADR-0201, ADR-0268 |
 | **A `verify/` precondition stricter than the compiler's own check passes in silence** | Narrowing a hypothesis only makes a proof easier; `index_span_is_representable` said `<` where Sema said `>=`, both agreed, and `array [0..maxint]` was refused for eleven increments. A precondition must carry the sentence it restates so the two can be compared by eye | ADR-0013, ADR-0289 |
-| **Nothing detects a harness that ignores a path, target or flag it is handed** | Four now: `sanitize.py` and `AFTERSCHOOL_PASCAL_OPT`, `llc_check.py` and the target, `seed_current.py` and an absolute path, and `lib_coverage.py` running a case with none of the arguments and no `.in` the suite gives it — 70 statements reported unreached that the corpus had been covering (ADR-0378), which is the same shape from the other side: not a flag ignored but the convention that makes a case a case. `require-consistency` does this for `*_REQUIRE`; the same for `AFTERSCHOOL_PASCAL_*` needs a judgement about which harness should read which | ADR-0330, ADR-0335, ADR-0345, ADR-0347, ADR-0378 |
+| **Nothing detects a harness that ignores a path, target or flag it is handed** | Four now: `sanitize.py` and `AFTERSCHOOL_PASCAL_OPT`, `llc_check.py` and the target, `seed_current.py` and an absolute path, and `lib_coverage.py` running a case with none of the arguments and no `.in` the suite gives it — 70 statements reported unreached that the corpus had been covering (ADR-0378), which is the same shape from the other side: not a flag ignored but the convention that makes a case a case. `require-consistency` does this for `*_REQUIRE`; the same for `AFTERSCHOOL_PASCAL_*` needs a judgement about which harness should read which. **One variable of that family is now checked in both directions** and is the pattern the rest could follow: `runner-seam` (ADR-0384) holds that `run_test.py` and `irtest.py` each start the program through `AFTERSCHOOL_PASCAL_RUNNER`, that neither starts any part of the *toolchain* through it, and that with the variable unset nothing reaches the wrapper at all — the judgement made, written down, and gated. What it does not generalise on its own is the other five variables | ADR-0330, ADR-0335, ADR-0345, ADR-0347, ADR-0378, ADR-0384 |
 | **Every gate but `target32` and the sanitizer modes runs at one optimisation level** | `labs` bound as `int64` passed `target32` at `-O2` for two weeks and answered garbage at `-O0`; the cell where two axes crossed was empty. The rest was measured: the gates that skip in the `unoptimised` job ask questions no optimiser can change | ADR-0334, ADR-0335 |
 | **The bracket list is by hand** | Which runtime routines can trap — 72 of 127 — was read off the call graph once; a routine that starts trapping reports no position. The safe direction, and visible in the first golden to reach it; a gate over the call graph was declined | ADR-0293 |
 | A **value transcribed from a C header** is checked for one library and no other | `tls.py` checks the six OpenSSL numbers; nothing derives the list, and `PasProcess.ClocksPerSec` carries the same hazard with no gate. An annotation the compiler could report, as `@cstruct` is, was not built | ADR-0185, ADR-0264 |

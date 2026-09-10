@@ -169,6 +169,54 @@ own exception and compare by length instead.
   gate's claim 1 then had to stop classing by word size — it put the two
   32-bit targets together and called 337 correct offsets a divergence — and
   classes by the compiler's whole layout answer instead, derived per run.
+- **A harness does not always run what it built** (ADR-0384). Every harness
+  here executed the binary it produced, which is right until the binary is for
+  another machine — and `--target=` had just admitted one. So
+  `AFTERSCHOOL_PASCAL_RUNNER` is a command, split on blanks and prepended by
+  `tests/run_test.py` and `selfhost/irtest.py` **and by nothing else**: the
+  runtime's own flags (a WASI `--dir` for the two scratch paths a case is
+  handed) are part of the command and not of the harness, and the *toolchain*
+  is never wrapped, a compiler being a program for the machine it runs on
+  whatever it emits for. **A seam with no user is plumbing**, so it landed with
+  a wrapper that records the command and `exec`s it, which holds the *shape* of
+  the invocation — four claims, the fourth being that with the variable unset
+  nothing reaches the wrapper at all, which is the floor.
+- **A Pascal program runs as WebAssembly** (ADR-0385). ADR-0383 admitted the
+  target on the terms every target is admitted on — the compiler lays it out
+  correctly and clang assembles what it emits — and that says nothing about
+  whether a program *works*: ADR-0325's lesson, since both defects the i386
+  port found were in neither a layout rule nor a frame. **519 of 598 answer
+  their golden** under a WASI engine, linked against only the two runtime units
+  `nonposix_headers.txt` says compile, so what a program can reach is what a
+  port has got and one wanting more fails at the link with the symbol named.
+  The 79 that do not are a work queue with six causes, 52 of them `tmpfile`,
+  which wasi declares and does not define. It found two things no other oracle
+  could, and both were **wrong answers rather than failures to start**: a 64 KB
+  default stack that printed stray spaces into the middle of a line, and a
+  `SOURCE_DATE_EPOCH` a WASI runtime does not pass on unless told to — which is
+  why `tests/checks/wasi_run.py` sits between the fixed runner prefix and the
+  engine, forwarding exactly the names `runtime/*.c` passes to `getenv`, in
+  both directions.
+- **...and the toolchain has to name `i128`.** clang *overrides* the module's
+  `target datalayout` with its own for the `--target=` it is given (ADR-0156),
+  so the two must agree about every field this compiler models. Debian trixie's
+  clang 19 states no `i128:128` for wasm32 and clang 21 does, which aligns an
+  i256 to 8 where the compiler computed 16 — a set inside a record laid out two
+  ways, ADR-0028's own defect, and `tests/sets_records.pas` was the one failure
+  in 598 on that image. Both `target-layout` and `wasm32` **abstain** where the
+  two disagree, printing each line, because the compiler is not wrong there and
+  the measurement simply cannot be taken on that toolchain; `WASM32_REQUIRE`
+  then turns that skip into a failed job, so the CI image is `debian:testing`.
+- **wasm64 costs nothing, and that is the finding** (ADR-0386). A seventh
+  target, WebAssembly's memory64, admitted on the layout claim alone because no
+  sysroot for it exists to link against. Nothing in the layout rules changed:
+  `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
+  an LP64 target needs, and wasm64 took the *default* side of every condition.
+  `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
+  matched every one of the 11 162 frame offsets, with nothing in the gate
+  edited to admit it — the target list being read from the compiler's own
+  `--target=` refusal. It is ADR-0325's generalisation spent a third time and
+  the first time free.
 - **A type's storage is a fact about the source program** (ADR-0287), so the
   layout arithmetic lives in ApFront and not in CodeGen, and a size is an
   `int64`. It answered a Pascal `integer` until a channel of an 8 GB element
@@ -4897,6 +4945,47 @@ string like the five before them. `clDefault` is numbered **8 and not 9**
 because SGR 38 is the extended-colour introducer rather than a colour, so a
 subrange running to 9 would admit a value that makes a terminal swallow
 whatever is written next; one private function maps 8 to 39 and 49.
+
+**Milestone two is undo, find and go-to-line** (ADR-0387), and two of the
+three are a design question wearing a feature's clothes.
+
+**Undo asks what an edit *is*.** Milestone one changed the buffer in place —
+each arm computed a new line and wrote it back — and nothing was wrong with
+that until something had to reverse it, at which point there was no *it*: the
+edit existed only as the difference between two strings, which cannot say
+where the cursor was. So an edit is one of four operations — `ekInsert`,
+`ekDelete`, `ekSplit`, `ekJoin` — and `DoInsert`/`DoRemove`/`DoSplit`/`DoJoin`
+are **the only code in the editor that touches the buffer**, every arm being
+one of those and one `Note`. That is what makes the journal complete *by
+construction rather than by inspection*: an arm reaching into `PasStrVec`
+itself would be an edit undo could not reverse, and there is no longer a way
+to write one without noticing. One entry both reverses an edit and performs it
+again, so redo is the same mechanism read forwards.
+
+**A typed run is one entry.** Characters left to right, backspaces right to
+left and forward deletes in place coalesce; a split or a join never joins a
+group. Every key that is not more of the same run closes it and **the default
+is to close** — the safe direction, since forgetting gives an undo smaller
+than expected, which a person sees and repeats, where the other way gives one
+that swallows an action they never performed. The mutation that disables
+coalescing is what makes `sessions/undo.keys` evidence rather than a
+transcript.
+
+**A prompt asks who owns the keyboard**, and the answer is the model: the
+label, the half-typed answer and the mode are fields of `Editor`, the render
+draws the question with the cursor *in* it, and the shell is told one thing
+(`EditPrompting`) and does nothing of its own while it is true. A prompt loop
+in the shell was the obvious shape and would have put the half of the
+milestone a person most notices being wrong into the one part no oracle here
+reaches — this entry's own first decision, met again.
+
+Two consequences worth knowing. Search is **case-insensitive**, which is the
+one thing this editor knows about the language it edits (§6.1.3 folds every
+letter of an identifier, so `writeln` finds `WriteLn`), and a wrapped search
+says so, there being no other way to tell the second match from the first one
+again. And **Escape cannot close a prompt, so Ctrl-C does** — a fact about the
+decoder rather than a preference: it is handed one byte at a time, and a bare
+Escape and the start of an arrow are the same byte.
 
 What no oracle here reaches is the shell itself — `doc/sop.md` §7 carries the
 row, which ADR-0262 owed and never wrote. It was checked by hand under a

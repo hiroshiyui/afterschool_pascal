@@ -48,3 +48,21 @@ doc/roadmap.md | ctest           | the suite is (\d+) cases green
 # moved that row to `doc/history.md` whole, and a number a *record* quotes is
 # out of scope on purpose -- history says what was found then. README's
 # sentence above is the live one.
+
+# **The admitted-target count went stale in two documents at once** on
+# 2026-09-10 -- `doc/glossary.md` said five and `doc/implementation-defined.md`
+# said six, where `--target=` had admitted seven. Neither was watched, and the
+# 2026-09-09 audit's finding repeated itself exactly: the register was current
+# and the stale things were outside it. `target-layout` reads the list from the
+# compiler's own refusal and prints how many it compared, so these three rows
+# are that number held against the three live sentences that quote it. A record
+# quoting it stays out of scope -- an ADR says what was true then.
+doc/glossary.md               | target-layout | ADR-0325\)\. There are \*\*(seven)\*\*
+doc/implementation-defined.md | target-layout | is one of the (seven)\s+targets
+README.md                     | target-layout | Five of the (seven) are POSIX
+
+# The frames `target-layout` actually compared, which moves whenever a target
+# joins the LP64 class or a frame is added to the corpus -- and it moved on the
+# day wasm64 was admitted, from a number nothing quoted to one two documents do.
+doc/roadmap.md                | target-layout | one of the\s+(11 162) frame offsets
+doc/design-digest.md          | target-layout | matched every one of the (11 162) frame

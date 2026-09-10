@@ -779,15 +779,53 @@ program's own loads and stores.
 deliberate: a target is admitted when this compiler's own size and alignment
 rules have been compared against LLVM's for that machine, over every frame the
 emitter writes and over six record shapes, on every build (ADR-0157,
-ADR-0325). There are **five** — `x86_64-pc-linux-gnu`, `aarch64-linux-gnu`,
-`i386-pc-linux-gnu` and the two Darwin triples (ADR-0372) — and every other is
-refused. **Every one is POSIX** since ADR-0380 dropped `x86_64-w64-windows-gnu`,
-a target admitted on a measurement (ADR-0371) and deferred on one (ADR-0374).
-Admission still says nothing about a platform being *supported*: it is a claim
-about the module the compiler *writes*, and README's **Platform tiers** is
-where a user reads what each one means. Several gates enumerate the list from
-the compiler's own refusal rather than from a copy, so a sixth is compared
-without any of them being edited.
+ADR-0325). There are **seven** — `x86_64-pc-linux-gnu`, `aarch64-linux-gnu`,
+`i386-pc-linux-gnu`, the two Darwin triples (ADR-0372), and `wasm32-wasi` and
+`wasm64-wasi` (ADR-0383, ADR-0386) — and every other is refused. **Five of the
+seven are POSIX** since ADR-0380 dropped `x86_64-w64-windows-gnu`, a target
+admitted on a measurement (ADR-0371) and deferred on one (ADR-0374); the other
+two are not machines at all. Admission still says nothing about a platform
+being *supported*: it is a claim about the module the compiler *writes*, and
+README's **Platform tiers** is where a user reads what each one means. Several
+gates enumerate the list from the compiler's own refusal rather than from a
+copy, so an eighth is compared without any of them being edited — and one was,
+`wasm64-wasi` landing with nothing in `target-layout` edited to admit it.
+
+**Runner.** What *starts* a compiled program, when the machine that built it
+cannot execute it (ADR-0384). `AFTERSCHOOL_PASCAL_RUNNER` is a command split on
+blanks and prepended by `tests/run_test.py` and `selfhost/irtest.py` and by
+nothing else. Two things it is not: it is not a compiler wrapper — the
+toolchain is never run through it, a compiler being a program for the machine
+it runs on whatever it emits for — and its flags are its own, so a WASI
+engine's `--dir` for the two scratch paths is part of the command rather than
+something a harness knows about.
+
+**Abstention.** A gate answering *I cannot take this measurement here*, as
+distinct from passing and from failing (ADR-0282). It is the honest answer when
+the thing being compared is absent or when the comparison would be about the
+machine rather than about this compiler — `target-layout` and `wasm32` both
+abstain where this clang lays a target out differently from the module the
+compiler emits, because clang overrides the module's datalayout with its own
+(ADR-0156) and the compiler is not the thing that is wrong. An abstention a job
+accepts is a gate that has stopped asking, which is what the `*_REQUIRE`
+variables exist to prevent (ADR-0330).
+
+**Journal (of edits).** The editor's undo, and the reason it is a word here is
+that it is a *representation* rather than a feature (ADR-0387). An edit is one
+of four operations — insert, remove, split, join — and the four routines that
+perform them are the only code that touches the buffer, so the journal is
+complete by construction: an arm that edited the buffer directly would be an
+edit undo could not reverse, and there is no way to write one unnoticed. One
+entry both reverses an edit and performs it again, so redo is not a second
+mechanism.
+
+**Session (of the editor).** `tui/sessions/name.keys` plus `name.screen`: a
+script of keys, and the screens the editor drew, compared byte for byte
+(ADR-0381). It is the golden test's shape for a program whose output is a
+*screen* — rows by columns with the cursor's cell — and it needs no terminal,
+which is why the editor renders into a buffer rather than writing escape
+sequences. A `name.note` beside it is the standard error a session is allowed
+to write; absent means none.
 
 **Golden test.** `tests/name.pas` plus `name.out`, the expected stdout of a
 program that must compile and exit 0 (ADR-0011). An optional `name.in` is fed

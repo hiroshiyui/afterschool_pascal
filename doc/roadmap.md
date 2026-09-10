@@ -227,6 +227,39 @@ Every other row was struck within four days of being written
 ([history](history.md#the-roadmap-as-it-stood-on-2026-09-07) has the table,
 and each row's narrative is a chapter there).
 
+### The text-mode editor
+
+`tui/` is open work rather than a finished thing, which is why it has a row
+here at all. It was proposed, carried for six increments, **withdrawn by
+decision** on 2026-09-01 — *"the language server is the better tool for what
+the IDE was wanted for"* — and un-withdrawn on 2026-09-10 for two reasons the
+withdrawal could not weigh
+([ADR-0381](adr/0381-the-ide-is-un-withdrawn.md)): the *Pascal-lineage answer
+key* the record itself named as what was being given up, and that this is a
+hobby project. The server is undisturbed and the two answer different
+questions.
+
+**Two milestones have landed.** One is open, edit, save, compile, land on the
+error. Two is undo and redo over a journal, find and find-again, and
+go-to-line ([ADR-0387](adr/0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md)) —
+and each of those three turned out to be a design question rather than a
+feature, which is the argument for using the thing you are building.
+
+**What is open**, in no order and none of it decided: replace; more than one
+file at once, which is what actually makes it usable on this compiler, since a
+diagnostic often names a component that is not on screen; horizontal
+scrolling; display width, which is a *language* question first (AP 6.4.15
+NOTE 14 puts the number of columns a value occupies outside this language);
+resize, which needs a signal facility this language does not have; and mouse.
+The four milestone-one exclusions and the milestone-two ones are listed in
+`tui/README.md` with the reason for each.
+
+**What nothing checks** is the shell — raw mode's flags, a read answering on
+one keystroke, the settings put back being the settings taken — which is a
+`doc/sop.md` §7 row that ADR-0262 owed and ADR-0381 finally wrote. Closing it
+needs a pseudo-terminal binding, declined twice on the grounds that a case
+needing one becomes a test of the binding.
+
 ### Cross-platform support
 
 Developed on x86-64 Linux; **built and tested on aarch64 on every push**
