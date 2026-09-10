@@ -154,29 +154,30 @@ def datalayout_of(target):
     return None
 
 
-# The fields of a datalayout this compiler **models**. Everything else in the
-# string is a fact about a machine that nothing here emits into, and comparing
-# it compares the two clangs' *vocabularies* rather than their layouts.
+# The fields of a datalayout that decide what this compiler lays out. It is an
+# **allowlist**, and it started as the opposite (ADR-0385): dropping the fields
+# that obviously decide nothing meant curating a list against every LLVM
+# release, and two of them arrived within the hour -- an x86 host states
+# `p270`/`p271`/`p272` for *any* target and an arm64 one does not, and clang 19
+# writes `Fn32` where clang 18 writes nothing. Neither decides the size or the
+# alignment of a single type here, and both abstained three targets at once.
 #
-# What is dropped is every non-default address space -- `p270`, `p271` and
-# `p272`, which are x86's segment registers, `p10` and `p20`, which are wasm's
-# own references, and the `ni` list that names them. This emitter puts
-# everything in address space 0 and reads nothing out of another, so a clang
-# that mentions them and one that does not are saying the same thing about
-# every type this compiler lays out.
+# What is kept is what `LlSize` and `LlAlign` read: the endianness, the default
+# pointer, and the alignment of an integer, a float, a vector or an aggregate.
+# Everything else is a symbol mangling (`m:`), a set of native widths (`n`), a
+# stack (`S`), a function-pointer alignment (`Fn`), a non-default address space
+# or the list naming them (`ni`) -- vocabulary this emitter never uses.
 #
-# **A byte comparison was tried first and was wrong on the second machine it
-# met** (ADR-0384): the aarch64 runner's clang states no `p270:32:32` for
-# `aarch64-linux-gnu` and the committed line has one, taken from an x86 host's
-# clang, so three targets abstained at once and the floor turned the gate red
-# for a difference that decides nothing.
-ADDRESS_SPACE = re.compile(r"^(?:p\d+:|ni:)")
+# **The safe direction is to compare too much rather than too little.** A field
+# that matters and is not allowed here makes two clangs *look* alike, and claim
+# 2 then fails loudly on the folded numbers; the cost is a message about the
+# wrong thing, not a wrong answer. Abstaining wrongly is the one that hides.
+MODELLED = re.compile(r"^(?:[eE]|p:|[ivfa]\d*:)")
 
 
 def modelled(line):
     body = line.split('"')[1] if '"' in line else line
-    return frozenset(f for f in body.split("-")
-                     if f and not ADDRESS_SPACE.match(f))
+    return frozenset(f for f in body.split("-") if MODELLED.match(f))
 
 
 def emitted_datalayout(target):
@@ -465,7 +466,7 @@ def main():
     # ask is one that reports about the machine. Two ways it cannot ask, and
     # they are different: no backend for the triple, and a *different idea* of
     # the triple's layout, which is what an older LLVM has for wasm32.
-    layouts, absent, disagree = {}, [], []
+    layouts, absent, disagree, cannot = {}, [], [], []
     for t in targets:
         dl = datalayout_of(t)
         if dl is None:
@@ -475,11 +476,24 @@ def main():
         if modelled(dl) != modelled(mine):
             disagree.append((t, dl.strip(), mine.strip()))
             continue
+        # **Answering about a target and assembling for one are two
+        # questions**, and macOS answers the first and not the second: its
+        # clang states wasm32's datalayout and has no backend to emit for it,
+        # so the probe assembled below died where this abstains. Asked with a
+        # module of nothing, before any of the real work.
+        probe = run([CLANG, "--target=" + t, "-S", "-o", os.devnull,
+                     "-x", "ir", "-"], input=dl + "\n")
+        if probe.returncode != 0:
+            cannot.append(t)
+            continue
         layouts[t] = dl
     targets = [t for t in targets if t in layouts]
     for t in absent:
         print("target-layout: %-24s not compared -- this clang has no backend "
               "for it" % t)
+    for t in cannot:
+        print("target-layout: %-24s not compared -- this clang states a "
+              "layout for it and cannot assemble for it" % t)
     for t, theirs, mine in disagree:
         print("target-layout: %-24s not compared -- this clang states a "
               "different layout for it than the module does, so the two are "
