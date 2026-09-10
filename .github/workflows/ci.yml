@@ -273,9 +273,20 @@ jobs:
     # target**, and that is a property of the toolchain a port is taken on.
     # testing carries the same wasi-libc this was measured against and
     # packages both engines.
+    # **Pinned by digest, because `testing` is a rolling target.** Every other
+    # job here names a stable release; this one cannot (the row above says
+    # why), and a tag that moves is a job that can go red on somebody else's
+    # upload, in a repository where a red bar is supposed to mean this tree
+    # changed. The digest below is the image the committed numbers were
+    # measured on -- 560 of 598, and wasmedge 0.17.1, which is the engine
+    # version `wasm32.py` probes for.
+    #
+    # Moving it is a deliberate act: bump the digest, run the job, and if the
+    # numbers move, say so in the same commit. That is the whole point of
+    # pinning rather than the point of never updating.
     name: the runtime and the corpus on WebAssembly
     runs-on: ubuntu-latest
-    container: 'debian:testing'
+    container: 'debian:testing@sha256:dab11cdb0a9dcf4bbd68f671635b35f1f726b452b92396875b69bb2c7daa42a9'
 
     steps:
       - name: Install the documented dependencies
