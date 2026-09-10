@@ -23,6 +23,11 @@ appears below in the release where it still existed.
   64 KB default. What is not there yet is the runtime: `tmpfile` is undefined
   on wasi and that is 52 of the 79 programs that do not run, with channels,
   tasks, processes and sockets accounting for most of the rest.
+- **A seventh target: `--target=wasm64-wasi`** (ADR-0386), WebAssembly's
+  memory64. It is admitted on the layout claim alone — the emitted module
+  states the target's layout and clang assembles it — because no sysroot for
+  it exists to link against. It cost nothing in the compiler's layout rules:
+  every one already had the arm an LP64 target needs.
 - **A sixth target: `--target=wasm32-wasi`** (ADR-0383), also spelled
   `wasm32-unknown-wasi` and `wasm32-wasip1`. The emitted module states
   WebAssembly's layout and triple, and `clang` assembles it into a `.wasm`

@@ -379,12 +379,14 @@ M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
 by default, then `aarch64-linux-gnu`, `i386-pc-linux-gnu`,
-`arm64-apple-macosx`, `x86_64-apple-macosx` and — since ADR-0383 —
-`wasm32-wasi`, which is not a machine at all. Five of the six are POSIX
-(ADR-0380); the sixth is the one this project is aiming at, and what admitting
-it means is that the compiler lays it out correctly and clang assembles what it
-emits, **not** that a program links: the runtime does not build for it yet, and
-ADR-0382 measures how far away that is.
+`arm64-apple-macosx`, `x86_64-apple-macosx` and — since ADR-0383 and
+ADR-0386 — `wasm32-wasi` and `wasm64-wasi`, which are not machines at all.
+Five of the seven are POSIX (ADR-0380); the other two are what this project is
+aiming at. **`wasm32-wasi` runs**: 519 of the corpus compile, link and answer
+their goldens under a WASI engine (ADR-0385). **`wasm64-wasi` is admitted on
+the layout claim alone** — the compiler lays it out correctly and clang
+assembles what it emits — because memory64 has no sysroot to link against
+yet, so every gate needing one abstains and says so.
 `pascalcc` hands it to `clang` as well, so with a cross toolchain installed it
 cross-compiles:
 
@@ -2767,7 +2769,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 920 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 921 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

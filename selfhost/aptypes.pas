@@ -47,7 +47,7 @@ export ApTypes = (
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtDarwinArm64,
-  tgtDarwinX86, tgtWasm32, targetIx, PtrSize,
+  tgtDarwinX86, tgtWasm32, tgtWasm64, targetIx, PtrSize,
   WordAlign, WideAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
@@ -326,7 +326,7 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 6;
+  tgtCount = 7;
   tgtX86 = 1;
   tgtAarch64 = 2;
   { ADR-0325's third, and the first that is not LP64. What made it admissible
@@ -372,6 +372,24 @@ const
     linking one. A target is admitted here when the compiler can lay it out
     correctly, which `target-layout` decides, and not when a program runs. }
   tgtWasm32 = 6;
+  { ADR-0386's seventh, and it costs **nothing** in this file, which is the
+    whole of what is worth saying about it. wasm64 is LP64 -- a pointer of
+    eight bytes, a C `long` of eight, an eight-byte datum aligned to eight --
+    so `PtrSize`, `WordAlign`, `CLongSize` and `WideAlign` below all answer it
+    with the arm they already had, and `target-layout` puts it in a class with
+    x86-64 and aarch64 and compares every frame against theirs.
+
+    That is ADR-0325's generalisation spent a third time and the first time it
+    has cost nothing at all: the first ILP32 target made those functions
+    target-dependent, the second (ADR-0383) split `WideAlign` out of
+    `WordAlign`, and this one needed neither.
+
+    **What it has not got is anywhere to run.** wasm64 is the memory64
+    proposal: Debian ships no sysroot for it, so `runtime-nonposix`,
+    `setjmp-arity` and `wasm32` all abstain, and what is claimed here is what
+    was claimed for wasm32 before ADR-0385 -- that the compiler lays the
+    target out correctly and clang assembles what it emits, and no more. }
+  tgtWasm64 = 7;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.

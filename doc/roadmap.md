@@ -25,7 +25,7 @@ headline: a command injection in the language server found, closed, audited
 and audited again (ADR-0362 – ADR-0364), a TOML library and the project reader
 rewritten over it (ADR-0360, ADR-0361) — none of it a change to the language.
 The compiler builds itself, stage 2 equals stage 3 in every
-program-component, and the suite is 920 cases green at `-O2` and at `-O0`.
+program-component, and the suite is 921 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
@@ -251,6 +251,12 @@ tiers* saying what a port starts from.
 measurement and deferred on one; the row that carried its measurements is
 [in history](history.md#windows-measured-and-then-dropped), where a
 contributor who wants it starts from a page of findings rather than nothing.
+
+**And `wasm64-wasi` is the seventh** (ADR-0386) — WebAssembly's memory64,
+admitted on the layout claim alone because no sysroot for it exists. It landed
+in a class with x86-64, aarch64 and both Darwin triples and every one of the
+11 162 frame offsets matched theirs, and it cost **nothing** in the layout
+rules: ADR-0325's generalisation spent a third time and the first time free.
 
 **And the sixth target is `wasm32-wasi`, admitted the same day** (ADR-0383) —
 the first this compiler names that is not POSIX and not a machine. What it

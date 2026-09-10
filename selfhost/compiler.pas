@@ -521,6 +521,10 @@ begin
   else if EQ(name, 'wasm32-wasi') or EQ(name, 'wasm32-unknown-wasi') or
           EQ(name, 'wasm32-wasip1') or
           EQ(name, 'wasm32-unknown-wasip1') then TargetIndex := tgtWasm32
+  { ADR-0386's seventh, and the same four spellings one width up. }
+  else if EQ(name, 'wasm64-wasi') or EQ(name, 'wasm64-unknown-wasi') or
+          EQ(name, 'wasm64-wasip1') or
+          EQ(name, 'wasm64-unknown-wasip1') then TargetIndex := tgtWasm64
   else TargetIndex := 0
 end;
 
@@ -532,7 +536,8 @@ begin
     tgtI386: name := 'i386-pc-linux-gnu';
     tgtDarwinArm64: name := 'arm64-apple-macosx';
     tgtDarwinX86: name := 'x86_64-apple-macosx';
-    tgtWasm32: name := 'wasm32-wasi'
+    tgtWasm32: name := 'wasm32-wasi';
+    tgtWasm64: name := 'wasm64-wasi'
   end
 end;
 
@@ -560,7 +565,8 @@ begin
   writeln('                  for: x86_64-pc-linux-gnu (default),');
   writeln('                  aarch64-linux-gnu, i386-pc-linux-gnu,');
   writeln('                  arm64-apple-macosx, x86_64-apple-macosx');
-  writeln('                  or wasm32-wasi. An unknown one is refused');
+  writeln('                  wasm32-wasi or wasm64-wasi. An unknown');
+  writeln('                  one is refused');
   writeln('                  and the refusal names them all');
   writeln('  --dump-all      write all three, with section headers');
   writeln('  --dump-dispatch compile as usual, then write every');
@@ -12184,6 +12190,14 @@ begin
       writeln(ircode, 'target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-',
                       'i64:64-i128:128-n32:64-S128-ni:1:10:20"');
       writeln(ircode, 'target triple = "wasm32-unknown-wasi"')
+    end;
+    { ADR-0386, and clang's own line for `wasm64-wasi`: the one above with a
+      64-bit pointer and nothing else changed, which is what makes this target
+      free here and what `target-layout` checks rather than takes on trust. }
+    tgtWasm64: begin
+      writeln(ircode, 'target datalayout = "e-m:e-p:64:64-p10:8:8-p20:8:8-',
+                      'i64:64-i128:128-n32:64-S128-ni:1:10:20"');
+      writeln(ircode, 'target triple = "wasm64-unknown-wasi"')
     end
   end;
   writeln(ircode);
@@ -12314,7 +12328,7 @@ begin
     like that one it is keyed on `targetIx` and judged by a gate that asks the
     target rather than by a reading. }
   writeln(ircode);
-  if targetIx = tgtWasm32 then
+  if (targetIx = tgtWasm32) or (targetIx = tgtWasm64) then
     writeln(ircode,
             'define i32 @__main_argc_argv(i32 %argc, ptr %argv) #1 {')
   else

@@ -184,7 +184,8 @@ def main():
     # because a target added without a row here is a target this half stops
     # asking about.
     want = {"x86_64-pc-linux-gnu": "i64", "aarch64-linux-gnu": "i64",
-            "i386-pc-linux-gnu": "i32", "wasm32-wasi": "i32"}
+            "i386-pc-linux-gnu": "i32", "wasm32-wasi": "i32",
+            "wasm64-wasi": "i64"}
     if pathlib.Path(pascalc).exists():
         with tempfile.TemporaryDirectory() as d:
             src = pathlib.Path(d) / "w.pas"; src.write_text(probe)
