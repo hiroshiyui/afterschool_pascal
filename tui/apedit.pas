@@ -1228,6 +1228,7 @@ end;
 procedure EditRender;
 var r, c, h, n, wide, pcol: integer; s: EditLine; row: ScreenRow;
     num: EditLine; k2: integer; kr: CellRole; prow: integer;
+    ans: EditLine;
 begin
   { The size the caller asked for, held to what this can draw. **Four rows is
     the least that has a document in it** since ADR-0389 -- the last three
@@ -1329,7 +1330,17 @@ begin
     k2 := (rows - 3) div 2;
     if k2 < 2 then k2 := 2;
     Frame(scr, k2, n, 3, wide, s, crFrame);
-    PutAt(scr, k2 + 1, n + 2, Left(ed.prompt, wide - 4), crFrame);
+    { **The answer is a field, and the field is the one thing on this screen
+      that means *the editor is waiting for you*** (ADR-0393). Between
+      ADR-0392 and this change `crPrompt` was written by nothing: the prompt
+      stopped being a bottom line and became a box, and the box drew its
+      contents in its own role -- so a role that is declared, mapped to a
+      colour and given a letter in every golden was drawn on no screen, and
+      every golden agreed. The whole line inside the frame takes it, so the
+      field has edges even when nothing has been typed into it. }
+    ans := Left(ed.prompt, wide - 4);
+    while length(ans) < wide - 4 do ans := ans + ' ';
+    PutAt(scr, k2 + 1, n + 2, ans, crPrompt);
     pcol := n + 2 + length(Left(ed.prompt, wide - 4));
     if pcol > cols then pcol := cols;
     prow := k2 + 1

@@ -71,6 +71,21 @@ var
   roles is what a panel will bring, and `PutRow` will then break the row into
   runs instead of taking the first cell's. It takes the first cell's *and says
   so*, rather than pretending to be general. }
+{ **Every role but the document pairs black or white with a colour, and
+  never a colour with a colour** (ADR-0393). `PasTerm` offers the eight ANSI
+  colours and no bright ones, and what a terminal makes of the eight is its
+  own business -- so the only pairings that stay legible under a theme
+  nobody here chose are the ones where one side is an extreme. Two arms broke
+  that rule and both were the ones a person could not read: `crFrame` was
+  cyan on blue, which is 4.8:1 on xterm's own palette and worse on a muted
+  one, and it is the whole body of a drop-down; and `crMessage` had a
+  `clDefault` background, which is yellow on white on a light terminal and so
+  is not a contrast ratio at all. The floor `tui/palette.py` holds this table
+  to is WCAG AAA's 7:1 for body text; the worst pair in it is 7.5:1.
+
+  `crText` is the exception and has to be: the document is the terminal's own
+  text in the terminal's own colours, and painting it would be this editor
+  overriding a choice the person made. }
 procedure RoleColour(k: CellRole; var fg, bg: Colour);
 begin
   case k of
@@ -79,16 +94,20 @@ begin
       one row a person looks at without meaning to. }
     crStatus: begin fg := clBlack; bg := clCyan end;
     crHint: begin fg := clBlack; bg := clWhite end;
-    { A message is the editor speaking and a question is the editor waiting,
-      so they do not look alike -- which is the whole reason the model tells
-      them apart. }
-    crMessage: begin fg := clYellow; bg := clDefault end;
+    { A message is the editor speaking and a question is the editor waiting.
+      They share a colour and never a screen -- a message is the row above the
+      status line and a question is a box in the middle -- so what tells them
+      apart is still the model, which is the whole reason it tells them
+      apart. }
+    crMessage: begin fg := clBlack; bg := clYellow end;
     crPrompt: begin fg := clBlack; bg := clYellow end;
-    { A panel's frame and the menu bar, and the item under the cursor in
-      reverse of the bar -- Turbo Pascal's own scheme. }
-    crFrame: begin fg := clCyan; bg := clBlue end;
+    { A panel is white on blue and the menu bar is black on cyan, so a
+      drop-down is visibly *not* the bar it hangs from; the item under the
+      cursor is plain reverse video, which is the one pairing that cannot be
+      mistaken for either. }
+    crFrame: begin fg := clWhite; bg := clBlue end;
     crMenu: begin fg := clBlack; bg := clCyan end;
-    crChosen: begin fg := clWhite; bg := clBlue end;
+    crChosen: begin fg := clBlack; bg := clWhite end;
   end
 end;
 

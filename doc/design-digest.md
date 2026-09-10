@@ -5086,6 +5086,30 @@ rather than lucky. It also took the message line back to one job: it had been
 answering two, under a test (`mode <> mdEdit`) that was right while every mode
 was a prompt and wrong the moment a menu was not.
 
+**A role that nothing draws is a colour nobody sees** (ADR-0393). The
+role/colour split is what lets a golden hold the model's decision without
+holding the shell's escape codes, and what it leaves uncovered is
+everything a person sees first. Two defects were living there. `crPrompt`
+— *the editor is waiting for you* — was declared in the enumeration,
+mapped to a colour, given a letter by `tui/session.pas` and drawn on **no
+screen**: ADR-0392 turned a prompt into a box and the box drew its
+contents in its own role, so the role plane of all fifteen sessions held
+no `p` and fifteen green sessions said nothing. And `crFrame` was cyan on
+blue, 4.8:1 against xterm's own eight and worse against a muted theme,
+while `crMessage` was yellow on `clDefault`, which on a light terminal is
+yellow on white and so is not a ratio at all.
+
+The rule is **structural** and the ratio is only its evidence: one side of
+every pairing is black or white, never a colour on a colour and never
+`clDefault`, because what a terminal makes of the eight is its own
+business — a pair that measures 7:1 on xterm can measure 3:1 on a theme
+nobody here chose. `crText` is exempt and has to be, the document being
+the terminal's own text in the terminal's own colours. `tui/palette.py`
+is the gate and holds both claims in both directions; the test that fails
+without it is the mutation that puts the field back to `crFrame` **and
+regenerates the goldens**, after which `tui-sessions` passes and
+`tui-palette` does not.
+
 **`ncurses` was declined, and the record says why** (ADR-0389): it owns the
 screen and the terminal, so drawing through it makes the drawing no longer a
 value anything can diff — ADR-0262's argument against a pseudo-terminal

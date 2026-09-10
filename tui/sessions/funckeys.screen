@@ -42,7 +42,7 @@ cursor 2,1
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
 |..ffffffffffffffffffffffffffffff..|
-|..ffffffffffffffffffffffffffffff..|
+|..ffppppppppppppppppppppppppppff..|
 |..ffffffffffffffffffffffffffffff..|
 |..................................|
 |mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
@@ -52,7 +52,7 @@ cursor 2,1
 +----------------------------------+
 |1-34u |
 |1-2. 3-32f 33-34. |
-|1-2. 3-32f 33-34. |
+|1-2. 3-4f 5-30p 31-32f 33-34. |
 |1-2. 3-32f 33-34. |
 |1-34. |
 |1-34m |
@@ -73,7 +73,7 @@ cursor 3,5
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
 |..ffffffffffffffffffffffffffffff..|
-|..ffffffffffffffffffffffffffffff..|
+|..ffppppppppppppppppppppppppppff..|
 |..ffffffffffffffffffffffffffffff..|
 |..................................|
 |mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
@@ -83,7 +83,7 @@ cursor 3,5
 +----------------------------------+
 |1-34u |
 |1-2. 3-32f 33-34. |
-|1-2. 3-32f 33-34. |
+|1-2. 3-4f 5-30p 31-32f 33-34. |
 |1-2. 3-32f 33-34. |
 |1-34. |
 |1-34m |

@@ -1289,6 +1289,16 @@ add_test(NAME tui-sessions
 set_tests_properties(tui-sessions PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
                      TIMEOUT 300)
 
+# The editor's colour (ADR-0393). A session golden holds the **role plane** and
+# never a colour, which is ADR-0389's split and is right -- and it leaves the
+# whole of what a person sees first unchecked. Two defects were living there:
+# `crPrompt` was declared, coloured, lettered and drawn on no screen for the
+# life of ADR-0392, with all fifteen sessions green; and two pairings were a
+# colour on a colour, which a muted terminal theme flattens into unreadable.
+# It reads three sources and needs neither a build nor a terminal.
+add_test(NAME tui-palette
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/palette.py)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

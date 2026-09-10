@@ -80,3 +80,4 @@ README.md                     | setjmp-arity | Five of the (seven) are POSIX
 # day wasm64 was admitted, from a number nothing quoted to one two documents do.
 doc/roadmap.md                | target-layout | one of the\s+(11 162) frame offsets
 doc/design-digest.md          | target-layout | matched every one of the (11 162) frame
+tui/README.md   | tui-palette        | every pairing clears at (\d+\.\d+):1 or better

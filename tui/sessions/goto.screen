@@ -38,7 +38,7 @@ cursor 2,1
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
 |..ffffffffffffffff..|
-|..ffffffffffffffff..|
+|..ffppppppppppppff..|
 |..ffffffffffffffff..|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
@@ -47,7 +47,7 @@ cursor 2,1
 +--------------------+
 |1-20u |
 |1-2. 3-18f 19-20. |
-|1-2. 3-18f 19-20. |
+|1-2. 3-4f 5-16p 17-18f 19-20. |
 |1-2. 3-18f 19-20. |
 |1-20m |
 |1-20s |

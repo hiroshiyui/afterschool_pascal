@@ -33,6 +33,9 @@ appears below in the release where it still existed.
   decoded and reported by number (`F5 is not bound`) rather than ignored. The
   hint bar now reads `F2 Save  F9 Build  …`.
 
+### Fixed
+- **The editor's colour is legible, and a role that nothing draws now fails a gate** (ADR-0393). A drop-down's body was cyan on blue, which is 4.8:1 on xterm's own palette and worse on a muted theme, and the message line was yellow on the terminal's own background, which on a light terminal is yellow on white. Every role but the document's text now pairs black or white with a colour, at 7.5:1 or better. And a dialog's answer is drawn as a **field** again: `crPrompt` — *the editor is waiting for you* — had been declared, coloured and drawn on no screen since the prompts became boxes, with all fifteen session goldens agreeing. The new `tui-palette` case holds both claims in both directions.
+
 ### Changed
 - **The editor is `apide`, and that is now its only name.** v3.9.0 installed
   it as `afterschool`, on the convention `pascalc` sets over

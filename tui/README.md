@@ -25,8 +25,33 @@ something, which is the model and not the shell.
 | `session.components` | ISO/IEC 10206:1991 §6.13's other program-components, one path per line, in dependency order |
 | `build.py` | builds either program from its sidecar; `lsp/build.py` with the program as an argument, since `tui/` has two over one model |
 | `run.py` | replays every session and compares the screens |
+| `palette.py` | the two claims about colour a golden cannot hold: every role is drawn by some session, and every pairing is legible (ADR-0393) |
 | `sessions/*.keys` | a script, one directive per line |
 | `sessions/*.screen` | what it drew, exactly — the characters, then the **roles**, one letter per cell |
+
+## Colour
+
+A cell carries a **role** and not a colour (ADR-0389), so a golden holds the
+role plane — one letter per cell — and the shell is what turns a role into an
+escape sequence. That split is what makes the drawing a value anything can
+diff, and it leaves the whole of what a person notices first held by nothing.
+
+`palette.py` closes the half that can be closed (ADR-0393). **Every role but
+`crText` pairs black or white with a colour** — never a colour with a colour,
+never `clDefault` — and the floor over the table is WCAG AAA's 7:1, which against
+xterm's own eight every pairing clears at 7.5:1 or better. The rule is the structural one and the ratio is its evidence: what a
+terminal makes of the eight ANSI colours is its own business, so a pair that
+measures well on one theme can flatten on another, and only *one side is an
+extreme* survives that. `crText` is exempt and has to be — the document is the
+terminal's own text in the terminal's own colours, and painting it would be
+this editor overriding a choice the person made.
+
+Its other claim is that **every role is drawn by some session**, which is not
+a tidiness rule. `crPrompt` — the role meaning *the editor is waiting for
+you* — was declared, coloured, given a letter and drawn on no screen at all
+for the life of ADR-0392, because a prompt became a box and the box drew its
+contents in its own role. All fifteen goldens agreed, a golden holding what
+was drawn.
 
 ## Why it can be tested at all
 
