@@ -256,9 +256,26 @@ jobs:
     # and Ubuntu 24.04's has `_longjmp` where Debian trixie's has not, so the
     # catalogue's row for `runtime/pasrt.c` was true on one image and false on
     # the other. One question, one toolchain, one image.
+    # **The image is `debian:testing`, and a datalayout is why** (ADR-0385).
+    # Every other job here is on trixie; this one cannot be, and the reason is
+    # a fact about LLVM rather than a preference. clang *overrides* the
+    # module's `target datalayout` with its own for the `--target=` it is
+    # given (ADR-0156), so the two have to agree about every field this
+    # compiler models -- and trixie's clang 19 names no `i128:128` for
+    # wasm32 where clang 21 does. An i256 then aligns to 8 where this
+    # compiler computed 16, which is a set inside a record laid out two ways:
+    # ADR-0028's own defect, and `tests/sets_records.pas` -- the case that
+    # decision exists for -- was the one failure in 598 when this job ran on
+    # trixie. **`wasm32.py` abstains rather than reporting that as a defect**,
+    # so on trixie this job would skip and `WASM32_REQUIRE` would then fail
+    # it: the image is what makes the measurement possible, not what makes it
+    # pass. So **wasm32 support requires an LLVM that names `i128` for the
+    # target**, and that is a property of the toolchain a port is taken on.
+    # testing carries the same wasi-libc this was measured against and
+    # packages both engines.
     name: the runtime and the corpus on WebAssembly
     runs-on: ubuntu-latest
-    container: 'debian:trixie'
+    container: 'debian:testing'
 
     steps:
       - name: Install the documented dependencies
@@ -306,13 +323,13 @@ jobs:
         # failing, and a `SOURCE_DATE_EPOCH` a WASI runtime does not pass on
         # unless it is told to.
         #
-        # **`wasmedge` is the engine and the reason is this image.** The
-        # catalogue's answers have to be one toolchain's -- the header of
-        # `nonposix_headers.txt` records that lesson being learned the
-        # expensive way -- and trixie is where the wasi sysroot is pinned, so
-        # the engine has to be one trixie packages. `wazero` measured this
-        # first and gives the same 519, and it is in Debian *testing*: a job
-        # cannot install it beside the sysroot.
+        # **`wasmedge` is the engine, and the catalogue's answers are one
+        # toolchain's** -- the header of `nonposix_headers.txt` records that
+        # lesson being learned the expensive way. `wazero` measured this first
+        # and gives the same 519 but for two cases; testing packages both, so
+        # the choice is now a choice rather than what the image had, and it
+        # stays with `wasmedge` because that is what the committed catalogue
+        # was taken with.
         #
         # What neither implements is the exception-handling proposal, which
         # the non-local goto lowers through on this target, so exactly one

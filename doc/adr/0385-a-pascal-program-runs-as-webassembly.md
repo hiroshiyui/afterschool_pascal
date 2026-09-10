@@ -189,3 +189,35 @@ what stops it happening quietly.
 
 The row about the non-local goto is unchanged and is still the engine's:
 neither implements the exception-handling proposal that SjLj lowers into.
+
+## And the toolchain had to name `i128`
+
+The engine is one half of *which machine this was measured on*; the assembler
+is the other, and it moved the job off trixie a day later.
+
+clang **overrides** the module's `target datalayout` with its own for the
+`--target=` it is given (ADR-0156), so the two have to agree about every field
+this compiler models or a program is assembled against a layout the compiler
+did not compute. Debian trixie's clang **19** states no `i128:128` for wasm32;
+clang **21** does, and this compiler's arm states it because that is what the
+clang it was taken from said. The consequence is one alignment: an i256 aligns
+to 8 under the first and to 16 under the second — a **set inside a record**
+laid out two ways, which is ADR-0028's own defect, and
+`tests/sets_records.pas`, the case that decision exists for, was the single
+failure in 598 on that image.
+
+So **wasm32 support requires an LLVM that names `i128` for the target**. That
+is a property of the toolchain a port is taken on and not of this compiler, and
+it is written down here because nothing else could say it: the failure it
+produces is one wrong offset in one program, with no diagnostic from compiler,
+assembler or linker.
+
+`tests/checks/wasm32.py` therefore **abstains** where this clang and this
+module disagree about a modelled field, printing both lines — `target-layout`'s
+rule (ADR-0384's sibling, ADR-0156's consequence) applied to a gate that
+*runs* things. It is an abstention rather than a failure because the compiler
+is not wrong there; the measurement simply cannot be taken on that toolchain.
+And it is an honest one rather than a quiet one, because `WASM32_REQUIRE` turns
+a skip into a failed job — so the CI image is now `debian:testing`, which has
+clang 21, the same wasi-libc these numbers were taken against, and both
+engines.

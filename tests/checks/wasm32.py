@@ -56,6 +56,7 @@ run the result; `WASM32_REQUIRE` refuses to pass by skipping (ADR-0330).
 
 import concurrent.futures
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -112,6 +113,50 @@ def read_forwarded():
     text = ADAPTER.read_text()
     body = text.split('FORWARD = (', 1)[1].split(')', 1)[0]
     return {w.strip().strip('",\'') for w in body.split() if w.strip(' ,')}
+
+
+# The fields of a datalayout this compiler **models** -- `target_layout.py`'s
+# allowlist, repeated rather than imported for the reason every check here is
+# standalone. That gate carries the argument: an x86 host states segment
+# address spaces for every target and an arm64 one states none, and clang 19
+# writes no `Fn32` where clang 21 does, and none of it decides a size or an
+# alignment.
+MODELLED = re.compile(r"^(?:[eE]|p:|[ivfa]\d*:)")
+
+
+def modelled(line):
+    body = line.split('"')[1] if '"' in line else line
+    return frozenset(f for f in body.split('-') if MODELLED.match(f))
+
+
+def clang_datalayout():
+    """What *this* clang says the target's layout is."""
+    r = subprocess.run(CC + ['-x', 'c', os.devnull, '-S', '-emit-llvm',
+                             '-o', '-'], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        if line.startswith('target datalayout'):
+            return line.strip()
+    raise Skip('%s states no datalayout for %s' % (CC[0], TARGET))
+
+
+def emitted_datalayout(pascalcc):
+    """...and what this compiler writes for it, asked of the compiler rather
+    than transcribed, a transcription being a claim that agrees with itself."""
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d) / 'd.pas'
+        src.write_text('program d(output);\nbegin writeln(1) end.\n')
+        out = Path(d) / 'd.ll'
+        pascalc = os.environ.get('PASCALC',
+                                 str(ROOT / 'build' / 'bin' / 'pascalc'))
+        r = subprocess.run([pascalc, '--target=' + TARGET, str(src),
+                            '-o', str(out)], capture_output=True, text=True)
+        if r.returncode != 0 or not out.exists():
+            raise Skip('this compiler could not emit for %s: %s'
+                       % (TARGET, (r.stdout + r.stderr).strip()[:200]))
+        for line in out.read_text().splitlines():
+            if line.startswith('target datalayout'):
+                return line.strip()
+        raise Skip('this compiler stated no datalayout for ' + TARGET)
 
 
 def units_that_compile():
@@ -174,6 +219,32 @@ def sweep(pascalcc, work, write):
               % (ADAPTER.name, ', '.join(sorted(forwarded)),
                  ', '.join(sorted(wanted))), file=sys.stderr)
         return 1
+
+    # **Is this clang talking about the same target the module states?**
+    # `target-layout` abstains where the two disagree about a field this
+    # compiler models, and so must this, for a reason that is this gate's own:
+    # clang *overrides* the module's datalayout with its own for the
+    # `--target=` it is given (ADR-0156), so on a toolchain naming no
+    # `i128:128` for wasm32 an i256 aligns to 8 where this compiler computed
+    # 16 -- and a set inside a record is laid out two ways. That is ADR-0028's
+    # defect, and CI found it the way only a gate that *runs* things could:
+    # Debian trixie's clang 19 names no `i128:128`, and
+    # `tests/sets_records.pas` -- the case ADR-0028 exists for -- was the one
+    # case in 598 that failed there.
+    #
+    # So: skip, with both lines printed. What this compiler supports for this
+    # target is the layout it states, and an older LLVM is a toolchain this
+    # measurement cannot be taken on.
+    mine = emitted_datalayout(pascalcc)
+    theirs = clang_datalayout()
+    if modelled(mine) != modelled(theirs):
+        raise Skip('this clang lays %s out differently from the module this '
+                   'compiler emits, so a program built here is assembled '
+                   'against a layout the compiler did not compute '
+                   '(ADR-0156). wasm32 needs an LLVM that names i128 for the '
+                   'target: trixie\'s clang 19 does not, testing\'s clang 21 '
+                   'does.\n           clang: %s\n          module: %s'
+                   % (TARGET, theirs, mine))
 
     # Can this machine compile *anything* for the target? Asked with C and
     # before any of this compiler's work, so an absent sysroot is reported as

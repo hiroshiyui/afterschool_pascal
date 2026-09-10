@@ -481,6 +481,12 @@ stands between that and all of them is the runtime rather than the language:
 `tmpfile` is undefined on wasi and accounts for 52 of the 79, and channels,
 tasks, processes and sockets for most of the rest.
 
+**It asks one thing of the toolchain**: an LLVM that names `i128` for the
+target. clang overrides the module's own `target datalayout` with its own for
+the `--target=` it is given, so a clang that does not -- Debian trixie's 19 --
+lays a set inside a record out one way where this compiler computed another.
+The gate abstains there and says so rather than reporting it as a defect.
+
 **The shape of a port, measured against `wasm32-wasi`:** two units of the four
 compile. `runtime/pasrt_unicode.c` is the whole of the text model, and
 `runtime/pasrt.c` is the language itself — the traps, the file model, the
