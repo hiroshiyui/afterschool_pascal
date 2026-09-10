@@ -260,6 +260,40 @@ def sweep(pascalcc, work, write):
         raise Skip('%s cannot run a .wasm this machine just built'
                    % ' '.join(runner))
 
+    # **Can this engine open a file by a bare name?** A preopen is a directory
+    # and not a working directory, and engines differ about what that means
+    # for a relative path: wasmedge 0.16 answers a null handle where 0.17
+    # answers a stream, both given `--dir /:/`. Two corpus programs open a
+    # scratch file beside themselves, which is an ordinary thing for a Pascal
+    # program to do, so on an older engine they fail for a reason that is
+    # nothing to do with this compiler or with the port.
+    #
+    # It is **probed and not version-sniffed**, because what matters is the
+    # behaviour and a version string is a proxy for it -- and the probe is C,
+    # so an absent capability is reported before any Pascal is built.
+    #
+    # It abstains rather than catalogues, for the reason the layout check
+    # above abstains: a row true on one machine and false on another is a row
+    # about the machine, and this cost a day of exactly that -- the two cases
+    # sat in `wasm32_known.txt` as a limitation of the port while CI, on a
+    # newer engine, reported them passing.
+    (work / 'rel.c').write_text(
+        '#include <stdio.h>\n'
+        'int main(void){FILE*f=fopen("rel_probe.tmp","w");'
+        'if(!f)return 1;fclose(f);return 0;}\n')
+    if subprocess.run(CC + ['-o', str(work / 'rel.wasm'), str(work / 'rel.c')],
+                      capture_output=True).returncode == 0:
+        if subprocess.run(runner + [str(work / 'rel.wasm')], cwd=str(work),
+                          capture_output=True).returncode != 0:
+            raise Skip('this engine cannot open a file by a bare name -- '
+                       'wasmedge 0.16 answers a null handle where 0.17 '
+                       'answers a stream, given the same `--dir /:/`. Two '
+                       'corpus programs open a scratch file beside '
+                       'themselves, so the catalogue this gate holds is only '
+                       'true on the newer one and the measurement cannot be '
+                       'taken here. The committed answers are testing\'s '
+                       'wasmedge 0.17.')
+
     # The runtime, for the target, and only the units that compile for it.
     rt = work / 'rt'
     rt.mkdir(parents=True, exist_ok=True)

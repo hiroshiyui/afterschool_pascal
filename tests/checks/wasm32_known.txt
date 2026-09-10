@@ -120,24 +120,26 @@ tests/dialect/foreign_int64_handle.pas
 tests/dialect/foreign_slice.pas
 tests/dialect/handle_bare_call.pas
 
-# --- 2 cases: a relative path, in a module granted only `/` --------------------
+# `tests/dialect/owned.pas` and `tests/dialect/take.pas` stood here for a day
+# as *a relative path, in a module granted only `/`*, and **the row was about
+# the engine's version and not about the port**. Both open a scratch file
+# beside themselves by a bare name; under wasmedge **0.16** that answers a
+# null handle with `--dir /:/`, and under **0.17** it answers a stream. CI
+# installs testing's 0.17.1 and the two have passed there from the first run.
 #
-# **A WASI module reaches no directory it was not handed**, and a preopen is
-# a directory rather than a working directory. The engine here is given
-# `--dir /:/`, so an absolute path resolves and a relative one does not:
-# probed directly, `fopen("owned_scratch.tmp", "w")` answers NULL under
-# wasmedge and `fopen("/tmp/owned_scratch.tmp", "w")` answers a stream, on
-# the same run. Both programs open a scratch file beside themselves by a bare
-# name, so the handle comes back empty and the trap that follows says so.
+# The row proposed its own fix -- a runner granting the case's working
+# directory -- and that was measured here and is **wrong**: adding a preopen
+# named `.` makes a *relative* path resolve and an **absolute** one stop,
+# which is 27 corpus cases traded for these 2, and reversing the order
+# reverses which half works. On 0.16 this engine serves absolute paths or
+# relative ones and not both, so there is nothing `wasi_run.py` can arrange.
 #
-# Adding `--dir .:.` to the engine does *not* close it -- measured, both
-# still fail -- because the preopen is resolved where the engine was started
-# and a case is run somewhere else. What would close it is a runner that
-# grants the case's own working directory by absolute path, which is a
-# question about `tests/checks/wasi_run.py` and ADR-0384's fixed prefix, and
-# is left as the port's next piece of work rather than guessed at here.
-tests/dialect/owned.pas
-tests/dialect/take.pas
+# **It was CI that made this findable**, in the direction a catalogue is least
+# expected to fail: the two passed there and failed here, so the gate reported
+# *progress* and refused to let it go unrecorded. A row true on one machine
+# and false on another is a row about the machine -- so the rows are gone and
+# `wasm32.py` now probes the engine instead, and abstains where it is too old
+# rather than reporting two defects that are not there.
 
 # --- 1 cases: a 2 GB allocation ------------------------------------------------
 #

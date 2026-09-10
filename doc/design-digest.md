@@ -185,11 +185,11 @@ own exception and compare by length instead.
   target on the terms every target is admitted on — the compiler lays it out
   correctly and clang assembles what it emits — and that says nothing about
   whether a program *works*: ADR-0325's lesson, since both defects the i386
-  port found were in neither a layout rule nor a frame. **558 of 598 answer
+  port found were in neither a layout rule nor a frame. **560 of 598 answer
   their golden** under a WASI engine, linked against only the two runtime units
   `nonposix_headers.txt` says compile, so what a program can reach is what a
   port has got and one wanting more fails at the link with the symbol named.
-  The 40 that do not are a work queue with six causes. It was 519 and 79, and
+  The 38 that do not are a work queue with six causes. It was 519 and 79, and
   the 52 that moved were one function — ADR-0390 below. It found two things no other oracle
   could, and both were **wrong answers rather than failures to start**: a 64 KB
   default stack that printed stray spaces into the middle of a line, and a
