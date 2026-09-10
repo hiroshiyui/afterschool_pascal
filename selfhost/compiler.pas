@@ -512,6 +512,15 @@ begin
           EQ(name, 'aarch64-apple-darwin') then TargetIndex := tgtDarwinArm64
   else if EQ(name, 'x86_64-apple-macosx') or
           EQ(name, 'x86_64-apple-darwin') then TargetIndex := tgtDarwinX86
+  { ADR-0383's sixth, and the first that is not a machine. `wasm32-wasi` is
+    what a person types and what Debian's sysroot is named for;
+    `wasm32-unknown-wasi` is clang's normalisation of it and is what the
+    module states; `wasm32-wasip1` is the name WASI's own versioning gave the
+    same interface, and a toolchain that has moved on to it will hand it
+    here. Three spellings for the reason the pairs above have two. }
+  else if EQ(name, 'wasm32-wasi') or EQ(name, 'wasm32-unknown-wasi') or
+          EQ(name, 'wasm32-wasip1') or
+          EQ(name, 'wasm32-unknown-wasip1') then TargetIndex := tgtWasm32
   else TargetIndex := 0
 end;
 
@@ -522,7 +531,8 @@ begin
     tgtAarch64: name := 'aarch64-linux-gnu';
     tgtI386: name := 'i386-pc-linux-gnu';
     tgtDarwinArm64: name := 'arm64-apple-macosx';
-    tgtDarwinX86: name := 'x86_64-apple-macosx'
+    tgtDarwinX86: name := 'x86_64-apple-macosx';
+    tgtWasm32: name := 'wasm32-wasi'
   end
 end;
 
@@ -548,7 +558,10 @@ begin
   writeln('  --dump-sema     write the tree Sema annotated and stop');
   writeln('  --target=<t>    which machine the emitted module states it is');
   writeln('                  for: x86_64-pc-linux-gnu (default),');
-  writeln('                  aarch64-linux-gnu or i386-pc-linux-gnu');
+  writeln('                  aarch64-linux-gnu, i386-pc-linux-gnu,');
+  writeln('                  arm64-apple-macosx, x86_64-apple-macosx');
+  writeln('                  or wasm32-wasi. An unknown one is refused');
+  writeln('                  and the refusal names them all');
   writeln('  --dump-all      write all three, with section headers');
   writeln('  --dump-dispatch compile as usual, then write every');
   writeln('                  case-statement that dispatches on an');
@@ -12158,6 +12171,19 @@ begin
       writeln(ircode, 'target datalayout = "e-m:o-p270:32:32-p271:32:32-',
                       'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
       writeln(ircode, 'target triple = "x86_64-apple-macosx"')
+    end;
+    { ADR-0383, and clang's own line for `wasm32-wasi`. It shares `p:32:32`
+      with i386 and differs from it in what a 32-bit machine's ABI usually
+      settles by history rather than by need: an i64 is eight-aligned here and
+      four-aligned there, and there is no `f80` at all, wasm having no such
+      type. The `p10`, `p20` and `ni:1:10:20` fields are the address spaces
+      for wasm's own references, which nothing this compiler emits uses -- the
+      line is clang's whole line because a datalayout is stated to be believed
+      and an edited one is a claim nobody made. }
+    tgtWasm32: begin
+      writeln(ircode, 'target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-',
+                      'i64:64-i128:128-n32:64-S128-ni:1:10:20"');
+      writeln(ircode, 'target triple = "wasm32-unknown-wasi"')
     end
   end;
   writeln(ircode);

@@ -15,14 +15,17 @@ falsifies by existing, and answering it would have meant refusing the port
 rather than checking it. Two claims replace it, and together they are what the
 one claim was standing in for.
 
-  1. **Targets of the same word size lay a frame out identically.** Every
-     admitted target is put in a class by the pointer size the compiler
-     believes it has, and within each class the comparison is the old one,
-     unchanged and as strict.
+  1. **Targets whose layout arithmetic is identical lay a frame out
+     identically.** Every admitted target is put in a class by what the
+     compiler answers for the six probe shapes below, and within each class
+     the comparison is the old one, unchanged and as strict. It was a class
+     per *word size* until ADR-0383: wasm32 is ILP32 like i386 and aligns an
+     i64 to eight where i386 aligns one to four, so the word size stopped
+     deciding the layout the moment there were two 32-bit targets.
 
-  2. **The two numbers the compiler varies are the numbers clang says.**
-     `PtrSize` and `WordAlign` are the whole of what ADR-0325 made
-     target-dependent, so a probe of six one-field-after-a-byte structs is
+  2. **The numbers the compiler varies are the numbers clang says.**
+     `PtrSize`, `WordAlign` and -- since ADR-0383 -- `WideAlign` are the whole
+     of what is target-dependent, so a probe of six one-field-after-a-byte structs is
      assembled for each target and the folded offsets are compared against
      what the compiler emits for a pointer, an i64, a double, a vector, an
      i256 and a two-pointer pair. This is the half that did not exist before,
@@ -50,9 +53,9 @@ rather than reported.
 The target list is read from the compiler's own refusal, so a fourth target
 admitted to `TargetIndex` is compared here without this file being edited --
 and the refusal already says "needs its layout compared against LlSize and
-LlAlign first", which is exactly this comparison. A target alone in its word-size
-class is compared by claim 2 and by nothing else, which is stated rather than
-hidden: the run prints the class sizes.
+LlAlign first", which is exactly this comparison. A target that lays out like no other
+admitted one is compared by claim 2 and by nothing else, which is stated
+rather than hidden: the run prints the classes.
 
 Needs `clang` and nothing else of LLVM's (ADR-0085): a target's datalayout is
 asked of clang, and clang is what folds the constants.
@@ -210,12 +213,18 @@ def build_module(sources, target):
     return types, consts, names
 
 
-# One 64-bit datum, however this target's assembler spells it.
-WIDE = re.compile(r"^\s*\.(?:quad|xword|8byte|dword)\s+(?:0\s*\+\s*)?(-?\d+)")
+# One 64-bit datum, however this target's assembler spells it. `int64` is
+# wasm's, and it is the first here that is not one of a machine assembler's
+# historic names -- a reminder that this list is a dialect and not a standard,
+# and that a target admitted without a matching arm reports every value as
+# unfolded rather than as wrong (ADR-0383).
+WIDE = re.compile(
+    r"^\s*\.(?:quad|xword|8byte|dword|int64)\s+(?:0\s*\+\s*)?(-?\d+)")
 # ...and the half of one, for the targets that have no 64-bit directive: a
 # 32-bit machine writes an i64 constant as two of these, and which half comes
 # first is the datalayout's `e`/`E`.
-HALF = re.compile(r"^\s*\.(?:long|word|4byte)\s+(?:0\s*\+\s*)?(-?\d+)")
+HALF = re.compile(
+    r"^\s*\.(?:long|word|4byte|int32)\s+(?:0\s*\+\s*)?(-?\d+)")
 # Mach-O gives a global a leading underscore. Stripping one is safe here and
 # only here: every name this gate generates begins with `z`, so there is no ELF
 # symbol `_x` for it to collide with a symbol `x`.
@@ -289,6 +298,9 @@ WORD_PROBE = [
     ("wset",  "record c: char; v: set of char end", "{ i8, i256 }"),
     ("wpair", "record a: ^integer; b: ^integer end", "{ ptr, ptr }"),
 ]
+
+
+WPAIR = [n for n, _, _ in WORD_PROBE].index("wpair")
 
 
 def compiler_layout(target):
@@ -391,9 +403,9 @@ def main():
     if bad2:
         sys.stderr.write(
             "target-layout: the compiler's own layout arithmetic disagrees "
-            "with LLVM.\nPtrSize and WordAlign in selfhost/aptypes.pas are "
-            "what vary per target (ADR-0325);\nLlSize and LlAlign are what "
-            "read them.\n")
+            "with LLVM.\nPtrSize, WordAlign and WideAlign in "
+            "selfhost/aptypes.pas are what vary per target\n(ADR-0325, "
+            "ADR-0383); LlSize and LlAlign are what read them.\n")
         for line in bad2:
             sys.stderr.write("  " + line + "\n")
         sys.exit(1)
@@ -416,15 +428,32 @@ def main():
                 "(first: %s)" % (t, len(missing), len(names[t]), missing[0]))
         measured[t] = vals
 
-    # The class is the pointer size the compiler believes the target has,
-    # which claim 2 has just shown to be LLVM's.
+    # **The class is every answer the compiler's arithmetic gives for this
+    # target**, and it was the pointer size until wasm32 was admitted
+    # (ADR-0383). Two targets can share a word size and lay a frame out
+    # differently: wasm32 is ILP32 like i386 and aligns an i64 to eight where
+    # i386 aligns one to four, so `record c: char; v: int64 end` is 16 bytes
+    # on one and 12 on the other -- and each is *right*, which claim 2 has
+    # just shown. Classing by the word size put them together and reported
+    # 337 correct offsets as a divergence.
+    #
+    # So the key is the six-shape signature rather than one number of it. It
+    # is derived from the compiler on this run, so a seventh number coming to
+    # vary splits the classes here without this file being edited -- which is
+    # the same property that makes the target list the compiler's own
+    # refusal. What claim 1 then says is exact: **targets whose layout
+    # arithmetic is identical must lay every frame out identically**, which
+    # is the statement `LlSize and LlAlign answer with one number` was
+    # standing in for.
     klass = {}
     for t in targets:
-        klass.setdefault(compiler_layout(t)["wpair"][0] // 2, []).append(t)
+        mine = compiler_layout(t)
+        sig = tuple(mine[n] for n, _, _ in WORD_PROBE)
+        klass.setdefault(sig, []).append(t)
 
     bad = []
-    for width in sorted(klass):
-        group = klass[width]
+    for sig in sorted(klass):
+        group = klass[sig]
         base = group[0]
         for t in group[1:]:
             shared = [n for n in names[base] if n in names[t]]
@@ -438,10 +467,10 @@ def main():
 
     if bad:
         sys.stderr.write(
-            "target-layout: %d offsets differ between targets of one word "
-            "size.\nWithin a word-size class LlSize and LlAlign answer with "
-            "one number, so a difference here\nmeans the emitted frames are "
-            "wrong for at least one of them -- see ADR-0028.\n" % len(bad))
+            "target-layout: %d offsets differ between targets whose layout "
+            "arithmetic is identical.\nThese targets agree on the size and "
+            "alignment of every shape in the probe, so a frame that differs\n"
+            "is wrong for at least one of them -- see ADR-0028.\n" % len(bad))
         for n, a, av, b, bv in bad[:20]:
             sys.stderr.write("  %-24s %s=%d  %s=%d\n" % (n, a, av, b, bv))
         if len(bad) > 20:
@@ -450,15 +479,20 @@ def main():
 
     print("target-layout: the compiler's size and alignment agree with LLVM "
           "for %d targets over %d shapes" % (len(targets), len(WORD_PROBE)))
-    for width in sorted(klass):
-        group = klass[width]
+    for sig in sorted(klass):
+        group = klass[sig]
+        # The pointer size names the class for a reader; the *key* is the
+        # whole signature, and saying only the width would now be the mistake
+        # this classing was changed to stop making.
+        width = sig[WPAIR][0] // 2 * 8
         if len(group) > 1:
-            print("target-layout: %d offsets identical across %s (%d-bit)"
-                  % (len(names[group[0]]), ", ".join(group), width * 8))
+            print("target-layout: %d offsets identical across %s (%d-bit, and "
+                  "one layout arithmetic)"
+                  % (len(names[group[0]]), ", ".join(group), width))
         else:
-            print("target-layout: %s is alone at %d-bit, so its frames are "
-                  "compared with nothing -- the check above is what covers it"
-                  % (group[0], width * 8))
+            print("target-layout: %s lays out like no other admitted target "
+                  "(%d-bit), so its frames are compared with nothing -- the "
+                  "check above is what covers it" % (group[0], width))
 
 
 if __name__ == "__main__":

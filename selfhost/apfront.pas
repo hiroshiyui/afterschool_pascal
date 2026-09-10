@@ -28505,9 +28505,16 @@ begin
       tyInteger, tyEnum: LlAlign := 4;
       { ADR-0325: five of the seven arms that used to write 8. i386 aligns a
         pointer, an i64 and a double to 4, and a file and a handle are arrays
-        of i64, so all five follow WordAlign rather than the constant this was
-        until a target that is not LP64 was admitted. }
-      tyInt64, tyReal, tyPointer, tyFile, tyHandle: LlAlign := WordAlign;
+        of i64, so all five followed WordAlign rather than the constant this
+        was until a target that is not LP64 was admitted.
+
+        **And then they were two arms, not one** (ADR-0383). A pointer follows
+        the word size; an eight-byte *datum* follows what the target aligns
+        one to, and wasm32 is ILP32 with `i64:64` -- four for the pointer and
+        eight for the i64. i386 answers 4 to both, which is why one number
+        looked sufficient for as long as it was the only ILP32 target here. }
+      tyPointer: LlAlign := WordAlign;
+      tyInt64, tyReal, tyFile, tyHandle: LlAlign := WideAlign;
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;

@@ -122,6 +122,22 @@ C_PROBE = "#include <setjmp.h>\njmp_buf b;\nint f(void){ return setjmp(b); }\n"
 C_PROBE_DIRECT = ("#include <setjmp.h>\njmp_buf b;\n"
                   "int f(void){ return _setjmp(b); }\n")
 
+# **What a target needs before clang can be asked about it at all**
+# (ADR-0383). Every target here until wasm32 kept its headers where clang
+# looks by default, so the probe was `clang --target=<t>` and nothing else.
+# wasm32-wasi keeps them in a sysroot Debian installs beside the compiler, and
+# `<setjmp.h>` there refuses outright without the SjLj flag -- so without
+# these four words the target reports *no headers here* and is silently not
+# compared, which is the shape of a gate that passes by asking nothing. The
+# `-nostdlibinc` is the same claim `runtime-nonposix` makes with it: without
+# it clang finds **glibc's** `<setjmp.h>` on this target's search path and
+# answers about the wrong C library entirely, which is the one way this gate
+# could give a confidently wrong answer instead of no answer.
+TARGET_FLAGS = {
+    "wasm32-wasi": ["-mllvm", "-wasm-enable-sjlj", "-nostdlibinc",
+                    "-isystem", "/usr/include/wasm32-wasi"],
+}
+
 CALL = re.compile(r"call i32 @_setjmp\(([^)]*)\)")
 DECL = re.compile(r"declare i32 @_setjmp\(([^)]*)\)")
 
@@ -176,7 +192,8 @@ def check(work, require):
     fails, seen, rows = [], set(), []
 
     for t in names:
-        r = run([CLANG, "--target=" + t, "-O0", "-S", "-emit-llvm",
+        flags = TARGET_FLAGS.get(t, [])
+        r = run([CLANG, "--target=" + t] + flags + ["-O0", "-S", "-emit-llvm",
                  str(work / "sj.c"), "-o", "-"])
         if r.returncode != 0:
             # A target clang cannot compile for is this machine's business,
@@ -191,8 +208,8 @@ def check(work, require):
             # two are separate functions rather than a macro and its
             # expansion. Ask about `_setjmp` directly, since that is the name
             # the emitted module carries.
-            r = run([CLANG, "--target=" + t, "-O0", "-S", "-emit-llvm",
-                     str(work / "sjd.c"), "-o", "-"])
+            r = run([CLANG, "--target=" + t] + flags +
+                    ["-O0", "-S", "-emit-llvm", str(work / "sjd.c"), "-o", "-"])
             m = CALL.search(r.stdout) if r.returncode == 0 else None
             if not m:
                 fails.append("clang for %s emitted no call to @_setjmp from "

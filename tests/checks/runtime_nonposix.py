@@ -209,8 +209,21 @@ def said(cc):
 
 def compiles(cc, src, args=()):
     """Does this translation unit compile for the target? An exit status and
-    the first lines of the failure, never the words of a diagnostic."""
-    r = subprocess.run(list(cc) + ["-std=c11", "-fsyntax-only", str(src)]
+    the first lines of the failure, never the words of a diagnostic.
+
+    **`-std=gnu11` because that is what builds this runtime**, and it was
+    `-std=c11` for the whole of this gate's life (ADR-0383). CMake's
+    `CMAKE_C_STANDARD 11` leaves `C_EXTENSIONS` on, so every `runtime/*.c`
+    in this tree is compiled with `-std=gnu11`, and asking the port question
+    in strict ISO mode asked something no build here asks. It cost a wrong
+    headline: wasi-libc declares `_setjmp` and `_longjmp` behind
+    `_XOPEN_SOURCE || _GNU_SOURCE || _BSD_SOURCE`, all three of which
+    `__STRICT_ANSI__` turns off, so `pasrt.c` was catalogued blocked on a name
+    the target *has* -- and recorded as the second target in a row to lack it,
+    which made the non-local goto look like this runtime's one portability
+    question when it is not. Whether the source is ISO C is `runtime-isoc`'s
+    question and it asks it properly, by stripping the non-ISO includes."""
+    r = subprocess.run(list(cc) + ["-std=gnu11", "-fsyntax-only", str(src)]
                        + list(args),
                        capture_output=True, text=True, env=ENV,
                        errors="surrogateescape")

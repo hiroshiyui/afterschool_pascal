@@ -177,7 +177,14 @@ def main():
     # --- the emitter's half: a slice's count is size_t, per target ---------
     pascalc = args.pascalc or str(root / "build" / "bin" / "pascalc")
     probe = "program w(output);\nfunction F(var b: array of char): csize; external 'readlink_probe';\nvar a: array [1..4] of char; n: csize;\nbegin n := F(a); writeln(n) end.\n"
-    want = {"x86_64-pc-linux-gnu": "i64", "aarch64-linux-gnu": "i64", "i386-pc-linux-gnu": "i32"}
+    # Every admitted target whose `size_t` this asks about. wasm32 is the
+    # second ILP32 one (ADR-0383) and the first where the answer was not a
+    # machine's word size but an abstract one's -- the count a slice carries
+    # is `i32` there for the same reason it is on i386, and it is written down
+    # because a target added without a row here is a target this half stops
+    # asking about.
+    want = {"x86_64-pc-linux-gnu": "i64", "aarch64-linux-gnu": "i64",
+            "i386-pc-linux-gnu": "i32", "wasm32-wasi": "i32"}
     if pathlib.Path(pascalc).exists():
         with tempfile.TemporaryDirectory() as d:
             src = pathlib.Path(d) / "w.pas"; src.write_text(probe)

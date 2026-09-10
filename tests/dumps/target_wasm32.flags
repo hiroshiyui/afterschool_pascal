@@ -1,0 +1,1 @@
+--dump-layout --target=wasm32-wasi

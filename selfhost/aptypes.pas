@@ -47,8 +47,8 @@ export ApTypes = (
   tab, newline, creturn, poolMax, tokMax, triviaMax, comment,
   keepTrivia, triviaCount, triviaFull, maxDepth, maxBlockDepth,
   fileSize, tgtCount, tgtX86, tgtAarch64, tgtI386, tgtDarwinArm64,
-  tgtDarwinX86, targetIx, PtrSize,
-  WordAlign, CLongSize, jumpSize, handleSize, deferSize,
+  tgtDarwinX86, tgtWasm32, targetIx, PtrSize,
+  WordAlign, WideAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
   lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
@@ -326,7 +326,7 @@ const
     adding a target is two arms and a count -- after the offsets have been
     compared for it, which doc/roadmap.md's cross-platform chapter says how to
     do. }
-  tgtCount = 5;
+  tgtCount = 6;
   tgtX86 = 1;
   tgtAarch64 = 2;
   { ADR-0325's third, and the first that is not LP64. What made it admissible
@@ -359,6 +359,19 @@ const
     the runtime. All three are gone with it. }
   tgtDarwinArm64 = 4;
   tgtDarwinX86 = 5;
+  { ADR-0383's sixth, and the first target here that is not a machine. It is
+    ILP32, so it joins tgtI386 in PtrSize, WordAlign and CLongSize below --
+    and that those three are the whole of the arithmetic is ADR-0325's
+    generalisation being spent a second time, which is the strongest evidence
+    that decision was right.
+
+    **What it is not is a platform this runtime runs on.** `runtime-nonposix`
+    measures the distance and it is three blockers wide (ADR-0382), so
+    admitting the triple buys the *front* of the toolchain -- a module that
+    states this layout and can be assembled for it -- and buys nothing about
+    linking one. A target is admitted here when the compiler can lay it out
+    correctly, which `target-layout` decides, and not when a program runs. }
+  tgtWasm32 = 6;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.
@@ -3241,6 +3254,18 @@ function FileIndexOf(n: pathStr): integer;
 function PtrSize: integer;
 function WordAlign: integer;
 
+{ ...and what it aligns an eight-byte datum to, which is a **third** number
+  since ADR-0383 and was the same one until wasm32 was admitted. i386 aligns
+  an i64 and a double to 4, exactly as it aligns a pointer, so one number
+  answered both questions and nothing here could tell that it was answering
+  two. wasm32 is ILP32 with `i64:64`: a pointer aligns to 4 and an i64 to 8.
+  `target-layout` reported it as four disagreements the first time the target
+  was admitted -- the size and the alignment of `record c: char; v: int64 end`
+  and of the same record over a `real` -- which is that gate's claim 2 doing
+  precisely what ADR-0325 built it for, and is why this is a measurement and
+  not a reading of a datalayout string. }
+function WideAlign: integer;
+
 { What a C `long` costs on the target the module is being emitted for
   (ADR-0328). A *third* number and not `PtrSize` under another name: the two
   agree on every target admitted here and differ on Windows x64, which is
@@ -4440,23 +4465,41 @@ end;
 
 function PtrSize;
 begin
-  if targetIx = tgtI386 then PtrSize := 4 else PtrSize := 8
+  { Two targets and not one, since ADR-0383: a set rather than an equality,
+    which is the shape ADR-0325 predicted a second ILP32 target would want. }
+  if (targetIx = tgtI386) or (targetIx = tgtWasm32) then
+    PtrSize := 4
+  else
+    PtrSize := 8
 end;
 
 function WordAlign;
 begin
-  if targetIx = tgtI386 then WordAlign := 4 else WordAlign := 8
+  if (targetIx = tgtI386) or (targetIx = tgtWasm32) then
+    WordAlign := 4
+  else
+    WordAlign := 8
+end;
+
+function WideAlign;
+begin
+  { i386 is the one target that aligns an eight-byte datum to four. It is
+    ILP32 and so is wasm32, which aligns one to eight -- so the word size does
+    not decide this, and the two questions had to come apart. }
+  if targetIx = tgtI386 then WideAlign := 4 else WideAlign := 8
 end;
 
 function CLongSize;
 begin
-  { One target and not two, since ADR-0380 removed the only LLP64 one: every
-    target here is LP64 but i386, which is ILP32, and a C `long` is four bytes
-    there and eight everywhere else. It is asked separately from PtrSize
-    because the two came apart once -- Win64 had eight-byte pointers and a
-    four-byte `long` -- and a boundary that says `clong` rather than a number
-    (ADR-0328) is what made that one line rather than an audit. }
-  if targetIx = tgtI386 then CLongSize := 4 else CLongSize := 8
+  { Every target here is LP64 but the two ILP32 ones, i386 and wasm32, where
+    a C `long` is four bytes. It is asked separately from PtrSize because the
+    two came apart once -- Win64 had eight-byte pointers and a four-byte
+    `long`, and ADR-0380 removed it -- and a boundary that says `clong` rather
+    than a number (ADR-0328) is what made that one line rather than an audit. }
+  if (targetIx = tgtI386) or (targetIx = tgtWasm32) then
+    CLongSize := 4
+  else
+    CLongSize := 8
 end;
 
 function FileIndexOf;

@@ -73,15 +73,28 @@
 
 # --- which translation units compile for the target -----------------------
 #
-# **One of four compiles, and what blocks the other three is three
-# different kinds of thing** -- a name, a set of headers, and a target
-# capability. That spread is the finding: no single change ports this
-# runtime.
+# **Two of four compile, and the two that do not are blocked by two different
+# kinds of thing** -- a set of headers, and a target capability. Neither is a
+# name this source uses wrongly, which is what the column said for one day and
+# is corrected below.
 #
 # `pasrt_unicode.c` compiling clean is the whole of AP 6.4.15 -- normalisation
 # and grapheme segmentation over tables, and nothing else. It is the one unit
 # a port gets for free, and it is measured here rather than hoped for. It was
 # free on mingw-w64 too.
+#
+# **`pasrt.c` compiles, and the day it spent catalogued `blocked` is the
+# finding** (ADR-0383). It was recorded as blocked on `_longjmp` -- and as the
+# second non-POSIX target in a row to lack that name, which made the non-local
+# goto look like this runtime's one portability question. wasi-libc declares
+# both `_setjmp` and `_longjmp`; what hid them is `__STRICT_ANSI__`, the
+# header putting them behind `_XOPEN_SOURCE || _GNU_SOURCE || _BSD_SOURCE`,
+# and this gate compiled with `-std=c11` while CMake builds every one of these
+# units with `-std=gnu11`. So the gate asked a question no build here asks and
+# answered it about the runtime. `-D_POSIX_C_SOURCE` alone does not unblock
+# it, which is the precise fact underneath: `_longjmp` is XSI and not base
+# POSIX. mingw-w64 genuinely had neither name, which is why one measurement
+# looked like confirmation of the other.
 #
 # `pasrt_task.c` is blocked on **threads**, and it took two machines to say
 # so. It was catalogued `compiles` for one commit, measured on a checkout
@@ -95,32 +108,21 @@
 # reported the language's concurrency as portable to a platform that cannot
 # run it. What a port pays here is the whole task facility, not a header.
 #
-# `pasrt.c` is blocked by **`_longjmp`**, and it is the second non-POSIX
-# target in a row to lack that name. mingw-w64 declares `longjmp` and no
-# `_longjmp`; wasi-libc does the same. ADR-0373 bought the row with the
-# runtime's only preprocessor conditional and ADR-0380 bought the conditional
-# back by dropping the platform that needed it -- so the honest statement is
-# that **the non-local goto is what stands between this runtime and a
-# non-POSIX target**, twice measured, and that a wasm port pays for it either
-# with the conditional again or with the tidier shape ADR-0373 named: the
-# jump emitted by the compiler, where `_setjmp` already is, which waits on a
-# reseed because the committed seed declares and calls `@pas_jump_go`.
-#
-# Two more things `pasrt.c` says under this toolchain that no exit status
-# carries, both warnings and both real: `tmpfile` is *deprecated on WASI* at
-# three sites -- §6.7.5.5's auxiliary file and the two scratch files -- so the
-# unit would compile and fail at run time; and the `-mllvm -wasm-enable-sjlj`
-# above is what makes `<setjmp.h>` usable at all.
-unit  pasrt.c            blocked
+# One warning `pasrt.c` carries that no exit status does, and it is real:
+# `tmpfile` is *deprecated on WASI* at three sites -- §6.7.5.5's auxiliary
+# file and the two scratch files -- so that unit compiles and would fail at
+# run time. And the `-mllvm -wasm-enable-sjlj` in the command is what makes
+# `<setjmp.h>` usable at all, which is a build flag and not a source change.
+unit  pasrt.c            compiles
 unit  pasrt_posix.c      blocked
 unit  pasrt_task.c       blocked
 unit  pasrt_unicode.c    compiles
 
 # --- the headers the target has not got -----------------------------------
 #
-# `pasrt.c`, `pasrt_task.c` and `pasrt_unicode.c` have every header they name;
-# what blocks the first two is *inside* those headers -- a name in one case
-# and a refusal to declare in the other -- which is a different claim and is
+# `pasrt.c`, `pasrt_task.c` and `pasrt_unicode.c` have every header they name.
+# What blocks `pasrt_task.c` is *inside* one of them -- a refusal to declare
+# what a single-threaded target cannot do -- which is a different claim and is
 # not this file's.
 #
 # **Five, and the shape of them is the finding.** `pasrt_posix.c` names

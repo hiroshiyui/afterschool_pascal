@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted. Re-points `runtime-nonposix` and its catalogue from mingw-w64 to
+Accepted. **Its headline finding is corrected by
+[ADR-0383](0383-a-word-size-does-not-decide-a-layout.md)**: `pasrt.c` is not
+blocked on `_longjmp` — wasi-libc declares it, behind `_XOPEN_SOURCE`, and
+this gate was compiling with `-std=c11` where the build uses `-std=gnu11`.
+Read the table below with that record beside it. Re-points `runtime-nonposix` and its catalogue from mingw-w64 to
 `wasm32-wasi`, and generalises the gate's toolchain from a program to a
 command. Follows [ADR-0369](0369-a-port-is-measured-or-it-is-an-estimate.md),
 which anticipated exactly this, and
