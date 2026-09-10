@@ -62,66 +62,66 @@ cursor 2,1
 cursor 2,11
 +------------------------------+
 | File  Edit  Search  Run      |
-|program p;                    |
+|pr┌─ Save as ──────────────┐  |
+|~ │                        │  |
+|~ └────────────────────────┘  |
 |~                             |
-|~                             |
-|~                             |
-|Save as:                      |
+|                              |
 |(no name) *               1:11|
 |F10 Menu  F2 Save  F9 Build  ^|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..ffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffff..|
 |..............................|
-|..............................|
-|..............................|
-|..............................|
-|pppppppppppppppppppppppppppppp|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +------------------------------+
 +------------------------------+
 |1-30u |
+|1-2. 3-28f 29-30. |
+|1-2. 3-28f 29-30. |
+|1-2. 3-28f 29-30. |
 |1-30. |
-|1-30. |
-|1-30. |
-|1-30. |
-|1-30p |
+|1-30m |
 |1-30s |
 |1-30h |
 +------------------------------+
-cursor 6,10
+cursor 3,5
 +------------------------------+
 | File  Edit  Search  Run      |
-|program p;                    |
+|pr┌─ Save as ──────────────┐  |
+|~ │ new.pas                │  |
+|~ └────────────────────────┘  |
 |~                             |
-|~                             |
-|~                             |
-|Save as: new.pas              |
+|                              |
 |(no name) *               1:11|
 |F10 Menu  F2 Save  F9 Build  ^|
 +------------------------------+
 +------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..ffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffff..|
 |..............................|
-|..............................|
-|..............................|
-|..............................|
-|pppppppppppppppppppppppppppppp|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +------------------------------+
 +------------------------------+
 |1-30u |
+|1-2. 3-28f 29-30. |
+|1-2. 3-28f 29-30. |
+|1-2. 3-28f 29-30. |
 |1-30. |
-|1-30. |
-|1-30. |
-|1-30. |
-|1-30p |
+|1-30m |
 |1-30s |
 |1-30h |
 +------------------------------+
-cursor 6,17
+cursor 3,12
 +------------------------------+
 | File  Edit  Search  Run      |
 |program p;                    |

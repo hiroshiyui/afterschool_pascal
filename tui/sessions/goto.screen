@@ -28,32 +28,32 @@
 cursor 2,1
 +--------------------+
 | File  Edit  Search |
-|one                 |
-|two                 |
-|three               |
-|Line:               |
+|on┌─ Go to line ─┐  |
+|tw│              │  |
+|th└──────────────┘  |
+|                    |
 |goto.pas         1:1|
 |F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
 |uuuuuuuuuuuuuuuuuuuu|
-|....................|
-|....................|
-|....................|
-|pppppppppppppppppppp|
+|..ffffffffffffffff..|
+|..ffffffffffffffff..|
+|..ffffffffffffffff..|
+|mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
 +--------------------+
 |1-20u |
-|1-20. |
-|1-20. |
-|1-20. |
-|1-20p |
+|1-2. 3-18f 19-20. |
+|1-2. 3-18f 19-20. |
+|1-2. 3-18f 19-20. |
+|1-20m |
 |1-20s |
 |1-20h |
 +--------------------+
-cursor 5,7
+cursor 3,5
 +--------------------+
 | File  Edit  Search |
 |two                 |

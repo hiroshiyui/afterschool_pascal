@@ -106,7 +106,7 @@ tui/build.py '' session.pas   # the session replayer
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
 | Ctrl-G | go to a line by number |
-| Ctrl-C | close the question a prompt is asking |
+| Ctrl-C | close the question a dialog is asking, or the menu |
 
 The bindings are on the **hint bar** along the bottom now (ADR-0389), so the
 table above is a reference rather than the only place they are written down.

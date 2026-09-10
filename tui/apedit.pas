@@ -1227,7 +1227,7 @@ end;
 
 procedure EditRender;
 var r, c, h, n, wide, pcol: integer; s: EditLine; row: ScreenRow;
-    num: EditLine; k2: CellRole;
+    num: EditLine; k2: integer; kr: CellRole; prow: integer;
 begin
   { The size the caller asked for, held to what this can draw. **Four rows is
     the least that has a document in it** since ADR-0389 -- the last three
@@ -1281,21 +1281,10 @@ begin
     message while one is open -- the older test was `mode <> mdEdit`, which
     was exactly right while every mode was a prompt and became wrong the
     moment one was not. }
-  pcol := 0;
-  if (ed.mode <> mdFind) and (ed.mode <> mdGoto) and
-     (ed.mode <> mdSaveAs) then begin
-    for c := 1 to cols do scr.role[rows - 2][c] := crMessage;
-    PutAt(scr, rows - 2, 1, Left(ed.says, cols), crMessage)
-  end
-  else begin
-    for c := 1 to cols do scr.role[rows - 2][c] := crPrompt;
-    if ed.mode = mdFind then s := 'Find: '
-    else if ed.mode = mdSaveAs then s := 'Save as: '
-    else s := 'Line: ';
-    s := s + ed.prompt;
-    PutAt(scr, rows - 2, 1, Left(s, cols), crPrompt);
-    pcol := length(s) + 1
-  end;
+  { The message line is always a message now: a question is a *box*
+    (ADR-0392) and no longer a line at the bottom. }
+  for c := 1 to cols do scr.role[rows - 2][c] := crMessage;
+  PutAt(scr, rows - 2, 1, Left(ed.says, cols), crMessage);
 
   { The status line, and it is the same shape a Turbo Pascal one was: what is
     being edited, whether it has been changed, and where the cursor is. }
@@ -1320,14 +1309,40 @@ begin
   for c := 1 to cols do scr.role[rows][c] := crHint;
   PutAt(scr, rows, 1, Left(Hints, cols), crHint);
 
+  { **A question is a framed box in the middle of the screen**, which is the
+    second user of ADR-0391's primitives and the point of writing them: one
+    user can be special-cased and two cannot. It is centred, three rows deep,
+    and wide enough for its title -- and it is drawn *after* the document and
+    *before* the menu, because a menu opened over a dialog would be the case
+    that finally needs a stack and there is deliberately no way to reach it. }
+  pcol := 0;
+  if (ed.mode = mdFind) or (ed.mode = mdGoto) or (ed.mode = mdSaveAs) then
+  begin
+    if ed.mode = mdFind then s := 'Find'
+    else if ed.mode = mdSaveAs then s := 'Save as'
+    else s := 'Go to line';
+    wide := 34;
+    if wide > cols - 4 then wide := cols - 4;
+    if wide < length(s) + 6 then wide := length(s) + 6;
+    n := (cols - wide) div 2 + 1;
+    if n < 1 then n := 1;
+    k2 := (rows - 3) div 2;
+    if k2 < 2 then k2 := 2;
+    Frame(scr, k2, n, 3, wide, s, crFrame);
+    PutAt(scr, k2 + 1, n + 2, Left(ed.prompt, wide - 4), crFrame);
+    pcol := n + 2 + length(Left(ed.prompt, wide - 4));
+    if pcol > cols then pcol := cols;
+    prow := k2 + 1
+  end;
+
   { **The menu bar, always on row 1**, which is where every editor of this
     shape put it. It costs the document a row and that is the trade: a person
     who cannot see that a menu exists does not go looking for one. }
   for c := 1 to cols do scr.role[1][c] := crMenu;
   for c := 1 to MenuCount do begin
-    if (ed.mode = mdMenu) and (c = ed.menu) then k2 := crChosen
-    else k2 := crMenu;
-    PutAt(scr, 1, MenuAt(c), MenuTitle(c), k2)
+    if (ed.mode = mdMenu) and (c = ed.menu) then kr := crChosen
+    else kr := crMenu;
+    PutAt(scr, 1, MenuAt(c), MenuTitle(c), kr)
   end;
 
   { ...and the drop-down under its title, which is the first thing on this
@@ -1341,14 +1356,14 @@ begin
     Frame(scr, 2, MenuAt(ed.menu) - 1, MenuItems(ed.menu) + 2, wide + 4,
           '', crFrame);
     for c := 1 to MenuItems(ed.menu) do begin
-      if c = ed.item then k2 := crChosen else k2 := crFrame;
+      if c = ed.item then kr := crChosen else kr := crFrame;
       PutAt(scr, 2 + c, MenuAt(ed.menu), ' ' + ItemCaption(ed.menu, c) + ' ',
-            k2)
+            kr)
     end
   end;
 
   if pcol > 0 then begin
-    scr.atRow := rows - 2;
+    scr.atRow := prow;
     scr.atCol := pcol
   end
   else if ed.mode = mdMenu then begin

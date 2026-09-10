@@ -31,66 +31,66 @@
 cursor 2,1
 +----------------------------------+
 | File  Edit  Search  Run          |
-|program p(output);                |
+|pr┌─ Save as ──────────────────┐  |
+|~ │                            │  |
+|~ └────────────────────────────┘  |
 |~                                 |
-|~                                 |
-|~                                 |
-|Save as:                          |
+|                                  |
 |(no name)                      1:1|
 |F10 Menu  F2 Save  F9 Build  ^F Fi|
 +----------------------------------+
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..ffffffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffffffff..|
 |..................................|
-|..................................|
-|..................................|
-|..................................|
-|pppppppppppppppppppppppppppppppppp|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------------+
 +----------------------------------+
 |1-34u |
+|1-2. 3-32f 33-34. |
+|1-2. 3-32f 33-34. |
+|1-2. 3-32f 33-34. |
 |1-34. |
-|1-34. |
-|1-34. |
-|1-34. |
-|1-34p |
+|1-34m |
 |1-34s |
 |1-34h |
 +----------------------------------+
-cursor 6,10
+cursor 3,5
 +----------------------------------+
 | File  Edit  Search  Run          |
-|program p(output);                |
+|pr┌─ Save as ──────────────────┐  |
+|~ │                            │  |
+|~ └────────────────────────────┘  |
 |~                                 |
-|~                                 |
-|~                                 |
-|Save as:                          |
+|                                  |
 |(no name)                      1:1|
 |F10 Menu  F2 Save  F9 Build  ^F Fi|
 +----------------------------------+
 +----------------------------------+
 |uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
+|..ffffffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffffffff..|
+|..ffffffffffffffffffffffffffffff..|
 |..................................|
-|..................................|
-|..................................|
-|..................................|
-|pppppppppppppppppppppppppppppppppp|
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +----------------------------------+
 +----------------------------------+
 |1-34u |
+|1-2. 3-32f 33-34. |
+|1-2. 3-32f 33-34. |
+|1-2. 3-32f 33-34. |
 |1-34. |
-|1-34. |
-|1-34. |
-|1-34. |
-|1-34p |
+|1-34m |
 |1-34s |
 |1-34h |
 +----------------------------------+
-cursor 6,10
+cursor 3,5
 +----------------------------------+
 | File  Edit  Search  Run          |
 |program p(output);                |

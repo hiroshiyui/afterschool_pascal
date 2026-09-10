@@ -5076,6 +5076,16 @@ model's** for the reason the drawing is: `tui/run.py` links the shell and
 never runs it, so a split done there could not be held to anything — and the
 `doc/sop.md` §7 row it would have widened is struck instead.
 
+**The primitives took a second user and did not change** (ADR-0392): the
+prompts became centred framed boxes, and a dialog is one `Frame`, one `PutAt`
+and a cursor. That is the evidence ADR-0391 could not produce for itself, one
+user always being special-caseable. The ordering is the load-bearing part — a
+dialog draws after the document and before the bar, and there is no route into
+a menu from inside one, which is what keeps *there is no panel stack* true
+rather than lucky. It also took the message line back to one job: it had been
+answering two, under a test (`mode <> mdEdit`) that was right while every mode
+was a prompt and wrong the moment a menu was not.
+
 **`ncurses` was declined, and the record says why** (ADR-0389): it owns the
 screen and the terminal, so drawing through it makes the drawing no longer a
 value anything can diff — ADR-0262's argument against a pseudo-terminal

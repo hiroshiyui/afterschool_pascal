@@ -14,6 +14,10 @@ appears below in the release where it still existed.
 ## [Unreleased]
 
 ### Added
+- **A question is a box** (ADR-0392). `Find`, `Go to line` and `Save as` are
+  centred framed dialogs instead of a line at the bottom, so the editor draws
+  one kind of thing for one kind of thing. It is the second user of the panel
+  primitives, which is what tests whether they are an abstraction.
 - **The editor has a menu bar** (ADR-0391): `File  Edit  Search  Run` along
   the top, F10 (or Ctrl-O) to open, arrows to move, Enter to choose, Ctrl-C to
   close — drawn as a framed drop-down in real box characters. **A screen

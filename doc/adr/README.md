@@ -400,3 +400,4 @@ the alternatives that were rejected and why.
 | [0389](0389-a-cell-carries-a-role-and-not-a-colour.md) | A cell carries a role, and not a colour | Accepted |
 | [0390](0390-an-auxiliary-file-without-tmpfile.md) | An auxiliary file, without `tmpfile` | Accepted |
 | [0391](0391-a-screen-is-cells-and-a-panel-is-a-rectangle.md) | A screen is cells, and a panel is a rectangle | Accepted |
+| [0392](0392-a-question-is-a-box.md) | A question is a box | Accepted |
