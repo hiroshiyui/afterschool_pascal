@@ -156,7 +156,7 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.stringschema = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 52)
 @v.aptypes.handleclosers = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 53)
 
-define void @m.aptypes.afterschool.22457f58285ad886.init() #1 {
+define void @m.aptypes.afterschool.244eaf0320c13341.init() #1 {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
@@ -225,7 +225,7 @@ L1:
   ret void
 }
 
-define void @m.aptypes.afterschool.22457f58285ad886.fini() #1 {
+define void @m.aptypes.afterschool.244eaf0320c13341.fini() #1 {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 22

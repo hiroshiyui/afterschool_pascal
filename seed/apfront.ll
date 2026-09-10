@@ -224886,8 +224886,8 @@ L4:
 @v.aptypes.annotate = external global i8
 @v.aptypes.maintokbase = external global i8
 @frame.aptypes = external global i8
-declare void @m.aptypes.afterschool.22457f58285ad886.init()
-declare void @m.aptypes.afterschool.22457f58285ad886.fini()
+declare void @m.aptypes.afterschool.244eaf0320c13341.init()
+declare void @m.aptypes.afterschool.244eaf0320c13341.fini()
 declare void @p.aptypes.errorat(ptr, i32, i32)
 declare void @p.aptypes.strclear(ptr, ptr)
 declare void @p.aptypes.strappend(ptr, ptr, i8)

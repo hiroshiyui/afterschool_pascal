@@ -13,6 +13,14 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-09-11
+
+**A text value knows how wide it is, and the editor is one you can work in.**
+AP 6.4.15.13 defines display width and `PasUnicode.Columns` answers it, so a
+column in the editor is a cell rather than a byte; and the editor opens eight
+documents, scrolls sideways, lands on a diagnostic in whichever of them it
+names, and draws in twenty-four-bit colour where the terminal has it.
+
 ### Added
 - **A question is a box** (ADR-0392). `Find`, `Go to line` and `Save as` are
   centred framed dialogs instead of a line at the bottom, so the editor draws

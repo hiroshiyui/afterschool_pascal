@@ -653,8 +653,8 @@ long long pas_text_columns(const char *s, long long n) {
   while (i < n) {
     unsigned int cp;
     long long k = u8dec(u, n, i, &cp);
-    cols += k ? (long long)range_lookup_or(pas_u_width, PAS_U_WIDTH_N, cp, 1)
-              : 1;
+    cols +=
+        k ? (long long)range_lookup_or(pas_u_width, PAS_U_WIDTH_N, cp, 1) : 1;
     i = pas_text_next(s, n, i);
   }
   return cols;
