@@ -48,6 +48,8 @@ part that never changes was the first 2,000 lines a reader met.
 | [The concurrency clauses, audited](#the-concurrency-clauses-audited) | four readers given the behaviour and not the reasoning found seven defects in a surface every gate here called green |
 | [The first macOS run](#the-first-macos-run) | nine failures, five runs, and not one of them in the compiler — what a suite learns the first time it is run somewhere else |
 | [The roadmap as it stood](#the-roadmap-as-it-stood-on-2026-09-07) | the whole page, verbatim, the moment before it was compacted to what is open |
+| [WebAssembly, measured and then run](#webassembly-measured-and-then-run) | the slot Windows vacated, in four steps that each corrected the one before — and the two abstentions a gate had to learn |
+| [The editor, un-withdrawn](#the-editor-un-withdrawn) | the only thing here withdrawn by decision and brought back, and the four increments that followed in nine days |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -10213,3 +10215,137 @@ the emitter's second `_setjmp` shape and its `llvm.frameaddress` went with it;
 unconditionally, so it no longer compiles for mingw-w64 and
 `nonposix_headers.txt` records that as `blocked` on purpose. The runtime holds
 no preprocessor conditional again.
+
+## WebAssembly, measured and then run
+
+Windows was dropped on 2026-09-10 and `wasm32-wasi` took the slot the same
+day. What that bought was not a platform but an **oracle**: the first target
+here that is not POSIX and not a machine, and the first behavioural test of
+what a program does when the answers cannot be inherited from Linux.
+
+It arrived in four steps, and each corrected the one before it.
+
+**ADR-0382 re-pointed the question.** `runtime-nonposix` had been asking
+mingw-w64 whether the runtime's headers were there; the question was never
+about Windows, so it asked wasi instead. Two units of the four compile —
+`pasrt.c`, which is the language itself, and `pasrt_unicode.c` — and the other
+two are blocked by two different kinds of thing: `pasrt_posix.c` by five
+headers of seventeen, and `pasrt_task.c` by the target having no threads at
+all, which is the whole task facility rather than a header.
+
+**ADR-0383 admitted the target, and corrected a rule that had been wrong since
+i386.** `WordAlign` had been answering two questions — what a pointer aligns
+to, and what an eight-byte datum aligns to — and got away with it because
+i386, the only ILP32 target, answers 4 to both. wasm32 is ILP32 with `i64:64`,
+so `WideAlign` came out of it. `target-layout`'s second claim reported four
+wrong numbers on the first run the target was admitted, which is exactly what
+that claim was built for; a wrong alignment costs no diagnostic anywhere. The
+gate's *first* claim then had to stop classing targets by word size — it had
+put the two 32-bit targets together and called 337 correct offsets a
+divergence.
+
+**ADR-0385 ran the corpus**, which is ADR-0325's lesson one target further on:
+both defects the i386 port found were in neither a layout rule nor a frame.
+519 of 598 answered their golden. It found two things no other oracle here
+could, and both were **wrong answers rather than failures to start** — a 64 KB
+default stack that printed stray spaces into the middle of a line, and a
+`SOURCE_DATE_EPOCH` that a WASI runtime does not pass on unless it is told to.
+
+**ADR-0390 took the largest single cause.** 52 of the 79 failures were
+`tmpfile`, which wasi declares and does not define. The runtime stopped calling
+it and built §6.7.5.5's auxiliary file out of two other ISO C functions — C11
+7.21.5.3's exclusive `fopen` mode, so composing a name is a retry and not a
+race, and 7.21.4.1's `remove` on the open stream, which is `tmpfile`'s contract
+exactly. **No preprocessor conditional was added**, so the runtime's catalogue
+of them is still empty; the `#ifdef __wasi__` route would have reversed
+ADR-0380, which dropped a *target* rather than keep one conditional, and it
+would have put a different implementation of the language on wasi from the one
+every oracle here tests. Thirteen of the 52 turned out to be behind a second
+cause and moved rows rather than passing, which is the half a count hides.
+
+**And the two abstentions are the part worth carrying forward.** Twice the
+gate had to learn to say *I cannot take this measurement here* rather than
+report a defect:
+
+- **An LLVM that names `i128` for the target.** clang overrides the module's
+  own `target datalayout` with its own for the `--target=` it is given
+  (ADR-0156), so the two must agree about every modelled field. Debian trixie's
+  clang 19 states no `i128:128` for wasm32 and clang 21 does, which aligns an
+  i256 to 8 where the compiler computed 16 — a set inside a record laid out two
+  ways, which is ADR-0028's own defect. `tests/sets_records.pas`, the case that
+  decision exists for, was the single failure in 598 on that image. The CI job
+  moved to `debian:testing`, later pinned by digest because `testing` rolls.
+- **An engine that resolves a bare filename.** Two cases opened a scratch file
+  beside themselves; wasmedge 0.16 answers a null handle where 0.17 answers a
+  stream, given the same `--dir /:/`. They sat in the catalogue for a day as a
+  limitation of the *port* while CI, on the newer engine, reported them
+  passing — and **the gate found it by failing in the direction a catalogue is
+  least expected to fail**, refusing to let progress go unrecorded. The fix the
+  row proposed for itself was measured and was wrong: granting a preopen named
+  `.` makes a relative path resolve and an absolute one stop, trading 27 cases
+  for 2. So the gate probes the engine in C and abstains, and the committed
+  numbers are one engine's.
+
+**560 of 598 at v3.9.0**, and the 38 that remain are a port's work queue rather
+than a defect list. `wasm64-wasi` joined on the layout claim alone (ADR-0386)
+and cost nothing: every layout rule already had the arm an LP64 target needs,
+so it took the default side of every condition and matched all 11 162 frame
+offsets with nothing in the gate edited to admit it.
+
+## The editor, un-withdrawn
+
+`tui/` is the only thing here that was **withdrawn by decision and then
+brought back**, and the nine days between are worth recording because the
+second decision did not reverse the first.
+
+It was proposed with the dialect's tooling chapter, carried for six increments
+as *later, not struck*, and withdrawn on 2026-09-01 — not deferred and not
+blocked. The reason recorded was *"the language server is the better tool for
+what the IDE was wanted for"*, and that judgement is still true: `pasls`
+answers eight questions about a document and is undisturbed.
+
+**What un-withdrew it (ADR-0381) is that the withdrawal had weighed the wrong
+thing.** The record itself named what was being given up — a *Pascal-lineage
+answer key*, so that "this was easier in Turbo Pascal" becomes a finding rather
+than a matter of taste — and under ADR-0109 a program someone actually wants to
+write is the test a dialect feature has to pass. The other reason is that this
+is a hobby project. Neither is a reason the first argument could weigh, and the
+one blocker the withdrawal named — no terminal control — had been removed by
+ADR-0262 two days *before* it was written.
+
+**The decision that makes it testable is that the terminal is not in the
+loop.** `ApEdit` takes a key as a value and answers a *screen* — rows by
+columns with the cursor's cell — and touches no descriptor, so `tui/run.py`
+replays a scripted session and diffs what was drawn byte for byte. ADR-0262 had
+declined a pseudo-terminal binding on the grounds that a case needing one
+becomes a test of the binding, and that argument has now been met three times:
+for the drawing, for the prompts, and for `ncurses`.
+
+Four increments in nine days, and each was a design question wearing a
+feature's clothes:
+
+- **Milestone one** (ADR-0381): open, edit, save, compile, land on the error.
+  The goldens settled three things an argument would not have — that the
+  message is about the *last* key, that `Left`/`From` beat `substr` at fourteen
+  sites, and that the unknown-key message must carry the byte.
+- **Milestone two** (ADR-0387): undo asks *what an edit is*. The buffer had
+  been changed in place, so an edit existed only as the difference between two
+  strings, which cannot say where the cursor was. An edit became one of four
+  operations, and the four routines performing them became the only code that
+  touches the buffer — so the journal is complete by construction. A prompt
+  became a **mode of the model**, which is what lets a session drive a search.
+- **Save-as** (ADR-0388): the editor had started fileless and Ctrl-S then
+  advised a restart. Closing that also closed a defect two milestones old — the
+  shell had kept a `path` beside the model's name, two copies of one fact, and
+  save-as is exactly what makes two copies disagree.
+- **Colour** (ADR-0389): `PasTerm` had gained colour *for the editor* and the
+  editor could not express any of it, a capability built for a client with no
+  way to reach it. A cell carries a **role** and not a colour, so the model
+  names no terminal vocabulary, a golden holds `sssss` rather than SGR numbers,
+  and a palette change touches no recorded screen. `ncurses` was asked about
+  and declined in that record: it owns the screen, so drawing through it makes
+  the drawing no longer a value anything can diff.
+
+It ships as `afterschool` at v3.9.0 — a CMake target installed beside
+`pascalc`, which is the answer to its own `build.py` header saying a server
+needs a binary a *person* runs rather than one buried in a build tree.
