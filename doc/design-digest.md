@@ -5053,6 +5053,29 @@ and F9 as `kkBuild` — so which bytes mean which key stays the one question the
 decoder answers, and nothing above it learns that Save has two spellings. The
 other ten are reported by number, for `kkUnknown`'s reason.
 
+**A screen became cells, and a panel a rectangle** (ADR-0391) — the step
+ADR-0389 named and left undecided. `ScreenCell = string(8)`, one array element
+per *display column*, because `┌` is three bytes and one column and a row
+indexed by byte could not hold a frame while `role[r][c]` still named the cell
+a person sees. A wide cell's right half is the null string, meaning
+continuation, fixed now so East Asian text does not reshape the type later.
+**There is no panel stack**: one panel is open at a time, so a z-order would
+order nothing, and ADR-0343 is why the general thing is not built for one
+user. A menu item **names a `Key`**, so choosing it is the path a typed key
+takes — a menu is a second spelling of a binding, not a second dispatch.
+
+Two things the mutations found that a reading did not. Collapsing `RowRuns` to
+one run per row **passed all fourteen goldens before the menu existed**, every
+row then being one run — the assertion recorded the split without
+distinguishing a wrong one, which is why cells and the menu had to land
+together. And `Frame` skipping its interior clear also passed, because every
+caption had been written to one width and covered the panel exactly: the
+clearing that makes a panel opaque was dead code, true by accident. Captions
+now have their natural widths and both mutations fail. **The run split is the
+model's** for the reason the drawing is: `tui/run.py` links the shell and
+never runs it, so a split done there could not be held to anything — and the
+`doc/sop.md` §7 row it would have widened is struck instead.
+
 **`ncurses` was declined, and the record says why** (ADR-0389): it owns the
 screen and the terminal, so drawing through it makes the drawing no longer a
 value anything can diff — ADR-0262's argument against a pseudo-terminal

@@ -1,32 +1,46 @@
 +------------+
+| File  Edit |
 |abcdefghijkl|
-|~           |
 |            |
 |wide.pas 1:1|
-|F2 Save  F9 |
+|F10 Menu  F2|
 +------------+
 +------------+
-|............|
+|uuuuuuuuuuuu|
 |............|
 |mmmmmmmmmmmm|
 |ssssssssssss|
 |hhhhhhhhhhhh|
 +------------+
-cursor 1,1
 +------------+
+|1-12u |
+|1-12. |
+|1-12m |
+|1-12s |
+|1-12h |
++------------+
+cursor 2,1
++------------+
+| File  Edit |
 |abcdefghijkl|
-|~           |
 |            |
 |wide.pas1:27|
-|F2 Save  F9 |
+|F10 Menu  F2|
 +------------+
 +------------+
-|............|
+|uuuuuuuuuuuu|
 |............|
 |mmmmmmmmmmmm|
 |ssssssssssss|
 |hhhhhhhhhhhh|
 +------------+
-cursor 1,12
++------------+
+|1-12u |
+|1-12. |
+|1-12m |
+|1-12s |
+|1-12h |
++------------+
+cursor 2,12
 lines 1 dirty FALSE
   1: [abcdefghijklmnopqrstuvwxyz]

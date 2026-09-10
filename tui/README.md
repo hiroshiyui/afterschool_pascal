@@ -99,6 +99,7 @@ tui/build.py '' session.pas   # the session replayer
 
 | Key | |
 | --- | --- |
+| F10, Ctrl-O | the menu bar — arrows move, Enter chooses, Ctrl-C closes |
 | F2, Ctrl-S | save — and on a document with no name, ask for one first |
 | F9, Ctrl-B | compile, and land on the first diagnostic |
 | Ctrl-Q | quit — twice when the document has changes in it |
@@ -119,6 +120,12 @@ are decoded and *reported by number* (`F5 is not bound`) rather than ignored,
 because a key that does nothing and a key that was misread look alike to a
 person. F3 and F10 will be Open and Menu when there is something for them to
 open and a menu to show.
+
+**Some terminals keep F10 for themselves.** GNOME Terminal and Konsole open
+their own menu on it; `Ctrl-O` is the same key here, and the terminal's own
+setting (*disable menu accelerator*) gives F10 back. A second binding is not a
+workaround for a terminal — the decoder is where terminals are accommodated —
+so this is a note rather than a feature.
 
 **Ctrl-C and not Escape** closes a prompt, and that is a fact about the
 decoder rather than a preference: it is handed one byte at a time, and a bare

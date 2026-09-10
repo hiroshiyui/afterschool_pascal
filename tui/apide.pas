@@ -84,16 +84,37 @@ begin
       them apart. }
     crMessage: begin fg := clYellow; bg := clDefault end;
     crPrompt: begin fg := clBlack; bg := clYellow end;
+    { A panel's frame and the menu bar, and the item under the cursor in
+      reverse of the bar -- Turbo Pascal's own scheme. }
+    crFrame: begin fg := clCyan; bg := clBlue end;
+    crMenu: begin fg := clBlack; bg := clCyan end;
+    crChosen: begin fg := clWhite; bg := clBlue end;
   end
 end;
 
-procedure PutRow(r: integer; s: ScreenRow; width: integer; k: CellRole);
-var out: IOLine; e2: ErrorCode; fg, bg: Colour;
+{ One row, **a run at a time**. The split is the model's (`RowRuns`/`RowRun`,
+  ADR-0391) and not this side's, which is what lets a golden hold it: the
+  harness links this program and never runs it, so a shell that painted every
+  row with one colour would pass the whole suite.
+
+  A run is written on its own rather than the row being assembled, because a
+  row of box characters is three bytes a column and `IOMax` is 4096 -- a
+  worst case of many runs would overflow one line where a run cannot. }
+procedure PutRow(r: integer);
+var i, lo, hi, c: integer; out: IOLine; e2: ErrorCode;
+    k: CellRole; fg, bg: Colour;
 begin
-  while length(s) < width do s := s + ' ';
-  RoleColour(k, fg, bg);
-  out := CursorTo(r, 1) + SetColour(fg, bg) + s + ResetColour;
-  e2 := WriteText(StdOut, out)
+  for i := 1 to RowRuns(scr, r) do begin
+    RowRun(scr, r, i, lo, hi, k);
+    RoleColour(k, fg, bg);
+    out := CursorTo(r, lo) + SetColour(fg, bg);
+    { A continuation cell is the null-string and contributes nothing, which
+      is right: the terminal has already advanced past the wide cell that
+      owns it. }
+    for c := lo to hi do out := out + scr.cell[r][c];
+    out := out + ResetColour;
+    e2 := WriteText(StdOut, out)
+  end
 end;
 
 { The whole frame. The cursor is hidden across it, or the terminal draws it
@@ -110,8 +131,7 @@ begin
   { The first cell's role stands for the row, which is true of every row this
     editor draws today and is checked by nothing -- a `doc/sop.md` §7 row
     until panels make it false and `PutRow` has to split a row into runs. }
-  for r := 1 to scr.rows do
-    PutRow(r, scr.line[r], scr.cols, scr.role[r][1]);
+  for r := 1 to scr.rows do PutRow(r);
   e2 := WriteText(StdOut, CursorTo(scr.atRow, scr.atCol));
   e2 := WriteText(StdOut, ShowCursor)
 end;
@@ -203,7 +223,16 @@ begin
     EditSay(ed, 'it did not compile, and said nothing this could read')
 end;
 
-var c: char; k: Key; e2: ErrorCode;
+{ What the model asked for and does not do itself: a write, a build, a quit.
+  One place, because a menu item and a typed key produce the same request. }
+procedure Obey(k: Key);
+begin
+  if k.kind = kkSave then Save
+  else if k.kind = kkBuild then Build
+  else if k.kind = kkQuit then running := false
+end;
+
+var c: char; k: Key; e2: ErrorCode; cmd: Key;
 begin
   if argcount >= 1 then path := argument(1) else path := '';
   EditInit(ed);
@@ -246,7 +275,7 @@ begin
         with the key. It is the only thing about a prompt the shell knows,
         and keeping it to one question is what stops the mode leaking out of
         the model it belongs to. }
-      if EditPrompting(ed) then begin
+      if EditModal(ed) then begin
         asked := false;
         EditKey(ed, k);
         { **The answer to `Save as:` is a name, and writing it is this side's
@@ -254,7 +283,11 @@ begin
           so a second key cannot write a second time -- and the write is here
           because a file is, which is the line ADR-0381 drew for the screen
           and this is the same one. }
-        if EditTakeSave(ed) then Save
+        { **A menu choice and a keystroke arrive the same way** (ADR-0391):
+          the model hands back a `Key` it does not act on itself, and this
+          dispatches it through the arms it already has. `Save` after a
+          `Save as:` answer is the same request as `File > Save`. }
+        if EditTakeCommand(ed, cmd) then Obey(cmd)
       end
       else if k.kind = kkQuit then begin
         { A document with changes in it takes two presses, and the second has
@@ -275,7 +308,10 @@ begin
           is the point. }
         if (k.kind = kkSave) and (EditName(ed) <> '') then Save
         else if k.kind = kkBuild then Build
-        else EditKey(ed, k)
+        else begin
+          EditKey(ed, k);
+          if EditTakeCommand(ed, cmd) then Obey(cmd)
+        end
       end;
       if running then Draw
     end

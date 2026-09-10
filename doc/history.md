@@ -10216,6 +10216,17 @@ unconditionally, so it no longer compiles for mingw-w64 and
 `nonposix_headers.txt` records that as `blocked` on purpose. The runtime holds
 no preprocessor conditional again.
 
+**Struck 2026-09-10 by ADR-0391** — *a row's colour is the first cell's, and
+nothing checks that a row is one colour*. It named its own closing condition
+(*"it becomes false the moment a panel overlaps a document row… what has to
+change then is `PutRow` splitting a row into runs"*), which is ADR-0197's
+second shape and the reason it was written down rather than left to whoever
+built panels. What closed it is not the split but *where the split went*: done
+in the shell it would have been unverifiable, `tui/run.py` linking `apide.pas`
+and never running it, so the row would have widened from "a row is one colour"
+to "how a row splits is unchecked". `RowRuns`/`RowRun` are the model's, a
+session holds them, and the mutation that collapses them fails two goldens.
+
 ## WebAssembly, measured and then run
 
 Windows was dropped on 2026-09-10 and `wasm32-wasi` took the slot the same

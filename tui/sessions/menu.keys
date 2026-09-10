@@ -1,0 +1,53 @@
+# The menu bar and its drop-down (ADR-0391) -- the first thing on this screen
+# that overlaps the document, and therefore the first row with two roles in
+# it. The runs block below each screen is what holds that.
+name m.pas
+push program p(output);
+push begin
+push end.
+size 12 40
+draw
+
+# F10 puts the keyboard on the bar. Nothing has dropped yet, so the document
+# is untouched and only the bar's own row has more than one run.
+func 10
+draw
+
+# Down opens the drop-down under the title. It is *opaque*: the document rows
+# it covers are gone, not shown through.
+esc B
+draw
+
+# Down again walks it, and wraps at the end.
+esc B
+draw
+esc B
+draw
+
+# Right moves to the next menu with the drop-down still open, which is what
+# Turbo Pascal did and what makes a menu bar feel like one.
+esc C
+draw
+
+# Right again to Search, whose three items are three different lengths -- so
+# the panel's interior is *not* covered by its captions, and what makes the
+# document behind it invisible is `Frame` clearing the rectangle. A panel that
+# did not clear would show `program p(output);` through the gaps.
+esc C
+draw
+esc B
+esc B
+draw
+esc D
+
+# Enter on `Edit > Undo` closes the menu and the item's key is applied by the
+# model itself -- there is nothing to undo, and saying so is the proof that a
+# menu item is a second spelling of a binding and not a second dispatch.
+ctrl M
+draw
+
+# F10 again, then Ctrl-C closes without choosing.
+func 10
+esc B
+ctrl C
+draw

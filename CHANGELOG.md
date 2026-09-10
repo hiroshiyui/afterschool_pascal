@@ -14,6 +14,13 @@ appears below in the release where it still existed.
 ## [Unreleased]
 
 ### Added
+- **The editor has a menu bar** (ADR-0391): `File  Edit  Search  Run` along
+  the top, F10 (or Ctrl-O) to open, arrows to move, Enter to choose, Ctrl-C to
+  close — drawn as a framed drop-down in real box characters. **A screen
+  became one array element per display column** to make that possible: `┌` is
+  three bytes and one column, so a row indexed by byte could not hold a frame
+  and keep the colour plane naming what a person sees. A menu item names a
+  *key*, so choosing one is the same path as pressing it — no second dispatch.
 - **The editor decodes the function keys** and binds two of them in Turbo
   Pascal's positions: **F2 is Save and F9 is Build**. Both spellings a
   terminal uses are understood — `ESC O Q` (SS3) and `ESC [ 1 2 ~` (CSI) are

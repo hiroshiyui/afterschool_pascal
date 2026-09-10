@@ -1,15 +1,15 @@
 +------------------------+
+| File  Edit  Search  Run|
 |program hello(output);  |
 |begin                   |
 |end.                    |
 |~                       |
-|~                       |
 |                        |
 |hello.pas            1:1|
-|F2 Save  F9 Build  ^F Fi|
+|F10 Menu  F2 Save  F9 Bu|
 +------------------------+
 +------------------------+
-|........................|
+|uuuuuuuuuuuuuuuuuuuuuuuu|
 |........................|
 |........................|
 |........................|
@@ -18,19 +18,29 @@
 |ssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhh|
 +------------------------+
-cursor 1,1
 +------------------------+
+|1-24u |
+|1-24. |
+|1-24. |
+|1-24. |
+|1-24. |
+|1-24m |
+|1-24s |
+|1-24h |
++------------------------+
+cursor 2,1
++------------------------+
+| File  Edit  Search  Run|
 |Xprogram hello(output); |
 |begin                   |
 |end.                    |
 |~                       |
-|~                       |
 |                        |
 |hello.pas *          1:2|
-|F2 Save  F9 Build  ^F Fi|
+|F10 Menu  F2 Save  F9 Bu|
 +------------------------+
 +------------------------+
-|........................|
+|uuuuuuuuuuuuuuuuuuuuuuuu|
 |........................|
 |........................|
 |........................|
@@ -39,7 +49,17 @@ cursor 1,1
 |ssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhh|
 +------------------------+
-cursor 1,2
++------------------------+
+|1-24u |
+|1-24. |
+|1-24. |
+|1-24. |
+|1-24. |
+|1-24m |
+|1-24s |
+|1-24h |
++------------------------+
+cursor 2,2
 lines 3 dirty TRUE
   1: [Xprogram hello(output);]
   2: [begin]

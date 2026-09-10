@@ -27,15 +27,23 @@ esc 20~
 draw
 
 # An unbound one is reported *with its number*, because a key that does
-# nothing and a key that was misread look alike. F1 is SS3, F5 and F10 are
-# CSI, and the numbering has gaps -- 16 and 22 are not function keys.
+# nothing and a key that was misread look alike. F1 is SS3 and F5 is CSI, and
+# the numbering has gaps -- 16 and 22 are not function keys.
 ss3 P
 draw
 esc 15~
 draw
+esc 24~
+draw
+
+# **F10 stopped being unbound** when the menu bar landed (ADR-0391), and this
+# is where that shows: it opens the bar instead of reporting a number. Left
+# here rather than moved to `menu.keys` because what this session is about is
+# the decoding, and a key that changes from unbound to bound is exactly the
+# transition a golden should record.
 esc 21~
 draw
-esc 24~
+ctrl C
 draw
 
 # A parameter that names no function key is still an unknown sequence.

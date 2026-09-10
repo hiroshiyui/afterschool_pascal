@@ -1,70 +1,102 @@
 +--------------------+
+| File  Edit  Search |
 |text                |
-|~                   |
 |~                   |
 |                    |
 |keys.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
++--------------------+
+| File  Edit  Search |
 |text                |
-|~                   |
 |~                   |
 |unknown key 90      |
 |keys.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
++--------------------+
+| File  Edit  Search |
 |.text               |
-|~                   |
 |~                   |
 |                    |
 |keys.pas *       1:2|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,2
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,2
++--------------------+
+| File  Edit  Search |
 |.text               |
-|~                   |
 |~                   |
 |unknown key 1       |
 |keys.pas *       1:2|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,2
++--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,2
 lines 1 dirty TRUE
   1: [.text]

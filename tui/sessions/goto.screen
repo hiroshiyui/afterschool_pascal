@@ -1,14 +1,14 @@
 +--------------------+
+| File  Edit  Search |
 |one                 |
 |two                 |
 |three               |
-|four                |
 |                    |
 |goto.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |....................|
@@ -16,18 +16,27 @@
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
++--------------------+
+| File  Edit  Search |
 |one                 |
 |two                 |
 |three               |
-|four                |
 |Line:               |
 |goto.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |....................|
@@ -35,18 +44,27 @@ cursor 1,1
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
++--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20. |
+|1-20p |
+|1-20s |
+|1-20h |
++--------------------+
 cursor 5,7
 +--------------------+
-|one                 |
+| File  Edit  Search |
 |two                 |
 |three               |
 |four                |
 |                    |
 |goto.pas         4:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |....................|
@@ -54,18 +72,27 @@ cursor 5,7
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
++--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
 cursor 4,1
 +--------------------+
-|two                 |
+| File  Edit  Search |
 |three               |
 |four                |
 |five                |
 |                    |
 |goto.pas         5:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |....................|
@@ -73,18 +100,27 @@ cursor 4,1
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
++--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
 cursor 4,1
 +------------------------------+
-|two                           |
+| File  Edit  Search  Run      |
 |three                         |
 |four                          |
 |five                          |
 |not a line number: 4x         |
 |goto.pas                   5:1|
-|F2 Save  F9 Build  ^F Find  ^L|
+|F10 Menu  F2 Save  F9 Build  ^|
 +------------------------------+
 +------------------------------+
-|..............................|
+|uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
 |..............................|
 |..............................|
 |..............................|
@@ -92,24 +128,42 @@ cursor 4,1
 |ssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
 +------------------------------+
++------------------------------+
+|1-30u |
+|1-30. |
+|1-30. |
+|1-30. |
+|1-30m |
+|1-30s |
+|1-30h |
++------------------------------+
 cursor 4,1
 +------------------------------+
-|two                           |
+| File  Edit  Search  Run      |
 |three                         |
 |four                          |
 |five                          |
 |nothing to find again         |
 |goto.pas                   5:1|
-|F2 Save  F9 Build  ^F Find  ^L|
+|F10 Menu  F2 Save  F9 Build  ^|
 +------------------------------+
 +------------------------------+
-|..............................|
+|uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu|
 |..............................|
 |..............................|
 |..............................|
 |mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
++------------------------------+
++------------------------------+
+|1-30u |
+|1-30. |
+|1-30. |
+|1-30. |
+|1-30m |
+|1-30s |
+|1-30h |
 +------------------------------+
 cursor 4,1
 lines 5 dirty FALSE

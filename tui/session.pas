@@ -23,6 +23,7 @@
     keys  <text>     every character of <text>, as bytes
     esc   <text>     ESC [ <text>, so `esc A` is an up arrow
     ss3   <text>     ESC O <text>, the other introducer: `ss3 Q` is F2
+    func  <n>        press F<n>, in the CSI spelling
     ctrl  <letter>   the control byte for that letter: `ctrl S` is Ctrl-S
     draw             render, and print what was drawn
     say   <text>     what the shell would have put on the message line
@@ -95,18 +96,21 @@ begin
     crHint: RoleChar := 'h';
     crMessage: RoleChar := 'm';
     crPrompt: RoleChar := 'p';
+    crFrame: RoleChar := 'f';
+    crMenu: RoleChar := 'u';
+    crChosen: RoleChar := 'U';
   end
 end;
 
 procedure Print;
-var r, c: integer; bar: ScreenRow;
+var r, c, lo, hi: integer; bar: ScreenRow; kr: CellRole; part: EditLine;
 begin
   bar := '';
   for c := 1 to scr.cols do bar := bar + '-';
   writeln('+', bar, '+');
   for r := 1 to scr.rows do begin
-    line := scr.line[r];
-    while length(line) < scr.cols do line := line + ' ';
+    line := '';
+    for c := 1 to scr.cols do line := line + scr.cell[r][c];
     writeln('|', line, '|')
   end;
   writeln('+', bar, '+');
@@ -119,6 +123,21 @@ begin
   for r := 1 to scr.rows do begin
     line := '';
     for c := 1 to scr.cols do line := line + RoleChar(scr.role[r][c]);
+    writeln('|', line, '|')
+  end;
+  writeln('+', bar, '+');
+  { **The runs each row splits into**, which is what the shell colours by and
+    which no golden could reach while the shell worked it out for itself: the
+    harness links `apide.pas` and never runs it. Printed as `first-last role`
+    so a row of one colour is one short entry and a framed row is a handful. }
+  writeln('+', bar, '+');
+  for r := 1 to scr.rows do begin
+    line := '';
+    for c := 1 to RowRuns(scr, r) do begin
+      RowRun(scr, r, c, lo, hi, kr);
+      writestr(part, lo:1, '-', hi:1, RoleChar(kr), ' ');
+      line := line + part
+    end;
     writeln('|', line, '|')
   end;
   writeln('+', bar, '+');
@@ -158,6 +177,21 @@ begin
       to F4 arrive as `ESC O P`..`ESC O S` on most terminals and F5 upwards as
       `ESC [ <n> ~`, so a script that could only spell the second would leave
       the half most likely to be misdecoded undriven. }
+    { **A session should press a key, not spell one.** `funckeys.keys` is
+      where the spellings are the claim; everywhere else the point is which
+      key, and `esc 21~` standing in for F10 makes a menu script a decoder
+      quiz. The numbering has gaps, which is `FuncOf`'s table read backwards. }
+    else if w = 'func' then begin
+      readstr(arg, n);
+      if n <= 5 then n := n + 10
+      else if n <= 10 then n := n + 11
+      else n := n + 12;
+      Feed(chr(27));
+      Feed('[');
+      writestr(line, n:1);
+      FeedAll(line);
+      Feed('~')
+    end
     else if w = 'ss3' then begin
       Feed(chr(27));
       Feed('O');

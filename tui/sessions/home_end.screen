@@ -1,87 +1,127 @@
 +--------------------+
+| File  Edit  Search |
 |the quick brown     |
-|~                   |
 |~                   |
 |                    |
 |ends.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
++--------------------+
+| File  Edit  Search |
 |the quick brown     |
-|~                   |
 |~                   |
 |                    |
 |ends.pas        1:16|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,16
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,16
++--------------------+
+| File  Edit  Search |
 |the quick brown     |
-|~                   |
 |~                   |
 |                    |
 |ends.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
++--------------------+
+| File  Edit  Search |
 |the quick brown     |
-|~                   |
 |~                   |
 |                    |
 |ends.pas        1:16|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,16
 +--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,16
++--------------------+
+| File  Edit  Search |
 |the quick brown     |
-|~                   |
 |~                   |
 |                    |
 |ends.pas         1:1|
-|F2 Save  F9 Build  ^|
+|F10 Menu  F2 Save  F|
 +--------------------+
 +--------------------+
-|....................|
+|uuuuuuuuuuuuuuuuuuuu|
 |....................|
 |....................|
 |mmmmmmmmmmmmmmmmmmmm|
 |ssssssssssssssssssss|
 |hhhhhhhhhhhhhhhhhhhh|
 +--------------------+
-cursor 1,1
++--------------------+
+|1-20u |
+|1-20. |
+|1-20. |
+|1-20m |
+|1-20s |
+|1-20h |
++--------------------+
+cursor 2,1
 lines 1 dirty FALSE
   1: [the quick brown]

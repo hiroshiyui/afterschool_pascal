@@ -37,16 +37,17 @@ module ApEdit;
 
 export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  CellRole, crText, crStatus, crHint, crMessage, crPrompt,
-                 ScreenRoles,
+                 crFrame, crMenu, crChosen, ScreenRoles,
+                 CellMax, ScreenCell, ScreenCells,
                  KeyKind, kkNone, kkChar, kkEnter, kkBack, kkDelete,
                  kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
                  kkSave, kkQuit, kkBuild, kkUnknown,
-                 kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc,
+                 kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu,
                  Key, Decoder, Editor,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
                  EditDirty, EditLines, EditLine_, EditRow, EditCol,
                  EditName, EditSetName, EditSay, EditSaved, EditFault,
-                 EditPrompting, EditTakeSave,
+                 EditModal, EditTakeCommand, RowRuns, RowRun,
                  DecodeInit, DecodeByte);
 
 import PasError;
@@ -64,9 +65,28 @@ const
     (`ItemMax`) and not a second one -- the buffer is a StrVec, so saying a
     larger number here would be saying it twice and wrongly. }
   LineMax = ItemMax;
+  { The bytes one *display column* of drawing may hold: enough for a box
+    character (three) with room to spare, and a bound in ADR-0012's sense
+    rather than a guess. }
+  CellMax = 8;
 
 type
   EditLine = StrItem;
+  { **A cell is what a terminal renders in one column**, and it holds the
+    *bytes* of that column rather than a byte (ADR-0391). That is the whole of
+    what Unicode frames needed: `'┌'` is three bytes and one column, so a row
+    indexed by byte could not hold a frame and keep `role[r][c]` pointing at
+    what a person sees. Eight is generous for one column and is a bound in
+    ADR-0012's sense rather than a guess.
+
+    **An empty cell means the column to its left is two wide** and this is its
+    continuation. Nothing in this increment produces one -- a box character is
+    one column and the document is read a byte at a time -- but the convention
+    is fixed now so that East Asian text does not reshape the type later. }
+  ScreenCell = string(CellMax);
+  ScreenCells = array [1..ColsMax] of ScreenCell;
+
+  { Still used for assembling a line of *output*, which is bytes. }
   ScreenRow = string(ColsMax);
 
   { **What a cell is for, which is not what colour it is** (ADR-0389). The
@@ -78,7 +98,8 @@ type
 
     `crText` is the document and is what a cell is unless something says
     otherwise, which is why it is first. }
-  CellRole = (crText, crStatus, crHint, crMessage, crPrompt);
+  CellRole = (crText, crStatus, crHint, crMessage, crPrompt,
+              crFrame, crMenu, crChosen);
   ScreenRoles = array [1..ColsMax] of CellRole;
 
   { What the caller draws. `rows` and `cols` are what was asked for and are
@@ -87,7 +108,7 @@ type
     arithmetic of its own. }
   Screen = record
     rows, cols: integer;
-    line: array [1..RowsMax] of ScreenRow;
+    cell: array [1..RowsMax] of ScreenCells;
     { One role per cell, in the same coordinates as `line`. A plane beside the
       characters rather than a record per cell: a `ScreenRow` is a string and
       the whole program is written to treat it as one, and a cell record would
@@ -103,7 +124,7 @@ type
   KeyKind = (kkNone, kkChar, kkEnter, kkBack, kkDelete,
              kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
              kkSave, kkQuit, kkBuild, kkUnknown,
-             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc);
+             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu);
 
   Key = record
     kind: KeyKind;
@@ -163,7 +184,7 @@ type
     owned would be behaviour no session could drive and no golden could
     hold, and it is the half of an editor where a person is most likely to
     notice something wrong. }
-  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs);
+  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs, mdMenu);
 
   { The document and where the caller is in it. `top` is the first line drawn,
     so scrolling is a property of the render and not of the cursor. }
@@ -185,12 +206,21 @@ type
       last thing searched for -- which outlives the prompt, Ctrl-L being a
       repeat of it. }
     mode: EditMode;
+    { Which menu is open and which item is under the bar, both 1-based. They
+      are the panel's whole state: at most one panel is open at a time in this
+      increment, so there is nothing for a z-order to order and there is no
+      stack -- which is a finding rather than an omission (ADR-0391). }
+    menu, item: integer;
     prompt: EditLine;
     seek: EditLine;
-    { A name was just given to a document that had none, and the write has not
-      happened yet -- the shell's half, which this is how it hears about.
-      Cleared by the asking, so it is a request and not a state. }
-    wantSave: boolean
+    { **What the person asked for that this side does not do**: a write, a
+      build, a quit. It is a `Key`, because a menu item is a second spelling
+      of a binding and not a second dispatch -- the shell handles it through
+      the arms it already has for a key that was typed. Cleared by the
+      asking, so it is a request and not a state (ADR-0388's rule, widened
+      from save alone). }
+    pend: Key;
+    hasPend: boolean
   end;
 
 { An editor holding one empty line, which is what an empty document is: a
@@ -247,11 +277,27 @@ procedure EditSaved(var ed: Editor);
   one is passed over rather than landing the cursor somewhere arbitrary. }
 function EditFault(var ed: Editor; text: EditLine): boolean;
 
+{ **How a row splits into runs of one role**, which the shell needs to colour
+  it and which is therefore a decision rather than a drawing -- so it is here,
+  where a session drives it and a golden holds it. `EditFault`'s rule met a
+  third time.
+
+  Without this the shell would walk the role plane itself, and *no golden
+  could see it*: `tui/run.py` links the shell and never runs it, so a shell
+  that painted every row with its first cell's colour would pass the whole
+  suite. That is the `doc/sop.md` row this closes rather than widens. }
+function RowRuns(var scr: Screen; r: integer): integer;
+
+{ The `n`-th run of row `r`, as a first and last column and the role they
+  share. }
+procedure RowRun(var scr: Screen; r, n: integer;
+                 var first, last: integer; var k: CellRole);
+
 { Is a question open? **The shell asks before it acts on anything of its
   own**: while the editor is asking something, Ctrl-S and Ctrl-B and Ctrl-Q
   belong to the answer and not to the file, and this is the only thing about
   a prompt the shell is told. }
-function EditPrompting(var ed: Editor): boolean;
+function EditModal(var ed: Editor): boolean;
 
 { Did the person just name a document that had none? **Answers true once**,
   and clears -- it is a request the shell takes rather than a flag it reads,
@@ -259,7 +305,7 @@ function EditPrompting(var ed: Editor): boolean;
   calls `EditSaved`; where the name came from is this side's business and the
   writing is that side's, which is the same line ADR-0381 drew for the
   screen. }
-function EditTakeSave(var ed: Editor): boolean;
+function EditTakeCommand(var ed: Editor; var k: Key): boolean;
 
 { No bytes in hand. }
 procedure DecodeInit(var d: Decoder);
@@ -273,11 +319,26 @@ end;
 
 const
   Esc = 27;
+  { **The frame, in real box characters.** Each is a three-byte string and a
+    one-column cell, which is what the cell model bought: a golden shows a box
+    and a person sees a box. Written as constants so the set can be swapped
+    (for ASCII on a terminal that cannot draw these) in one place. }
+  BoxTL = '┌'; BoxTR = '┐'; BoxBL = '└'; BoxBR = '┘';
+  BoxH = '─'; BoxV = '│';
+
+  { The menu bar. **An item names a `Key`**, and choosing it feeds that key
+    back through `EditKey` -- so a menu adds no action of its own, exactly as a
+    bound function key is decoded *as* the key it is bound to. Only what
+    exists is listed: a menu of things that do nothing is worse than no menu,
+    which is why there is no Help and no File>Open yet. }
+  MenuCount = 4;
+  ItemMost = 3;
+
   { What the hint bar says. One place, because it is a claim about the
     bindings and the decoder is the other half of that claim -- a key here
     that `DecodeByte` does not answer would be the editor lying about itself
     on every frame. }
-  Hints = 'F2 Save  F9 Build  ^F Find  ^L Next  ^G Line  ^Z Undo  ^Q Quit';
+  Hints = 'F10 Menu  F2 Save  F9 Build  ^F Find  ^Z Undo  ^Q Quit';
 
 procedure EditInit;
 begin
@@ -295,7 +356,12 @@ begin
   ed.mode := mdEdit;
   ed.prompt := '';
   ed.seek := '';
-  ed.wantSave := false
+  ed.menu := 1;
+  ed.item := 0;
+  ed.hasPend := false;
+  ed.pend.kind := kkNone;
+  ed.pend.ch := ' ';
+  ed.pend.num := 0
 end;
 
 { Give a journal back. Written once and called three times -- freeing the
@@ -318,15 +384,50 @@ begin
   Drop(ed.redos)
 end;
 
-function EditPrompting;
+function EditModal;
 begin
-  EditPrompting := ed.mode <> mdEdit
+  EditModal := ed.mode <> mdEdit
 end;
 
-function EditTakeSave;
+function RowRuns;
+var c, n: integer; k: CellRole;
 begin
-  EditTakeSave := ed.wantSave;
-  ed.wantSave := false
+  n := 0;
+  c := 1;
+  while c <= scr.cols do begin
+    n := n + 1;
+    k := scr.role[r][c];
+    while (c <= scr.cols) and (scr.role[r][c] = k) do c := c + 1
+  end;
+  RowRuns := n
+end;
+
+procedure RowRun;
+var c, seen: integer; k2: CellRole;
+begin
+  { Answers the last run for an `n` past the end rather than nothing, so a
+    caller that miscounts paints a row twice instead of leaving a gap of
+    whatever the terminal had. }
+  first := 1;
+  last := scr.cols;
+  k := crText;
+  c := 1;
+  seen := 0;
+  while (c <= scr.cols) and (seen < n) do begin
+    seen := seen + 1;
+    k2 := scr.role[r][c];
+    first := c;
+    while (c <= scr.cols) and (scr.role[r][c] = k2) do c := c + 1;
+    last := c - 1;
+    k := k2
+  end
+end;
+
+function EditTakeCommand;
+begin
+  k := ed.pend;
+  EditTakeCommand := ed.hasPend;
+  ed.hasPend := false
 end;
 
 procedure EditPush;
@@ -686,7 +787,7 @@ end;
 
 { A key while a question is open. **The question owns every one of them**: a
   person typing an answer has not asked for anything else to happen, which is
-  what `EditPrompting` tells the shell and why Ctrl-S does not save from
+  what `EditModal` tells the shell and why Ctrl-S does not save from
   inside a search. }
 procedure PromptKey(var ed: Editor; k: Key);
 var r: IntResult; msg: EditLine;
@@ -723,7 +824,8 @@ begin
           ed.says := 'a document needs a name to be saved'
         else begin
           ed.name := ed.prompt;
-          ed.wantSave := true
+          ed.pend.kind := kkSave;
+          ed.hasPend := true
         end
       end;
       mdGoto: begin
@@ -746,6 +848,205 @@ begin
   end
 end;
 
+{ **Composite one cell.** Every drawing below goes through this, so clipping
+  is written once: a panel that runs off the right edge or past the last row
+  is cut rather than trapping, which is what a window narrower than a dialog
+  has to do. }
+procedure PutCell(var scr: Screen; r, c: integer; s: ScreenCell; k: CellRole);
+begin
+  if (r >= 1) and (r <= scr.rows) and (c >= 1) and (c <= scr.cols) then begin
+    scr.cell[r][c] := s;
+    scr.role[r][c] := k
+  end
+end;
+
+{ ...and one string of *bytes*, a byte to a cell. That is right for the ASCII
+  a Pascal source is written in and wrong for anything wider, which is exactly
+  the limitation this increment leaves standing and stage two removes. }
+procedure PutAt(var scr: Screen; r, c: integer; s: EditLine; k: CellRole);
+var i: integer; one: ScreenCell;
+begin
+  for i := 1 to length(s) do begin
+    one := '';
+    one := one + s[i];
+    PutCell(scr, r, c + i - 1, one, k)
+  end
+end;
+
+{ A frame, with its title let into the top edge Turbo Pascal's way. The
+  inside is *cleared* to the frame's role, which is what makes a panel opaque
+  -- a dialog over a document must hide it rather than show through. }
+procedure Frame(var scr: Screen; top, left, hgt, wid: integer;
+                title: EditLine; k: CellRole);
+var r, c: integer;
+begin
+  for r := top to top + hgt - 1 do
+    for c := left to left + wid - 1 do
+      PutCell(scr, r, c, ' ', k);
+  for c := left + 1 to left + wid - 2 do begin
+    PutCell(scr, top, c, BoxH, k);
+    PutCell(scr, top + hgt - 1, c, BoxH, k)
+  end;
+  for r := top + 1 to top + hgt - 2 do begin
+    PutCell(scr, r, left, BoxV, k);
+    PutCell(scr, r, left + wid - 1, BoxV, k)
+  end;
+  PutCell(scr, top, left, BoxTL, k);
+  PutCell(scr, top, left + wid - 1, BoxTR, k);
+  PutCell(scr, top + hgt - 1, left, BoxBL, k);
+  PutCell(scr, top + hgt - 1, left + wid - 1, BoxBR, k);
+  if title <> '' then
+    PutAt(scr, top, left + 2, ' ' + title + ' ', k)
+end;
+
+{ The menu bar, written as functions rather than as a table of records
+  because Pascal has no array literal and a `case` is what this tree reaches
+  for. Adding a menu is four arms and no other change. }
+function MenuTitle(m: integer): EditLine;
+begin
+  case m of
+    1: MenuTitle := 'File';
+    2: MenuTitle := 'Edit';
+    3: MenuTitle := 'Search';
+    4: MenuTitle := 'Run';
+    otherwise MenuTitle := ''
+  end
+end;
+
+function MenuItems(m: integer): integer;
+begin
+  case m of
+    1: MenuItems := 2;
+    2: MenuItems := 2;
+    3: MenuItems := 3;
+    4: MenuItems := 1;
+    otherwise MenuItems := 0
+  end
+end;
+
+{ The caption carries the key, which is how a person learns one without
+  reading a README -- the hint bar's argument, one layer in. }
+function ItemCaption(m, i: integer): EditLine;
+begin
+  { **Not padded to a common width**, and that is deliberate: what makes a
+    panel opaque is `Frame` clearing its interior, and captions padded to the
+    box would cover every cell and leave that clearing dead code -- true by
+    accident, and silently false the day a caption is shorter. The Search menu
+    is the one with three different lengths, which is why the session opens
+    it. }
+  ItemCaption := '';
+  if m = 1 then begin
+    if i = 1 then ItemCaption := 'Save  F2'
+    else if i = 2 then ItemCaption := 'Quit  ^Q'
+  end
+  else if m = 2 then begin
+    if i = 1 then ItemCaption := 'Undo  ^Z'
+    else if i = 2 then ItemCaption := 'Redo  ^Y'
+  end
+  else if m = 3 then begin
+    if i = 1 then ItemCaption := 'Find  ^F'
+    else if i = 2 then ItemCaption := 'Find next  ^L'
+    else if i = 3 then ItemCaption := 'Go to line  ^G'
+  end
+  else if m = 4 then
+    if i = 1 then ItemCaption := 'Build  F9'
+end;
+
+{ **The item names a key**, and that is the whole of the menu's machinery. }
+function ItemKey(m, i: integer): Key;
+var k: Key;
+begin
+  k.ch := ' ';
+  k.num := 0;
+  k.kind := kkNone;
+  if m = 1 then begin
+    if i = 1 then k.kind := kkSave
+    else if i = 2 then k.kind := kkQuit
+  end
+  else if m = 2 then begin
+    if i = 1 then k.kind := kkUndo
+    else if i = 2 then k.kind := kkRedo
+  end
+  else if m = 3 then begin
+    if i = 1 then k.kind := kkFind
+    else if i = 2 then k.kind := kkAgain
+    else if i = 3 then k.kind := kkGoto
+  end
+  else if m = 4 then
+    if i = 1 then k.kind := kkBuild;
+  ItemKey := k
+end;
+
+{ Where a menu's title starts on the bar, so the drop-down lines up under it. }
+function MenuAt(m: integer): integer;
+var i, c: integer;
+begin
+  c := 2;
+  for i := 1 to m - 1 do c := c + length(MenuTitle(i)) + 2;
+  MenuAt := c
+end;
+
+{ A key while the menu bar has the keyboard. **One mode and not two**:
+  `ed.item = 0` is the bar with nothing dropped and anything above it is the
+  drop-down open on that item, which is one integer where a second `EditMode`
+  value would have been a second state to keep consistent with it. }
+procedure MenuKey(var ed: Editor; k: Key);
+var c: Key;
+begin
+  case k.kind of
+    kkLeft: begin
+      ed.menu := ed.menu - 1;
+      if ed.menu < 1 then ed.menu := MenuCount;
+      if ed.item > MenuItems(ed.menu) then ed.item := MenuItems(ed.menu)
+    end;
+    kkRight: begin
+      ed.menu := ed.menu + 1;
+      if ed.menu > MenuCount then ed.menu := 1;
+      if ed.item > MenuItems(ed.menu) then ed.item := MenuItems(ed.menu)
+    end;
+    { Down opens the drop-down and then walks it, wrapping. Turbo Pascal's
+      behaviour, and the reason `item = 0` is worth having as a value. }
+    kkDown: if ed.item = 0 then ed.item := 1
+            else begin
+              ed.item := ed.item + 1;
+              if ed.item > MenuItems(ed.menu) then ed.item := 1
+            end;
+    kkUp: if ed.item = 0 then ed.item := MenuItems(ed.menu)
+          else begin
+            ed.item := ed.item - 1;
+            if ed.item < 1 then ed.item := MenuItems(ed.menu)
+          end;
+    kkEnter: if ed.item = 0 then ed.item := 1
+             else begin
+               c := ItemKey(ed.menu, ed.item);
+               ed.mode := mdEdit;
+               ed.item := 0;
+               { **An item is a second spelling of a binding**, so what it
+                 names goes down the path a typed key goes down: the shell's
+                 three become a request it takes, and everything else is this
+                 side's and is applied here. The recursion is one deep and
+                 stays so because no item names a menu key -- which is a
+                 property of `ItemKey` and is why that table is small and in
+                 one place. }
+               if (c.kind = kkSave) or (c.kind = kkQuit) or
+                  (c.kind = kkBuild) then begin
+                 ed.pend := c;
+                 ed.hasPend := true
+               end
+               else
+                 EditKey(ed, c)
+             end;
+    { Ctrl-C, and F10 a second time, both close. }
+    kkCancel, kkMenu: begin
+      ed.mode := mdEdit;
+      ed.item := 0
+    end;
+    kkNone, kkChar, kkBack, kkDelete, kkHome, kkEnd, kkSave, kkQuit,
+    kkBuild, kkUnknown, kkUndo, kkRedo, kkFind, kkAgain, kkGoto,
+    kkFunc: ;
+  end
+end;
+
 procedure EditKey;
 var cur, rest, one: EditLine; k2: integer; keep: boolean;
 begin
@@ -758,7 +1059,12 @@ begin
     the document, which is exactly how long it is true. }
   ed.says := '';
 
-  { A question owns the keyboard while it is open, and nothing below runs. }
+  { A question or a menu owns the keyboard while it is open, and nothing
+    below runs. }
+  if ed.mode = mdMenu then begin
+    MenuKey(ed, k);
+    exit
+  end;
   if ed.mode <> mdEdit then begin
     PromptKey(ed, k);
     exit
@@ -879,6 +1185,12 @@ begin
     { Nothing is open, so there is nothing to cancel -- said rather than
       ignored, for `kkUnknown`'s reason. }
     kkCancel: ed.says := 'nothing to cancel';
+    { F10, and Ctrl-O where a terminal keeps F10 for itself. }
+    kkMenu: begin
+      ed.mode := mdMenu;
+      ed.menu := 1;
+      ed.item := 0
+    end;
     { Decoded, and not bound to anything yet -- said with its number, because
       a key that does nothing and a key that was misread look alike, and F3
       and F10 are the two a Turbo Pascal user will press first. }
@@ -915,25 +1227,27 @@ end;
 
 procedure EditRender;
 var r, c, h, n, wide, pcol: integer; s: EditLine; row: ScreenRow;
-    num: EditLine;
+    num: EditLine; k2: CellRole;
 begin
   { The size the caller asked for, held to what this can draw. **Four rows is
     the least that has a document in it** since ADR-0389 -- the last three
     being the message, the status and the hint bar. }
   if rows > RowsMax then rows := RowsMax;
-  if rows < 4 then rows := 4;
+  if rows < 5 then rows := 5;
   if cols > ColsMax then cols := ColsMax;
   if cols < 8 then cols := 8;
   scr.rows := rows;
   scr.cols := cols;
-  h := rows - 3;
+  h := rows - 4;
 
   { Every cell is document text until something below says otherwise, which is
     why `crText` is the role's first value and why this is one loop rather
     than a rule at each site. }
   for r := 1 to rows do
-    for c := 1 to cols do
-      scr.role[r][c] := crText;
+    for c := 1 to cols do begin
+      scr.cell[r][c] := ' ';
+      scr.role[r][c] := crText
+    end;
 
   { Scroll so the cursor is on screen. This is why the editor is a `var`
     parameter of a routine that only draws: where the window sits is a
@@ -951,7 +1265,7 @@ begin
       cursor stops at the last column rather than following the text off the
       edge. It is a milestone-one limitation and a person meets it on a long
       line, so the *cursor* is what says so rather than a message. }
-    scr.line[r] := Left(s, cols)
+    PutAt(scr, r + 1, 1, Left(s, cols), crText)
   end;
 
   { The message line, or the question when one is open. **The cursor goes
@@ -963,10 +1277,15 @@ begin
     different states, and the role is what says which -- so the plane a golden
     holds changes when the mode does, and a prompt that failed to open is a
     visible difference rather than an invisible one. }
+  { **A menu is a mode and is not a question**, so the message line stays a
+    message while one is open -- the older test was `mode <> mdEdit`, which
+    was exactly right while every mode was a prompt and became wrong the
+    moment one was not. }
   pcol := 0;
-  if ed.mode = mdEdit then begin
+  if (ed.mode <> mdFind) and (ed.mode <> mdGoto) and
+     (ed.mode <> mdSaveAs) then begin
     for c := 1 to cols do scr.role[rows - 2][c] := crMessage;
-    scr.line[rows - 2] := Left(ed.says, cols)
+    PutAt(scr, rows - 2, 1, Left(ed.says, cols), crMessage)
   end
   else begin
     for c := 1 to cols do scr.role[rows - 2][c] := crPrompt;
@@ -974,7 +1293,7 @@ begin
     else if ed.mode = mdSaveAs then s := 'Save as: '
     else s := 'Line: ';
     s := s + ed.prompt;
-    scr.line[rows - 2] := Left(s, cols);
+    PutAt(scr, rows - 2, 1, Left(s, cols), crPrompt);
     pcol := length(s) + 1
   end;
 
@@ -988,8 +1307,8 @@ begin
   if wide < 1 then wide := 1;
   row := Left(s, wide);
   while length(row) < wide do row := row + ' ';
-  scr.line[rows - 1] := Left(row + num, cols);
   for c := 1 to cols do scr.role[rows - 1][c] := crStatus;
+  PutAt(scr, rows - 1, 1, Left(row + num, cols), crStatus);
 
   { **The hint bar** (ADR-0389). The bindings were discoverable by reading
     `tui/README.md`, which is not where a person sits when they are looking at
@@ -998,15 +1317,54 @@ begin
     exist yet, so this says what is true today rather than what it would like
     to say. It is cut to the window like everything else, so a narrow terminal
     loses the right-hand end rather than wrapping. }
-  scr.line[rows] := Left(Hints, cols);
   for c := 1 to cols do scr.role[rows][c] := crHint;
+  PutAt(scr, rows, 1, Left(Hints, cols), crHint);
+
+  { **The menu bar, always on row 1**, which is where every editor of this
+    shape put it. It costs the document a row and that is the trade: a person
+    who cannot see that a menu exists does not go looking for one. }
+  for c := 1 to cols do scr.role[1][c] := crMenu;
+  for c := 1 to MenuCount do begin
+    if (ed.mode = mdMenu) and (c = ed.menu) then k2 := crChosen
+    else k2 := crMenu;
+    PutAt(scr, 1, MenuAt(c), MenuTitle(c), k2)
+  end;
+
+  { ...and the drop-down under its title, which is the first thing on this
+    screen that *overlaps* the document -- so it is the first row with two
+    roles in it, and the first case `RowRuns` can get wrong. }
+  if (ed.mode = mdMenu) and (ed.item > 0) then begin
+    wide := 0;
+    for c := 1 to MenuItems(ed.menu) do
+      if length(ItemCaption(ed.menu, c)) > wide then
+        wide := length(ItemCaption(ed.menu, c));
+    Frame(scr, 2, MenuAt(ed.menu) - 1, MenuItems(ed.menu) + 2, wide + 4,
+          '', crFrame);
+    for c := 1 to MenuItems(ed.menu) do begin
+      if c = ed.item then k2 := crChosen else k2 := crFrame;
+      PutAt(scr, 2 + c, MenuAt(ed.menu), ' ' + ItemCaption(ed.menu, c) + ' ',
+            k2)
+    end
+  end;
 
   if pcol > 0 then begin
     scr.atRow := rows - 2;
     scr.atCol := pcol
   end
+  else if ed.mode = mdMenu then begin
+    { On the bar, or on the chosen item -- a person needs to see where they
+      are even where the role plane already says it. }
+    if ed.item = 0 then begin
+      scr.atRow := 1;
+      scr.atCol := MenuAt(ed.menu)
+    end
+    else begin
+      scr.atRow := 2 + ed.item;
+      scr.atCol := MenuAt(ed.menu) + 1
+    end
+  end
   else begin
-    scr.atRow := ed.row - ed.top + 1;
+    scr.atRow := ed.row - ed.top + 2;
     scr.atCol := ed.col
   end;
   if scr.atCol > cols then scr.atCol := cols
@@ -1100,6 +1458,7 @@ begin
   k.num := n;
   if n = 2 then k.kind := kkSave
   else if n = 9 then k.kind := kkBuild
+  else if n = 10 then k.kind := kkMenu
   else k.kind := kkFunc
 end;
 
@@ -1208,6 +1567,7 @@ begin
     else if b = 25 then k.kind := kkRedo      { Ctrl-Y }
     else if b = 6 then k.kind := kkFind       { Ctrl-F }
     else if b = 12 then k.kind := kkAgain     { Ctrl-L }
+    else if b = 15 then k.kind := kkMenu      { Ctrl-O, for F10's sake }
     else if b = 7 then k.kind := kkGoto       { Ctrl-G }
     else if b = 3 then k.kind := kkCancel     { Ctrl-C }
     else if (b = 13) or (b = 10) then k.kind := kkEnter

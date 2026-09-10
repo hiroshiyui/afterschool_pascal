@@ -5,8 +5,11 @@
 # back up scrolls the other way, and the first line comes back.
 #
 # The `~` rows are how a person tells a short document from a blank one.
+# Seven rows and not six since the menu bar took one (ADR-0391): the window
+# onto the document has to stay three lines for the claims above to be about
+# scrolling rather than about a window too small to show a `~` at all.
 name long.pas
-size 6 12
+size 7 12
 push one
 push two
 push three
