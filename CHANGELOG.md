@@ -13,6 +13,24 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-09-10
+
+**Two more targets and a program that runs on one of them**, and **an editor
+you can install and use**. The compiler's `--target=` now admits seven
+triples, two of which are not machines: `wasm32-wasi`, where **560 of the 598
+programs in this corpus compile, link and print what they print everywhere
+else** under a WASI engine, and `wasm64-wasi`, admitted on the layout claim
+alone because no sysroot for memory64 exists yet. And `tui/` — withdrawn by
+decision nine days ago and un-withdrawn for reasons that decision could not
+weigh — is now `afterschool`, a CMake target installed beside `pascalc`, with
+undo, search, go-to-line, save-as, colour and a hint bar.
+
+**Nothing an already-valid program does has changed.** The runtime stopped
+calling `tmpfile` and builds §6.7.5.5's auxiliary file out of two other ISO C
+functions instead, which is a portability improvement on every target and no
+change to behaviour; the runtime still holds **zero** preprocessor
+conditionals.
+
 ### Added
 
 - **The editor has colour and a hint bar** (ADR-0389). A cell carries a
