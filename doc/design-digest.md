@@ -5117,10 +5117,23 @@ that the *generator* is stable and not that the table is right. The C
 library has a table built by other people from the same database, and
 `wcwidth` is how a program asks it -- **not an authority**, which is
 `fpc-differential`'s rule, so where the two differ the clause decides and
-the disagreement is catalogued with which way and why. Sixteen ranges, four
-causes, both directions, and a floor of 100 000 code points compared
-because glibc answers -1 outside the locale's charmap and the `C` locale
-would agree with everything it never looked at.
+the disagreement is written down.
+
+**What is written down is a cause and not a code point** (ADR-0399), and
+that correction came from CI the same day: the first version enumerated
+sixteen ranges, passed on the machine that generated it, and failed on macOS
+and ubuntu:24.04. A range list is a fact about *one* libc's table.
+`fpc-differential` may enumerate because Free Pascal is absent or present; a
+libc is always present and never the same one, so what can be written down
+is the *reason* two implementations are allowed to differ. Four causes,
+three of them read off the `pas_u_gcb` table the header already carries for
+segmentation. Ambiguous is 179 **ranges** rather than the rule *one against
+two*, which would also have excused a generator that made every Wide code
+point one cell -- mutating the committed table so the CJK range measures one
+is caught now and would have passed before. Floors on both: 100 000 code
+points compared, because glibc answers -1 outside the locale's charmap and
+the `C` locale would agree with everything it never looked at, and 100
+ranges, so the Ambiguous class cannot excuse everything by being empty.
 
 **The Hangul rows are evidence and not only disagreement.** `wcwidth` is
 per code point and gives a leading jamo two cells and a medial none;

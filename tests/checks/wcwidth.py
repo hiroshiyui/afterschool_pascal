@@ -27,12 +27,23 @@ open.
 The C library has a table of its own, built by other people from the same
 database, and `wcwidth` is how a program asks it.  **It is not an authority**
 -- that is `fpc-differential`'s rule and its reason -- so where the two differ
-the clause decides and the disagreement is catalogued with which way and why.
-What a second opinion actually buys is narrow and worth having: a
-transcription error here would show up as a range with no explanation.
+the clause decides and the disagreement is written down with which way and
+why.
 
-Both directions.  A range that stops disagreeing is as loud as a new one,
-either being a table that moved -- ours or the C library's.
+**What is written down is a cause and not a code point**, and the first
+version of this gate got that wrong: it held an enumerated list of sixteen
+ranges, passed on the machine that generated it, and failed on macOS and on
+ubuntu:24.04.  A range list is a fact about *one* C library's table.  Two
+libraries built from the same database differ exactly where the database
+leaves the question open -- a control, a format character, a spacing mark, a
+conjoining jamo, an Ambiguous width -- and every one of those places has a
+name and a property this tree already has a table for.  So the claim is that
+**every disagreement falls into a catalogued cause**, and one that falls into
+none is the transcription error this gate exists to find.
+
+The classes come from `pas_u_gcb`, the Grapheme_Cluster_Break table the
+committed header already holds for segmentation, which is what makes them a
+property of the code point rather than of the machine.
 
 Skips 77 without a C compiler or without a UTF-8 locale; `WCWIDTH_REQUIRE`
 refuses to pass by skipping.
@@ -111,22 +122,105 @@ def ours():
     return table
 
 
+GCB_NAMES = ("Other", "CR", "LF", "Control", "Extend", "ZWJ", "RI",
+             "Prepend", "SpacingMark", "L", "V", "T", "LV", "LVT")
+
+
+def breaks():
+    """Grapheme_Cluster_Break per code point, from the committed header.
+
+    The same table `pas_text_next` segments with, so the classes below are the
+    ones the clause's own *unit* is defined in terms of -- which is why a
+    disagreement about a jamo is not a disagreement about a text.
+    """
+    text = HEADER.read_text()
+    m = re.search(r"pas_u_gcb\[\] = \{(.*?)\};", text, re.S)
+    if not m:
+        sys.exit("wcwidth: no pas_u_gcb table in %s" % HEADER)
+    table = bytearray(0x110000)
+    for lo, hi, v in re.findall(r"\{0x([0-9A-Fa-f]+), 0x([0-9A-Fa-f]+), (\d+)\}",
+                                m.group(1)):
+        for cp in range(int(lo, 16), int(hi, 16) + 1):
+            table[cp] = int(v)
+    return table
+
+
 def catalogued():
-    """The catalogue, as {(lo, hi): (ours, theirs, cause)}."""
-    out = {}
+    """The causes: {cause: set of GCB names}, plus the named exceptions."""
+    causes, named, ranges = {}, {}, []
     for line in CATALOGUE.read_text().splitlines():
         line = line.split("#")[0].strip()
         if not line:
             continue
         f = line.split()
-        if len(f) != 5:
-            sys.exit("wcwidth: %s: five fields wanted, got %r" %
-                     (CATALOGUE.name, line))
-        out[(int(f[0], 16), int(f[1], 16))] = (int(f[2]), int(f[3]), f[4])
-    return out
+        cause, rest = f[0], f[1:]
+        if len(rest) == 2 and all(re.fullmatch("[0-9A-Fa-f]{4,6}", x)
+                                  for x in rest):
+            ranges.append((int(rest[0], 16), int(rest[1], 16), cause))
+            causes.setdefault(cause, set())
+        elif rest and rest[0].startswith("U+"):
+            for cp in rest:
+                named[int(cp[2:], 16)] = cause
+            causes.setdefault(cause, set())
+        else:
+            for name in rest:
+                if name not in GCB_NAMES:
+                    sys.exit("wcwidth: %s: %r is not a "
+                             "Grapheme_Cluster_Break value"
+                             % (CATALOGUE.name, name))
+            causes[cause] = set(rest)
+    for want in ("cluster", "jamo", "ambiguous", "filler"):
+        if want not in causes:
+            sys.exit("wcwidth: %s has no `%s` cause, and the check below "
+                     "names it" % (CATALOGUE.name, want))
+    if len(ranges) < 100:
+        sys.exit("wcwidth: %s has %d code-point range(s), which is too few "
+                 "to be UAX #11's Ambiguous set -- a class with no members "
+                 "excuses nothing and hides everything"
+                 % (CATALOGUE.name, len(ranges)))
+    return causes, named, ranges
+
+
+def write_ambiguous():
+    """Rewrite the catalogue's Ambiguous ranges from the pinned database.
+
+    The set moves with the Unicode version, and the database is fetched and
+    never committed (ADR-0189), so this is a step a *refresh* takes and not
+    something the gate can do for itself on a machine that has no UCD.
+    """
+    ucd = ROOT / "runtime" / "unicode" / "ucd" / "EastAsianWidth.txt"
+    if not ucd.is_file():
+        sys.exit("wcwidth: %s is not there; runtime/unicode/fetch.py puts it "
+                 "in place" % ucd)
+    rows = []
+    for line in ucd.read_text(encoding="utf-8").splitlines():
+        line = line.split("#")[0].strip()
+        if not line:
+            continue
+        span, value = [f.strip() for f in line.split(";")[:2]]
+        if value.split()[0] != "A":
+            continue
+        ends = span.split("..")
+        rows.append([int(ends[0], 16), int(ends[-1], 16)])
+    rows.sort()
+    runs = []
+    for lo, hi in rows:
+        if runs and runs[-1][1] + 1 == lo:
+            runs[-1][1] = hi
+        else:
+            runs.append([lo, hi])
+    text = CATALOGUE.read_text()
+    head = text[:text.index("ambiguous ")]
+    CATALOGUE.write_text(head + "".join("ambiguous %04X %04X\n" % (lo, hi)
+                                        for lo, hi in runs))
+    print("wcwidth: wrote %d Ambiguous range(s) to %s"
+          % (len(runs), CATALOGUE.name))
+    return 0
 
 
 def main():
+    if "--write-ambiguous" in sys.argv[1:]:
+        return write_ambiguous()
     cc = os.environ.get("CC", "clang")
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)
@@ -142,8 +236,21 @@ def main():
         answers = r.stdout
 
     mine = ours()
+    gcb = breaks()
+    causes, named, ranges = catalogued()
+    byrange = bytearray(0x110000)
+    order = sorted(causes)
+    for lo, hi, cause in ranges:
+        for cp in range(lo, hi + 1):
+            byrange[cp] = order.index(cause) + 1
+    by_gcb = {}
+    for cause, names in causes.items():
+        for name in names:
+            by_gcb[GCB_NAMES.index(name)] = cause
+
     compared = 0
-    found = {}
+    counts = {}
+    unexplained = []
     for line in answers.splitlines():
         a, b = line.split()
         cp, w = int(a, 16), int(b)
@@ -153,8 +260,20 @@ def main():
         if w < 0:
             continue
         compared += 1
-        if mine[cp] != w:
-            found[cp] = w
+        if mine[cp] == w:
+            continue
+        if cp in named:
+            cause = named[cp]
+        elif gcb[cp] in by_gcb:
+            cause = by_gcb[gcb[cp]]
+        elif byrange[cp]:
+            cause = order[byrange[cp] - 1]
+        else:
+            cause = None
+        if cause is None:
+            unexplained.append((cp, mine[cp], w))
+        else:
+            counts[cause] = counts.get(cause, 0) + 1
 
     if compared < LEAST_COMPARED:
         print("wcwidth: only %d code point(s) had a width in this locale, "
@@ -163,50 +282,28 @@ def main():
               % (compared, LEAST_COMPARED), file=sys.stderr)
         return 1
 
-    # Coalesce into the ranges the catalogue is written in: a run of adjacent
-    # code points that disagree the same way is one row.
-    runs = []
-    for cp in sorted(found):
-        if runs and runs[-1][1] + 1 == cp and \
-                (mine[runs[-1][0]], found[runs[-1][0]]) == (mine[cp], found[cp]):
-            runs[-1][1] = cp
-        else:
-            runs.append([cp, cp])
-
-    want = catalogued()
-    bad = []
-    seen = set()
-    for lo, hi in runs:
-        key = (lo, hi)
-        seen.add(key)
-        if key not in want:
-            bad.append("U+%04X..U+%04X disagrees and is not catalogued: "
-                       "AP 6.4.15.13 says %d, wcwidth says %d"
-                       % (lo, hi, mine[lo], found[lo]))
-        else:
-            o, t, _ = want[key]
-            if (o, t) != (mine[lo], found[lo]):
-                bad.append("U+%04X..U+%04X is catalogued as %d against %d "
-                           "and is now %d against %d"
-                           % (lo, hi, o, t, mine[lo], found[lo]))
-    for key in want:
-        if key not in seen:
-            bad.append("U+%04X..U+%04X is catalogued as a disagreement and "
-                       "the two now agree -- a table moved, and which one is "
-                       "the question" % key)
-
-    if bad:
-        for b in bad:
-            print("wcwidth: " + b, file=sys.stderr)
+    if unexplained:
+        for cp, o, t in unexplained[:20]:
+            print("wcwidth: U+%04X disagrees for no catalogued reason: "
+                  "AP 6.4.15.13 says %d, wcwidth says %d, and its "
+                  "Grapheme_Cluster_Break is %s"
+                  % (cp, o, t, GCB_NAMES[gcb[cp]]), file=sys.stderr)
+        if len(unexplained) > 20:
+            print("wcwidth: ...and %d more" % (len(unexplained) - 20),
+                  file=sys.stderr)
         return 1
 
-    causes = {}
-    for o, t, cause in want.values():
-        causes[cause] = causes.get(cause, 0) + 1
+    # A cause nothing exercises is not a failure and is worth saying: two C
+    # libraries decide these differently, so a cause with no code points here
+    # is one this machine's library happens to agree about.  Reporting it is
+    # what keeps the catalogue from quietly describing nobody.
+    idle = sorted(c for c in causes if c not in counts)
     print("wcwidth: %d code point(s) compared against the C library's own "
-          "table; %d catalogued disagreement(s) in %d cause(s) (%s)"
-          % (compared, len(want), len(causes),
-             ", ".join("%s %d" % (c, n) for c, n in sorted(causes.items()))))
+          "table; every disagreement explained -- %s%s"
+          % (compared,
+             ", ".join("%s %d" % (c, n) for c, n in sorted(counts.items()))
+             or "none on this machine",
+             "; no disagreement here from " + ", ".join(idle) if idle else ""))
     return 0
 
 
