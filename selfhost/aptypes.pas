@@ -3576,8 +3576,17 @@ begin
     for k := at + 6 to at + len - 1 do
       if (pool[k] < '0') or (pool[k] > '9') then rels := false;
 
+  { ADR-0385: the entry point is `__main_argc_argv` on wasm, so that name is
+    one the emitted module can carry. It is reserved as a **prefix** and on
+    every target, not just the one that writes it: a name is refused because
+    this compiler may emit it, and keying the refusal on `--target=` would
+    make a program compile for one target and collide on another. The prefix
+    costs a program nothing it was entitled to -- ISO C 7.1.3 reserves every
+    identifier beginning with two underscores to the implementation, and
+    nothing under lib/ or lsp/ binds one. }
   ReservedForeignName := dotted or counter or frames or rels or
     PoolStarts(at, len, 'pas_     ') or
+    PoolStarts(at, len, '__main_  ') or
     PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ')
 end;
 

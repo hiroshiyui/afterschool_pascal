@@ -472,6 +472,13 @@ the point of the machinery below:
   the commands that build and run a Windows program end to end; ADR-0380 is
   the decision that followed them.
 
+**519 of the 598 programs in this corpus run as WebAssembly** (ADR-0385) --
+compiled for `wasm32-wasi`, linked against the runtime units that build for
+it, and printing what they print everywhere else under a WASI runtime. What
+stands between that and all of them is the runtime rather than the language:
+`tmpfile` is undefined on wasi and accounts for 52 of the 79, and channels,
+tasks, processes and sockets for most of the rest.
+
 **The shape of a port, measured against `wasm32-wasi`:** two units of the four
 compile. `runtime/pasrt_unicode.c` is the whole of the text model, and
 `runtime/pasrt.c` is the language itself — the traps, the file model, the
@@ -2760,7 +2767,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 919 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 920 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

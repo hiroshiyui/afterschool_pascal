@@ -1166,6 +1166,23 @@ set_tests_properties(target32 PROPERTIES
                      SKIP_RETURN_CODE 77
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# The corpus, built for WebAssembly and run under a WASI runtime (ADR-0385).
+# `target32`'s shape one target further on, and its argument: both defects the
+# i386 port found were in neither a layout rule nor a frame. This one found a
+# 64 KB stack that printed stray spaces into the middle of a line rather than
+# failing, and a `SOURCE_DATE_EPOCH` a WASI runtime does not pass on unless it
+# is told to. It builds only the runtime units `nonposix_headers.txt` says
+# compile for the target, so what a program can reach is what a port has got,
+# and a program wanting more fails at the link with the symbol named. Skips 77
+# without the sysroot, without llvm-ar, or without a runtime to run a `.wasm`.
+add_test(NAME wasm32
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/checks/wasm32.py
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+set_tests_properties(wasm32 PROPERTIES
+                     TIMEOUT 1800
+                     SKIP_RETURN_CODE 77
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
 # against the same golden output the C++ compiler is held to, and then by

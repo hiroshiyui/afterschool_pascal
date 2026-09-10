@@ -34,6 +34,7 @@ CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify
 CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
 CLAUDE.md   | runtime-nonposix   | on its own and \*\*(five)\*\* come back, of seventeen
 doc/implementation-defined.md | target-layout | is one of the (six)\n?targets
+README.md   | wasm32             | \*\*(\d+) of the (\d+) programs in this corpus run as
 doc/roadmap.md | ctest           | the suite is (\d+) cases green
 
 # **CLAUDE.md's row was added after the sentence went stale, which is the

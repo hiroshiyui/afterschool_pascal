@@ -12301,9 +12301,24 @@ begin
 
   { main takes the command line, because ISO 7185 6.10 leaves it to the
     implementation to say how a program parameter names an external file and
-    this one binds them to the arguments, in the order they are written. }
+    this one binds them to the arguments, in the order they are written.
+
+    **And on wasm it is not called `main`** (ADR-0385). wasi's `crt1` calls
+    `__main_argc_argv`, and that is not a convention a linker papers over:
+    clang *renames* a C `main` to it when compiling for this target, so a
+    module defining the name literally is the one thing wasm-ld leaves as an
+    undefined weak symbol -- the link succeeds, and the program traps on
+    `unreachable` the moment it starts. It was found exactly that way. This
+    is the second time a target has needed a name of its own in the emitted
+    module, after Win64's `_setjmp` arm (ADR-0371, gone with ADR-0380), and
+    like that one it is keyed on `targetIx` and judged by a gate that asks the
+    target rather than by a reading. }
   writeln(ircode);
-  writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) #1 {');
+  if targetIx = tgtWasm32 then
+    writeln(ircode,
+            'define i32 @__main_argc_argv(i32 %argc, ptr %argv) #1 {')
+  else
+    writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) #1 {');
   EnterFrame(programSym);
   irBodySeq := progBlock^.blBody;
   EmitStmt(progBlock^.blBody);

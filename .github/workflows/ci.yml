@@ -222,10 +222,18 @@ jobs:
     # ADR-0382 that is **wasm32-wasi**, the target this project now cares
     # about; the mingw-w64 answers are in `doc/history.md`.
     #
-    # The answer that carried over is the interesting one: `pasrt.c` is
-    # blocked on `_longjmp` here too. Two non-POSIX targets in a row lack that
-    # name, which is what makes the non-local goto the runtime's one real
-    # portability question rather than a Windows quirk.
+    # **And since ADR-0385 it runs the corpus there.** The two questions
+    # belong in one job because they need one toolchain: this is the only
+    # image with a wasi sysroot, and asking *how far is the runtime* and
+    # *does a program built for it behave* anywhere else would be two answers
+    # about two machines. `wasm32` builds the runtime units this catalogue
+    # says compile, so the second question is asked against exactly what the
+    # first one found.
+    #
+    # The answer that carried over from mingw-w64 was `pasrt.c` blocked on
+    # `_longjmp`, and it was **wrong**: this gate compiled with `-std=c11`
+    # where the build uses `-std=gnu11`, and wasi-libc declares that name
+    # behind `_XOPEN_SOURCE` (ADR-0383). `pasrt.c` compiles here.
     #
     # A job of its own for `unicode-conformance`'s reason: a red bar should
     # name the question. This one is cheap -- four translation units and 34
@@ -248,7 +256,7 @@ jobs:
     # and Ubuntu 24.04's has `_longjmp` where Debian trixie's has not, so the
     # catalogue's row for `runtime/pasrt.c` was true on one image and false on
     # the other. One question, one toolchain, one image.
-    name: the runtime on a target that is not POSIX
+    name: the runtime and the corpus on WebAssembly
     runs-on: ubuntu-latest
     container: 'debian:trixie'
 
@@ -258,7 +266,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang libclang-rt-dev git python3 \
-            wasi-libc libclang-rt-dev-wasm32
+            wasi-libc libclang-rt-dev-wasm32 llvm lld wazero
           # **The sysroot and the builtins, and both are needed** (ADR-0382).
           # `wasi-libc` is the headers this measures against; the clang that
           # is already here supplies the target. `target-sizes` learned the
@@ -284,6 +292,25 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j"$(nproc)"
+
+      - name: ...and does a program built for it behave?
+        env:
+          WASM32_REQUIRE: '1'
+        run: python3 tests/checks/wasm32.py
+        # ADR-0385. The corpus, built for `wasm32-wasi` and run under a WASI
+        # runtime -- ADR-0325's argument one target further on: both defects
+        # the i386 port found were in neither a layout rule nor a frame, and
+        # that port passed every arithmetic check with `select` segfaulting.
+        # It found two here that no other gate could: 64 KB of stack, which
+        # printed 700 stray spaces into the middle of a line rather than
+        # failing, and a `SOURCE_DATE_EPOCH` a WASI runtime does not pass on
+        # unless it is told to.
+        #
+        # `wazero` is the runtime and Debian packages it. What it does not
+        # implement is the exception-handling proposal, which the non-local
+        # goto lowers through on this target, so exactly one corpus case is
+        # catalogued as *this engine cannot run it* -- and the gate's summary
+        # names the runner so that row can be told from a defect.
 
       - name: ...and the one call whose shape is the target's
         env:

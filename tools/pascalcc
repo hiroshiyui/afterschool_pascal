@@ -509,9 +509,36 @@ done
 # rather than a pair of code-generation switches. `tests/checks/target32.sh`
 # builds a runtime with direct clang calls and says the same thing there; the
 # two are the only places, and each names the other.
+#
+# **wasm32 needs two decisions of the same kind and neither is a processor**
+# (ADR-0385). `-mllvm -wasm-enable-sjlj` because the emitted module calls
+# `@_setjmp` on every target -- the non-local goto is a language feature here
+# (6.8.1) -- and on wasm that call needs LLVM's SjLj lowering or the module
+# will not compile at all. And `-pthread` comes *off* the link: wasi without
+# the threads proposal has none, and asking for one is
+# `--shared-memory is disallowed by pasrt.o`, a link error naming an object
+# the caller did not write. The flag above is only half of the non-local
+# goto's price on this target: the lowering it turns on calls
+# `__wasm_setjmp`, which lives in wasi's own `libsetjmp.a` and is not linked
+# by default -- so `-lsetjmp` goes on too, and without it every program with a
+# `goto` out of a procedure, a `defer` or a handle fails to link.
+#
+# **And the stack, which is a decision and not a default** -- wasm-ld gives a
+# module 64 KB of it, where the machines this language is otherwise compiled
+# for give a thread 8 MB. That is not enough for programs this corpus already
+# contains: `tests/dialect/lib_regex.pas` overran it and printed 700 stray
+# spaces in the middle of a line rather than failing, which is the worst shape
+# a defect can take -- a wrong answer that looks like a compiler bug. One
+# megabyte is what it is set to, an override goes in
+# `AFTERSCHOOL_PASCAL_LDFLAGS`, and the argument is `-march=pentium4`'s above:
+# a target-specific number the driver owns so that no program has to.
 cpu=()
+threads=(-pthread)
+sjlj=()
 case $target in
   *=i386-pc-linux-gnu) cpu=(-march=pentium4) ;;
+  *=wasm32-*) cpu=(-mllvm -wasm-enable-sjlj); threads=()
+              sjlj=(-lsetjmp -Wl,-z,stack-size=1048576) ;;
 esac
 
 # The installed library goes on the end, after whatever --import-path the
@@ -646,7 +673,8 @@ fi
 # error into something else would be the silent-ignoring this script's header
 # refuses.
 if clang ${target:+"$target"} ${cpu[@]+"${cpu[@]}"} -Wno-override-module "$opt" ${extra_cflags[@]+"${extra_cflags[@]}"} "$ir" \
-     "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm -pthread \
+     "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
+     ${threads[@]+"${threads[@]}"} ${sjlj[@]+"${sjlj[@]}"} \
      ${extra_ldflags[@]+"${extra_ldflags[@]}"} \
      -o "${out:-$base}" 2>"$work/link.txt"; then
   exit 0

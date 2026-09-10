@@ -15,6 +15,14 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **Programs run as WebAssembly** (ADR-0385). 519 of the 598 programs in this
+  repository's corpus compile for `wasm32-wasi`, link, and print what they
+  print everywhere else under a WASI runtime. `tools/pascalcc` knows what the
+  target needs — the SjLj lowering the non-local goto compiles through,
+  `libsetjmp`, no `-pthread`, and a stack of a megabyte rather than wasm's
+  64 KB default. What is not there yet is the runtime: `tmpfile` is undefined
+  on wasi and that is 52 of the 79 programs that do not run, with channels,
+  tasks, processes and sockets accounting for most of the rest.
 - **A sixth target: `--target=wasm32-wasi`** (ADR-0383), also spelled
   `wasm32-unknown-wasi` and `wasm32-wasip1`. The emitted module states
   WebAssembly's layout and triple, and `clang` assembles it into a `.wasm`
