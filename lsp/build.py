@@ -24,10 +24,19 @@ one path per line relative to this directory and in dependency order -- the
 same sidecar convention `tests/run_test.py` and `selfhost/irtest.py` read,
 and read here for the same reason: the build order is written down once.
 
-This is not a CMake target. Nothing in this tree installs a library or a
-second program, and a server needs a binary a *user* can point an editor at
-rather than one buried in a build tree -- so it is a script, as
-`tools/pascalcc` is. `lsp/run.py` calls it, and so can anyone.
+This is not a CMake target, and **the reason it gives for that used to be a
+premise that is now false three times over**. It said nothing in this tree
+installs a library or a second program; `cmake --install` puts
+`lib/afterschool/` and `bin/apconfig` (ADR-0361) in the prefix, and since the
+editor became `afterschool` it installs a second program in this language too.
+
+So what is left is the *other* half of the old argument, and it points the
+other way: a server needs a binary a **user** can point an editor at rather
+than one buried in a build tree -- and the way to make that true is to install
+it, which is exactly the argument that made the editor a target. Whether
+`pasls` should follow is an open question and not a decision this comment gets
+to make by staying stale. Until it is put, this stays a script, as
+`tools/pascalcc` is; `lsp/run.py` calls it, and so can anyone.
 
 Converted from shell under ADR-0366; the shell version's binary is what this
 was required to reproduce, and the comparison is the emitted IR of every
