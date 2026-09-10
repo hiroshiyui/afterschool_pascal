@@ -154,6 +154,31 @@ def datalayout_of(target):
     return None
 
 
+# The fields of a datalayout this compiler **models**. Everything else in the
+# string is a fact about a machine that nothing here emits into, and comparing
+# it compares the two clangs' *vocabularies* rather than their layouts.
+#
+# What is dropped is every non-default address space -- `p270`, `p271` and
+# `p272`, which are x86's segment registers, `p10` and `p20`, which are wasm's
+# own references, and the `ni` list that names them. This emitter puts
+# everything in address space 0 and reads nothing out of another, so a clang
+# that mentions them and one that does not are saying the same thing about
+# every type this compiler lays out.
+#
+# **A byte comparison was tried first and was wrong on the second machine it
+# met** (ADR-0384): the aarch64 runner's clang states no `p270:32:32` for
+# `aarch64-linux-gnu` and the committed line has one, taken from an x86 host's
+# clang, so three targets abstained at once and the floor turned the gate red
+# for a difference that decides nothing.
+ADDRESS_SPACE = re.compile(r"^(?:p\d+:|ni:)")
+
+
+def modelled(line):
+    body = line.split('"')[1] if '"' in line else line
+    return frozenset(f for f in body.split("-")
+                     if f and not ADDRESS_SPACE.match(f))
+
+
 def emitted_datalayout(target):
     """The datalayout line *this compiler* writes for the target.
 
@@ -447,7 +472,7 @@ def main():
             absent.append(t)
             continue
         mine = emitted_datalayout(t)
-        if dl.strip() != mine.strip():
+        if modelled(dl) != modelled(mine):
             disagree.append((t, dl.strip(), mine.strip()))
             continue
         layouts[t] = dl
