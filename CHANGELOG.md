@@ -13,14 +13,43 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
-### Fixed
+## [3.11.0] - 2026-09-11
 
-- **A test case is run in a directory of its own**, not the one the harness
-  was invoked from (ADR-0406). Every case shared the invoker's, so the one
-  case that names a file relatively raced its own concurrent copy — eight
-  failures in twenty concurrent pairs, and none after. Only the two harnesses
-  that start the program under test changed; a toolchain still runs where it
-  was invoked.
+**The editor replaces, and two things it shipped broken a day ago do not do
+that any more.** v3.10.0 put eight documents behind one screen in a day, and
+two questions that had been complete became incomplete without changing: the
+quit guard asked about the document *on screen*, so Ctrl-Q over a clean one
+discarded another's work in silence; and the menu's key dispatch did not name
+the two kinds that feature had added, so F3 or F6 with the menu open stopped
+the program. Both are fixed, and the gate that could have caught the second is
+now pointed at every program here instead of only at the compiler.
+
+### Added
+
+- **The editor replaces.** `Ctrl-R` asks for a pattern and a replacement and
+  changes every occurrence in the document, matching case-insensitively as the
+  search does, with an empty replacement meaning deletion — and **one `Ctrl-Z`
+  takes the whole of it back** (ADR-0403). `Search ▸ Replace` is the same thing
+  from the menu. That last part is why it is not a small feature: the undo
+  journal knew about *operations* and not about **actions**, so an entry may
+  now say the undo continues through it — a property of an entry, deliberately
+  not a fifth operation, so the four routines are still the only code that
+  touches the buffer. Confirm-each was rejected rather than deferred: what a
+  person wants after a replace that went wrong is to undo it.
+- **Every program here is checked for a `case` that has stopped covering its
+  enumeration**, not only the compiler (ADR-0404). The editor and the language
+  server join the sweep — five corpora, and adding one is a line — because
+  `--dump-dispatch` answers that question about any Pascal program and had
+  been asked about one. 63 case-statements over 13 enumerations became 79 over
+  35. The crash below is what the widening found.
+- **The editor's shell is checked.** `tui-terminal` drives the real editor
+  under a pseudo-terminal and requires every coloured run it writes to be one
+  the model decided, at the same columns, in the colour that role's table
+  gives, over both the twenty-four-bit and the eight-colour table (ADR-0402).
+  Nothing had ever read a byte the editor wrote to a terminal: a shell
+  painting every row in one flat colour passed every oracle here. The
+  expectation is *derived* from the session golden's own run decomposition
+  rather than recorded.
 
 ### Changed
 
@@ -30,39 +59,29 @@ appears below in the release where it still existed.
   and what it is asked to *do* — a process, a socket, a terminal, a private
   directory — stays in `runtime/pasrt_posix.c` (ADR-0405). Nothing a program
   can call changed; what changed is that a target with a file system and no
-  processes gets the first half, which is what `wasm32-wasi` is.
-
-### Added
-
-- **The editor replaces.** `Ctrl-R` asks for a pattern and a replacement and
-  changes every occurrence in the document, matching case-insensitively as the
-  search does, with an empty replacement meaning deletion — and **one `Ctrl-Z`
-  takes the whole of it back** (ADR-0403). `Search ▸ Replace` is the same
-  thing from the menu.
-- **Every program here is checked for a `case` that has stopped covering its
-  enumeration**, not only the compiler (ADR-0404). The editor and the language
-  server join the sweep; the crash above is what the widening found.
-- **The editor's shell is checked.** `tui-terminal` drives the editor under a
-  pseudo-terminal and requires every coloured run it writes to be one the
-  model decided, in the colour that role's table gives, over both the
-  twenty-four-bit and the eight-colour table (ADR-0402). Nothing had ever read
-  a byte the editor wrote to a terminal; a shell painting every row in one
-  flat colour passed every oracle here.
+  processes gets the first half, which is what `wasm32-wasi` is. 560 of the
+  598 corpus programs ran there and 563 do.
 
 ### Fixed
 
-- **F3 and F6 no longer stop the editor when the menu is open.** `MenuKey`
-  dispatches over the key kinds with a `case` and no `otherwise`, and the two
-  kinds the second document added in v3.10.0 were not listed, so opening a
-  file or cycling documents from under an open menu exited with
-  `case: no label matches the selector`.
 - **The editor no longer discards another document's changes on one Ctrl-Q.**
   Since eight documents landed in v3.10.0, the quit guard asked whether the
   document *on screen* was modified, so typing into one file, opening a clean
   second over it and pressing Ctrl-Q once exited with no prompt and no
-  message. It now asks about every open document and the message says how
-  many hold changes (ADR-0401). Two presses still discard, as they always
-  have.
+  message. It now asks about every open document and the message says how many
+  hold changes (ADR-0401). Two presses still discard, as they always have.
+- **F3 and F6 no longer stop the editor when the menu is open.** `MenuKey`
+  dispatches over the key kinds with a `case` and no `otherwise` — the right
+  shape, since an unmatched selector is a reported trap rather than a
+  swallowed key — and the two kinds the second document added in v3.10.0 were
+  not listed, so opening a file or cycling documents from under an open menu
+  exited with `case: no label matches the selector`.
+- **A test case is run in a directory of its own**, not the one the harness
+  was invoked from (ADR-0406). Every case shared the invoker's, so the one
+  case that names a file relatively raced its own concurrent copy — eight
+  failures in twenty concurrent pairs, and none after. Only the two harnesses
+  that start the program under test changed; a toolchain still runs where it
+  was invoked.
 
 ## [3.10.0] - 2026-09-11
 
