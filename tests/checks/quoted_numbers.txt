@@ -83,7 +83,11 @@ README.md                     | setjmp-arity | Five of the (seven) are POSIX
 # reading `(11 162)` matches only while the answer is 11 162, so when it moved
 # the row simply stopped matching and the gate reported a *reworded sentence*.
 # A capture group says **where the number is**, never which number it is.
-doc/roadmap.md                | target-layout | one of the\s+(\d[\d ]*\d) frame offsets
+#
+# `doc/roadmap.md` was the second of the two and is no longer: the wasm64
+# sentence moved to `doc/history.md` when the roadmap was compacted on
+# 2026-09-11, and a record's numbers are out of scope, so the sentence there
+# quotes none.
 doc/design-digest.md          | target-layout | matched every one of the (\d[\d ]*\d) frame
 tui/README.md   | tui-palette        | every pairing clears at (\d+\.\d+):1 or better
 

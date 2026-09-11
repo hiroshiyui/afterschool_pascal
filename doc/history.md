@@ -10454,3 +10454,118 @@ with `surrogateescape`, so a three-byte box character arriving in two pieces
 became six escapes that never rejoined. A property of how the pty buffers and
 not of anything either program did. Proved fixed by reading one byte at a
 time, which splits every multi-byte character in the corpus.
+
+## The roadmap, compacted again on 2026-09-11
+
+[`doc/roadmap.md`](roadmap.md) says of itself that it is kept to what is open,
+and four days after the cut of 2026-09-07 it had drifted again — not by
+acquiring open rows but by keeping the narrative of rows as they closed. The
+four chapters below are that narrative, moved here whole rather than deleted,
+which is the same disposal the Windows row got.
+
+### The Rust-flavoured map, as it stood
+
+The memory model was reviewed against *a Rust-flavoured Pascal* on 2026-09-04
+and the review's table stood on the roadmap until every row of it had an
+answer. What each row routes to is the finding — three of the nine came from
+Pascal's own 1982 vocabulary rather than from Rust, and only the last row is
+still a sentence about something absent.
+
+| Rust | Here | Route |
+| --- | --- | --- |
+| `Box<T>` | `owned ^T` (AP 6.4.14) | from the file variable, not from Rust (ADR-0181) |
+| `Drop`, RAII | scope-based release | present since 1982, named by ADR-0151 |
+| a move | `take` (AP 6.4.14.6, 6.4.12.7) | forced by writing `PasList` (ADR-0182, ADR-0267) |
+| `&mut T` | a `var` parameter bound to `o^` | *unformable* rather than checked (ADR-0201) |
+| `&T` | `protected var`, over an owned pointer too | ISO's own word (ADR-0283, ADR-0318) |
+| `Option<T>`, `Result<T, E>`, `?` | `?T`, `T ! E`, `try` | ADR-0123, ADR-0176, ADR-0178 |
+| `&[T]` | `array of T` | ADR-0125 |
+| `Send`, channels | `task`, `channel [n] of T` | ADR-0268 |
+| traits | `trait` / `impl … for`, as a bound | ADR-0338 – ADR-0341 |
+| lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | three sentences, which are what the roadmap keeps |
+
+### The macOS row, as it closed
+
+macOS became a job that can fail on 2026-09-09 (ADR-0368), with 904 of the 912
+cases of that day running and passing on arm64, `SANITIZE_REQUIRE` and
+`UNICODE_CONFORMANCE_REQUIRE` set, and the remaining `*_REQUIRE` variables
+naming tools the hosted runner has not got.
+
+**Ten skips became nine, and two of the ten were not facts about macOS at
+all.** `verify-lowering` skipped because z3 had been installed with `--user`,
+which Homebrew's externally-managed Python refuses, and the step swallowed its
+own failure — so the SMT rules had never run there at all; `unicode-conformance`
+skipped because that job did not fetch the database. Both closed in `d8d925d`,
+which is what makes the remaining list homogeneous, and the second bought a
+reading the tree had never had: `runtime/pasrt_unicode.c` compiling under
+`-pedantic-errors -Werror` on Apple clang with the committed tables regenerated
+on a second platform. ADR-0369 then added a gate wanting a cross compiler this
+runner has not got, which is why the count did not fall further.
+
+**`--target=` admits both Darwin triples since ADR-0372**, so a module built
+there names the machine it is for rather than relying on clang to override the
+header — and `setjmp-arity` stopped skipping on that runner with them, the host
+target having become comparable.
+
+**The release leg is what closed the row** (ADR-0375): a `v*` tag ships an
+`arm64-darwin` archive beside the two Linux ones. Apple has no static libc, so
+that leg configures `APASCAL_STATIC_PASCALC=OFF` and does not set
+`RELEASE_REQUIRE_STATIC`; what it asserts instead is a claim macOS can answer
+and `ldd` never could — that the binary depends on nothing outside `/usr/lib`
+and `/System`, which `otool -L` reports and every hosted runner's Homebrew
+makes worth asking. It ran for the first time at `v3.8.0`. Nine failures got it
+there and **not one was in the compiler** — every one was a harness assuming
+Linux ([above](#the-first-macos-run)).
+
+### wasm64, and what admitting it cost
+
+`wasm64-wasi` is the seventh target (ADR-0386) — WebAssembly's memory64,
+admitted on the layout claim alone, because no sysroot for it exists and there
+is therefore nothing else to ask. It landed in a class with x86-64, aarch64 and
+both Darwin triples, every frame offset matched theirs, and it cost **nothing**
+in the layout rules: ADR-0325's generalisation spent a third time, and the first
+time free. Nothing in `target-layout` was edited to admit it, which is the
+claim the gate was built to make.
+
+`wasm32-wasi`, admitted the same day (ADR-0383), paid for itself immediately in
+the other direction: `target-layout` reported four wrong numbers on its first
+run, `WordAlign` having answered two questions that i386 gave one answer to.
+
+### What a helper is written in, and the one it left
+
+The rule is ADR-0366's and the lint is ADR-0367's; what stood on the roadmap
+was the argument, and it is worth keeping because the argument is what makes it
+a decision rather than a preference.
+
+**The portability boundary is the set of external programs a helper invokes,
+not the language.** A Python script that runs `nm` is exactly as unportable as
+a shell script that runs `sed`, which is what two of the nine macOS failures
+were. So a harness is Python 3 *and* reaches for the standard library rather
+than a subprocess — `pathlib`, `tempfile`, `difflib`, `re` in place of `find`,
+`mktemp`, `diff`, `sed`. Invoking the toolchain is not what that forbids;
+invoking a general-purpose Unix utility to do what the language can do is.
+
+**A helper that ships to a user is written in Afterschool Pascal; a gate is
+written in Python.** A gate must be able to fail *because the compiler is
+broken*, so it cannot be written in the language under test. A shipped helper
+has the opposite constraint, and the one thing present on the user's machine is
+the compiler and runtime just installed there — `bin/apconfig` is the precedent
+(ADR-0361).
+
+**Nothing was converted wholesale, and a conversion is checkable.** These
+scripts *are* this project's evidence, so a rewrite lands with two things and
+neither is a green suite: byte-identical output from both versions on the
+current tree, and that gate's own historical mutation re-run against the new
+version, failing the same way. Thirty-one conversions carried it out.
+
+**Why it was a decision**: macOS is a platform where a shell script *runs* and
+differs in detail. Windows was one where there is no bash, no `sed`, no `nm`
+and no `#!` line, so all 31 scripts did not run at all — each a blocker rather
+than a bug, and a rule that converts them only when they are being edited never
+reaches the stable ones. The collision the record named and left open is the
+driver: `tools/pascalcc` is the product rather than a harness, and the decision
+that it stays a shell script could not stand beside the Windows row. **Windows
+was dropped on 2026-09-10** (ADR-0380), which settled that collision by
+removing one side of it rather than by answering it — so the catalogue is still
+one line of shell, and a target that is not POSIX is where the question comes
+back.

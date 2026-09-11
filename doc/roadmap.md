@@ -94,21 +94,13 @@ it cannot, a factory's answer outliving the call.
 Reviewed against *a Rust-flavoured Pascal* on 2026-09-04, **probed rather than
 read** — and the pieces missing were not the ones the records said were
 missing. Three of the review's four rows closed within two days
-([history](history.md#the-memory-model-read-against-the-goal)); what each left
-is a sentence:
-
-| Rust | Here | Route |
-| --- | --- | --- |
-| `Box<T>` | `owned ^T` (AP 6.4.14) | from the file variable, not from Rust (ADR-0181) |
-| `Drop`, RAII | scope-based release | present since 1982, named by ADR-0151 |
-| a move | `take` (AP 6.4.14.6, 6.4.12.7) | forced by writing `PasList` (ADR-0182, ADR-0267) |
-| `&mut T` | a `var` parameter bound to `o^` | *unformable* rather than checked (ADR-0201) |
-| `&T` | `protected var`, over an owned pointer too | ISO's own word (ADR-0283, ADR-0318) |
-| `Option<T>`, `Result<T, E>`, `?` | `?T`, `T ! E`, `try` | ADR-0123, ADR-0176, ADR-0178 |
-| `&[T]` | `array of T` | ADR-0125 |
-| `Send`, channels | `task`, `channel [n] of T` | ADR-0268 |
-| traits | `trait` / `impl … for`, as a bound | ADR-0338 – ADR-0341 |
-| lifetimes, `Rc`, `RefCell`, `unsafe` | **absent** | the three sentences below |
+([history](history.md#the-memory-model-read-against-the-goal)), and the map of
+what answers what — `owned ^T` for `Box<T>`, `take` for a move, a `var`
+parameter for `&mut T`, `protected var` for `&T`, `?T` and `T ! E` for
+`Option` and `Result`, `array of T` for a slice, `trait` for a trait —
+is [in history](history.md#the-rust-flavoured-map-as-it-stood) row by row.
+What is **absent** is lifetimes, `Rc`, `RefCell` and `unsafe`, and what each
+of those left open is a sentence:
 
 - **The escape half of the borrow rule is held by construction and watched by
   nothing.** Invalidation is refused where a borrow is formed (ADR-0319); escape
@@ -301,14 +293,14 @@ them.
 
 ### Cross-platform support
 
-Developed on x86-64 Linux; **built and tested on aarch64 on every push**
-(ADR-0155 – ADR-0159), shipped as an archive per release (ADR-0296); **i386
-admitted** (ADR-0325, ADR-0346), the two width defects the port left found
-and gated (ADR-0328, ADR-0334, ADR-0364;
-[history](history.md#the-32-bit-port-and-the-width-it-left)). The twenty-five
-target measurement is
-[in history](history.md#cross-platform-support-measured); run
-`python3 tests/checks/target_layout.py` rather than quoting it.
+Developed on x86-64 Linux; **aarch64 (ADR-0155 – ADR-0159), i386 (ADR-0325,
+ADR-0346) and macOS on arm64 (ADR-0368) are built and run on every push**, and
+each is shipped as an archive per release (ADR-0296, ADR-0375). How each was
+admitted, what the 32-bit port's two width defects cost
+([history](history.md#the-32-bit-port-and-the-width-it-left)) and what the
+twenty-five-target measurement said
+([history](history.md#cross-platform-support-measured)) are settled; run
+`python3 tests/checks/target_layout.py` rather than quoting a target count.
 
 **The tiers, since 2026-09-09.** **GNU/Linux is first**: the seed is generated
 for x86-64, every gate has a job that installs its tools, and i386 is built and
@@ -319,30 +311,23 @@ since ADR-0375. **Everything else is unsupported and open to contributors** —
 FreeBSD, OpenBSD, NetBSD, Haiku and Windows — with `README.md`'s *Platform
 tiers* saying what a port starts from.
 
-**Windows is dropped, since 2026-09-10** (ADR-0380). It was admitted on a
-measurement and deferred on one; the row that carried its measurements is
-[in history](history.md#windows-measured-and-then-dropped), where a
-contributor who wants it starts from a page of findings rather than nothing.
+**Windows is dropped, since 2026-09-10** (ADR-0380), and what was measured
+about it is [in history](history.md#windows-measured-and-then-dropped) rather
+than deleted, so a contributor who wants it starts from a page of findings.
 
-**And `wasm64-wasi` is the seventh** (ADR-0386) — WebAssembly's memory64,
-admitted on the layout claim alone because no sysroot for it exists. It landed
-in a class with x86-64, aarch64 and both Darwin triples and every one of the
-11 164 frame offsets matched theirs, and it cost **nothing** in the layout
-rules: ADR-0325's generalisation spent a third time and the first time free.
-
-**And the sixth target is `wasm32-wasi`, admitted the same day** (ADR-0383) —
-the first this compiler names that is not POSIX and not a machine. What it
-means is the front half of a toolchain: the emitted module states
-WebAssembly's layout and clang assembles it into a `.wasm` object. What it does
-not mean is a program, because the runtime does not build for the target yet.
-`runtime-nonposix` is the measurement and it is two units short — five headers
-wasi has not got, and threads it has not got either. Admitting it paid for
-itself immediately: `target-layout` reported four wrong numbers, `WordAlign`
-having answered two questions that i386 gave one answer to.
+**Seven targets are admitted and two of them are WebAssembly.**
+`wasm64-wasi` (ADR-0386) is closed: it cost nothing and nothing waits on it
+([history](history.md#wasm64-and-what-admitting-it-cost)). **`wasm32-wasi` is
+the open one** (ADR-0383) — the first target this compiler names that is
+neither POSIX nor a machine. The compiler emits for it and the corpus runs
+under a WASI runtime (ADR-0385); what is short is the runtime, and
+`runtime-nonposix` is the measurement rather than an estimate: two translation
+units of five, blocked by five headers wasi has not got and by threads it has
+not got either.
 
 | Target | What a wasm port still needs |
 | --- | --- |
-| **the runtime** | `pasrt_posix.c` over wasi's own interfaces, or a build that ships neither `PasProcess` nor `PasNet`; `pasrt_task.c` needs the threads proposal, so AP 6.4.16 and AP 6.9.3.12 are what a first port gives up. **The file model is no longer in that list** (ADR-0405): the old POSIX unit held what the operating system is *asked about* beside what it is asked to *do*, and only the second is what wasi has not got, so `pasrt_file.c` compiles for the target and three corpus rows moved with it |
+| **the runtime** | `pasrt_posix.c` over wasi's own interfaces, or a build that ships neither `PasProcess` nor `PasNet`; `pasrt_task.c` needs the threads proposal, so AP 6.4.16 and AP 6.9.3.12 are what a first port gives up. **The file model is not in that list** (ADR-0405, [history](history.md#the-editors-third-increment-and-three-gates-that-were-pointed-too-narrowly)): `pasrt_file.c` compiles for the target |
 | **the driver** | `tools/pascalcc` links with `clang`, and `-pthread`, `-fPIC` and `wasm-ld`'s own `undefined symbol:` spelling are what a wasm link would differ in |
 | **a runner** | every harness executes what it built; a `.wasm` needs `wasmtime` or `node`, and the two scratch argv paths need preopened directories |
 
@@ -350,7 +335,7 @@ having answered two questions that i386 gave one answer to.
 
 | Target | What it needs |
 | --- | --- |
-| **macOS** | **a job that can fail, since [ADR-0368](adr/0368-macos-is-a-job-that-can-fail.md).** 904 of 912 cases run and pass on arm64; `SANITIZE_REQUIRE` and `UNICODE_CONFORMANCE_REQUIRE` are set and the remaining variables name tools the runner has not got. **Nine skips remain and the job's comment lists them with the reason for each.** ADR-0368 listed ten; two of those were not facts about macOS at all, and ADR-0369 then added a gate wanting a cross compiler this runner has not got: `verify-lowering` skipped because z3 was installed with `--user`, which Homebrew's externally-managed Python refuses, and the step swallowed its own failure — so the 43 SMT rules had never run there; `unicode-conformance` skipped because that job did not fetch the database. Both closed in `d8d925d`, which is what makes the remaining nine a homogeneous list — and the second bought a reading the tree had never had, `runtime/pasrt_unicode.c` compiling under `-pedantic-errors -Werror` on Apple clang with the committed tables regenerated on a second platform. **`--target=` admits both Darwin triples since ADR-0372**, so a module built there names the machine it is for rather than relying on clang to override the header — and `setjmp-arity` stopped skipping on that runner with them, the host target having become comparable. **Nothing is open**: ADR-0375 enabled the release-matrix leg, so a `v*` tag ships an `arm64-darwin` archive beside the two Linux ones. Apple has no static libc, so that leg configures `APASCAL_STATIC_PASCALC=OFF` and does not set `RELEASE_REQUIRE_STATIC`; what it asserts instead is a claim macOS can answer and `ldd` never could — that the binary depends on nothing outside `/usr/lib` and `/System`, which `otool -L` reports and every hosted runner's Homebrew makes worth asking. It ran for the first time at `v3.8.0` and the archive is attached to that release. Nine failures got it there and **not one was in the compiler** — every one was a harness assuming Linux ([history](history.md#the-first-macos-run)) |
+| **macOS** | **Nine skips, and every one of them is a tool the runner has not got** — the job's comment lists them with the reason for each. The suite runs natively and the job can fail (ADR-0368), `--target=` admits both Darwin triples (ADR-0372) and a `v*` tag ships an `arm64-darwin` archive (ADR-0375). Nothing else here is open: how the list got from ten to nine, and what the first run cost, is [in history](history.md#the-macos-row-as-it-closed) |
 | **s390x** | aligns `tySet`'s `i256` to 8 where every other target says 16 — thirteen offsets, and `target-layout`'s second claim would catch it |
 
 **What is not claimed**: the seed is generated for x86-64 and stays so; the
@@ -360,49 +345,24 @@ and the layout gate sees frames and nothing else.
 
 ### What a helper is written in
 
-Decided in [ADR-0366](adr/0366-a-helper-is-not-a-shell-script.md), and the
-short form is three sentences.
+**Decided in [ADR-0366](adr/0366-a-helper-is-not-a-shell-script.md) and
+enforced since [ADR-0367](adr/0367-the-rule-about-helpers-is-enforced.md)**, so
+what is left here is the rule and not the argument for it
+([history](history.md#what-a-helper-is-written-in-and-the-one-it-left)). A
+gate is Python 3 reaching for the standard library rather than a subprocess,
+because the portability boundary is the set of external programs a helper
+invokes and not the language it is written in; a helper that *ships to a user*
+is written in Afterschool Pascal, `bin/apconfig` being the precedent
+(ADR-0361); and a conversion lands with byte-identical output and that gate's
+own mutation re-run, never with a green suite. `helper-portability` holds all
+three, in both directions.
 
-**The portability boundary is the set of external programs a helper invokes,
-not the language.** A Python script that runs `nm` is exactly as unportable as
-a shell script that runs `sed`, which is what two of the nine macOS failures
-were. So: a harness is Python 3, *and* it reaches for the standard library
-rather than a subprocess — `pathlib`, `tempfile`, `difflib`, `re` in place of
-`find`, `mktemp`, `diff`, `sed`. Invoking the toolchain is not what that
-forbids; invoking a general-purpose Unix utility to do what the language can
-do is.
-
-**A helper that ships to a user is written in Afterschool Pascal; a gate is
-written in Python.** A gate must be able to fail *because the compiler is
-broken*, so it cannot be written in the language under test. A shipped helper
-has the opposite constraint, and the one thing present on the user's machine
-is the compiler and runtime just installed there — `bin/apconfig` is the
-precedent (ADR-0361).
-
-**Nothing is converted wholesale, and a conversion is checkable.** These
-scripts *are* this project's evidence, so a rewrite lands with two things and
-neither is a green suite: byte-identical output from both versions on the
-current tree, and that gate's own historical mutation re-run against the new
-version, failing the same way.
-
-**Why it is a decision and not a preference**: macOS was a platform where a
-shell script *runs* and differs in detail. Windows is one where there is no
-bash, no `sed`, no `nm` and no `#!` line, so all 31 scripts do not run at all —
-each is a blocker rather than a bug, and a rule that converts them only when
-they are being edited never reaches the stable ones. The driver is the
-collision the record names and leaves open: `tools/pascalcc` is the product
-rather than a harness, and the decision that it stays a shell script cannot
-stand beside the Windows row.
-
-**The lint is built** ([ADR-0367](adr/0367-the-rule-about-helpers-is-enforced.md)):
-`helper-portability` is a `ctest` case, and what it watches has moved with the
-tree. There is no longer a script to lint for GNU-only flags — every harness
-is Python — so the three claims are that **no tracked shell script the
-catalogue does not name** appears, that the one it does name holds none of the
-constructs bash 3.2 lacks, and that **no Python helper starts a
-general-purpose utility** to do what the standard library does. All three fail
-in both directions, and the catalogue is one line of shell: `tools/pascalcc`,
-which the Windows row above is the standing argument against.
+**One thing is left open and it moved when Windows was dropped.** The
+catalogue is one line of shell — `tools/pascalcc`, which is the product rather
+than a harness — and the standing argument against it was the Windows row,
+where a `#!` line does not run at all. That row is gone (ADR-0380), so nothing
+currently presses on the driver; a target that is not POSIX is where the
+question comes back.
 
 ---
 
