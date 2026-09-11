@@ -29,7 +29,7 @@ program-component, and the suite is 924 cases green at `-O2` and at `-O0`.
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383), which is the compiler emitting for it and not a program running — the runtime is two translation units short |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383) and 563 of the 598 corpus programs run there (ADR-0385) — the runtime is two translation units short of five, and ADR-0405 is what made that a smaller number than it was: the file model was never what the target lacked |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
@@ -260,17 +260,39 @@ about another program-component jumped to that line number in whatever
 document was open. Eight documents, F3 to open and F6 to cycle, and a
 diagnostic naming an open one is landed on.
 
-**What is open**, in no order and none of it decided: replace; a shaping model, which is what East_Asian_Width is *not* — Arabic
-and Devanagari are laid out by rules no per-code-point property expresses;
-resize, which needs a signal facility this language does not have; and mouse.
-The four milestone-one exclusions and the milestone-two ones are listed in
-`tui/README.md` with the reason for each.
+**Replace is closed** (ADR-0403), and it needed the model to grow rather than
+the editor: an *action* a person takes may be more than one of ADR-0387's four
+operations, and an undo that reverses one of six is an undo of nothing anybody
+did. A journal entry may now say the undo continues through it, which is a
+property of an entry and not a fifth operation, so replacing every occurrence
+in a document is one Ctrl-Z. Confirm-each was **rejected rather than
+deferred**: what a person wants after a replace that went wrong is to undo it.
 
-**What nothing checks** is the shell — raw mode's flags, a read answering on
-one keystroke, the settings put back being the settings taken — which is a
-`doc/sop.md` §7 row that ADR-0262 owed and ADR-0381 finally wrote. Closing it
-needs a pseudo-terminal binding, declined twice on the grounds that a case
-needing one becomes a test of the binding.
+**What is open**, in no order and none of it decided: a shaping model, which
+is what East_Asian_Width is *not* — Arabic and Devanagari are laid out by
+rules no per-code-point property expresses; resize, which needs a signal
+facility this language does not have; mouse; and a **selection**, which is the
+largest of them and is missing from four features at once — cut, copy, paste
+and replace-in-a-region are one design and not four, this editor having no
+notion of a region at all. The milestone-one and milestone-two exclusions are
+listed in `tui/README.md` with the reason for each.
+
+**What the shell emits is checked now** (ADR-0402), and the row that said
+otherwise was `doc/sop.md` §7's oldest. `tui-terminal` drives the real editor
+under a pseudo-terminal and requires every coloured run it writes to be one
+the model decided, at the same columns, in the colour that role's table gives,
+over both the twenty-four-bit and the eight-colour table. **It is not the
+binding ADR-0262 declined twice** — the pseudo-terminal is the harness's, in
+Python, as `lsp/run.py`'s pipe is, so nothing in this language knows about it
+and no case tests a binding. The expectation is *derived* from the session
+golden's own run decomposition rather than recorded, a golden of escape bytes
+being one that agrees with whoever wrote it.
+
+**What nothing checks** is narrower and is still real: that a terminal renders
+those sequences as they are meant, and that an emulator setting `COLORTERM` is
+telling the truth — neither checkable here at all — and three of raw mode's
+six claims, the other three being reached by the editor not working without
+them.
 
 ### Cross-platform support
 
@@ -315,7 +337,7 @@ having answered two questions that i386 gave one answer to.
 
 | Target | What a wasm port still needs |
 | --- | --- |
-| **the runtime** | `pasrt_posix.c` over wasi's own interfaces, or a build that ships neither `PasProcess` nor `PasNet`; `pasrt_task.c` needs the threads proposal, so AP 6.4.16 and AP 6.9.3.12 are what a first port gives up |
+| **the runtime** | `pasrt_posix.c` over wasi's own interfaces, or a build that ships neither `PasProcess` nor `PasNet`; `pasrt_task.c` needs the threads proposal, so AP 6.4.16 and AP 6.9.3.12 are what a first port gives up. **The file model is no longer in that list** (ADR-0405): the old POSIX unit held what the operating system is *asked about* beside what it is asked to *do*, and only the second is what wasi has not got, so `pasrt_file.c` compiles for the target and three corpus rows moved with it |
 | **the driver** | `tools/pascalcc` links with `clang`, and `-pthread`, `-fPIC` and `wasm-ld`'s own `undefined symbol:` spelling are what a wasm link would differ in |
 | **a runner** | every harness executes what it built; a `.wasm` needs `wasmtime` or `node`, and the two scratch argv paths need preopened directories |
 

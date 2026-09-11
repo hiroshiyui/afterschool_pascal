@@ -10360,3 +10360,97 @@ feature's clothes:
 It ships as `afterschool` at v3.9.0 — a CMake target installed beside
 `pascalc`, which is the answer to its own `build.py` header saying a server
 needs a binary a *person* runs rather than one buried in a build tree.
+
+## The editor's third increment, and three gates that were pointed too narrowly
+
+The v3.10.0 release put display width, eight documents, horizontal scrolling
+and a twenty-four-bit palette into `tui/` in one day. What followed was mostly
+a reckoning with that speed, and the shape it took is worth keeping, because
+the same thing went wrong three times in three different places.
+
+**A question that was complete became incomplete when what it asks about grew
+a second instance, and nothing changed at the moment it stopped being right.**
+
+- **Quitting asked `EditDirty`** (ADR-0401), which answers about the document
+  being *drawn*. Before ADR-0396 that was the whole editor. Afterwards it was
+  a silent loss of work: type into `a.pas`, open a clean `b.pas` over it,
+  press Ctrl-Q **once**, and the editor exits with no prompt, no message and
+  status 0. ADR-0396's own consequences had recorded it as a gap — *quitting
+  still asks about the document on screen only* — which undersold it by a
+  wide margin, and the sentence is why nobody looked again. Measured under a
+  pseudo-terminal rather than reasoned about.
+- **`MenuKey` dispatched over `KeyKind` with a `case` and no `otherwise`**,
+  which is the right shape — §6.9.3.5 makes an unmatched selector a trap, so a
+  kind added later is a reported crash and not a swallowed key. ADR-0396 added
+  `kkOpen` and `kkNextDoc` and did not revisit the arm, so F3 or F6 with the
+  menu open stopped the shipped editor with `case: no label matches the
+  selector`. Found by a probe while wiring a *different* key into the same
+  tables.
+- **`runtime/pasrt_posix.c` was one translation unit** holding everything
+  needing a POSIX type, and `wasm32_known.txt` carried sixteen corpus cases
+  under a heading that said `directories` (ADR-0405). The target has a
+  perfectly good file system; `PasFs.Info`, `PasDir`'s walk and
+  `PasIo.FdReady` were blocked by nothing but sharing a file with
+  `posix_spawn`.
+
+Each was correct as written. What the three have in common is that **no gate
+could see any of them**, and two of the three had a gate that could have.
+
+`kind-exhaustive` asks exactly the `MenuKey` question and answers it correctly
+about any Pascal program — and had been handed the compiler's three components
+and nothing else for the whole of its life (ADR-0404). Its corpus was a line
+of code, so it stopped growing when the tree did. It sweeps five programs now,
+and widening it moved 63 case-statements over 13 enumerations to 79 over 35.
+Twelve sites and constants needed an argument and none of them was a defect;
+**the defect was the commit before**, which is the evidence for the widening
+rather than an absence of it.
+
+`doc/sop.md` §7's oldest open row was the other. ADR-0389 split a cell's role
+from its colour, ADR-0391 had `PutRow` split a row into runs, both promised a
+register row and neither wrote one, and ADR-0393 closed the half that needed
+no terminal. What was left is stated by a mutation: make `PutRow` take the
+first run's role for the whole row — ADR-0391's own pre-state, and what the
+comment in `Draw` still claimed was true — and twenty-one sessions and both
+halves of the palette gate stay green. A shell painting a framed dialog in one
+flat colour passed every oracle this project had. `tui/terminal.py` closes it
+(ADR-0402) by driving the real editor under a pseudo-terminal, and two things
+about how are the record: it is **not** the binding ADR-0262 declined twice,
+the pseudo-terminal being Python's as `lsp/run.py`'s pipe is; and the
+expectation is **derived** from the session golden's own run decomposition
+rather than recorded, a golden of escape bytes being one that agrees with
+whoever wrote it — which is exactly how `crPrompt` came to be drawn on no
+screen at all.
+
+**Replace was the increment's actual feature** and it needed the model to grow
+(ADR-0403). ADR-0387 made an edit one of four operations with one journal
+entry each, and had no notion of an *action* — a thing a person did — getting
+away with it because every key a person presses is one operation. A
+replacement is two and a replace-all is a great many. An entry may now say
+`more`, which is a property of an entry and not a fifth operation, so the four
+routines are still the only code that touches the buffer. Confirm-each was
+**rejected rather than deferred**: what a person wants after a replace that
+went wrong is to undo it, and an editor that can do that in one keystroke need
+not have asked six times first.
+
+Two defects were found by reading a CI failure instead of retrying it.
+
+**A case ran in the invoker's working directory** and not its own (ADR-0406).
+`CLAUDE.md` rests the parallel suite on *each harness works in a directory it
+created for the run*, which was true of a harness's scratch files and false of
+the program under test — started with no `cwd` at all. It costs nothing for
+almost every case, the two scratch paths arriving as absolute arguments;
+`lib_process_execute.pas` is the one that names a file relatively, and its own
+closing comment had noticed half of it. The cleanup that keeps the tree clean
+is also the race: two copies of the program in one directory, one `rm`ing
+`victim.txt` while the other opens it. Eight failures in twenty concurrent
+pairs before, none after. `doc/sop.md` §7's row about it had ended with the
+words *every local parallel run now exercises it* — a row naming its own
+closing condition, and wrong, which is the shape that register warns about
+most and had not previously been caught doing real damage.
+
+**A UTF-8 character may be split across two reads of a pseudo-terminal**, and
+macOS found it where Linux did not: the new harness decoded each `os.read`
+with `surrogateescape`, so a three-byte box character arriving in two pieces
+became six escapes that never rejoined. A property of how the pty buffers and
+not of anything either program did. Proved fixed by reading one byte at a
+time, which splits every multi-byte character in the corpus.

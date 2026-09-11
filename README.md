@@ -450,8 +450,9 @@ shape: there is no machine here, and what is claimed is measured rather than
 assumed. **563 of the 598 corpus programs compile, link and answer their
 goldens** under a WASI engine on every push, and the job refuses to pass by
 skipping (ADR-0385). What a program can reach there is what a port has got —
-two of the four runtime units build, so a program wanting a thread, a process
-or a socket fails at the link with the symbol named rather than at run time.
+three of the five runtime units build, so a program wanting a thread, a
+process or a socket fails at the link with the symbol named rather than at run
+time.
 It asks one thing of the toolchain, an LLVM that names `i128` for the target.
 `wasm64-wasi` is admitted on the layout claim alone (ADR-0386): no sysroot for
 memory64 exists, so nothing links and nothing runs there yet.
@@ -471,7 +472,7 @@ What a contributor starts from is measurement rather than guesswork, which is
 the point of the machinery below:
 
 - **`python3 tests/checks/runtime_nonposix.py`** compiles each of the
-  runtime's four translation units for a target that is not POSIX and reports
+  runtime's five translation units for a target that is not POSIX and reports
   which of them build, which want only a different C runtime, and — for one
   that does not build — *every* header the target lacks rather than the first,
   because a missing header is a fatal error and stops the compile. It measures
@@ -502,10 +503,12 @@ the `--target=` it is given, so a clang that does not -- Debian trixie's 19 --
 lays a set inside a record out one way where this compiler computed another.
 The gate abstains there and says so rather than reporting it as a defect.
 
-**The shape of a port, measured against `wasm32-wasi`:** two units of the four
-compile. `runtime/pasrt_unicode.c` is the whole of the text model, and
+**The shape of a port, measured against `wasm32-wasi`:** three units of the
+five compile. `runtime/pasrt_unicode.c` is the whole of the text model;
 `runtime/pasrt.c` is the language itself — the traps, the file model, the
-string arena and the non-local goto's jump. `runtime/pasrt_task.c` is blocked
+string arena and the non-local goto's jump; and `runtime/pasrt_file.c` is what
+the operating system is *asked about*, which ADR-0405 cut out of the POSIX
+unit on the finding that the file model was never what this target lacked. `runtime/pasrt_task.c` is blocked
 on **threads**: wasm32-wasi without the threads proposal cannot create one,
 and wasi-libc says so from its own header, so AP 6.4.16's channels and AP
 6.9.3.12's tasks are what a port on this target gives up — the whole facility
@@ -658,32 +661,48 @@ three arguments it always did and now defaults every one of them.
 
 | Key | |
 | --- | --- |
-| Ctrl-S | save |
-| Ctrl-Q | quit, and twice where the document has changes in it |
-| Ctrl-B | compile, and go to the first error |
+| F10, Ctrl-O | the menu bar — arrows move, Enter chooses, Ctrl-C closes |
+| F3 | open a file into a **second document**, up to eight |
+| F6 | go to the next open document, wrapping |
+| F2, Ctrl-S | save — and on a document with no name, ask for one first |
+| F9, Ctrl-B | compile, and go to the first error — or **report** it, where it names another program-component |
+| Ctrl-Q | quit, and twice where **any** open document has changes in it |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo and not one per key |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
+| Ctrl-R | replace — two questions, every occurrence, and **one** Ctrl-Z to take it back |
 | Ctrl-G | go to a line |
-| Ctrl-C | close the question a prompt is asking |
-| arrows, Home, End | move |
+| Ctrl-C | close the question a prompt is asking, or the menu |
+| arrows, Home, End | move — by **element**, so the cursor lands where the character is |
 | Enter, Backspace, Delete | change the shape of the document |
 
-It says what it is not: no horizontal scrolling — a line wider than the window
-is cut and the cursor stops with it — no mouse, no replace, and a column is a
-byte, since the number of terminal cells a character occupies is a property of
-the Unicode database this language does not carry.
+It says what it is not: no mouse, no resize, no search backwards, no regular
+expressions, and **no selection** — which is the largest of them, because cut,
+copy, paste and replace-in-a-region are one design and not four, this editor
+having no notion of a region at all. `tui/README.md` lists each with its
+reason.
+
+**A column is a cell and not a byte** (ADR-0395), which was on that list until
+AP 6.4.15.13 defined display width and `PasUnicode.Columns` answered it: `日本語`
+is three cells and six columns, and a line wider than the window scrolls
+sideways by column rather than being cut (ADR-0397).
 
 **An edit is one of four operations** — insert, remove, split, join — and the
 four routines that perform them are the only code that touches the buffer,
 which is what makes the undo journal complete by construction rather than by
-inspection (ADR-0387). **A prompt is a mode of the model**, not a loop in the
+inspection (ADR-0387). **One *action* of a person's may be several of them**
+(ADR-0403): a journal entry can say the undo continues through it, so
+replacing every occurrence of a word is one Ctrl-Z — a property of an entry,
+not a fifth operation. **A prompt is a mode of the model**, not a loop in the
 shell, so a search is something a scripted session drives and a golden holds.
 
 **`tui/apedit.pas` has no terminal in it**: a key goes in as a value and a
 screen comes out, rows by columns with the cursor's cell. That is what lets
 the editor be tested at all — `tui/run.py` replays scripted keys and compares
 the screens byte for byte — and it is why the part that talks to the terminal
-is a few dozen lines. `tui/README.md` has the rest.
+is a few dozen lines. **Those few dozen lines are checked too** (ADR-0402):
+`tui/terminal.py` drives the real editor under a pseudo-terminal and requires
+every coloured run it writes to be one the model decided, in the colour that
+role's table gives. `tui/README.md` has the rest.
 
 ## The language
 

@@ -819,6 +819,27 @@ edit undo could not reverse, and there is no way to write one unnoticed. One
 entry both reverses an edit and performs it again, so redo is not a second
 mechanism.
 
+**Operation and action (of an edit).** Two words the journal above needs to
+keep apart, and the distinction is ADR-0403's. An **operation** is one of the
+four things that can happen to a document; an **action** is one thing a person
+did, and it is not always one operation. Replacing a word is a remove and an
+insert; replacing every occurrence of it is a great many, and an undo that
+reversed one of six would be an undo of nothing anybody performed. So an entry
+may say `more` — *the undo continues through me* — which is a property of an
+entry and deliberately **not a fifth operation**: the four routines are still
+the only code that touches the buffer, so the journal stays complete by
+construction. A typed run reaches the same place by the older route, `Note`
+coalescing it into one entry, and the two are not unified.
+
+**A question and an action (of the runtime).** The same word in a second,
+unrelated sense, which is worth saying because the two records are three
+apart. ADR-0405 cuts the runtime's POSIX half along it: `pasrt_file.c` asks
+the operating system **about** a file or a descriptor that already exists and
+answers, and `pasrt_posix.c` makes it **do** something — start a process, open
+a socket, put a terminal into raw mode, make a directory. The rule is what a
+routine is placed by; that a target may have a file system and no processes is
+what makes the placement worth anything, and `wasm32-wasi` is that target.
+
 **Session (of the editor).** `tui/sessions/name.keys` plus `name.screen`: a
 script of keys, and the screens the editor drew, compared byte for byte
 (ADR-0381). It is the golden test's shape for a program whose output is a

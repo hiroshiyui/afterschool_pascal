@@ -35,6 +35,7 @@ CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
 CLAUDE.md   | runtime-nonposix   | on its own and \*\*(five)\*\* come back, of seventeen
 README.md   | wasm32             | \*\*(\d+) of the (\d+) programs in this corpus run as
 CLAUDE.md   | wasm32             | \*\*(\d+) of (\d+) answer their golden\*\*
+doc/roadmap.md | wasm32          | and (\d+) of the (\d+) corpus programs run there
 doc/roadmap.md | ctest           | the suite is (\d+) cases green
 
 # **CLAUDE.md's row was added after the sentence went stale, which is the

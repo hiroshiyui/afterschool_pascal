@@ -598,6 +598,23 @@ tools — `outline` and `diagnostics` — for an agent working on Pascal. The
 `.mcp.json` at the root of this repository wires it up for Claude Code, and
 `lsp/README.md` has the rest.
 
+**Or in the editor that comes with it.** `apide` is a text-mode editor in
+Turbo Pascal's mould, written in this language and installed beside the
+compiler, and if you remember that screen you will know where everything is:
+`File  Edit  Search  Run` along the top, F10 to open it, F2 to save, F9 to
+build and land on the first error. It holds eight documents, finds and
+replaces, undoes a whole replace in one keystroke, and counts a column in
+*cells* rather than bytes, so a line of Japanese behaves.
+
+```sh
+apide hello.pas        # or with no argument at all, for a new document
+```
+
+It is not a rival to the server — the server is what your own editor should
+use. It is here because a Pascal-lineage editor is an answer key: *this was
+easier in Turbo Pascal* becomes a finding rather than a matter of taste.
+`tui/README.md` has the keys and what it deliberately does not do.
+
 ## 11. Where to go next
 
 - **`examples/`** — twelve programs of a page each, each one a test case:
