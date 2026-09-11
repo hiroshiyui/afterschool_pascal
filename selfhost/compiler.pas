@@ -963,6 +963,15 @@ begin
         an argument carries the scope it was *declared* in, not the one it is
         called from -- which is the whole difficulty of the feature. }
       tyProc: write(ircode, '{ ptr, ptr }');
+      { **The data and the vtable** (ADR-0408), which is a procedural
+        parameter's shape exactly: two pointers, and the backend needs no
+        opinion about how a struct of them would be passed, because a value of
+        this type travels as two arguments and never as a struct (ADR-0030).
+        No program can make one until increment C grants a position, and the
+        arm is here because 6.9.3.5 makes a case with a missing label a trap
+        (ADR-0018) -- a kind the emitter cannot name is a crash and not a
+        diagnostic. }
+      tyDyn: write(ircode, '{ ptr, ptr }');
       { ADR-0125: the address of the first component, and how many there are. }
       tySlice: write(ircode, '{ ptr, i32 }');
       { ISO/IEC 10206:1991 6.4.2.2 e) makes `complex` a *simple* type, so it
@@ -3433,8 +3442,13 @@ begin
         is a crash rather than a wrong answer (ADR-0018), and "no program can
         reach it" is the argument that was wrong the last two times. It costs
         no coverage: a label is not a statement and the arm was already run. }
+      { A kind with no constant to emit answers zero. `tyDyn` joins them and
+        is the strongest case of it: AP 6.7.11 gives a trait object no
+        constant-denotation at all, so this arm is unreachable and exists
+        because the case must be total (ADR-0018, ADR-0408). }
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted, tyString, tyText, tyOptional, tySlice, tyHandle:
+      tyComplex, tyRestricted, tyString, tyText, tyOptional, tySlice, tyHandle,
+      tyDyn:
         OpInt(0, v)
     end
 end;
@@ -10170,7 +10184,7 @@ begin
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkSelectArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle, nkDyn,
       nkFallible,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
@@ -12831,6 +12845,7 @@ var kindTotal: integer; k: typeKind;
       tyString: WriteTrim('tyString        ');
       tyText: WriteTrim('tyText          ');
       tyInt64: WriteTrim('tyInt64         ');
+      tyDyn: WriteTrim('tyDyn           ');
     end
   end;
 
@@ -12840,11 +12855,11 @@ var kindTotal: integer; k: typeKind;
   var k: typeKind; n: integer;
   begin
     n := 0;
-    for k := tyVoid to tyInt64 do
+    for k := tyVoid to tyDyn do
       if P(NewType(k)) then n := n + 1;
     WriteTrim(name);
     write(' ', n:1, ' of ', kindTotal:1, ':');
-    for k := tyVoid to tyInt64 do
+    for k := tyVoid to tyDyn do
       if P(NewType(k)) then begin
         write(' ');
         PutKindName(k)
@@ -12854,7 +12869,7 @@ var kindTotal: integer; k: typeKind;
 
 begin
   kindTotal := 0;
-  for k := tyVoid to tyInt64 do kindTotal := kindTotal + 1;
+  for k := tyVoid to tyDyn do kindTotal := kindTotal + 1;
   { The kinds themselves, in order, before the answers. Two things come of
     naming them: the table below is readable without the enumeration beside it,
     and a kind that no predicate is true of is *visible* rather than merely
@@ -12862,7 +12877,7 @@ begin
     because every ordinal predicate looks through Base() and a type of that
     kind with no host to look through answers no to all of them. }
   write('kinds ', kindTotal:1, ':');
-  for k := tyVoid to tyInt64 do begin
+  for k := tyVoid to tyDyn do begin
     write(' ');
     PutKindName(k)
   end;
@@ -12870,6 +12885,7 @@ begin
   Row('IsInteger       ', IsInteger);
   Row('IsReal          ', IsReal);
   Row('IsInt64         ', IsInt64);
+  Row('IsDyn           ', IsDyn);
   Row('IsComplex       ', IsComplex);
   Row('IsVarString     ', IsVarString);
   Row('IsText          ', IsText);

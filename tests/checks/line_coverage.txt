@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 394
-instrumented 20806
+instrumented 20955
 
 accept 0/4
 accumulate 0/84
@@ -80,7 +80,7 @@ boundschema 0/67
 boundschemafor 0/9
 boundslot 0/3
 boundvalue 1/35
-buildformals 7/151
+buildformals 7/156
 buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
@@ -96,7 +96,7 @@ checkarguments 6/325
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
-checkcall 12/295
+checkcall 12/300
 checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -126,7 +126,7 @@ checkmutualsupply 0/24
 checknewtuple 0/32
 checkpendingimplementations 0/8
 checkprocargument 0/47
-checkprocbody 0/49
+checkprocbody 0/50
 checkread 3/71
 checkreceive 0/27
 checkrecordvalue 0/92
@@ -143,13 +143,13 @@ checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
 checkstdproc 19/391
-checkstmt 2/258
+checkstmt 2/273
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
-checktake 0/22
-checktaskformals 0/26
-checktraitdecl 0/7
+checktake 0/27
+checktaskformals 0/33
+checktraitdecl 0/13
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
@@ -157,8 +157,8 @@ checkwith 1/109
 checkwrite 2/83
 checkwriteargs 0/20
 claimboundsslot 0/7
-clongsize 0/1
-closefiles 0/24
+clongsize 0/3
+closefiles 0/19
 collecttagtests 0/31
 compile 0/55
 complexcall 0/19
@@ -191,7 +191,7 @@ covbranch 0/3
 curcol 0/1
 curline 0/1
 declare 0/24
-declareprocheading 0/60
+declareprocheading 0/63
 declareprocs 0/12
 declareschema 9/60
 def 0/5
@@ -218,7 +218,7 @@ dumpexpr 0/207
 dumpexprlist 0/4
 dumpfield 0/8
 dumpfieldlist 0/3
-dumpframe 1/22
+dumpframe 0/22
 dumpframes 0/5
 dumpgroup 0/39
 dumpgrouplist 0/4
@@ -238,7 +238,7 @@ dumpstmt 0/245
 dumpstmtlist 0/4
 dumpstrchild 0/5
 dumpsymbols 1/16
-dumpsymdecl 0/26
+dumpsymdecl 0/28
 dumpsymfields 0/8
 dumpsymparams 0/9
 dumpsymrecord 0/6
@@ -246,7 +246,7 @@ dumpsymtype 0/10
 dumpsymvariants 0/9
 dumptokens 0/27
 dumptrivia 0/8
-dumptypeexpr 2/128
+dumptypeexpr 2/135
 dumpusefiles 0/3
 dumpvariantpart 0/29
 dumpwords 0/18
@@ -274,16 +274,16 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/155
+emitdeclares 0/156
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
 emitexpr 6/51
-emitexterns 0/60
+emitexterns 0/61
 emitfbin 0/7
 emitfinis 0/5
 emitfor 0/111
-emitforeignargument 0/33
+emitforeignargument 0/36
 emitforin 0/110
 emitforintext 0/73
 emitframealiases 0/14
@@ -305,7 +305,7 @@ emitoptionaltest 0/13
 emitownrels 0/139
 emitposglobals 0/8
 emitprocargument 0/27
-emitprocbody 0/40
+emitprocbody 0/43
 emitprocs 0/8
 emitread 0/59
 emitreadargs 0/77
@@ -318,9 +318,9 @@ emitset 0/63
 emitsetbinary 0/61
 emitshortcircuit 0/28
 emitslicevalue 0/89
-emitspawn 0/120
-emitstdproc 2/258
-emitstmt 0/39
+emitspawn 0/121
+emitstdproc 2/259
+emitstmt 0/41
 emitstore 0/34
 emitstring 0/211
 emitstringcompare 11/33
@@ -460,7 +460,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/34
-instantiategeneric 0/198
+instantiategeneric 0/199
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -488,6 +488,7 @@ isconstantaccess 4/12
 iscontinuation 0/6
 isdesignator 0/15
 isdigit 0/1
+isdyn 0/1
 isemptyset 0/1
 isenum 0/2
 isequatable 0/1
@@ -535,6 +536,7 @@ istimebuiltin 0/1
 istypeparamname 0/7
 isvariable 0/1
 isvarstring 0/1
+jointasks 0/6
 jumpdispatch 0/21
 jumprecord 0/4
 labelblock 0/10
@@ -545,7 +547,7 @@ lexnumber 0/100
 lexoperator 0/47
 lexstring 0/28
 linkstdfile 0/2
-llalign 1/17
+llalign 1/18
 llsize 2/61
 lookslikestructuredvalue 0/20
 lookslikesubrange 0/23
@@ -579,10 +581,10 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/99
+newnode 0/101
 newresultslot 0/7
 newsymbol 0/103
-newtype 0/41
+newtype 0/43
 nextformal 0/4
 nonvarying 3/42
 noteblockdeclarations 0/1
@@ -594,7 +596,7 @@ noteunwrittenvarparams 0/17
 noteuse 0/8
 noteusefield 0/5
 notinghere 0/4
-offer 0/38
+offer 0/39
 opglobal 0/4
 opint 0/2
 opreg 0/4
@@ -604,6 +606,7 @@ ordinalhi 1/6
 ordinallo 0/3
 otherlistsparameter 0/1
 overlaps 0/7
+ownedbytask 0/3
 ownedroot 0/28
 ownrelid 0/13
 packedcomponent 0/8
@@ -611,7 +614,7 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/140
+parseargs 10/141
 parsearraytype 0/17
 parseblock 0/56
 parseboundident 0/12
@@ -639,7 +642,7 @@ parselabelpart 0/6
 parsemainprogram 0/31
 parsemodule 0/76
 parsemoduleblock 0/16
-parsemoduleparts 0/34
+parsemoduleparts 0/41
 parsenamelist 1/22
 parsepointertypeargs 0/11
 parseprimary 2/115
@@ -661,7 +664,7 @@ parsestatement 0/32
 parsestructuredvalue 0/29
 parseterm 0/22
 parsetraitdecl 0/21
-parsetypedenoter 0/153
+parsetypedenoter 0/157
 parsetypeexpr 0/7
 parsetypepart 0/21
 parsevariantpart 0/59
@@ -689,7 +692,7 @@ producefromschema 0/194
 protectable 1/14
 protectablecandidate 0/1
 protectedowner 0/3
-ptrsize 0/1
+ptrsize 0/3
 pushseq 0/3
 pushstmt 0/6
 put 0/1
@@ -704,9 +707,9 @@ putint 0/13
 putintmin 0/2
 putintwidth 0/1
 putirlit 0/5
-putkindname 0/22
+putkindname 0/23
 putlit 0/5
-putlltype 2/28
+putlltype 3/29
 putmodulepart 0/9
 putop 0/2
 putparamtypes 0/26
@@ -746,6 +749,7 @@ requiredprocname 0/13
 requiredtype 0/6
 reservedforeignname 4/16
 resolvearray 0/25
+resolvedyn 0/14
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
@@ -754,21 +758,21 @@ resolveinquiry 1/41
 resolvename 0/12
 resolveoptional 0/20
 resolvependingpointers 0/34
-resolvepointer 0/30
+resolvepointer 0/32
 resolverecord 0/20
 resolverestricted 6/31
 resolveset 1/22
 resolveslice 0/14
 resolvesubrange 7/74
-resolvetype 6/81
+resolvetype 6/82
 resolvevariantpart 1/145
 resultnameclash 0/7
 resulttypeof 0/5
 rootdesignator 0/7
 rootname 0/12
 roundup 0/2
-row 0/58
-runcodegen 0/97
+row 0/59
+runcodegen 0/109
 rundefersreversed 0/4
 runsema 2/93
 samelink 0/1
@@ -823,8 +827,8 @@ symtailto 0/3
 tag 0/30
 tagfieldat 0/4
 tagtypeat 0/4
-targetindex 0/6
-targetname 0/4
+targetindex 0/14
+targetname 0/8
 tasksetbase 0/4
 tasksetslot 0/4
 textofcapacity 1/23
@@ -842,7 +846,7 @@ typeend 0/4
 typeformalpos 0/10
 typelength 0/1
 underlying 0/1
-usage 0/61
+usage 0/63
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
@@ -855,8 +859,9 @@ warnunreachable 0/13
 warnunusedlocals 0/13
 warnunwrittenvarparams 0/33
 whycanname 0/8
+widealign 0/1
 widenordinal 0/8
-wordalign 0/1
+wordalign 0/3
 writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
@@ -880,7 +885,7 @@ writesymkind 9/14
 writesymref 5/24
 writetokenname 15/81
 writetrim 0/3
-writetypename 14/95
+writetypename 14/99
 writeunop 1/4
 writevariantref 0/8
 writeword 0/3

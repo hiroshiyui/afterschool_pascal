@@ -1727,6 +1727,8 @@ begin
     nkOptional: n^.opElem := nil;
     nkHandle: begin n^.hdAt := 0; n^.hdLen := 0;
                     n^.hdCap := nil; n^.hdElem := nil end;
+    nkDyn: begin n^.dyAt := 0; n^.dyLen := 0;
+                 n^.dyQualAt := 0; n^.dyQualLen := 0 end;
     nkFallible: begin n^.faVal := nil; n^.faCause := nil end;
     nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
@@ -2734,6 +2736,25 @@ begin
         ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen);
         ParsePointerTypeArgs(t)
       end
+    end
+    { trait-object-type = 'dyn' trait-identifier (AP 6.7.11, ADR-0408). The
+      arm above's shape one token over: `owned` is an identifier juxtaposed
+      with a caret, and this is an identifier juxtaposed with **an
+      identifier**. A type-denoter is complete after a type-name, so a name
+      followed by a name is a syntax error in both standards, which is
+      ADR-0140's test and the reason `dyn` is no more reserved than `owned`
+      is -- a program may declare a type named `dyn` and `var d: dyn;` is
+      still that program's.
+
+      What follows is a *trait* identifier, so it is read as a name and not as
+      a denoter: a trait is not a type (6.7.9) and has no denoter to parse.
+      Qualified, because 6.11.3 lets a trait be imported. }
+    else if Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'dyn      ') and
+            (PeekKind(1) = tkIdent) then begin
+      t := NewNode(nkDyn, CurLine, CurCol);
+      pos := pos + 1;
+      ParseQualifiedName(t^.dyQualAt, t^.dyQualLen, t^.dyAt, t^.dyLen)
     end
     { optional-type = '?' type-denoter (ADR-0123). A whole denoter and not a
       name, unlike the pointer above: `^T` takes a name so that a type may
@@ -9836,6 +9857,50 @@ begin
   ResolveHandle := t
 end;
 
+{ **AP 6.7.11's trait-object-type** (ADR-0408). The name must denote a trait
+  and nothing else: a trait is not a type, so there is no denoter here to
+  resolve and no recursion to bound -- which is why this is the shortest
+  Resolve in the file.
+
+  **The refusal is written here and that was not the first design.** Every
+  type predicate answers false for `tyDyn` (`IsDyn` alone excepted), and the
+  plan was for that to refuse it everywhere by construction -- CLAUDE.md's
+  rule, and the shape a restricted type and a discriminant-selected variant
+  both take. Compiling it showed the premise was wrong: a type that answers
+  false to every predicate is not refused, it is treated as an **ordinary
+  small value**, so a `dyn` field, a `dyn` array element and a `dyn` variable
+  all compiled and only a `protected` warning came out. Refusal by
+  construction works where the default is to refuse and the predicate grants;
+  in each of those positions the default is to permit.
+
+  So the refusal is one diagnostic, here, where the denoter is resolved --
+  which is also where a program can be told the two positions AP 6.7.11 will
+  permit, rather than being told something about assignment three passes
+  later. Increment C replaces it with the two grants. }
+function ResolveDyn(d: nodePtr): typePtr;
+var t: typePtr; s: symPtr;
+begin
+  t := NewType(tyDyn);
+  s := LookupName(d^.dyQualAt, d^.dyQualLen, d^.dyAt, d^.dyLen, d^.line, d^.col);
+  if (s <> nil) and (s^.kind <> skTrait) then begin
+    ErrorAt(d^.line, d^.col);
+    write('''');
+    WritePool(d^.dyAt, d^.dyLen);
+    writeln(''' is not a trait, so there is nothing for ''dyn'' to name');
+    s := nil
+  end;
+  t^.dynTrait := s;
+  { AP 6.7.11 [not yet implemented]: the type is built, named by every
+    dispatch and refused. What a program is told is where one will be able to
+    stand, because the two positions are the feature and a message that only
+    said *no* would leave a reader to find them in a record. }
+  ErrorAt(d^.line, d^.col);
+  WriteTypeName(t);
+  write(' has no storage of its own yet: write ''owned ^T'' over a named ');
+  writeln('''dyn'' type, or a ''var'' parameter, when AP 6.7.11 is implemented');
+  ResolveDyn := t
+end;
+
 function ResolveOptional(d: nodePtr): typePtr;
 var t, inner: typePtr;
 begin
@@ -11007,7 +11072,7 @@ begin
       nkProcCall, nkWith, nkDefer, nkSpawn, nkSelect, nkSelectArm,
       nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
-      nkPointer, nkHandle, nkInquiry, nkRestricted,
+      nkPointer, nkHandle, nkDyn, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
       nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem,
       nkTrait, nkImpl: ;
@@ -12005,7 +12070,11 @@ begin
         reason is the rule ADR-0125 makes rather than an approximation: a slice
         denoter may be written only as a formal parameter's own type, never in
         a schema body, so nothing inside it can name a discriminant. }
-      tyPointer, tyProc, tyComplex, tyString, tyText, tySlice:
+      { A trait object joins these for the slice's reason one step on: it is
+        two pointers whatever it points at, so its *own* size is known even
+        though the concrete value's is not — that being the whole point of a
+        vtable (ADR-0408). }
+      tyPointer, tyProc, tyComplex, tyString, tyText, tySlice, tyDyn:
         StaticThroughout := true;
       tyRestricted: StaticThroughout := StaticThroughout(t^.elem)
     end
@@ -12913,7 +12982,7 @@ begin
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkDefer, nkSpawn, nkSelect, nkSelectArm, nkCase, nkGoto, nkLabeled, nkCaseArm,
       nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle, nkDyn,
       nkFallible,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
@@ -13143,6 +13212,7 @@ begin
       nkRecord:   t := ResolveRecord(d);
       nkPointer:  t := ResolvePointer(d);
       nkOptional: t := ResolveOptional(d);
+      nkDyn:      t := ResolveDyn(d);
       nkHandle:   t := ResolveHandle(d);
       nkFallible: t := ResolveFallible(d);
       nkFile:     t := ResolveFile(d);
@@ -18759,7 +18829,7 @@ begin
       nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
       nkStructValue, nkValueElem, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible, nkConfArray,
+      nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkDyn, nkFallible, nkConfArray,
       nkSchema,
       nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
@@ -26506,6 +26576,20 @@ begin
       WritePos(n^.line, n^.col);
       TypeEnd(n)
     end;
+    { AP 6.7.11 (ADR-0408). It nests on neither side -- what follows `dyn` is
+      a trait *identifier* and not a denoter -- so the name is printed here
+      and nothing is indented under it, which is the handle's shape above and
+      for the same reason. }
+    nkDyn: begin
+      write('dyn ');
+      if n^.dyQualLen > 0 then begin
+        WritePool(n^.dyQualAt, n^.dyQualLen);
+        write('.')
+      end;
+      WritePool(n^.dyAt, n^.dyLen);
+      WritePos(n^.line, n^.col);
+      TypeEnd(n)
+    end;
     { AP 6.4.13. It nests on both sides, so each is printed indented under it
       the way an optional's component is -- value first, then cause, which is
       the order they are written in. }
@@ -28587,7 +28671,11 @@ begin
       { A procedural parameter is a pair of pointers: the code, and the static
         link to call it with. ADR-0125's slice is the same two-word shape with
         a length in the second word instead of a link. }
-      tyProc, tySlice: LlAlign := WordAlign;
+      { **The two-word company** (ADR-0030), which `tyDyn` joins: a
+        procedural parameter's code-and-link pair, a slice's
+        address-and-count, and a trait object's data-and-vtable (ADR-0408).
+        Each is two pointers and aligns as one does. }
+      tyProc, tySlice, tyDyn: LlAlign := WordAlign;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -28634,7 +28722,7 @@ begin
       tyFile: LlSize := fileSize;
       tyHandle: LlSize := handleSize;
       tySet: LlSize := setBits div 8;
-      tyProc, tySlice: LlSize := PtrSize * 2;
+      tyProc, tySlice, tyDyn: LlSize := PtrSize * 2;
       { 6.4.3.2 bounds the *elements* at maxint already and says nothing
         about bytes, which is the other half: two nested maxint arrays of a
         four-byte element need 1.8e19 of them. Asked before the multiply,

@@ -104,7 +104,7 @@ export ApTypes = (
   nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
   nkWith, nkCase, nkGoto, nkLabeled, nkDefer, nkSpawn, nkSelect, nkSelectArm, nkWriteArg, nkCaseArm,
   nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray,
-  nkRecord, nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible,
+  nkRecord, nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkDyn, nkFallible,
   nkConfArray, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
   nkProcDecl, nkLabelDecl, nkBlock, nkTrait, nkImpl,
   nkModule, nkExportPart, nkExportItem,
@@ -114,7 +114,7 @@ export ApTypes = (
   fbInternal, fbStdInput, fbStdOutput, fbArgument, tyVoid, tyInteger,
   tyReal, tyBoolean, tyChar, tyEnum, tySubrange, tyArray, tyRecord,
   tyPointer, tyFile, tySet, tyProc, tyComplex, tyRestricted, tySlice,
-  tyOptional, tyHandle, tyString, tyText, tyInt64, typeCat, tcNone,
+  tyOptional, tyHandle, tyString, tyText, tyInt64, tyDyn, typeCat, tcNone,
   tcNumeric, tcOrdinal, tcOrdered, tcEquatable, biNone, biAbs, biSqr,
   biOdd, biOrd, biChr, biSucc, biPred, biSqrt, biSin, biCos, biLn, biExp,
   biArcTan, biTrunc, biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm,
@@ -137,7 +137,7 @@ export ApTypes = (
   PoolSame, PoolPut, InternWord, InternWide, InternWide2,
   InternResultName, InternBindingName, InternCallResultName,
   InternTryName, InternWithName, InternBoundsName, InternForName, NewType,
-  Base, IsInteger, IsReal, IsInt64, IsComplex, IsVarString, IsText,
+  Base, IsInteger, IsReal, IsInt64, IsDyn, IsComplex, IsVarString, IsText,
   IsStringRep, IsOptional, IsFallible, IsHandleBirth,
   IsSlice, SliceOf, IsNumeric,
   IsArith, IsBoolean, IsChar, IsEnum, IsArray, IsRecord, IsPointer,
@@ -678,6 +678,14 @@ type
       released by the named routine when the variable dies. A denoter and
       not a name, for the optional's reason. }
     nkHandle,
+    { AP 6.7.11's trait-object-type, `dyn Renders` (ADR-0408): two juxtaposed
+      identifiers, which is `owned ^T`'s shape one token over -- a denoter is
+      complete after a type-name, so a name followed by another name is a
+      syntax error in both standards and the position is free (ADR-0140).
+      What it names is a **trait** and not a type, so unlike every denoter
+      above it holds an identifier rather than a nested denoter: there is
+      nothing here to resolve recursively. }
+    nkDyn,
     { AP 6.4.13's fallible-type, `T ! E` (ADR-0176): the result record
       ADR-0120 tells a module to write, with the field names fixed. It is a
       denoter holding two denoters and resolves to an ordinary record, which
@@ -842,7 +850,33 @@ type
                 label, no array index, no subrange host, no set base, no `for`
                 control variable, because each of those needs a value the
                 compiler must hold. }
-              tyInt64);
+              tyInt64,
+              { **ADR-0315's increment C: the trait object** (AP 6.7.11,
+                ADR-0408). `dyn Renders` is a value that answers a trait whose
+                implementation is not known where the value is held, and it is
+                **two words** -- the data's address and the vtable's -- which
+                puts it in ADR-0030's company: a procedural parameter's
+                code-and-link pair, a schematic formal's
+                address-and-discriminants, a string's pointer-and-length, a
+                slice's address-and-count. Nothing that is two words may
+                depend on how a struct is passed, so it travels as two
+                arguments and the textual backend needs no opinion about the
+                C ABI.
+
+                `elem` is the **trait** it answers, which is the one field it
+                has. There is no implementation on it: which one a value
+                carries is what the vtable says, at run time, and that is the
+                whole difference between this and a bound (6.7.3.10.5), where
+                the implementation is chosen at instantiation.
+
+                **Every type predicate answers false for it** and `IsDyn` is
+                the one that does not, which is the refusal doing its own
+                work: a kind no predicate admits is refused everywhere a
+                permission is asked for, rather than by a list of places that
+                remembered to say no (CLAUDE.md's rule). What that costs is
+                the *message*, so where a program writes one inline there is a
+                diagnostic of its own saying which two positions take one. }
+              tyDyn);
 
   { AP 6.7.3.10.5's category of a type parameter (ADR-0266). The set is small
     and closed on purpose: each constant names a group of operations a
@@ -1173,6 +1207,14 @@ type
     aliasAt, aliasLen: integer;
     { tyHandle: the foreign name of the routine that releases the value. }
     handleAt, handleLen: integer;
+    { tyDyn: the trait this object answers (AP 6.7.11, ADR-0408). A **symbol**
+      and not a type, because a trait is not one (6.7.9) -- which is why this
+      is a field of its own rather than `elem`, the field every other kind
+      that refers onwards uses. What it does *not* hold is an implementation:
+      which one a value carries is the vtable's answer at run time, and that
+      is the whole difference between this and a bound (6.7.3.10.5), where the
+      implementation is chosen at instantiation and no vtable exists. }
+    dynTrait: symPtr;
     { tyPointer: this pointer *owns* the variable it identifies (AP 6.4.14,
       ADR-0181). A flag on the kind rather than a kind of its own, which is
       isText's shape and setCanonical's: what changes is the ownership, and
@@ -2300,6 +2342,11 @@ type
         which is a handle whose closer is the runtime's -- the denoter's own
         version of IsChannel's question. hdCap is the channel's capacity. }
       nkHandle:     (hdAt, hdLen: integer; hdCap, hdElem: nodePtr);
+      { dyAt/dyLen name the trait, and a trait may be imported, so dyQualAt
+        and dyQualLen carry 6.11.3's qualifier when the source wrote one.
+        Four integers and no node: a trait-name is an identifier and never a
+        denoter, so there is nothing here to resolve recursively. }
+      nkDyn:        (dyAt, dyLen, dyQualAt, dyQualLen: integer);
       nkFallible:   (faVal, faCause: nodePtr);
       { caLo and caHi are nkDeclName nodes -- these are defining-points, and a
         declared name is what that node kind is for. caIndex is the
@@ -2911,6 +2958,14 @@ function IsReal(t: typePtr): boolean;
   IsReal is: an int64 is not an ordinal, so it is never the host of a subrange
   and there is nothing for Base() to look through. }
 function IsInt64(t: typePtr): boolean;
+
+{ **The one predicate a trait object answers yes to** (ADR-0408). Every other
+  in this file answers no for `tyDyn`, which is what refuses it in each place
+  a permission is asked for without any of those places naming it -- the
+  refusal-by-construction CLAUDE.md prefers to an enumerated list. So this is
+  not a convenience: it is the only way to ask, and the places that will grant
+  a permission in increment C are exactly the places that will call it. }
+function IsDyn(t: typePtr): boolean;
 
 function IsComplex(t: typePtr): boolean;
 
@@ -3854,6 +3909,9 @@ begin
   t^.aliasLen := 0;
   t^.handleAt := 0;
   t^.handleLen := 0;
+  { ADR-0222: a pointer field of a fresh type is written before it is read,
+    and `ast-fields`' catalogue being empty is what says so of every one. }
+  t^.dynTrait := nil;
   t^.owns := false;
   t^.isTaskType := false;
   t^.schema := nil;
@@ -3904,6 +3962,11 @@ begin IsReal := (t <> nil) and (t^.kind = tyReal) end;
   and there is nothing for Base() to look through. }
 function IsInt64;
 begin IsInt64 := (t <> nil) and (t^.kind = tyInt64) end;
+
+{ Asked on the type itself and never through Base(), for IsInt64's reason: a
+  trait object is no ordinal's host and there is nothing to look through. }
+function IsDyn;
+begin IsDyn := (t <> nil) and (t^.kind = tyDyn) end;
 
 function IsComplex;
 begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
@@ -4678,6 +4741,17 @@ begin
         PutLit('array of        ');
         Put(' ');
         WriteTypeName(t^.elem)
+      end;
+      { ADR-0408. Printed the way it is written -- `dyn` and the trait it
+        answers. The trait is a **symbol** and not a type (6.7.9), so this
+        writes its name rather than recursing the way tyOptional's arm below
+        does: there is no denoter under a trait-identifier to print. Nil where
+        the name did not resolve, which is the arm that has already reported. }
+      tyDyn: begin
+        PutLit('dyn             ');
+        Put(' ');
+        if t^.dynTrait = nil then Put('?')
+        else WritePool(t^.dynTrait^.at, t^.dynTrait^.len)
       end;
       { ADR-0123. Printed the way it is written, `?` and then the type it
         may hold -- which recurses, but never forever: the denoter had to

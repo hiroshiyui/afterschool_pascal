@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **`dyn T` is a type the compiler knows and accepts nowhere yet** (ADR-0408,
+  AP 6.7.11). The trait object of ADR-0315's increment C: its spelling, its
+  restrictions and its two-word value are stated, every position a program can
+  write one in is refused with a message naming where it *will* stand, and the
+  clause carries AP 5.6's `[not yet implemented]` marker — the first to do so,
+  so no passing test can make the specification claim the feature is there.
+  `dyn` reserves nothing: a program may still declare a type, a field and a
+  parameter of that name.
+
 ### Fixed
 
 - **A trait may declare a procedure, and calling one now selects an

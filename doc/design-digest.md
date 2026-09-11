@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 164 frame offsets, with nothing in the gate
+  matched every one of the 11 188 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5759,6 +5759,26 @@ expression or a function result therefore selects nothing and falls to
 nothing. **The cost of "only after" is that an ordinary declaration hides the
 trait's routine of that spelling entirely**, and what the program is then told
 is that its argument has the wrong type (AP 6.7.10.2 NOTE 11).
+
+**A type nothing admits is not refused** (ADR-0408), which is the finding
+increment C1 turned on. `tyDyn` -- AP 6.7.11's trait object -- answers false
+to all 41 type predicates and true only to `IsDyn`, and the plan was for that
+to refuse it everywhere by construction, CLAUDE.md's rule and the shape a
+restricted type takes. Compiling it showed the premise wrong: a `dyn` field,
+array element, variable and `var` parameter **all compiled**, with only a
+`protected` warning, because in each of those positions the default is to
+**permit** and a predicate is what would have refused. Refusal by
+construction works where the default is to refuse and a predicate grants. So
+the refusal is one diagnostic where the denoter resolves, which is also the
+only place a program can be told the two positions 6.7.11.1 will permit.
+The type is two words -- data and vtable -- so `LlSize`, `LlAlign` and
+`PutLlType` put it beside `tyProc` and `tySlice`, ADR-0030's company. A trait
+is not a type, so it is held as `dynTrait: symPtr` and not as `elem`; and
+`owned ^dyn T` cannot be written inline, 6.4.14's domain being a
+type-*identifier*, so the spelling is a named `dyn` type and then `owned ^D`.
+**AP 6.7.11 is the first clause to carry AP 5.6's `[not yet implemented]`
+marker**, which ADR-0189 wrote, ADR-0195 gated both ways, and nothing had
+used -- the gap ADR-0407 had just found written into prose instead.
 
 **A procedure-statement selects by the same lookup** (ADR-0407), and did not
 for the life of the clause. AP 6.7.10.2 has named *a function-designator or a

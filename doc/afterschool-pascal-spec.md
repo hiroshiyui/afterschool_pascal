@@ -3678,6 +3678,67 @@ implementations reports the first implementation's types at the second
 
 ### 6.8 Expressions [extended]
 
+#### 6.7.11 Trait-object-types [added] [not yet implemented]
+
+    trait-object-type = 'dyn' trait-identifier .
+
+A trait-object-type shall denote a value that implements the trait its
+trait-identifier denotes, where **which** implementation shall not be
+determined until the value is accessed. The trait-identifier shall denote a
+trait (6.7.9); it shall be an error for it to denote anything else, and the
+error shall be reported at the trait-object-type.
+
+`dyn` shall not be a word-symbol. A type-denoter is complete after a
+type-identifier, so a type-identifier followed by an identifier is a syntax
+error in both ISO 7185 and ISO/IEC 10206:1991, and the juxtaposition is
+therefore available in the sense 6.0.1 requires (ADR-0140). A program may
+declare a type, a variable or a field named `dyn` and keep it.
+
+**6.7.11.1 Where a trait object may stand.** A trait-object-type shall occur
+only as
+
+  a) the domain of an owned-pointer-type (6.4.14); or
+
+  b) the parameter-form of a variable-parameter-specification or of a
+     protected variable-parameter-specification (6.7.3.7).
+
+It shall be an error for a trait-object-type to occur elsewhere, and the error
+shall be reported at the type-denoter.
+
+NOTE 1 — Every other position would hold a value whose lifetime the language
+cannot state. A trait object refers to storage it does not own; a) names the
+owner and b) is a borrow for the duration of the call, which is the one second
+name 6.4.14.7 admits (ADR-0201). This is the boundary ADR-0201 drew and this
+clause does not move it.
+
+NOTE 2 — The restriction is narrower than it reads. An array may hold owned
+pointers, so a vector of `owned ^D` over a named trait-object-type `D` is a
+heterogeneous collection and is within a). What is excluded is the trait
+object *inline* — a variable, a field or an array element of the type itself.
+
+NOTE 3 — a) says *the domain of an owned-pointer-type*, and 6.4.14 requires
+that domain to be a **type-identifier**. So the two are written as
+`type D = dyn Renders;` and then `owned ^D`, and not as `owned ^dyn Renders`.
+That follows from 6.4.4's own rule, which 6.4.14 restates so that a type may
+own something of its own type.
+
+**6.7.11.2 The value.** A value of a trait-object-type shall be two
+components: the storage the value refers to, and the implementation it
+answers with. Neither shall be accessible to a program.
+
+NOTE 4 — Two words, which is the company 6.7.3.9 keeps for a procedural
+parameter, 6.4.8 for a schematic formal, 6.4.3.3.3 for a variable string and
+6.4.13.1 for a slice: nothing of two words depends on how a structure is
+passed, so a processor need hold no opinion about a foreign calling
+convention (ADR-0030).
+
+**6.7.11.3 What this clause does not yet require.** A processor is not
+required by this clause to *accept* any occurrence of a trait-object-type.
+The type, its spelling and its restrictions are stated here; what is not
+stated is the access, which needs 6.7.10.2's selection performed at the time
+of access rather than at the time of translation, and that requirement will be
+written when it is met (5.6).
+
 #### 6.8.3 Operators [extended]
 
 ##### 6.8.3.5 Relational operators [extended]

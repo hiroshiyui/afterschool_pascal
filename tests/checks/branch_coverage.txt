@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 855
-instrumented 11496
-decisions 5748
+uncovered 852
+instrumented 11606
+decisions 5803
 
 accept 0/4
 accumulate 1/32
@@ -50,7 +50,7 @@ armatin 0/2
 armlayoutat 0/8
 armsat 0/2
 armscontainfile 1/14
-armscontainrestricted 2/14
+armscontainrestricted 1/14
 armsholdfile 2/10
 armslotat 0/4
 arraycomponentof 1/16
@@ -73,7 +73,7 @@ boundschema 0/30
 boundschemafor 0/2
 boundslot 0/2
 boundvalue 1/24
-buildformals 7/116
+buildformals 7/120
 buildsearchpath 0/12
 calledsym 2/6
 calltakescaret 3/22
@@ -88,7 +88,7 @@ checkarguments 10/266
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 1/10
-checkcall 21/194
+checkcall 21/196
 checkcase 2/38
 checkcomponentvalue 0/10
 checkconstdecl 0/18
@@ -100,7 +100,7 @@ checkedforsubrange 2/24
 checkedresulttype 0/16
 checkedwidth 0/2
 checkexports 1/10
-checkexpr 19/178
+checkexpr 19/182
 checkforeignheading 0/64
 checkgoto 1/4
 checkhandlebirth 0/4
@@ -116,7 +116,7 @@ checkmutualsupply 0/20
 checknewtuple 3/18
 checkpendingimplementations 1/10
 checkprocargument 2/24
-checkprocbody 2/34
+checkprocbody 2/32
 checkread 3/56
 checkreceive 0/12
 checkrecordvalue 0/44
@@ -133,13 +133,13 @@ checksetmember 2/12
 checksetvalue 1/12
 checkspawn 4/18
 checkstdproc 30/338
-checkstmt 16/268
+checkstmt 16/274
 checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
-checktake 0/20
-checktaskformals 0/12
-checktraitdecl 1/4
+checktake 0/24
+checktaskformals 0/14
+checktraitdecl 1/6
 checktypedecl 1/34
 checkvardecl 2/38
 checkvariantpartvalue 4/44
@@ -147,8 +147,8 @@ checkwith 13/62
 checkwrite 2/58
 checkwriteargs 4/34
 claimboundsslot 0/2
-clongsize 0/2
-closefiles 0/12
+clongsize 0/4
+closefiles 0/10
 collecttagtests 7/34
 compile 0/102
 computeactivemodules 0/4
@@ -172,12 +172,12 @@ containerof 1/16
 containsfile 1/16
 containshandle 1/14
 containsownedpointer 1/14
-containsrestricted 3/18
+containsrestricted 2/18
 convertfor 0/6
 copycomponent 1/2
 covbranch 1/6
 declare 0/8
-declareprocheading 1/50
+declareprocheading 1/52
 declareprocs 2/18
 declareschema 5/38
 deferbase 0/2
@@ -200,7 +200,7 @@ dumpexports 0/14
 dumpexpr 1/58
 dumpexprlist 0/2
 dumpfieldlist 0/2
-dumpframe 1/6
+dumpframe 0/6
 dumpframes 0/4
 dumpgroup 0/18
 dumpgrouplist 0/2
@@ -213,12 +213,12 @@ dumpmodulesbefore 0/4
 dumpnames 0/2
 dumpoptional 0/2
 dumpproc 0/20
-dumpprogram 2/20
+dumpprogram 0/20
 dumprecordlayout 0/2
 dumpstmt 0/100
 dumpstmtlist 0/2
 dumpsymbols 5/12
-dumpsymdecl 2/22
+dumpsymdecl 2/24
 dumpsymfields 0/4
 dumpsymparams 0/4
 dumpsymrecord 0/2
@@ -226,7 +226,7 @@ dumpsymtype 1/8
 dumpsymvariants 0/4
 dumptokens 0/2
 dumptrivia 1/2
-dumptypeexpr 4/30
+dumptypeexpr 4/32
 dumpvariantpart 0/8
 dumpwords 0/2
 dynamicextent 1/14
@@ -252,10 +252,10 @@ emitdeclares 0/4
 emitdeferrunner 0/4
 emitexittarget 0/2
 emitexpr 3/28
-emitexterns 1/42
+emitexterns 1/44
 emitfinis 0/2
 emitfor 2/20
-emitforeignargument 0/8
+emitforeignargument 0/10
 emitforin 1/10
 emitframealiases 0/6
 emitframeglobal 0/2
@@ -291,7 +291,7 @@ emitshortcircuit 0/10
 emitslicevalue 2/16
 emitspawn 1/20
 emitstdproc 2/56
-emitstmt 3/28
+emitstmt 3/34
 emitstore 0/34
 emitstring 0/46
 emitstringcompare 2/4
@@ -406,7 +406,7 @@ initinitialstates 0/8
 inittasks 0/2
 inquiryofaccess 0/6
 inquiryrootname 1/6
-instantiategeneric 4/92
+instantiategeneric 4/94
 instantiateheading 0/28
 int64toolarge 3/14
 internbindingname 0/2
@@ -433,6 +433,7 @@ isconstantaccess 10/22
 iscontinuation 0/4
 isdesignator 1/22
 isdigit 0/2
+isdyn 1/2
 isemptyset 0/2
 isenum 1/2
 isequatable 0/14
@@ -480,6 +481,7 @@ istimebuiltin 0/2
 istypeparamname 0/6
 isvariable 1/6
 isvarstring 0/2
+jointasks 0/2
 jumpdispatch 0/4
 labelblock 0/6
 lastfield 0/2
@@ -525,11 +527,12 @@ noteunwrittenvarparams 0/20
 noteuse 0/6
 noteusefield 0/4
 notinghere 0/4
-offer 1/26
+offer 1/30
 ordinalhi 1/10
 ordinallo 0/4
 otherlistsparameter 0/14
 overlaps 0/10
+ownedbytask 0/4
 ownedroot 0/22
 ownrelid 0/8
 packedcomponent 1/18
@@ -553,7 +556,7 @@ parsefieldgroups 0/14
 parsefor 1/8
 parseformaldiscriminants 1/12
 parseformalparameters 0/38
-parseidentstatement 1/96
+parseidentstatement 0/96
 parseif 0/2
 parseimpldecl 0/16
 parseimportpart 0/26
@@ -562,7 +565,7 @@ parselabelpart 0/4
 parsemainprogram 1/12
 parsemodule 0/32
 parsemoduleblock 0/16
-parsemoduleparts 0/26
+parsemoduleparts 0/32
 parsenamelist 0/6
 parsepointertypeargs 0/6
 parseprimary 1/52
@@ -583,7 +586,7 @@ parsestatement 0/32
 parsestructuredvalue 0/20
 parseterm 0/18
 parsetraitdecl 2/8
-parsetypedenoter 1/78
+parsetypedenoter 1/84
 parsetypeexpr 0/8
 parsetypepart 0/12
 parsevariantpart 1/30
@@ -609,7 +612,7 @@ producefromschema 6/102
 protectable 1/18
 protectablecandidate 0/8
 protectedowner 0/2
-ptrsize 0/2
+ptrsize 0/4
 pushstmt 0/4
 put 0/2
 putcchar 0/8
@@ -646,8 +649,9 @@ reportcat 0/2
 requirearg 0/2
 requiredfuncwide 0/4
 requiredtype 0/2
-reservedforeignname 14/40
+reservedforeignname 14/42
 resolvearray 0/12
+resolvedyn 1/4
 resolveenum 0/6
 resolvefile 4/16
 resolvegotos 3/52
@@ -669,7 +673,7 @@ rootdesignator 1/10
 rootname 1/6
 roundup 0/2
 row 0/4
-runcodegen 1/40
+runcodegen 1/44
 rundefersreversed 0/4
 runsema 3/28
 samelink 0/8
@@ -712,7 +716,7 @@ suppliersof 0/14
 tag 2/10
 tagfieldat 0/2
 tagtypeat 0/2
-targetindex 1/16
+targetindex 2/44
 tasksetbase 1/4
 textofcapacity 2/10
 threatened 2/34
@@ -738,8 +742,9 @@ warnunreachable 0/18
 warnunusedlocals 1/24
 warnunwrittenvarparams 0/28
 whycanname 0/2
+widealign 0/2
 widenordinal 0/4
-wordalign 0/2
+wordalign 0/4
 writeboundname 0/2
 writedistincttypenote 2/18
 writekeyword 0/2
@@ -750,6 +755,6 @@ writeordinalname 2/24
 writesresult 0/26
 writesymref 2/20
 writetrim 1/4
-writetypename 2/36
+writetypename 2/38
 writevariantref 0/6
 writeword 1/4
