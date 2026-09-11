@@ -410,3 +410,4 @@ the alternatives that were rejected and why.
 | [0399](0399-a-differential-oracle-catalogues-causes.md) | A differential oracle catalogues causes, not code points | Superseded by ADR-0400 |
 | [0400](0400-icu-reads-the-same-database.md) | ICU reads the same database | Accepted |
 | [0401](0401-a-guard-that-asked-the-wrong-document.md) | A guard that asked the wrong document | Accepted |
+| [0402](0402-what-the-shell-emits.md) | What the shell emits | Accepted |

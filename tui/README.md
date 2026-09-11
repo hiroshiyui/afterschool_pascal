@@ -26,6 +26,7 @@ something, which is the model and not the shell.
 | `build.py` | builds either program from its sidecar; `lsp/build.py` with the program as an argument, since `tui/` has two over one model |
 | `run.py` | replays every session and compares the screens |
 | `palette.py` | the two claims about colour a golden cannot hold: every role is drawn by some session, and every pairing is legible (ADR-0393) |
+| `terminal.py` | the claim neither a golden nor the palette can hold: that `apide.pas` **emits** what the model decided, read back from a pseudo-terminal (ADR-0402) |
 | `sessions/*.keys` | a script, one directive per line |
 | `sessions/*.screen` | what it drew, exactly — the characters, then the **roles**, one letter per cell |
 
@@ -80,9 +81,22 @@ declined a pseudo-terminal binding on the grounds that a case needing one
 becomes a test of the binding rather than of the program.
 
 So the terminal is **not in the loop**. `apedit.pas` renders into a buffer,
-and what a session compares is that buffer, frame by frame. The shell that
-puts it on a real terminal is a few dozen lines and is the only part no
-oracle here reaches — which is a row in
+and what a session compares is that buffer, frame by frame.
+
+The shell that puts it on a real terminal is a few dozen lines, and it was
+for three releases the only part no oracle here reached. `terminal.py` closes
+that (ADR-0402): it drives the real `apide` under a **pseudo-terminal** —
+Python's, as `lsp/run.py`'s pipe is, and so not the binding ADR-0262
+declined — and requires every run the shell writes to be one the model
+decided, at the same columns, with the same cells, in the colour that role's
+table gives. Both tables, 12 of the 20 scripts, and the expectation
+**derived** from the session golden's own run decomposition rather than
+recorded: a golden of escape bytes agrees with whoever wrote it, which is how
+`crPrompt` came to be drawn nowhere.
+
+What is still outside every oracle is that a real terminal renders these
+sequences as they are meant, and that an emulator setting `COLORTERM` is
+telling the truth — neither is checkable here at all. Those are rows in
 [`doc/sop.md` §7](../doc/sop.md), written honestly rather than left implied.
 
 ## Writing a session

@@ -5180,6 +5180,26 @@ ADR-0381's line again. A file already open is switched to rather than
 opened twice, two buffers over one file being two answers to *is this
 saved*.
 
+**What the shell emits** (ADR-0402), which is the other half of ADR-0393
+and was `doc/sop.md` §7's oldest open row. A session golden holds what the
+model *decided* and `tui-palette` reads the two colour tables; neither can
+see what `PutRow` does with one, and the mutation says so exactly -- make
+it take the first run's role for the whole row, which is ADR-0391's own
+pre-state, and twenty sessions and both halves of the palette gate stay
+green. `tui/terminal.py` drives the real `apide` under a pseudo-terminal
+and requires every run it writes to be one the model decided, at the same
+columns, with the same cells and in the colour that role's table gives --
+**both** tables, with `COLORTERM` set and unset, the eight-colour fallback
+being what a plain `ssh` and the Linux console get and no byte written to
+one having ever been read here. **The expectation is derived, not
+recorded**: a golden of escape bytes agrees with whoever wrote it, so each
+script is replayed through `tui/session.pas` too, whose golden already
+holds the run decomposition `PutRow` walks. It is not the binding ADR-0262
+declined -- the pseudo-terminal is Python's, as `lsp/run.py`'s pipe is, and
+nothing in this language knows about it. A run's columns and colour are
+compared one at a time and its text a row at a time, a cell not being a
+character (ADR-0395).
+
 **A guard that asked the wrong document** (ADR-0401), which is the cost of
 the paragraph above written down. The shell's quit guard read `EditDirty`,
 which answers about the document *being drawn*; that was the whole editor

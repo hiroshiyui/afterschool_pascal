@@ -1299,6 +1299,23 @@ set_tests_properties(tui-sessions PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
 add_test(NAME tui-palette
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/palette.py)
 
+# What the shell *emits* (ADR-0402), which is the other half of the row above
+# and the oldest open one in `doc/sop.md` §7. The gate above reads the two
+# colour tables and holds every pairing in them to a floor; what `PutRow`
+# does with a table is a different question, and a shell painting every row
+# in one colour passes all twenty sessions and both halves of the palette
+# gate. This drives the real editor under a pseudo-terminal and reads the
+# bytes back, with the expectation **derived** from the session golden's own
+# run decomposition rather than recorded -- a golden of escape bytes would
+# agree with whoever wrote it. It is not the binding ADR-0262 declined: the
+# pseudo-terminal is Python's, as `lsp/run.py`'s pipe is, and nothing in this
+# language knows about it.
+add_test(NAME tui-terminal
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tui/terminal.py
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(tui-terminal PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
+                     TIMEOUT 600)
+
 # A second reading of the width properties (ADR-0400). Normalisation and
 # segmentation each have a conformance file Unicode publishes; East_Asian_Width
 # has none, so `unicode-conformance` regenerating the header and diffing it

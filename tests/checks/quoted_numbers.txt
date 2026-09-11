@@ -81,3 +81,10 @@ README.md                     | setjmp-arity | Five of the (seven) are POSIX
 doc/roadmap.md                | target-layout | one of the\s+(11 162) frame offsets
 doc/design-digest.md          | target-layout | matched every one of the (11 162) frame
 tui/README.md   | tui-palette        | every pairing clears at (\d+\.\d+):1 or better
+
+# How much of the session corpus a person at a terminal could have driven
+# (ADR-0402). It moves in two ways and both are real: a session added is a
+# script this may or may not be able to press, and a *directive* added to
+# `session.pas` is a reason a script stops being drivable.
+CLAUDE.md       | tui-terminal       | (\d+) of the (\d+) sessions can be driven
+tui/README.md   | tui-terminal       | Both tables, (\d+) of the (\d+) scripts

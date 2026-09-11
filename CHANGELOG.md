@@ -13,6 +13,15 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **The editor's shell is checked.** `tui-terminal` drives the editor under a
+  pseudo-terminal and requires every coloured run it writes to be one the
+  model decided, in the colour that role's table gives, over both the
+  twenty-four-bit and the eight-colour table (ADR-0402). Nothing had ever read
+  a byte the editor wrote to a terminal; a shell painting every row in one
+  flat colour passed every oracle here.
+
 ### Fixed
 
 - **The editor no longer discards another document's changes on one Ctrl-Q.**

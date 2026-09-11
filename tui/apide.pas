@@ -223,9 +223,12 @@ begin
   end;
   EditRender(ed, rows, cols, scr);
   e2 := WriteText(StdOut, HideCursor);
-  { The first cell's role stands for the row, which is true of every row this
-    editor draws today and is checked by nothing -- a `doc/sop.md` §7 row
-    until panels make it false and `PutRow` has to split a row into runs. }
+  { **Every row, and `PutRow` splits each into runs.** The comment that stood
+    here said the first cell's role stood for the row -- true before ADR-0391
+    put a framed box on the screen, false the day it did, and checked by
+    nothing either way until ADR-0402. `tui/terminal.py` drives this program
+    under a pseudo-terminal and requires every run written here to be one the
+    model decided, in the colour that role's table gives. }
   for r := 1 to scr.rows do PutRow(r);
   e2 := WriteText(StdOut, CursorTo(scr.atRow, scr.atCol));
   e2 := WriteText(StdOut, ShowCursor)
