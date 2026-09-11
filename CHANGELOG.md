@@ -13,6 +13,15 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A test case is run in a directory of its own**, not the one the harness
+  was invoked from (ADR-0406). Every case shared the invoker's, so the one
+  case that names a file relatively raced its own concurrent copy — eight
+  failures in twenty concurrent pairs, and none after. Only the two harnesses
+  that start the program under test changed; a toolchain still runs where it
+  was invoked.
+
 ### Changed
 
 - **The runtime's POSIX half is two translation units.** What the operating

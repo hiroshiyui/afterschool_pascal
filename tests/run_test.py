@@ -249,7 +249,7 @@ def case(pascalc, source_file, d, name, stem, expected_out, expected_err,
                 [str(work / name), str(work / 'file1'), str(work / 'file2')],
                 stdin=fin, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT if merge else subprocess.PIPE,
-                env=run_env, preexec_fn=limits)
+                env=run_env, preexec_fn=limits, cwd=str(work))
         out = r.stdout.decode('utf-8', 'surrogateescape')
         err = ('' if merge
                else r.stderr.decode('utf-8', 'surrogateescape'))

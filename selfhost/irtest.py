@@ -190,13 +190,17 @@ def runner():
 
 
 def run(argv, *, stdout=None, stderr=None, stdin=None, env=None,
-        timeout=None):
+        timeout=None, cwd=None):
     """The toolchain, with a bound on how long it may take. coreutils'
     `timeout` was a subprocess and a portability note in the shell; here it is
-    an argument, and a run that exceeds it answers 124 as that program does."""
+    an argument, and a run that exceeds it answers 124 as that program does.
+
+    `cwd` is for the *program under test* and not for the toolchain: a case
+    is compiled where it sits and run where nothing else is running
+    (ADR-0406)."""
     try:
         p = subprocess.run(argv, stdout=stdout, stderr=stderr, stdin=stdin,
-                           env=env, timeout=timeout)
+                           env=env, timeout=timeout, cwd=cwd)
         return p.returncode
     except subprocess.TimeoutExpired:
         return 124
@@ -574,7 +578,8 @@ def sweep(seedcc, args, here, root, work):
                 status = run(runner() + [str(work / name),
                                          str(work / "file1"),
                                          str(work / "file2")],
-                             stdin=si, stdout=so, stderr=se, timeout=60)
+                             stdin=si, stdout=so, stderr=se, timeout=60,
+                             cwd=str(work))
             if status == 124:
                 err("--- %s/%s: the program did not terminate ---\n"
                     % (stage, name))

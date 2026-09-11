@@ -265,9 +265,12 @@ begin
   unbind(f);
   write('20 inherited=', out);
 
-  { What this program made, it takes away: `irtest.sh` runs every case in
-    the checkout, and a case that leaves a file behind is a case that dirties
-    the tree it is measuring. }
+  { What this program made, it takes away. **A case is run in a directory of
+    its own since ADR-0406** and this no longer keeps the checkout clean --
+    but it was doing something else as well, and that is why the sweep is
+    kept: two copies of this program in one directory raced here, one
+    removing `victim.txt` while the other was opening it, and the shape a
+    cleanup has is the shape a race has. }
   e := NewArgs(v);
   e := AddArg(v, 'rm');
   e := AddArg(v, '-f');

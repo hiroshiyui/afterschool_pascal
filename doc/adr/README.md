@@ -414,3 +414,4 @@ the alternatives that were rejected and why.
 | [0403](0403-one-action-is-not-one-operation.md) | One action is not one operation | Accepted |
 | [0404](0404-the-compiler-answers-about-any-program.md) | The compiler answers this about any program | Accepted |
 | [0405](0405-a-question-is-not-an-action.md) | A question is not an action | Accepted |
+| [0406](0406-a-case-is-run-where-nothing-else-is.md) | A case is run where nothing else is | Accepted |

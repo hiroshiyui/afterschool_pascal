@@ -447,7 +447,7 @@ system's own directories, so what is attached is a compiler a user can move.
 
 **WebAssembly (`wasm32-wasi`) is the third**, and it is a tier of a different
 shape: there is no machine here, and what is claimed is measured rather than
-assumed. **560 of the 598 corpus programs compile, link and answer their
+assumed. **563 of the 598 corpus programs compile, link and answer their
 goldens** under a WASI engine on every push, and the job refuses to pass by
 skipping (ADR-0385). What a program can reach there is what a port has got —
 two of the four runtime units build, so a program wanting a thread, a process
@@ -485,7 +485,7 @@ the point of the machinery below:
   the commands that build and run a Windows program end to end; ADR-0380 is
   the decision that followed them.
 
-**560 of the 598 programs in this corpus run as WebAssembly** (ADR-0385) --
+**563 of the 598 programs in this corpus run as WebAssembly** (ADR-0385) --
 compiled for `wasm32-wasi`, linked against the runtime units that build for
 it, and printing what they print everywhere else under a WASI runtime. It was
 519 until ADR-0390, and what moved was one function: `tmpfile` is ISO C, wasi

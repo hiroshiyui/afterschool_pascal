@@ -1,7 +1,8 @@
 # Cases that do not pass for wasm32-wasi (ADR-0385).
 #
-# **558 of 598 corpus programs compile for WebAssembly, link against the two
-# runtime units that build for it, and answer their golden under a WASI
+# **563 of 598 corpus programs compile for WebAssembly, link against the two
+# runtime units that build for it -- three since ADR-0405 -- and answer
+# their golden under a WASI
 # runtime.** These are the rest, and the gate beside this file fails in both
 # directions: a case that starts failing is a regression, and a case that
 # stops failing is progress somebody has to record.
@@ -16,7 +17,7 @@
 # the row that names it, which is the half of this exercise a summary number
 # hides.
 #
-# It is a long file and every row is one of six causes. That is the point --
+# It is a long file and every row is one of five causes. That is the point --
 # **this is a port's work queue and not a list of defects**. Nothing here is
 # the compiler getting an answer wrong; the two behavioural differences that
 # were, a stack overrun and a lost `SOURCE_DATE_EPOCH`, are fixed and the
@@ -44,30 +45,47 @@ tests/dialect/task_real_conversion.pas
 tests/dialect/task_wait.pas
 tests/dialect/task_wait_empty.pas
 
-# --- 16 cases: processes, sockets, directories and the terminal -----------------
+# --- 13 cases: processes, sockets and the terminal ------------------------------
 #
 # `runtime/pasrt_posix.c` wants five headers wasi has not got, so none of it
-# is built and every `pasx_` routine is undefined. What each program here
-# wants is named by the symbol the link reports: a process, a socket, a
-# directory walk, `isatty`. This is the part of a port with a decision in it
-# -- wasi has its own socket interface and no processes at all -- and
-# ADR-0382 sets out the shape.
+# is built and every `pasx_` routine in it is undefined. What each program
+# here wants is named by the symbol the link reports: a process, a socket,
+# `isatty`. This is the part of a port with a decision in it -- wasi has its
+# own socket interface and no processes at all -- and ADR-0382 sets out the
+# shape.
 #
-# **An absent `pasx_` shows up in three ways and all three are here**, which
-# is worth knowing before reading a failure as a defect. `lib_fs` and
-# `lib_dir` stop at the *link* with `pasx_file_info` named. `lib_io` and
-# `lib_os` link -- wasm-ld having left the symbol undefined weak -- print
-# their first few lines and then trap on `unreachable` at the call. And
-# `lib_path` neither fails nor traps: `PasPath` reports the refusal its own
-# way, so the program answers `symlink made = no` and differs from its golden
-# by two lines. The third is the shape to watch for, because it is a *wrong
-# answer* and nothing about it says wasm.
-examples/dir_sizes.pas
+# **It said sixteen and said `directories` in its own heading**, which was the
+# finding: the target has a perfectly good file system, and `PasFs.Info`,
+# `PasDir`'s walk and `PasIo.FdReady` were blocked by nothing but sharing a
+# translation unit with `posix_spawn`. ADR-0405 cut that unit in two along a
+# rule -- what the operating system is *asked about* against what it is asked
+# to *do* -- and `runtime/pasrt_file.c` compiles here. Three rows went with
+# it: `examples/dir_sizes.pas`, `tests/dialect/lib_dir.pas` and
+# `tests/dialect/lib_fs.pas`.
+#
+# **Three and not the six or seven the split looked like it should buy**, and
+# the shortfall is worth reading, because each remaining row is blocked by
+# something the file model does not reach: `lib_fs_tempdir` wants
+# `pasx_temp_dir`, which stayed on the action side because `mkdtemp` is an act
+# and is undeclared here; `lib_io` and `lib_os` reach a socket or a process
+# further on; `lib_path` answers `symlink made = no` and differs from its
+# golden by two lines, which is the *wrong answer* shape the note below warns
+# about; and `lib_boundary_nul` and `lib_term` want the terminal, which cannot
+# move -- wasi-libc ships `<sys/ioctl.h>` and has no `struct winsize`.
+#
+# **An absent `pasx_` shows up in three ways**, which is worth knowing before
+# reading a failure as a defect. A program may stop at the *link*, with the
+# symbol named -- which is what `lib_fs` and `lib_dir` did until ADR-0405 gave
+# them a unit that compiles. It may *link and trap*: `lib_io` and `lib_os` do,
+# wasm-ld having left the symbol undefined weak, so they print their first few
+# lines and hit `unreachable` at the call. Or it may neither fail nor trap:
+# `lib_path` answers `symlink made = no`, `PasPath` reporting the refusal its
+# own way, and differs from its golden by two lines. **The third is the shape
+# to watch for**, because it is a *wrong answer* and nothing about it says
+# wasm.
 examples/fetch_http.pas
 tests/dialect/handle_release.pas
 tests/dialect/lib_boundary_nul.pas
-tests/dialect/lib_dir.pas
-tests/dialect/lib_fs.pas
 tests/dialect/lib_fs_tempdir.pas
 tests/dialect/lib_http.pas
 tests/dialect/lib_io.pas
