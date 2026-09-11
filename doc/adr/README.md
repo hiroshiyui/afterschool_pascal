@@ -349,7 +349,7 @@ the alternatives that were rejected and why.
 | [0338](0338-a-bound-belongs-where-the-type-is-written-down.md) | A bound belongs where the type is written down | Accepted |
 | [0339](0339-a-trait-heading-names-one-type-and-one-scope.md) | A trait heading names one type, and one scope | Accepted |
 | [0340](0340-four-things-a-trait-heading-cannot-do.md) | Four things a trait heading cannot do | Accepted |
-| [0341](0341-a-trait-crosses-a-component-and-an-implementation-need-not.md) | A trait crosses a component, and an implementation need not | Accepted |
+| [0341](0341-a-trait-crosses-a-component-and-an-implementation-need-not.md) | A trait crosses a component, and an implementation need not | Accepted; the deferred module-side implementation superseded by [0411](0411-an-implementation-travels-with-its-type.md) |
 | [0342](0342-what-an-audit-found-that-every-oracle-was-green-over.md) | What an audit found that every oracle was green over | Accepted |
 | [0343](0343-the-client-comes-before-the-design.md) | The client comes before the design | Accepted |
 | [0344](0344-the-first-client-of-a-trait.md) | The first client of a trait | Accepted |
@@ -419,3 +419,4 @@ the alternatives that were rejected and why.
 | [0408](0408-a-type-nothing-admits-is-not-refused.md) | A type nothing admits is not refused | Accepted; staging superseded by [0409](0409-the-trait-object-carries-its-answer.md) |
 | [0409](0409-the-trait-object-carries-its-answer.md) | The trait object carries its answer | Accepted |
 | [0410](0410-a-method-is-the-call-already-made.md) | A method is the call already made | Accepted |
+| [0411](0411-an-implementation-travels-with-its-type.md) | An implementation travels with its type | Accepted |

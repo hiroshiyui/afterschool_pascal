@@ -139,3 +139,91 @@ Feature: methods
       """
       needs its parameters here
       """
+
+  # 6.7.10.5 and 6.13: an implementation written in a module-block is selected
+  # by 6.7.10.2 in a component that imports the module. It is the one place
+  # where something a block writes is part of what a client may depend on, and
+  # it follows from the selection rule rather than being granted: the routine
+  # is identified from the *type*, and the type is exported.
+  @afterschool:6.7.10.5
+  @afterschool:6.13.2
+  Scenario: a module's implementation reaches the component that imports it
+    Given the program-component
+      """
+      module shapesm;
+      export shaping = (circle, circleof);
+      type circle = record r: integer end;
+      function circleof(radius: integer): circle;
+      end;
+      function circleof; var t: circle; begin t.r := radius; circleof := t end;
+      impl circle;
+        function Area(protected var me: circle): integer;
+        begin Area := 3 * me.r * me.r end;
+        function Grown(protected var me: circle; by: integer): circle;
+        var t: circle;
+        begin t.r := me.r + by; Grown := t end;
+      end;
+      end.
+      """
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      import shaping;
+      var c: circle;
+      begin
+        c := circleof(2);
+        writeln(c.Area:1, ' ', Area(c):1, ' ', c.Grown(3).r:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      12 12 5
+      """
+
+  # 6.7.10.5 NOTE 20. A trait declared in one component, a type in another and
+  # the implementation in a third is the arrangement a library is in, and the
+  # selection still reads only the type.
+  @afterschool:6.7.10.5
+  Scenario: a trait, a type and an implementation in three components
+    Given the program-component
+      """
+      module namingm;
+      export naming = (naming_, tagbase);
+      trait naming_;
+        function Tag(protected var me: Self): integer;
+      end;
+      function tagbase: integer;
+      end;
+      function tagbase; begin tagbase := 100 end;
+      end.
+      """
+    Given the program-component
+      """
+      module squarem;
+      export squaring = (square, squareof);
+      type square = record s: integer end;
+      function squareof(side: integer): square;
+      end;
+      function squareof; var t: square; begin t.s := side; squareof := t end;
+      end.
+      """
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      import naming; squaring;
+      impl naming_ for square;
+        function Tag;
+        begin Tag := tagbase + me.s end;
+      end;
+      var q: square;
+      begin
+        q := squareof(7);
+        writeln(q.Tag:1)
+      end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      107
+      """

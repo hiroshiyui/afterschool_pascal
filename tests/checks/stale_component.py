@@ -92,6 +92,72 @@ end.
 
 ANSWER = "a=11 b=22"
 
+# AP 6.7.10's implementation-declaration is in the module-*block*, and is
+# reachable from another component all the same: a client looks a method up on
+# the exported *type* and never in the export-part (ADR-0411). So the third
+# claim above -- that a block change costs no relink -- is true of everything
+# in a block except this one construct, and the two claims below are the pair
+# that says so. Without the impl digest the first of them links and answers
+# **0**: the client passes one argument where the rebuilt module reads two.
+
+METHOD_PROG = """program prog(output);
+import counting;
+var c: tally;
+begin
+  c := start;
+  writeln('n=', c.Bumped(2).n:1)
+end.
+"""
+
+# The sixth claim, and the one no ctest case can make. A method is reached by
+# a *name* two translations compose the same way (ADR-0411), where every other
+# routine a module does not export is named by a counter -- "a fact about the
+# order this translation walked the tree in", as AppendProcName puts it. The
+# counter happens to agree whenever both translations are handed the same
+# components in the same order, which is what `tests/run_test.py` always does:
+# it compiles each component with the ones before it and then hands the client
+# all of them, in one order. So the corpus cannot tell a composed name from a
+# counter, and a build in which the module was translated **alone** and the
+# client has another component in front of it can -- which is the ordinary
+# situation for a library. Under a counter this link fails with `undefined
+# reference to p4`, a symbol no source spells.
+
+OTHER = """module other;
+export othering = (twice);
+function twice(n: integer): integer;
+end;
+function twice; begin twice := 2 * n end;
+end.
+"""
+
+ORDERED_PROG = """program prog(output);
+import othering; counting;
+var c: tally;
+begin c := start; writeln('n=', twice(c.Bumped(2).n):1) end.
+"""
+
+
+def method_module(by_param="by: integer", body="me.n + by"):
+    """A module with an inherent implementation, in its two versions.
+
+    The difference is the method's *parameter list*, which is written in the
+    block and nowhere else -- there is no heading for it to appear in, that
+    being what AP 6.7.10 decided and what makes this digest necessary.
+    """
+    return f"""module count;
+export counting = (tally, start);
+type tally = record n: integer end;
+function start: tally;
+end;
+function start; var t: tally; begin t.n := 1; start := t end;
+impl tally;
+  function Bumped(protected var me: tally; {by_param}): tally;
+  var t: tally;
+  begin t.n := {body}; Bumped := t end;
+end;
+end.
+"""
+
 
 def heading(extra=""):
     """The heading, in the two versions that differ.
@@ -200,12 +266,76 @@ def main():
             got = ran("prog5")
             if got != ANSWER:
                 fail(f"after a block change it printed [{got}]")
+
+            # 4. A *method's* heading, which is in the block and is still part
+            #    of what a client was translated against.
+            (w / "mprog.pas").write_text(METHOD_PROG)
+            (w / "count.pas").write_text(method_module())
+            if not compile_("-c", "count.pas", "-o", "count.o"):
+                show_log(); fail("the method component did not translate")
+            if not compile_("mprog.pas", "--import", "count.pas", "count.o",
+                            "-o", "mprog"):
+                show_log(); fail("a matching method pair did not link")
+            got = ran("mprog")
+            if got != "n=3":
+                fail(f"a matching method pair printed [{got}]")
+
+            # The parameter's *type*, so that the client still compiles --
+            # §6.6.3.2 lets an integer actual reach a real value parameter.
+            # An argument count would be caught by the client reading the new
+            # source; a width is not, and is what a stale object gets wrong.
+            (w / "count.pas").write_text(
+                method_module("by: real", "me.n + trunc(by)"))
+            if compile_("mprog.pas", "--import", "count.pas", "count.o",
+                        "-o", "mprog2"):
+                print("it linked, and the program printed "
+                      f"[{ran('mprog2')}]", file=sys.stderr)
+                fail("a stale object linked over a changed method heading")
+            said = log.read_text(errors="replace")
+            if "was translated from a different" not in said:
+                show_log(); fail("the method link failed without saying why")
+
+            # 5. ...and the method's *body*, which no client can see, still
+            #    links. A digest over the whole implementation would refuse
+            #    this, and refusing too much is what makes a gate ignored.
+            (w / "count.pas").write_text(method_module())
+            if not compile_("-c", "count.pas", "-o", "count.o"):
+                show_log(); fail("translate")
+            (w / "count.pas").write_text(
+                method_module(body="by + me.n"))
+            if not compile_("mprog.pas", "--import", "count.pas", "count.o",
+                            "-o", "mprog3"):
+                show_log(); fail("a method body forced a relink")
+            got = ran("mprog3")
+            if got != "n=3":
+                fail(f"after a method body change it printed [{got}]")
+
+            # 6. A method is reached by a name and not by a counter: the
+            #    module translated on its own, the client translated with a
+            #    second component in front of it.
+            (w / "count.pas").write_text(method_module())
+            (w / "other.pas").write_text(OTHER)
+            (w / "oprog.pas").write_text(ORDERED_PROG)
+            if not compile_("-c", "count.pas", "-o", "count.o"):
+                show_log(); fail("translate")
+            if not compile_("-c", "other.pas", "-o", "other.o"):
+                show_log(); fail("translate")
+            if not compile_("oprog.pas", "--import", "other.pas",
+                            "--import", "count.pas", "other.o", "count.o",
+                            "-o", "oprog"):
+                show_log()
+                fail("a method did not link when the client read another "
+                     "component first")
+            got = ran("oprog")
+            if got != "n=6":
+                fail(f"a method reached across an ordering printed [{got}]")
         except Fail as e:
             print(f"--- stale-component: {e} ---", file=sys.stderr)
             return 1
 
-    print("stale-component: a changed heading is refused, a comment and a "
-          "block are not")
+    print("stale-component: a changed heading and a changed method are "
+          "refused, a comment and a body are not, and a method is reached by "
+          "its name")
     return 0
 
 

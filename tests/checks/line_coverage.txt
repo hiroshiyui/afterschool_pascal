@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 394
-instrumented 21369
+instrumented 21421
 
 accept 0/4
 accumulate 0/84
@@ -36,7 +36,7 @@ aftercall 0/1
 append 0/4
 appendinstdecl 0/4
 appendint 0/13
-appendlinkname 0/9
+appendlinkname 0/20
 appendlit 0/5
 appendnum 0/6
 appendopnd 0/7
@@ -115,7 +115,7 @@ checkexpr 6/281
 checkforeignheading 0/131
 checkgoto 0/9
 checkhandlebirth 0/6
-checkimpldecl 0/154
+checkimpldecl 0/164
 checkimports 0/86
 checkinitialstate 0/24
 checklabeled 0/21
@@ -308,7 +308,7 @@ emitoptionaltest 0/13
 emitownrels 0/172
 emitposglobals 0/8
 emitprocargument 0/27
-emitprocbody 0/43
+emitprocbody 0/44
 emitprocs 0/8
 emitread 0/59
 emitreadargs 0/77
@@ -345,7 +345,7 @@ emittry 0/18
 emittuplecheck 0/25
 emitunary 2/21
 emitusercall 0/179
-emitvtables 0/27
+emitvtables 0/28
 emitwhile 0/27
 emitwith 6/55
 emitwrite 0/60
@@ -573,7 +573,8 @@ mentionsself 0/16
 methodof 0/1
 methodreceiver 0/9
 methodsym 0/12
-moduledigest 0/9
+mixdigest 0/3
+moduledigest 0/15
 more 0/18
 msgend 0/3
 msgstart 0/2
@@ -590,7 +591,7 @@ nestwith 0/8
 newblock 0/2
 newnode 0/102
 newresultslot 0/7
-newsymbol 0/105
+newsymbol 0/109
 newtype 0/43
 nextformal 0/4
 nonvarying 3/42
@@ -644,13 +645,13 @@ parseformaldiscriminants 0/35
 parseformalparameters 0/44
 parseidentstatement 0/99
 parseif 0/11
-parseimpldecl 0/35
+parseimpldecl 0/42
 parseimportpart 0/58
 parselabel 0/16
 parselabelpart 0/6
 parsemainprogram 0/31
-parsemodule 0/76
-parsemoduleblock 0/16
+parsemodule 0/78
+parsemoduleblock 0/17
 parsemoduleparts 0/41
 parsenamelist 1/22
 parsepointertypeargs 0/11
@@ -829,6 +830,7 @@ stringofcapacity 1/23
 stringtype 0/10
 stringvalueformal 0/1
 striswide 0/9
+sumimpldigests 0/6
 suppliedby 0/9
 suppliersof 0/23
 symhead 0/1

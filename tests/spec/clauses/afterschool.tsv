@@ -178,6 +178,7 @@
 6.7.10.2	Selecting an implementation
 6.7.10.3	Reading a trait heading
 6.7.10.4	A method-designator
+6.7.10.5	An implementation reaches the clients of its module
 6.7.11	Trait-object-types
 6.7.11.1	Where a trait object may stand
 6.7.11.2	The value

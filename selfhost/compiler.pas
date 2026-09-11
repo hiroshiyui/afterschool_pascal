@@ -1071,6 +1071,25 @@ begin
     so there is no interface part and no prefix letter to add. }
   else if sym^.linkKind = lnkForeign then
     AppendPool(s, sym^.linkItemAt, sym^.linkItemLen)
+  { AP 6.7.10's method (ADR-0411). The interface part is the module's own
+    name rather than an export-part's, a method being reached through the type
+    and never through a constituent, and the type and the trait stand between
+    it and the routine. Four parts for an inherent implementation and five for
+    a trait's, which is what keeps the two apart without a marker: a trait
+    name can never occupy a routine name's position. }
+  else if sym^.linkKind = lnkMethod then begin
+    StrAppend(s, 'p');
+    StrAppend(s, '.');
+    AppendPool(s, sym^.linkIfaceAt, sym^.linkIfaceLen);
+    StrAppend(s, '.');
+    AppendPool(s, sym^.linkTypeAt, sym^.linkTypeLen);
+    if sym^.linkTraitLen > 0 then begin
+      StrAppend(s, '.');
+      AppendPool(s, sym^.linkTraitAt, sym^.linkTraitLen)
+    end;
+    StrAppend(s, '.');
+    AppendPool(s, sym^.linkItemAt, sym^.linkItemLen)
+  end
   else begin
     if sym^.linkKind = lnkVar then StrAppend(s, 'v') else StrAppend(s, 'p');
     StrAppend(s, '.');
@@ -1088,7 +1107,8 @@ end;
 procedure AppendProcName(var s: str; sym: symPtr);
 begin
   StrAppend(s, '@');
-  if (sym^.linkKind = lnkProc) or (sym^.linkKind = lnkForeign) then
+  if (sym^.linkKind = lnkProc) or (sym^.linkKind = lnkForeign) or
+     (sym^.linkKind = lnkMethod) then
     AppendLinkName(s, sym)
   else begin
     StrAppend(s, 'p');
@@ -1186,6 +1206,9 @@ end;
   own and reads one through --import, so the node with the digest is the
   imported one and the node being emitted is not. Both name the same module. }
 procedure ModuleDigest(p: symPtr; var d1, d2: int64);
+const
+  m1 = 1000000007;
+  m2 = 998244353;
 var m: nodePtr;
 begin
   d1 := 0;
@@ -1200,6 +1223,20 @@ begin
         d1 := m^.mdDigest1;
         d2 := m^.mdDigest2
       end;
+    m := m^.next
+  end;
+  { ...and every implementation-declaration written for the module, from
+    whichever component wrote it (ADR-0411). AP 6.7.10 puts an implementation
+    in the *block*, and 6.11.1's split form puts the block in a component of
+    its own, so this is the second walk and not a field of the node above.
+    Summed, so the order the components were read in does not enter into it --
+    which is what lets the module's own translation and its client agree. }
+  m := progModules;
+  while m <> nil do begin
+    if PoolSame(m^.mdAt, m^.mdLen, p^.at, p^.len) then begin
+      d1 := (d1 + m^.mdImplDigest1) mod m1;
+      d2 := (d2 + m^.mdImplDigest2) mod m2
+    end;
     m := m^.next
   end
 end;
@@ -1430,11 +1467,20 @@ end;
   interface imported twice brings two symbols naming one variable. }
 function SameLink(a, b: symPtr): boolean;
 begin
+  { The four parts and not two. Two methods of one module answer alike on the
+    interface and the item until the type is compared, and a symbol with no
+    linkage name at all answers alike on every one of them -- which is how a
+    module's second method reached a client with no `declare` at all, the
+    first having been taken for it (ADR-0411). }
   SameLink := (a^.linkKind = b^.linkKind) and
               (a^.linkIfaceAt = b^.linkIfaceAt) and
               (a^.linkIfaceLen = b^.linkIfaceLen) and
               (a^.linkItemAt = b^.linkItemAt) and
-              (a^.linkItemLen = b^.linkItemLen)
+              (a^.linkItemLen = b^.linkItemLen) and
+              (a^.linkTypeAt = b^.linkTypeAt) and
+              (a^.linkTypeLen = b^.linkTypeLen) and
+              (a^.linkTraitAt = b^.linkTraitAt) and
+              (a^.linkTraitLen = b^.linkTraitLen)
 end;
 
 procedure NeedOne(var head, tail: symListPtr; s: symPtr);
@@ -2826,6 +2872,11 @@ begin
           ' x ptr] [ptr @ownrel', OwnRelId(v^.forType):1);
     p := v^.routines;
     while p <> nil do begin
+      { A table built *here* for an implementation written in a module that
+        was translated elsewhere names a routine this module does not define
+        (ADR-0411). A call site registers its callee; a table is an address
+        taken and never called, so it has to register its own. }
+      if p^.sym^.owner^.compiledElsewhere then NeedExternalProc(p^.sym);
       StrClear(nm);
       AppendProcName(nm, p^.sym);
       FrameGlobal(p^.sym^.owner, lnk);
@@ -11843,7 +11894,8 @@ begin
   writeln(ircode, ' ', d^.line:1);
   { An exported procedure is externally visible, because 6.13 lets the
     component that calls it be another translation. }
-  if p^.linkKind = lnkProc then write(ircode, 'define ')
+  if (p^.linkKind = lnkProc) or (p^.linkKind = lnkMethod) then
+    write(ircode, 'define ')
   else write(ircode, 'define internal ');
   { A result that lives in memory is written into storage the caller supplied,
     so the function returns void and takes its address after the static link.

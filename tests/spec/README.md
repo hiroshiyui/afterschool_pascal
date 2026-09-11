@@ -142,6 +142,18 @@ step is an error, not a skip** — a step that silently does nothing is a
 scenario that asserts nothing, and this suite exists precisely to avoid claims
 nothing checks.
 
+**A scenario may have more than one program-component.** `Given the
+program-component` takes a module, and may be written more than once; each is
+translated on its own with the ones before it as imports, and the `Given the
+… program` is translated against all of them and linked with their objects —
+which is what §6.13 means by separately, and what `tests/run_test.py` reads a
+`.components` sidecar to do. It was added for AP 6.7.10.5 (ADR-0411): a clause
+about what crosses a component boundary cannot be asserted by a program that
+has none, and until then every scenario here was a single component. A
+component that fails to translate ends the compilation with its own
+diagnostic, so `Then it is rejected` and `Then the diagnostic includes` reach a
+refusal in a module too.
+
 Two rules that keep a scenario honest:
 
 - **One requirement per scenario, and the name says which.** A scenario called

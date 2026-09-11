@@ -3635,9 +3635,8 @@ like any other name, which is what makes a trait bindable by a client. A
 module's own routines can reach an implementation the **client** wrote, where
 those routines are generic over a pointer: AP 6.7.3.5 re-reads a generic's
 body in the translation that activates it, which is the client's. A module
-supplying an implementation for its clients is **not provided**; a client that
-wants one writes it, and `doc/implementation-defined.md` carries the entry
-(ADR-0341).
+supplying an implementation for **its** clients is 6.7.10.5, and was not
+provided until ADR-0411.
 
 **6.7.10.2 Selecting an implementation.** Where a function-designator or a
 procedure-statement names an identifier that has no defining-point in force,
@@ -3735,6 +3734,35 @@ qualified name where `i` denotes an imported interface and a method-designator
 where it denotes a variable. What separates them is what the identifier
 denotes, which is the recurring answer of §6.4.3.3, §6.7.1 and §6.8.7.4 met
 once more.
+
+**6.7.10.5 An implementation reaches the clients of its module [added].**
+Where an implementation-declaration occurs in a module-block, 6.7.10.2 shall
+select its routines in every program-component that imports an interface of
+that module through which the implementation's type is accessible, and 6.13
+shall not prevent it.
+
+NOTE 20 — This is the one place in this document where something a
+module-block writes is part of what a client may depend on, and it follows
+from 6.7.10.2 rather than being granted: a routine of an implementation is
+identified from the *type* of the first actual-parameter and never from a
+name in scope, so a client that can name the type can already name the
+selection. §6.11.2's one scope is not reached, which is why two modules may
+each implement a `Put` (NOTE 17) where two exported `Put`s would collide.
+
+NOTE 21 — An implementation stays in the module-block (6.7.10.1). The
+alternative was §6.11.1's split — the routine headings in the module-heading,
+the bodies in the block — and it is rejected because an inherent
+implementation's headings would then be written twice, and because the
+headings of a *trait* implementation are written in the trait already
+(6.7.10.3): a third copy could disagree with the first two and nothing would
+be gained but the digest 6.13.2 now takes directly.
+
+NOTE 22 — What 6.13 requires of the routine's name is that two translations
+compose it the same way without exchanging anything, and the module's name,
+the type as the implementation-declaration spells it, the trait where there
+is one, and the routine's identifier are all read by both. A processor naming
+such a routine by a counter would have the two translations agree only while
+they happened to read the same components in the same order (ADR-0411).
 
 ### 6.8 Expressions [extended]
 
@@ -4438,7 +4466,8 @@ apart.
 #### 6.13.2 Program-components shall agree about the interfaces they share [added]
 
 A program-component shall be linked only with components translated against
-the same module-heading for every interface they both name.
+the same module-heading, and the same implementation-declarations (6.7.10.5),
+for every interface they both name.
 
 NOTE 1 — As with 6.13.1 there is nothing here for a source to state. §6.11.1
 makes a module-heading the whole of what a client may depend on, and §6.13
@@ -4468,7 +4497,17 @@ an object built from the first resolves every symbol, runs, and reads a field
 from an offset the other component never wrote. The processor's own probe
 measured it: `a=11 b=22` written and `a=11 b=0` read back, with a zero exit
 status and no diagnostic from the translator, the driver or the linker
-(`tests/checks/stale_component.sh`).
+(`tests/checks/stale_component.py`).
+
+NOTE 5a — The implementations are in the *block* and are named here all the
+same, because 6.7.10.5 makes them reachable and NOTE 3's "a change confined to
+a module-block is not a change to a heading" would otherwise let a method's
+parameter list change under a component already translated against it. What is
+digested is each implementation-declaration's own line and each of its
+routines' headings, and not the bodies — the distinction NOTE 3 draws, one
+construct further in. The digests are **summed**, so neither the order the
+routines were written in nor the order the components were read in enters into
+it, which is what lets 6.11.1's split form answer alike on both sides.
 
 NOTE 5 — No interface artefact is defined by this document, and this clause is
 what stands in place of one. A processor that wrote a compiled interface file

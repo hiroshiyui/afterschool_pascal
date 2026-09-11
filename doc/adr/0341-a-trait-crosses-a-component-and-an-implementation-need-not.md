@@ -4,7 +4,12 @@ Date: 2026-09-06
 
 ## Status
 
-Accepted. Follows [ADR-0340](0340-four-things-a-trait-heading-cannot-do.md) and
+Accepted; the deferred module-side implementation is superseded by
+[ADR-0411](0411-an-implementation-travels-with-its-type.md), which builds the
+derived linkage name this record named as its one candidate. Everything else
+here stands.
+
+Follows [ADR-0340](0340-four-things-a-trait-heading-cannot-do.md) and
 completes the design family for increment B's separate translation, which none
 of [ADR-0338](0338-a-bound-belongs-where-the-type-is-written-down.md),
 ADR-0339 or ADR-0340 had asked about.

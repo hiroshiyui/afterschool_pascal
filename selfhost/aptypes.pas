@@ -51,7 +51,8 @@ export ApTypes = (
   WordAlign, WideAlign, CLongSize, jumpSize, handleSize, deferSize,
   taskSetSize, selectArmSize,
   setLimit, setBits, lnkNone, lnkVar, lnkProc, lnkStdIn, lnkStdOut,
-  lnkForeign, strLen, nameStr, pathStr, bindText, str, kwLit, wordLit, msgLit,
+  lnkForeign, lnkMethod, strLen, nameStr, pathStr, bindText, str, kwLit,
+  wordLit, msgLit,
   textLit, tokenKind, token, ctxKind, labelWhat, binaryOp, unaryOp,
   nodeKind, symKind, fileBinding, typeKind, builtinKind, stdProcKind,
   typePtr, symPtr, constitPtr, ifacePtr, modRecPtr, producedPtr, instPtr,
@@ -450,6 +451,17 @@ const
     part, there being no interface -- what is on the other side was not
     translated by anything that reads this repository's conventions. }
   lnkForeign = 5; { the foreign name, exactly as written }
+  { AP 6.7.10's implementation-declaration (ADR-0411). A method is reached
+    through the *type* and not through an export-part, so it has no
+    constituent spelling to be named after -- and it has to be named all the
+    same, a client of the module emitting a call to it. The interface part is
+    the module's own name, and the type and the trait stand between that and
+    the routine because one type may implement two traits that declare one
+    spelling: AP 6.7.10.2 refuses the *call* as ambiguous and lets both
+    implementations stand, so both are emitted and neither may take the
+    other's name. An inherent implementation writes four parts and a trait's
+    writes five, which is why no trait name can collide with a routine name. }
+  lnkMethod = 6; { p.<module>.<type>[.<trait>].<routine> }
 
 
 type
@@ -1656,6 +1668,12 @@ type
     linkKind: integer;
     linkIfaceAt, linkIfaceLen: integer;
     linkItemAt, linkItemLen: integer;
+    { The two middle parts of lnkMethod's name, and zero for every other
+      shape: the type the implementation is for, as the implementation-
+      declaration spelled it, and the trait it implements, which is zero for
+      AP 6.7.10's inherent form. }
+    linkTypeAt, linkTypeLen: integer;
+    linkTraitAt, linkTraitLen: integer;
     { ...and whether the storage that name denotes is defined by *another*
       component. Both ends compute the same name; this is which end this is. }
     storageElsewhere: boolean;
@@ -2494,7 +2512,14 @@ type
                      imForLine, imForCol: integer;
                      imRoutines: nodePtr;
                      imTrait, imForSym: symPtr;
-                     imForType: typePtr);
+                     imForType: typePtr;
+                     { A digest of what this implementation promises a client:
+                       its own `impl ... ;` and each routine's heading, and
+                       none of the bodies (ADR-0411). It is summed into the
+                       module's own digest, so that a method whose parameter
+                       list changed cannot be called by a component that was
+                       translated against the old one. }
+                     imDigest1, imDigest2: int64);
       { 6.2.1 puts an import-part at the head of a block, before the label,
         constant, type, variable and procedure parts -- in every block, and
         not only a module's. There is at most one. }
@@ -2534,6 +2559,17 @@ type
                        looks the digest up by name on whichever node does
                        hold one. }
                      mdDigest1, mdDigest2: int64;
+                     { ...and the digest of every implementation-declaration
+                       this component writes for the module (ADR-0411). An
+                       implementation is in the *block* and is reachable from
+                       another component all the same, so the heading's digest
+                       alone would let a method's parameter list change under
+                       a client that had already been translated -- a wrong
+                       call with no diagnostic anywhere, which is the class
+                       ADR-0245 exists to refuse. Summed rather than chained,
+                       so that the answer does not depend on the order the
+                       components were read in. }
+                     mdImplDigest1, mdImplDigest2: int64;
                      { Which source this component was read from: 0 for the
                        one named on the command line, k for the k'th
                        --import. A module's block is parsed while reading its

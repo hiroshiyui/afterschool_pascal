@@ -4803,10 +4803,32 @@ end;
   trait's heading: that is 6.7's own parameterless definition, the shape this
   compiler writes 248 times after a `forward`, and it is why the construct
   needed no syntax invented for its body. }
+{ Written below, and needed here: an implementation's digest is taken over
+  the same token ranges a module-heading's is, and for the same reason. }
+procedure HeadingDigest(from, to_: integer; var d1, d2: int64); forward;
+
+{ Fold the tokens in [from, to) into a digest that is already accumulating.
+  **Summed and not chained**, so that two routines written in the other order
+  give one answer: what a client depends on is the set of headings, not the
+  order somebody wrote them in. }
+procedure MixDigest(from, to_: integer; var d1, d2: int64);
+const
+  m1 = 1000000007;
+  m2 = 998244353;
+var e1, e2: int64;
+begin
+  HeadingDigest(from, to_, e1, e2);
+  d1 := (d1 + e1) mod m1;
+  d2 := (d2 + e2) mod m2
+end;
+
 function ParseImplDecl: nodePtr;
-var d, r, head, tail: nodePtr;
+var d, r, head, tail: nodePtr; implFrom, routineFrom: integer;
 begin
   d := NewNode(nkImpl, CurLine, CurCol);
+  d^.imDigest1 := 0;
+  d^.imDigest2 := 0;
+  implFrom := pos;
   pos := pos + 1;                        { 'impl' }
   d^.imAt := tok[pos].at;
   d^.imLen := tok[pos].len;
@@ -4847,10 +4869,22 @@ begin
     d^.imLen := 0;
     Expect(tkSemi, ctxImplFor)
   end;
+  { What a client of this module reads: which trait, for which type. The
+    bodies below are deliberately outside it -- rewriting a method is not a
+    change a separately translated caller can see (ADR-0411). }
+  if not aborted then MixDigest(implFrom, pos, d^.imDigest1, d^.imDigest2);
   head := nil;
   tail := nil;
   while (not aborted) and (Check(tkProcedure) or Check(tkFunction)) do begin
+    routineFrom := pos;
     r := ParseProcOrFunc(Check(tkFunction));
+    { The heading alone: pdBodyPos is where its block starts, which is where
+      ADR-0211 already had to record it. A routine that repeats only its name
+      -- every routine of a *trait* implementation -- contributes its name and
+      nothing else, its signature being in the trait, which the module-heading
+      has already digested. }
+    if (not aborted) and (r^.pdBodyPos > routineFrom) then
+      MixDigest(routineFrom, r^.pdBodyPos, d^.imDigest1, d^.imDigest2);
     Append(head, tail, r)
   end;
   d^.imRoutines := head;
@@ -5282,9 +5316,33 @@ end;
 
   It has no statement-part: 6.11.1 gives a module its two `to begin do` and
   `to end do` parts instead, and each takes a single *statement*. }
+{ Every implementation-declaration a module-block writes, summed into the
+  module's own digest (ADR-0411). It is taken here, in the parser, because
+  what it is a digest *of* is tokens -- and because the emitter asks for it by
+  module name across whatever components were read, which is what makes
+  6.11.1's split form answer the same on both sides of the boundary. }
+procedure SumImplDigests(m: nodePtr);
+const
+  m1 = 1000000007;
+  m2 = 998244353;
+var d: nodePtr;
+begin
+  { No nil test on the block: ParseModuleParts always builds a node, and this
+    is called with what it just returned. }
+  d := m^.mdBlock^.blProcs;
+  while d <> nil do begin
+    if d^.kind = nkImpl then begin
+      m^.mdImplDigest1 := (m^.mdImplDigest1 + d^.imDigest1) mod m1;
+      m^.mdImplDigest2 := (m^.mdImplDigest2 + d^.imDigest2) mod m2
+    end;
+    d := d^.next
+  end
+end;
+
 procedure ParseModuleBlock(m: nodePtr);
 begin
   m^.mdBlock := ParseModuleParts(false);
+  SumImplDigests(m);
   if (not aborted) and Check(tkTo) and (tok[pos + 1].kind = tkBegin) then begin
     pos := pos + 2;
     Expect(tkDo, ctxToBegin);
@@ -5327,7 +5385,7 @@ end;
   the compiler has to be told to ignore. `h * 131` with `h` under 10^9 is
   1.3 * 10^11, comfortably inside int64, and the two moduli are coprime, so
   the pair is worth about 60 bits. }
-procedure HeadingDigest(from, to_: integer; var d1, d2: int64);
+procedure HeadingDigest;
 const
   m1 = 1000000007;
   m2 = 998244353;
@@ -5364,6 +5422,8 @@ begin
   m^.mdHasBlock := false;
   m^.mdDigest1 := 0;
   m^.mdDigest2 := 0;
+  m^.mdImplDigest1 := 0;
+  m^.mdImplDigest2 := 0;
   m^.mdFileIdx := curImportIdx;
   m^.mdSym := nil;
   m^.mdAt := 0;
@@ -5717,6 +5777,10 @@ begin
   s^.linkIfaceLen := 0;
   s^.linkItemAt := 0;
   s^.linkItemLen := 0;
+  s^.linkTypeAt := 0;
+  s^.linkTypeLen := 0;
+  s^.linkTraitAt := 0;
+  s^.linkTraitLen := 0;
   s^.storageElsewhere := false;
   s^.usedSeq := 0;
   s^.threatLine := 0;
@@ -24486,6 +24550,28 @@ begin
             writeln(''' would name two things')
           end;
       DeclareProcHeading(r, owner);
+      { 6.13 (ADR-0411): a method of a type a module exports is reachable from
+        another component -- the client looks it up on the *type* and not in
+        the module's export-part -- so it needs a name the other translation
+        can compose. It is composed from the implementation-declaration's own
+        spellings, which both ends read: this module's name, the type as the
+        implementation names it, the trait if there is one, and the routine.
+
+        A program's implementation is left with its counter. Nothing may
+        import a program (6.13), so the name has no second reader and an
+        external one would only be a global spelling nobody asked for. }
+      if (r^.pdSym <> nil) and owner^.isModuleSym and
+         (r^.pdSym^.linkKind = lnkNone) then begin
+        r^.pdSym^.linkKind := lnkMethod;
+        r^.pdSym^.linkIfaceAt := owner^.at;
+        r^.pdSym^.linkIfaceLen := owner^.len;
+        r^.pdSym^.linkTypeAt := d^.imForAt;
+        r^.pdSym^.linkTypeLen := d^.imForLen;
+        r^.pdSym^.linkTraitAt := d^.imAt;
+        r^.pdSym^.linkTraitLen := d^.imLen;
+        r^.pdSym^.linkItemAt := r^.pdAt;
+        r^.pdSym^.linkItemLen := r^.pdLen
+      end;
       if r^.pdBody <> nil then CheckProcBody(r);
       if r^.pdSym <> nil then
         AppendSym(im^.routines, im^.routineTail, r^.pdSym);

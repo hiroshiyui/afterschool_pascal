@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 869
-instrumented 11858
-decisions 5929
+uncovered 867
+instrumented 11896
+decisions 5948
 
 accept 0/4
 accumulate 1/32
@@ -36,11 +36,11 @@ advance 0/2
 append 0/2
 appendinstdecl 0/2
 appendint 0/8
-appendlinkname 0/8
+appendlinkname 0/12
 appendlit 1/4
 appendnum 0/2
 appendopnd 0/2
-appendprocname 0/4
+appendprocname 0/6
 appendrange 0/2
 appendsym 0/2
 arg 0/2
@@ -105,7 +105,7 @@ checkexpr 19/188
 checkforeignheading 0/64
 checkgoto 1/4
 checkhandlebirth 0/4
-checkimpldecl 3/70
+checkimpldecl 3/76
 checkimports 0/52
 checkinitialstate 2/18
 checklabeled 1/10
@@ -279,7 +279,7 @@ emitoptionaltest 1/4
 emitownrels 1/28
 emitposglobals 0/2
 emitprocargument 1/6
-emitprocbody 0/14
+emitprocbody 0/16
 emitprocs 1/8
 emitread 1/12
 emitreadargs 0/18
@@ -307,7 +307,7 @@ emittransfer 0/18
 emittuplecheck 0/2
 emitunary 0/2
 emitusercall 1/86
-emitvtables 1/8
+emitvtables 1/10
 emitwhile 0/6
 emitwith 2/8
 emitwrite 1/12
@@ -359,7 +359,7 @@ fmtdepth 0/2
 fmtenddecl 1/6
 fmtflush 0/12
 fmtglue 0/66
-fmthasblock 3/26
+fmthasblock 1/26
 fmtnewline 0/2
 fmtownsanof 0/6
 fmtpop 0/2
@@ -512,7 +512,7 @@ mentions 5/18
 mentionsself 3/16
 methodreceiver 1/10
 methodsym 1/12
-moduledigest 0/6
+moduledigest 0/10
 more 0/8
 msgtext 1/4
 nameforlinkage 2/16
@@ -566,7 +566,7 @@ parseformaldiscriminants 1/12
 parseformalparameters 0/38
 parseidentstatement 0/102
 parseif 0/2
-parseimpldecl 0/14
+parseimpldecl 0/20
 parseimportpart 0/26
 parselabel 1/6
 parselabelpart 0/4
@@ -684,7 +684,7 @@ row 0/4
 runcodegen 1/44
 rundefersreversed 0/4
 runsema 3/28
-samelink 0/8
+samelink 0/16
 sametuple 2/12
 satisfiesbound 0/4
 schemahastypedisc 0/6
@@ -719,6 +719,7 @@ stringofcapacity 2/10
 stringtype 0/2
 stringvalueformal 0/4
 striswide 1/8
+sumimpldigests 0/4
 suppliedby 0/6
 suppliersof 0/14
 tag 2/10

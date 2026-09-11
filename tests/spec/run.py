@@ -49,6 +49,7 @@ asserts nothing, which is the failure this whole suite exists to avoid:
     Given the ISO 7185 program            <docstring>
     Given the Extended Pascal program     <docstring>
     Given the Afterschool Pascal program  <docstring>
+    Given the program-component           <docstring>
     Given the standard input              <docstring>
     When it is compiled and run
     When it is compiled
@@ -198,6 +199,10 @@ def parse(path):
 class Outcome:
     def __init__(self):
         self.source = self.standard = None
+        # 6.13's other program-components, in the order they were written.
+        # Each is translated on its own, with the ones before it as imports,
+        # which is what the clause means by separately (ADR-0411).
+        self.components = []
         self.stdin = ""
         self.compiled = None      # True / False, once a When has run
         self.diagnostic = ""
@@ -225,12 +230,35 @@ def compile_and_maybe_run(out, pascalcc, work, run_it):
     env = dict(os.environ)
     env["AFTERSCHOOL_PASCAL_PATH"] = os.pathsep.join(
         str(ROOT / part) for part in ("lib", "lib/dialect"))
-    proc = subprocess.run([str(pascalcc), str(src), "-o", str(exe)],
+    # **The other program-components** (6.13, ADR-0411). Each is translated
+    # alone and then handed to the next as an --import, exactly as
+    # `tests/run_test.py` reads a `.components` sidecar: a clause about what
+    # crosses a boundary cannot be asserted by a program that has none. A
+    # component that fails to translate ends the compilation there, with its
+    # own diagnostic, so a scenario may assert a refusal in a module too.
+    imports = []
+    objects = []
+    for n, text in enumerate(out.components, 1):
+        comp = work / ("component%d.pas" % n)
+        comp.write_text(text)
+        obj = work / ("component%d.o" % n)
+        r = subprocess.run([str(pascalcc), *imports, "-c", str(comp),
+                            "-o", str(obj)],
+                           capture_output=True, text=True, timeout=300,
+                           env=env)
+        out.diagnostic += r.stdout + r.stderr
+        if r.returncode != 0:
+            out.compiled = False
+            return
+        imports += ["--import", str(comp)]
+        objects.append(str(obj))
+    proc = subprocess.run([str(pascalcc), str(src), *imports, *objects,
+                           "-o", str(exe)],
                           capture_output=True, text=True, timeout=300,
                           env=env)
     # pascalcc puts the compiler's diagnostics on stderr; take both so a
     # scenario cannot pass by matching the wrong stream.
-    out.diagnostic = proc.stdout + proc.stderr
+    out.diagnostic += proc.stdout + proc.stderr
     out.compiled = proc.returncode == 0
     if not out.compiled or not run_it:
         return
@@ -261,6 +289,8 @@ def run(scenario, pascalcc, work):
 
         if text in STANDARD_OF:
             out.source, out.standard = need_doc(step), STANDARD_OF[text]
+        elif text == "the program-component":
+            out.components.append(need_doc(step))
         elif text == "the standard input":
             out.stdin = need_doc(step) + "\n"
 
@@ -513,7 +543,11 @@ def check_clauses(scenarios):
               "python3 tests/spec/run.py --write-pending")
         return 0
 
-    print(f"spec: {len(covered)}/{len(testable)} testable clauses cited, "
+    # The scenario total is here and nowhere else: under `ctest` this suite is
+    # one case per feature, so no line in the log holds the whole of it, and a
+    # document quoting the number had nothing watching it (ADR-0379, ADR-0411).
+    print(f"spec: {len(scenarios)} scenarios, "
+          f"{len(covered)}/{len(testable)} testable clauses cited, "
           f"{len(now_pending)} pending, none lost or mis-tagged")
     return 0
 

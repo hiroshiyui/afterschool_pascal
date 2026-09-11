@@ -171,6 +171,28 @@ begin
   writeln(k.Twice:1, ' ', k.Plus(1):1, ' ', k.Twice.Plus(1):1)
 end;
 
+{ **A method may be foreign** (ADR-0121's directive in AP 6.7.10's routine
+  position, pinned by ADR-0411). Nothing had to admit it -- an implementation
+  declares its routines the way any block does, and `external` is a directive
+  that stands where a body would -- and nothing had asked, so this is the
+  case that says which way it went. It is the one method shape that keeps a
+  *foreign* linkage name: what is on the other side was translated by a C
+  compiler, which knows nothing of the type, and the receiver reaches it as
+  the address a `var` parameter already travels as (ADR-0122). }
+type CStr = record bytes: packed array [1..8] of char end;
+
+impl CStr;
+  function Len(protected var me: CStr): csize; external 'strlen';
+end;
+
+procedure Foreign_;
+var s: CStr; i: integer;
+begin
+  for i := 1 to 8 do s.bytes[i] := chr(0);
+  s.bytes[1] := 'a'; s.bytes[2] := 'b'; s.bytes[3] := 'c';
+  writeln('strlen ', s.Len:1, ' ', Len(s):1)
+end;
+
 procedure TraitsToo;
 var p: Point; l: Line;
 begin
@@ -188,5 +210,6 @@ begin
   writeln(small:1, ' ', h.impl:1);
   Receivers;
   BothSpellings;
+  Foreign_;
   TraitsToo
 end.
