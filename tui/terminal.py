@@ -278,7 +278,7 @@ def drive(binary, name, rows, cols, lines, steps, colorterm):
         argv = [binary, name] if name else [binary]
         os.execve(binary, argv, env)
         os._exit(127)
-    buf = ['']
+    buf = [b'']
 
     def settle(seconds=0.35):
         end = time.time() + seconds
@@ -292,7 +292,15 @@ def drive(binary, name, rows, cols, lines, steps, colorterm):
                 return False
             if not chunk:
                 return False
-            buf[0] += chunk.decode('utf-8', 'surrogateescape')
+            # **Bytes, and decoded once at the end.** A read boundary falls
+            # where the kernel put it, so a three-byte box character can
+            # arrive split across two of them; decoding each chunk turns the
+            # halves into surrogate escapes that never rejoin. macOS found
+            # this and Linux did not, which is the whole reason it is written
+            # down here: it is a property of how the pty buffers and not of
+            # anything either editor did. Proved by reading **one byte at a
+            # time**, which splits every character there is and passes.
+            buf[0] += chunk
             end = time.time() + 0.2
         return True
 
@@ -301,7 +309,7 @@ def drive(binary, name, rows, cols, lines, steps, colorterm):
     try:
         for word, payload in steps:
             if word == 'draw':
-                frames.append(last_frame(buf[0]))
+                frames.append(last_frame(text_of(buf[0])))
             else:
                 os.write(fd, payload)
                 settle()
@@ -321,6 +329,17 @@ def drive(binary, name, rows, cols, lines, steps, colorterm):
         pass
     shutil.rmtree(work, ignore_errors=True)
     return frames
+
+
+def text_of(raw):
+    """What has been emitted so far, decoded as one string.
+
+    `surrogateescape` is still here for a byte that is genuinely not UTF-8 --
+    a terminal may emit one and this must not raise -- but it is now applied
+    to the whole buffer rather than to each read, so a character split across
+    two reads is decoded from its own bytes.
+    """
+    return raw.decode('utf-8', 'surrogateescape')
 
 
 def last_frame(text):
