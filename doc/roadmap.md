@@ -13,19 +13,24 @@ question this page has closed and what closing it found — including
 [the page as it stood on 2026-09-07](history.md#the-roadmap-as-it-stood-on-2026-09-07),
 verbatim, the moment before it was cut to this.
 
-## Where development stands — 2026-09-09
+## Where development stands — 2026-09-11
 
-**Released: v3.8.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
-headline is the platforms, measured rather than assumed: `--target=` admits
-six machines where it admitted three, a release ships an `arm64-darwin`
-archive beside the two Linux ones (ADR-0372, ADR-0375), and **Windows got as
-far as a program that runs and was then deferred** — on a run and not a
-reading (ADR-0374), and **dropped the day after the release** (ADR-0380). The release before it, v3.7.0, had the boundary for its
-headline: a command injection in the language server found, closed, audited
-and audited again (ADR-0362 – ADR-0364), a TOML library and the project reader
-rewritten over it (ADR-0360, ADR-0361) — none of it a change to the language.
-The compiler builds itself, stage 2 equals stage 3 in every
-program-component, and the suite is 924 cases green at `-O2` and at `-O0`.
+**Released: v3.11.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
+headline is the editor: it replaces, and two defects v3.10.0 had shipped a
+day earlier do not happen any more — a Ctrl-Q that discarded another
+document's work in silence (ADR-0401) and a menu that stopped the program on
+F3 (ADR-0404 is the gate that could have caught it and had been pointed at
+the compiler alone). v3.10.0 before it was display width as a *language*
+question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
+v3.9.0 was the editor arriving and WebAssembly running the corpus. The
+compiler builds itself, stage 2 equals stage 3 in every program-component,
+and the suite is 924 cases green at `-O2` and at `-O0`.
+
+**The three releases before those are in [history](history.md)** — the
+platforms measured rather than assumed (v3.8.0: `--target=` admits seven
+machines where it admitted three, and Windows got as far as a program that
+runs and was then dropped, ADR-0374 and ADR-0380), and the boundary audited
+twice over (v3.7.0, ADR-0360 – ADR-0364).
 
 | | |
 | --- | --- |
@@ -144,7 +149,7 @@ sentence notwithstanding.
 
 | Increment | What it adds | What it would retire |
 | --- | --- | --- |
-| **A. Methods** | `impl T; … end;`, `x.M(a)` meaning `M(x, a)`, method names in the type's scope | 118 of 484 exported names that repeat their module's noun as a hand-spelled receiver (retaken 2026-09-05; run `tests/checks/export_unique.py`). No new representation |
+| **A. Methods** | `impl T; … end;`, `x.M(a)` meaning `M(x, a)`, method names in the type's scope | the exported names that repeat their module's noun as a hand-spelled receiver — 118 of 484 when it was last counted on 2026-09-05, and the denominator is 580 now, so **run `tests/checks/export_unique.py` rather than quoting either**. No new representation |
 | **C. `dyn T`** | dynamic dispatch, only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first vtable here |
 
 **Not settled**: whether to build A or C. B's payoff was a program's own
