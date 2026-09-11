@@ -89,7 +89,7 @@ that (ADR-0402): it drives the real `apide` under a **pseudo-terminal** —
 Python's, as `lsp/run.py`'s pipe is, and so not the binding ADR-0262
 declined — and requires every run the shell writes to be one the model
 decided, at the same columns, with the same cells, in the colour that role's
-table gives. Both tables, 13 of the 21 scripts, and the expectation
+table gives. Both tables, 14 of the 22 scripts, and the expectation
 **derived** from the session golden's own run decomposition rather than
 recorded: a golden of escape bytes agrees with whoever wrote it, which is how
 `crPrompt` came to be drawn nowhere.
@@ -171,6 +171,7 @@ tui/build.py '' session.pas   # the session replayer
 | Ctrl-Q | quit — twice when **any** open document has changes in it (ADR-0401) |
 | Ctrl-Z, Ctrl-Y | undo, redo — a typed run is one undo, not one per character |
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
+| Ctrl-R | replace — two questions, every occurrence in the document, and **one** Ctrl-Z to take it back (ADR-0403) |
 | Ctrl-G | go to a line by number |
 | Ctrl-C | close the question a dialog is asking, or the menu |
 
@@ -228,8 +229,19 @@ It refuses to start where its standard input is not a terminal, and says so.
   language; the caller passes the size on every render, so a shell that wants
   to notice asks `PasTerm.TermSize` again.
 - **No mouse.**
-- **No replace, no search backwards and no regular expressions.** Milestone
-  two is a search that finds, and says so when it wraps and when it does not.
+- ~~**No replace.**~~ Closed by ADR-0403. Ctrl-R asks twice and replaces every
+  occurrence in the document, case-insensitively, and **one Ctrl-Z reverses
+  the whole of it** — which is what the feature needed the model to grow: a
+  journal entry may now say the undo continues through it, so an *action* can
+  be more than one of ADR-0387's four operations without becoming a fifth one.
+  There is no confirm-each, on purpose: what a person wants after a replace
+  that went wrong is to undo it, and an editor that can do that in one
+  keystroke need not have asked six times first.
+
+  **No search backwards, no regular expressions and no replace in a
+  selection.** The last is the larger gap and is missing from everything else
+  too: this editor has no notion of a region, so cut, copy, paste and
+  replace-in-selection are one design and not four.
 - **No prompt to save another document on quitting.** The dirty mark travels
   with each document and Ctrl-Q takes two presses over unsaved work, and since
   ADR-0401 it asks about **every** open document rather than the one on

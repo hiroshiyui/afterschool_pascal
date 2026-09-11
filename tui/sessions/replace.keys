@@ -1,0 +1,53 @@
+# **Replace** (ADR-0403), the last of the three things milestone two said it
+# left out and the one that needed the model to grow: an action of a person's
+# that is more than one of ADR-0387's four operations.
+#
+# The claims, in the order the keys drive them:
+#
+#   - Ctrl-R asks twice, in the same framed box `Find` and `Open` use -- the
+#     titles are `Replace` and `With`, and the first answer survives the
+#     second being typed;
+#   - matching is `Seek`'s, which is **case-insensitive** (6.1.3 folds an
+#     identifier, so a person searching for `writeln` means `WriteLn` too),
+#     and what goes in is the replacement exactly -- which is how one spelling
+#     becomes another;
+#   - every occurrence in the document goes, including two on one line, so
+#     the scan does not stop at the first match of a line;
+#   - **one Ctrl-Z reverses the whole action.** This is the claim the feature
+#     was built around: three replacements are six entries in the journal, and
+#     an undo that reversed one of the six would be an undo of nothing anybody
+#     did. One Ctrl-Y puts them all back, which is the same group read the
+#     other way;
+#   - an empty answer to `With` is a **deletion** and not a refusal, that
+#     being the commonest thing anyone does with this;
+#   - and a pattern that matches nothing says so and changes nothing, as a
+#     failed search does.
+name r.pas
+size 12 34
+push writeln(one); WriteLn(two);
+push   writeln(three)
+push begin end
+draw
+ctrl R
+keys writeln
+draw
+ctrl M
+keys print
+draw
+ctrl M
+draw
+ctrl Z
+draw
+ctrl Y
+draw
+ctrl R
+keys print
+ctrl M
+ctrl M
+draw
+ctrl R
+keys nosuch
+ctrl M
+keys x
+ctrl M
+draw

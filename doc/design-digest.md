@@ -5180,6 +5180,24 @@ ADR-0381's line again. A file already open is switched to rather than
 opened twice, two buffers over one file being two answers to *is this
 saved*.
 
+**One action is not one operation** (ADR-0403). ADR-0387 made an edit one
+of four operations with one journal entry each, which is what makes undo
+complete by construction; what it has no notion of is an *action*, and it
+got away with that because every key a person presses is one operation. A
+replacement is two and a replace-all is a great many, and an undo that
+reverses one of six is an undo of nothing anybody did. An entry may now say
+`more` -- **the undo continues through me** -- which is a property of an
+entry and **not a fifth operation**, so the four routines are still the
+only code that touches the buffer. `Undo` and `Redo` each split into the
+one-entry routine and the loop, and read the flag from opposite ends: undo
+off the entry just reversed, redo off the one about to be performed,
+because the redo stack holds the action reversed. Replace is then two
+prompts and a scan -- `Seek`'s matching, so case-insensitive, the
+replacement literal, an empty one a deletion, and the next search starting
+past the text just written so `a` becoming `aa` terminates. Confirm-each
+was rejected rather than deferred: the answer to a replace that went wrong
+is the Ctrl-Z this made work.
+
 **What the shell emits** (ADR-0402), which is the other half of ADR-0393
 and was `doc/sop.md` §7's oldest open row. A session golden holds what the
 model *decided* and `tui-palette` reads the two colour tables; neither can

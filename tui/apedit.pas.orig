@@ -42,8 +42,7 @@ export ApEdit = (ColsMax, RowsMax, LineMax, EditLine, ScreenRow, Screen,
                  KeyKind, kkNone, kkChar, kkEnter, kkBack, kkDelete,
                  kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
                  kkSave, kkQuit, kkBuild, kkUnknown,
-                 kkUndo, kkRedo, kkFind, kkAgain, kkReplace, kkGoto, kkCancel,
-                 kkFunc, kkMenu,
+                 kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu,
                  kkOpen, kkNextDoc,
                  Key, Decoder, Editor,
                  EditInit, EditFree, EditPush, EditKey, EditRender,
@@ -148,8 +147,7 @@ type
   KeyKind = (kkNone, kkChar, kkEnter, kkBack, kkDelete,
              kkLeft, kkRight, kkUp, kkDown, kkHome, kkEnd,
              kkSave, kkQuit, kkBuild, kkUnknown,
-             kkUndo, kkRedo, kkFind, kkAgain, kkReplace, kkGoto, kkCancel,
-             kkFunc, kkMenu,
+             kkUndo, kkRedo, kkFind, kkAgain, kkGoto, kkCancel, kkFunc, kkMenu,
              { **Open a file, and go to the next one open** (ADR-0396). F3
                and F6 are Turbo Pascal's positions, and `tui/README.md` had
                promised F3 would be Open `when there is something for it to
@@ -204,14 +202,6 @@ type
     row, col: integer;
     text: EditLine;
     atRow, atCol: integer;
-    { **Undo continues through me** (ADR-0403). One action of a person's may
-      be more than one of the four operations -- replacing a word is a remove
-      and an insert, and replacing every word is a great many -- and an undo
-      that reversed half of one is not an undo of anything anybody did. It is
-      a property of an *entry* and not a fifth operation: what touches the
-      buffer is still the four routines, which is the whole of ADR-0387's
-      claim. False on every entry a keystroke makes. }
-    more: boolean;
     next: EditRecPtr
   end;
 
@@ -222,8 +212,7 @@ type
     owned would be behaviour no session could drive and no golden could
     hold, and it is the half of an editor where a person is most likely to
     notice something wrong. }
-  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs, mdOpen, mdMenu,
-              mdReplace, mdWith);
+  EditMode = (mdEdit, mdFind, mdGoto, mdSaveAs, mdOpen, mdMenu);
 
   { The document and where the caller is in it. `top` is the first line drawn,
     so scrolling is a property of the render and not of the cursor. }
@@ -277,10 +266,6 @@ type
     menu, item: integer;
     prompt: EditLine;
     seek: EditLine;
-    { What a replacement puts in `seek`'s place, kept beside it and for its
-      reason: `Replace` asks two questions and the first answer has to
-      survive the second being typed. }
-    repl: EditLine;
     { **What the person asked for that this side does not do**: a write, a
       build, a quit. It is a `Key`, because a menu item is a second spelling
       of a binding and not a second dispatch -- the shell handles it through
@@ -460,7 +445,6 @@ begin
   ed.mode := mdEdit;
   ed.prompt := '';
   ed.seek := '';
-  ed.repl := '';
   ed.menu := 1;
   ed.item := 0;
   ed.hasPend := false;
@@ -868,20 +852,20 @@ begin
     not. }
   e^.atRow := ed.doc.row;
   e^.atCol := ed.doc.col;
-  e^.more := false;
   e^.next := ed.doc.undos;
   ed.doc.undos := e;
   ed.doc.open := true
 end;
 
 { Undo one entry: perform its opposite, move it to the redo stack, and put
-  the cursor back where the person was before it. Answers whether the entry
-  said the undo goes on -- `Undo` below is the loop, and the two are separate
-  so that the reversal of an edit is written once (ADR-0403). }
-function UndoOne(var ed: Editor): boolean;
+  the cursor back where the person was before it. }
+procedure Undo(var ed: Editor);
 var e: EditRecPtr;
 begin
-  UndoOne := false;
+  if ed.doc.undos = nil then begin
+    ed.says := 'nothing to undo';
+    exit
+  end;
   e := ed.doc.undos;
   ed.doc.undos := e^.next;
   case e^.kind of
@@ -898,32 +882,18 @@ begin
     is deliberate: this editor does not track which entry the last save was
     at, so it says the document differs rather than claiming it does not. The
     honest direction to be wrong in is the one that offers to save. }
-  ed.doc.dirty := true;
-  UndoOne := e^.more
-end;
-
-{ **One action of a person's, however many operations it took** (ADR-0403).
-  A keystroke makes one entry and `more` is false on it, so this is the old
-  routine for everything that was here before; a replacement makes two and a
-  replace-all makes many, and undoing half of one is an undo of nothing
-  anybody did. The flag is read off the entry just reversed, which is what
-  makes the loop terminate on a journal built by any means at all. }
-procedure Undo(var ed: Editor);
-begin
-  if ed.doc.undos = nil then begin
-    ed.says := 'nothing to undo';
-    exit
-  end;
-  while UndoOne(ed) and (ed.doc.undos <> nil) do
-    { the entry said the action goes on };
-  ed.doc.open := false
+  ed.doc.dirty := true
 end;
 
 { ...and redo performs the same entry again. There is one description of an
   edit here and not two, which is the reason this is eight lines. }
-procedure RedoOne(var ed: Editor);
+procedure Redo(var ed: Editor);
 var e: EditRecPtr;
 begin
+  if ed.doc.redos = nil then begin
+    ed.says := 'nothing to redo';
+    exit
+  end;
   e := ed.doc.redos;
   ed.doc.redos := e^.next;
   ed.doc.row := e^.row;
@@ -944,25 +914,6 @@ begin
   e^.next := ed.doc.undos;
   ed.doc.undos := e;
   ed.doc.dirty := true
-end;
-
-{ **The same group, forwards.** `Undo` pushes the entries it reversed onto
-  the redo stack in the order it took them, so the one that *starts* the
-  action is on top and the ones that say `more` are beneath it -- which is
-  why this reads the flag off the entry it is about to do next, where `Undo`
-  reads it off the one it has just done. Written out rather than made
-  symmetrical: the two stacks are the same journal read in opposite
-  directions, and pretending otherwise is how an undo and a redo come to
-  disagree about what one action was. }
-procedure Redo(var ed: Editor);
-begin
-  if ed.doc.redos = nil then begin
-    ed.says := 'nothing to redo';
-    exit
-  end;
-  RedoOne(ed);
-  while (ed.doc.redos <> nil) and ed.doc.redos^.more do RedoOne(ed);
-  ed.doc.open := false
 end;
 
 { Case-insensitive, and that is the one thing this editor knows about the
@@ -1064,87 +1015,6 @@ begin
   end
 end;
 
-{ **Replace every occurrence in the document** (ADR-0403), and answer how
-  many. Matching is `Seek`'s -- case-insensitive, 6.1.3's reason -- and what
-  goes in is `ed.repl` exactly, so replacing `writeln` with `WriteLn` is a
-  thing this can do and a search that could tell them apart is not.
-
-  **It is the four operations and the journal, like every other edit here.**
-  A replacement is a remove and an insert at the same place; what makes it
-  one action is that every entry but the first says `more`, which is the flag
-  ADR-0403 added and the whole of what this feature needed the model to grow.
-  Undoing a hundred replacements is one Ctrl-Z, and that is the answer this
-  editor gives instead of asking about each one.
-
-  The search for the next match starts past the text just written, which is
-  what stops `a` becoming `aa` from running forever; where the replacement is
-  *empty* the start does not move and the line does instead, so that
-  terminates on the line getting shorter. Both are the same loop and neither
-  is a special case. }
-procedure ReplaceAll(var ed: Editor);
-var r, at, from, n, made, lastr, lastc: integer;
-    needle, line, msg: EditLine;
-    first: boolean;
-
-  { One operation of the action. **Never joined to a run**: a replacement
-    that coalesced with the typing before it would make Ctrl-Z reverse both,
-    and `Note`'s three conditions are about a person's fingers and not about
-    this. The first entry stops the undo and every one after it continues
-    it, which is the direction `UndoOne` reads the flag in. }
-  procedure Step(kind: EditKind; row, col: integer; t: EditLine);
-  begin
-    ed.doc.open := false;
-    Note(ed, kind, row, col, t);
-    if not first then ed.doc.undos^.more := true;
-    first := false
-  end;
-
-begin
-  if ed.seek = '' then begin
-    ed.says := 'nothing to replace';
-    exit
-  end;
-  needle := Fold(ed.seek);
-  made := 0;
-  first := true;
-  lastr := ed.doc.row;
-  lastc := ed.doc.col;
-  n := SVecLen(ed.doc.lines);
-  for r := 1 to n do begin
-    from := 1;
-    repeat
-      line := SVecGet(ed.doc.lines, r);
-      at := IndexFrom(Fold(line), needle, from);
-      if at > 0 then begin
-        Step(ekDelete, r, at, substr(line, at, length(ed.seek)));
-        DoRemove(ed, r, at, length(ed.seek));
-        if ed.repl <> '' then begin
-          Step(ekInsert, r, at, ed.repl);
-          DoInsert(ed, r, at, ed.repl)
-        end;
-        made := made + 1;
-        lastr := r;
-        lastc := at + length(ed.repl);
-        from := at + length(ed.repl)
-      end
-    until at = 0
-  end;
-  if made = 0 then begin
-    writestr(msg, 'not found: ', ed.seek);
-    ed.says := msg;
-    exit
-  end;
-  ed.doc.dirty := true;
-  { The cursor lands *after* the last replacement, where a person typing it
-    by hand would have left it. }
-  MoveTo(ed, lastr, lastc);
-  if made = 1 then ed.says := '1 replacement'
-  else begin
-    writestr(msg, made:1, ' replacements');
-    ed.says := msg
-  end
-end;
-
 { A key while a question is open. **The question owns every one of them**: a
   person typing an answer has not asked for anything else to happen, which is
   what `EditModal` tells the shell and why Ctrl-S does not save from
@@ -1173,29 +1043,6 @@ begin
         ed.mode := mdEdit;
         ed.seek := ed.prompt;
         FindFrom(ed, false)
-      end;
-      { **Two questions and one action** (ADR-0403). The first answer has to
-        survive the second being typed, which is why it goes into `ed.seek`
-        here rather than being held in the prompt -- and putting it there is
-        also what makes Ctrl-L after a replace repeat the same search, which
-        is what a person would expect and costs nothing to be right about. }
-      mdReplace: begin
-        if ed.prompt = '' then begin
-          ed.mode := mdEdit;
-          ed.says := 'nothing to replace'
-        end
-        else begin
-          ed.seek := ed.prompt;
-          ed.prompt := '';
-          ed.mode := mdWith
-        end
-      end;
-      { An empty answer is a deletion and not a refusal: replacing a word
-        with nothing is the commonest thing anyone does with this. }
-      mdWith: begin
-        ed.mode := mdEdit;
-        ed.repl := ed.prompt;
-        ReplaceAll(ed)
       end;
       { **A name is not judged here**, and that is the division of labour:
         whether a path can be written is something only the write finds out,
@@ -1427,7 +1274,7 @@ begin
   case m of
     1: MenuItems := 3;
     2: MenuItems := 2;
-    3: MenuItems := 4;
+    3: MenuItems := 3;
     4: MenuItems := 1;
     otherwise MenuItems := 0
   end
@@ -1456,8 +1303,7 @@ begin
   else if m = 3 then begin
     if i = 1 then ItemCaption := 'Find  ^F'
     else if i = 2 then ItemCaption := 'Find next  ^L'
-    else if i = 3 then ItemCaption := 'Replace  ^R'
-    else if i = 4 then ItemCaption := 'Go to line  ^G'
+    else if i = 3 then ItemCaption := 'Go to line  ^G'
   end
   else if m = 4 then
     if i = 1 then ItemCaption := 'Build  F9'
@@ -1482,8 +1328,7 @@ begin
   else if m = 3 then begin
     if i = 1 then k.kind := kkFind
     else if i = 2 then k.kind := kkAgain
-    else if i = 3 then k.kind := kkReplace
-    else if i = 4 then k.kind := kkGoto
+    else if i = 3 then k.kind := kkGoto
   end
   else if m = 4 then
     if i = 1 then k.kind := kkBuild;
@@ -1562,7 +1407,7 @@ begin
       `otherwise` would be the wrong fix: it is the trap that says a kind was
       added, and this is the arm that has to say what happens to it. }
     kkNone, kkChar, kkBack, kkDelete, kkHome, kkEnd, kkSave, kkQuit,
-    kkBuild, kkUnknown, kkUndo, kkRedo, kkFind, kkAgain, kkReplace, kkGoto,
+    kkBuild, kkUnknown, kkUndo, kkRedo, kkFind, kkAgain, kkGoto,
     kkOpen, kkNextDoc, kkFunc: ;
   end
 end;
@@ -1711,10 +1556,6 @@ begin
     { A prompt starts empty rather than holding the last search: a person who
       wants that presses Ctrl-L, and one who does not would have to clear it
       every time. }
-    kkReplace: begin
-      ed.mode := mdReplace;
-      ed.prompt := ''
-    end;
     kkFind: begin
       ed.mode := mdFind;
       ed.prompt := ''
@@ -1895,11 +1736,9 @@ begin
     that finally needs a stack and there is deliberately no way to reach it. }
   pcol := 0;
   if (ed.mode = mdFind) or (ed.mode = mdGoto) or (ed.mode = mdSaveAs)
-     or (ed.mode = mdOpen) or (ed.mode = mdReplace) or (ed.mode = mdWith) then
+     or (ed.mode = mdOpen) then
   begin
     if ed.mode = mdFind then s := 'Find'
-    else if ed.mode = mdReplace then s := 'Replace'
-    else if ed.mode = mdWith then s := 'With'
     else if ed.mode = mdSaveAs then s := 'Save as'
     else if ed.mode = mdOpen then s := 'Open'
     else s := 'Go to line';
@@ -2212,7 +2051,6 @@ begin
     else if b = 25 then k.kind := kkRedo      { Ctrl-Y }
     else if b = 6 then k.kind := kkFind       { Ctrl-F }
     else if b = 12 then k.kind := kkAgain     { Ctrl-L }
-    else if b = 18 then k.kind := kkReplace   { Ctrl-R }
     else if b = 15 then k.kind := kkMenu      { Ctrl-O, for F10's sake }
     else if b = 7 then k.kind := kkGoto       { Ctrl-G }
     else if b = 3 then k.kind := kkCancel     { Ctrl-C }

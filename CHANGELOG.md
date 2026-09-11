@@ -15,6 +15,11 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The editor replaces.** `Ctrl-R` asks for a pattern and a replacement and
+  changes every occurrence in the document, matching case-insensitively as the
+  search does, with an empty replacement meaning deletion — and **one `Ctrl-Z`
+  takes the whole of it back** (ADR-0403). `Search ▸ Replace` is the same
+  thing from the menu.
 - **Every program here is checked for a `case` that has stopped covering its
   enumeration**, not only the compiler (ADR-0404). The editor and the language
   server join the sweep; the crash above is what the widening found.

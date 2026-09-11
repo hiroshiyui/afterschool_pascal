@@ -29,12 +29,18 @@ draw
 esc C
 draw
 
-# Right again to Search, whose three items are three different lengths -- so
+# Right again to Search, whose four items are four different lengths -- so
 # the panel's interior is *not* covered by its captions, and what makes the
 # document behind it invisible is `Frame` clearing the rectangle. A panel that
 # did not clear would show `program p(output);` through the gaps.
 esc C
 draw
+# **Down past the last item wraps to the first**, and this is where that is
+# claimed. It is one press further than it was: the Search menu gained
+# `Replace  ^R` with ADR-0403, and a session that walks a menu by *counting*
+# presses stops asserting what it was written for the day the menu grows --
+# which is why the press is here and this comment says what it is for.
+esc B
 esc B
 esc B
 draw

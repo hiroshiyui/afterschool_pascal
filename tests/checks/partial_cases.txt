@@ -594,7 +594,7 @@ DumpProc:nodeKind:1 chains 2 of 68
 # reaches this and `mdEdit` is the mode in which there is no question. The
 # guard is the `if ed.mode = mdMenu` before the call, which is why a constant
 # left off here is unreachable rather than merely unlikely.
-promptkey:editmode:1 names 5 of 6
+promptkey:editmode:1 names 7 of 8
 
 # The four keys a question has a meaning for: a character extends the answer,
 # Backspace shortens it, Ctrl-C withdraws it and Enter submits it. Every other
@@ -602,7 +602,11 @@ promptkey:editmode:1 names 5 of 6
 # anything else to happen, which is the whole of ADR-0387's decision that a
 # prompt is a mode. Unlike a case-statement this is a chain, so a kind left
 # off takes the trailing else, and here that is the behaviour wanted.
-promptkey:keykind:1 chains 4 of 25
+#
+# The denominator moved from 25 to 26 with `kkReplace` (ADR-0403), which is
+# the gate doing its job: a kind added is a kind every dispatch has to be
+# looked at over, and three of these four rows moved without an arm changing.
+promptkey:keykind:1 chains 4 of 26
 
 [tui/apide.pas]
 
@@ -610,13 +614,13 @@ promptkey:keykind:1 chains 4 of 25
 # build, a quit, an open. Nothing else can be pending, because `EditTakeCommand`
 # answers only what `ed.pend` was set to and the four places that set it set
 # one of these. ADR-0388, ADR-0391, ADR-0396.
-obey:keykind:1 chains 4 of 25
+obey:keykind:1 chains 4 of 26
 
 # The main loop tests two kinds before handing the key to the model: Ctrl-Q,
 # which is the quit guard and is the shell's because the loop is (ADR-0401),
 # and Ctrl-S, which is this side's only when there is a name to write under.
 # Every other key goes to `EditKey` unexamined, which is ADR-0381's line.
-apide:keykind:1 chains 2 of 25
+apide:keykind:1 chains 2 of 26
 
 # --- compared with `=`, not dispatched ------------------------------------
 #
