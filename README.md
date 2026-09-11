@@ -413,7 +413,7 @@ the emitted module is right for macOS, and one of them ships an archive.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **603 of the 604 programs in this repository's
+a file and a handle (ADR-0325). **604 of the 605 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 
@@ -1842,16 +1842,25 @@ be written either way, and the receiver may be any variable: `p.Len`,
 
 **A method is not an exported name.** What a module exports is the *type*, and
 its routines travel with it — so two modules may each have a `Put`, which
-§6.11.2 refuses to two exported names. That is what this is for: 139 of 486
-exported names in the library below repeat their own module's noun to work
+§6.11.2 refuses to two exported names. That is what this is for: the library
+below repeats its own module's noun in a third of its exported names to work
 around exactly that, and a method is the receiver those prefixes are spelling
 by hand.
 
-Two things to know. A type may not have a field and a routine of one name, and
-is told so where the implementation is written rather than at the call. And a
+**An implementation is written in the module's block and reaches the module's
+clients** (AP 6.7.10.5). There is nothing to export and nothing to declare
+twice: a component that can name the type can call everything implemented for
+it, including a trait a third component declared. Changing a method's heading
+means rebuilding the components that call it, and the linker says so; changing
+its body does not.
+
+Three things to know. A type may not have a field and a routine of one name,
+and is told so where the implementation is written rather than at the call. A
 method called **on what a method returned** needs that second method to take
 its receiver by value — §6.6.3.3 wants a variable for a `var` parameter, and a
-function result is not one.
+function result is not one. And a method may be `external`, which binds a C
+function as a routine of the type, the receiver reaching it as the address a
+`var` parameter already travels as.
 
 **A trait object holds a value whose type is not known until it is used**
 (AP 6.7.11, ADR-0409), which is what a bound cannot do: a bound chooses the
@@ -2922,8 +2931,8 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 933 cases under `ctest`, the compiler compiled with itself to a
-fixed point and built a second way through `llc`, 427 scenarios written against
+Beside that: 935 cases under `ctest`, the compiler compiled with itself to a
+fixed point and built a second way through `llc`, 442 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,
 and each of the eleven programs the two answer differently is recorded with the

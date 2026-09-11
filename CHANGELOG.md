@@ -15,6 +15,27 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A module's implementations reach the components that import it**
+  (ADR-0411, AP 6.7.10.5). `impl Circle;` and `impl Renders for Circle;`
+  written in a module-block are selected in every program-component that can
+  name `Circle` — so a library's types carry their own routines, and
+  `c.Area`, `Area(c)` and a `dyn Renders` built by the client all reach them.
+  Nothing about the spelling changed; what changed is which translations may
+  read it.
+
+  Until now this did not work and was not refused: the call compiled and the
+  program failed at the assembler or the linker, naming a symbol no source
+  spells. AP 6.7.10.1 NOTE 9 had recorded it as not provided (ADR-0341).
+
+  A method's *heading* is now part of what a component is translated against,
+  so changing one without rebuilding the client is refused at the link, the
+  way a changed module-heading already was (AP 6.13.2). Changing a method's
+  **body** still costs no relink.
+
+  A method may be `external`, which had been admitted since methods landed and
+  is now pinned by a case; it is the one method shape whose linkage name is
+  C's rather than this compiler's.
+
 - **A type may have routines of its own: `impl T;` and `x.M(a)`** (ADR-0410,
   AP 6.7.10, AP 6.7.10.4). `impl Point;` declares routines belonging to
   `Point`, with the receiver written as an ordinary first parameter, and

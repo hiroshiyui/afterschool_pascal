@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 427 frame offsets, with nothing in the gate
+  matched every one of the 11 455 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5818,6 +5818,39 @@ this construct invented: a method result is a function-access, so
 `p.Doubled.Len` is refused where `Len` takes `protected var` and accepted
 where it takes `self` by value. Giving the result a temporary would be a
 second name for a value nobody declared, which is what ADR-0201 refuses.
+
+**An implementation travels with its type** (ADR-0411, AP 6.7.10.5). A module's
+implementation is selected in every component that can name its type -- granted
+rather than added, 6.7.10.2 identifying a routine from the *type* and never
+from a name in scope, so 6.11.2's one scope is not reached at all. ADR-0341 had
+deferred this as *a module shipping an implementation for its clients* and named
+one candidate if it were reopened; that candidate is what is built. The routine
+takes a composed linkage name -- `p.<module>.<type>.<routine>` for an inherent
+implementation and `p.<module>.<type>.<trait>.<routine>` for a trait's, four
+parts against five being what keeps them apart, and the trait standing in the
+name because two traits may declare one spelling for one type and both
+implementations are emitted. The implementation stays in the module-*block*:
+6.11.1's split would state an inherent implementation's headings twice and a
+trait's a third time, 6.7.10.3 having already written them in the trait.
+
+**So AP 6.13.2 grew to cover the implementations**, which is the half that makes
+it safe. 6.13's agreement is a digest of the module-heading's tokens carried in
+the module's activation-procedure name, and an implementation is not in a
+heading -- so a method's parameter list could change under a component already
+translated against it, and did: the probe printed `n=3` with a zero exit status
+where the client passed an i32 into a `real`. Digested now are each
+implementation-declaration's own line and each routine's *heading*, never a
+body, and the parts are **summed** so that neither the order routines were
+written in nor the order components were read in enters into it.
+
+**The counter is reproducible more often than its own comment says**, and that
+is why this needed a gate. Two translations handed the same components in the
+same order allocate the same counters, and `run_test.py` always hands them the
+same list -- so no ctest case distinguishes a composed name from a counter, and
+the first mutation of the change passed all 935. `stale-component` builds the
+case by hand instead: the module translated *alone*, the client with another
+component in front of it, which is the ordinary library situation and which
+fails under a counter with `undefined reference to p4`.
 
 **The trait object carries its answer** (ADR-0409), which is increment C2 and
 the whole feature. A value of `dyn T` is a **box**: a two-word heap variable

@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 933 cases green at `-O2` and at `-O0`.
+and the suite is 935 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
@@ -153,14 +153,23 @@ the compiler three ways — a simple name is §6.11.3's qualified form, a comple
 one is a variable-access the parser can finish, and a parameterless one is a
 field selection — and the first and third are Sema's to tell apart.
 
-**What is not settled is the library.** ADR-0315's judgement stands: one
-module is rewritten as proof and the rest judged after reading it. Nothing is
-forced — `export-unique` reads the export-part and a method is not in one, so
-the prefixed names may coexist with methods indefinitely. The count it would
-retire has moved twice and is worth **running** rather than quoting: it was
-118 of 484 on 2026-09-05 and the denominator is 580 now, so
-`tests/checks/export_unique.py` is the answer and neither number in this
-sentence is. B's payoff was a program's own
+**The object model reaches a client since ADR-0411**, which is where the
+library work began rather than where it was expected to. An implementation
+written in a module-block is selected in every component that can name its
+type (AP 6.7.10.5); before it, a client's call to a module's method compiled
+and died at the assembler or the linker, and AP 6.7.10.1 NOTE 9 had recorded
+the restriction (ADR-0341). **The first thing a rewrite has to ask of a
+feature is whether it crosses §6.13**, and neither the record proposing
+methods nor the one building them had.
+
+**What is not settled is which modules are rewritten.** ADR-0315's judgement
+stands: one module is rewritten as proof and the rest judged after reading it.
+Nothing is forced — `export-unique` reads the export-part and a method is not
+in one, so the prefixed names may coexist with methods indefinitely. The count
+it would retire has moved twice and is worth **running** rather than quoting:
+`tests/checks/export_unique.py` answers the denominator and a sweep of the
+export-parts for names beginning with their own module's noun answers the
+numerator, and no number in this sentence does. B's payoff was a program's own
 text — thirty call sites and fourteen routine parameters — and A's is
 call-site spellings that block no program; A's best argument arrived from B
 (ADR-0339): two modules exporting `Compare` collide under §6.11.2, and
