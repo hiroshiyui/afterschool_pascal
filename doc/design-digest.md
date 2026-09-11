@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 188 frame offsets, with nothing in the gate
+  matched every one of the 11 369 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5771,14 +5771,53 @@ array element, variable and `var` parameter **all compiled**, with only a
 construction works where the default is to refuse and a predicate grants. So
 the refusal is one diagnostic where the denoter resolves, which is also the
 only place a program can be told the two positions 6.7.11.1 will permit.
-The type is two words -- data and vtable -- so `LlSize`, `LlAlign` and
-`PutLlType` put it beside `tyProc` and `tySlice`, ADR-0030's company. A trait
-is not a type, so it is held as `dynTrait: symPtr` and not as `elem`; and
-`owned ^dyn T` cannot be written inline, 6.4.14's domain being a
-type-*identifier*, so the spelling is a named `dyn` type and then `owned ^D`.
-**AP 6.7.11 is the first clause to carry AP 5.6's `[not yet implemented]`
-marker**, which ADR-0189 wrote, ADR-0195 gated both ways, and nothing had
-used -- the gap ADR-0407 had just found written into prose instead.
+The type is two words, so `LlSize`, `LlAlign` and `PutLlType` put it beside
+`tyProc` and `tySlice` -- though **not for their reason**, which ADR-0409
+corrected: those two are ADR-0030's company, two words travelling as separate
+arguments, and a trait object is a two-word heap variable travelling by
+address (AP Annex E.13). A trait is not a type, so it is held as `dynTrait:
+symPtr` and not as `elem`; and `owned ^dyn T` cannot be written inline,
+6.4.14's domain being a type-*identifier*, so the spelling is a named `dyn`
+type and then `owned ^D`. **AP 6.7.11 is the first clause to carry AP 5.6's
+`[not yet implemented]` marker**, which ADR-0189 wrote, ADR-0195 gated both
+ways, and nothing had used -- the gap ADR-0407 had just found written into
+prose instead. It carried it for one increment.
+
+**The trait object carries its answer** (ADR-0409), which is increment C2 and
+the whole feature. A value of `dyn T` is a **box**: a two-word heap variable
+holding the implementation and the storage, with an ordinary one-word `owned`
+pointer at it. The alternative was a fat pointer -- `owned ^D` two words --
+and it was rejected on cost: `LlSize` of a *pointer* would stop being a
+constant, so every load, store, comparison and parameter pass of an owned
+pointer would have to ask whether its domain is a `dyn`. What the box cost
+instead is **one cell in a 42 x 22 predicate table**: `IsMemory` gains
+`IsDyn`, `IsStructured` stays false, and that is the *file's* own shape
+(ADR-0021) -- a value that lives in memory and may never be copied refuses
+assignment, comparison, value parameters and results, and admits a `var`
+parameter, which is 6.7.11.1 b) for free.
+
+**Object safety is measured and not argued.** A routine is reachable through a
+trait object when `Self` occurs once, as a `var` or `protected var` first
+parameter: with that spelling an implementation for a record and one for an
+integer compile to the same LLVM signature, so a table holds the routine
+itself; with `p: Self` by value they are `ptr` and `i32` and every call would
+need an adapter per implementation. It is reported at `type D = dyn T;`, where
+the program asks for the facility, naming every heading in the way at once.
+
+**The table is `[2n+1 x ptr]` per (trait, concrete type)**, drained from a
+worklist after the last user function as `EmitOwnRels` drains its own. Slot 0
+is the **release** -- `@ownrel` of the concrete domain -- and routine *i* takes
+1+2i and 2+2i, its code and its static link. The order is the **trait's
+headings** and not the implementation's declarations, that being the only
+order two concrete types reached through one `dyn` share; the link is a
+constant because an implementation cannot be written inside a procedure, so
+its activation is a global. The release slot is why the table exists beside
+the trait's own routines, and it is **not separable**: behind a `dyn` there is
+no type to resolve `@ownrelN` from, so ADR-0408's planned third increment --
+add the slot later, refuse a concrete type that owns something meanwhile --
+could not have been built, since without it `owned ^D` leaks every object it
+ever holds. Writing it found a real defect: `dispose` had a second release
+path that freed the box and nothing else, at `new=5 dispose=3`.
 
 **A procedure-statement selects by the same lookup** (ADR-0407), and did not
 for the life of the clause. AP 6.7.10.2 has named *a function-designator or a

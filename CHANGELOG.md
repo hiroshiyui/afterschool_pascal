@@ -15,14 +15,33 @@ appears below in the release where it still existed.
 
 ### Added
 
-- **`dyn T` is a type the compiler knows and accepts nowhere yet** (ADR-0408,
-  AP 6.7.11). The trait object of ADR-0315's increment C: its spelling, its
-  restrictions and its two-word value are stated, every position a program can
-  write one in is refused with a message naming where it *will* stand, and the
-  clause carries AP 5.6's `[not yet implemented]` marker — the first to do so,
-  so no passing test can make the specification claim the feature is there.
-  `dyn` reserves nothing: a program may still declare a type, a field and a
-  parameter of that name.
+- **A collection may hold values of different types: `dyn T`, the trait
+  object** (ADR-0408, ADR-0409, AP 6.7.11). `type Shape = dyn Renders;` denotes
+  *something that implements `Renders`*, and `owned ^Shape` owns one; `take`
+  moves a concrete value in and attaches its implementation, and a call
+  through the result selects the implementation where the value is used
+  rather than where the call is translated. This is what a bound
+  (AP 6.7.3.10.5) cannot do — a bound chooses where the type is written, so
+  one collection is one type — and it is the first place this compiler emits a
+  dispatch table.
+
+  A trait object stands in two positions: the domain of an `owned` pointer and
+  a `var` or `protected var` parameter. Everything else is refused with a
+  message saying where one can stand, because every other position would hold
+  a value whose lifetime nothing states. The implementation travels with the
+  value and so does the **release**, so disposing an `owned ^Shape` releases
+  the concrete value and whatever that owns.
+
+  Not every trait has a trait object: each routine must take its receiver as a
+  `var` or `protected var` first parameter and name `Self` nowhere else, and a
+  trait that does not is told so where the `dyn` type is declared, with the
+  heading named. `dyn` reserves nothing — a program may still declare a type,
+  a field and a parameter of that name.
+
+  AP 6.7.11 was published one release early, marked `[not yet implemented]`
+  under AP 5.6 — the first and only clause ever to carry that marker — and the
+  marker is now gone. Building it corrected two things the clause had said
+  (AP Annex E.13, E.14).
 
 ### Fixed
 

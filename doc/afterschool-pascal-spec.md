@@ -3678,7 +3678,7 @@ implementations reports the first implementation's types at the second
 
 ### 6.8 Expressions [extended]
 
-#### 6.7.11 Trait-object-types [added] [not yet implemented]
+#### 6.7.11 Trait-object-types [added]
 
     trait-object-type = 'dyn' trait-identifier .
 
@@ -3726,18 +3726,70 @@ own something of its own type.
 components: the storage the value refers to, and the implementation it
 answers with. Neither shall be accessible to a program.
 
-NOTE 4 — Two words, which is the company 6.7.3.9 keeps for a procedural
-parameter, 6.4.8 for a schematic formal, 6.4.3.3.3 for a variable string and
-6.4.13.1 for a slice: nothing of two words depends on how a structure is
-passed, so a processor need hold no opinion about a foreign calling
-convention (ADR-0030).
+NOTE 4 — The value lives in memory and travels by address, as a record does;
+it shall not be copied, compared, passed by value or returned, which 6.7.11.1
+already secures by confining it to two positions. An earlier draft of this
+clause put it in ADR-0030's company — the two words of a procedural parameter
+(6.7.3.9), a schematic formal (6.4.8), a variable string (6.4.3.3.3) and a
+slice (6.4.13.1), each travelling as separate arguments so that nothing
+depends on how a structure is passed. That was a claim about a representation
+this Standard does not require and the processor here does not use: in neither
+permitted position do the two components travel as arguments. See Annex E.
 
-**6.7.11.3 What this clause does not yet require.** A processor is not
-required by this clause to *accept* any occurrence of a trait-object-type.
-The type, its spelling and its restrictions are stated here; what is not
-stated is the access, which needs 6.7.10.2's selection performed at the time
-of access rather than at the time of translation, and that requirement will be
-written when it is met (5.6).
+**6.7.11.2.1 Which routines a trait object answers.** A trait-object-type
+shall denote a value answering the routines its trait declares. It shall be an
+error for the trait to declare a routine whose first formal-parameter-section
+is not a variable-parameter-specification or a protected
+variable-parameter-specification naming exactly one parameter whose
+parameter-form is `Self`, or to declare a routine naming `Self` anywhere else;
+and the error shall be reported at the trait-object-type.
+
+NOTE 5 — The restriction is what makes one implementation substitutable for
+another at the point of access. `Self` in a second parameter would require two
+trait objects to agree about a type neither carries, and `Self` as a
+result-type is a value whose size the accessing activation cannot know. The
+first parameter's form is a requirement of the same kind stated once more: a
+value parameter of a type that is a record and a value parameter of a type
+that is an integer are not passed alike, so no single description of the
+routine would serve both implementations (ADR-0017, ADR-0409).
+
+NOTE 6 — A trait may therefore be usable as a bound (6.7.3.10.5) and not as a
+trait-object-type, and that is not an inconsistency: a bound chooses the
+implementation where the type is given, so nothing has to be substitutable
+afterwards.
+
+**6.7.11.3 Access.** Where the first actual-parameter of a call selected by
+6.7.10.2 possesses a trait-object-type, the routine shall be the one the
+implementation that value answers with supplies, and the selection shall be
+performed at the time of the access and not at the time of translation. The
+first actual-parameter shall be bound to the storage the value refers to.
+
+NOTE 7 — This is the whole of the difference between a trait-object-type and a
+bound (6.7.3.10.5). A bound is satisfied where the type is given, so one
+translation serves; a trait object carries the answer, so the translation
+serves every type that ever answered.
+
+**6.7.11.4 Creation and release.** A value of a trait-object-type shall be
+created only by 6.4.14.6's move into a variable of an owned-pointer-type whose
+domain is that trait-object-type, from a variable of an owned-pointer-type
+whose domain is a type for which the trait is implemented. It shall be an
+error for 6.7.5.3's `new` to be applied to a variable of an owned-pointer-type
+whose domain is a trait-object-type, and the error shall be reported at the
+procedure-statement.
+
+Releasing a variable of an owned-pointer-type whose domain is a
+trait-object-type shall release the storage the value refers to, by the
+implementation that value answers with, before releasing the value itself.
+
+NOTE 8 — The move is where the implementation is attached, and `new` is
+refused because it has none to attach: the storage it would create is of the
+right shape and would answer nothing.
+
+NOTE 9 — The second paragraph is the requirement 6.4.14.3 cannot state for
+this domain. Release is otherwise a function of the domain-type, which behind
+a trait object is not known where the release stands, so what runs is carried
+by the value — and the release of a type that itself owns something is
+therefore reached exactly as it is anywhere else (ADR-0409).
 
 #### 6.8.3 Operators [extended]
 
@@ -4781,6 +4833,35 @@ translation time, which is the honest form: *when* a required conversion
 happens is not a property a program can observe, and stating it bought
 nothing but a requirement no processor here could meet.
 
+**E.13 6.7.11.2 put a trait object in ADR-0030's two-word company, and
+building it took it out again.** ADR-0408 wrote the clause from a
+representation it had reasoned about and not built: an owned pointer whose
+domain is a trait-object-type would be two words, {storage, implementation},
+and would therefore join the procedural parameter, the schematic formal, the
+variable string and the slice in travelling as separate arguments (ADR-0030).
+
+Building it chose the other shape (ADR-0409). Making a *pointer's* width
+depend on its domain would have required every load, store, comparison and
+parameter pass of an owned pointer to ask whether that domain is a trait
+object — the class of change nothing here can make by construction, and the
+record that proposed it said so in its own words: *every place that assumes an
+owned pointer is one word has to be found, not assumed.* The value lives in
+memory and travels by address instead, as a record does, and the pointer to it
+is an ordinary one word.
+
+The two-word sentence in 6.7.11.2 is true of the *value* either way — it has
+two components — so what changed is the NOTE, which claimed a property of how
+they travel. They travel as one address, in both permitted positions.
+
+**E.14 6.7.11 required no object safety, and could not have been implemented
+without it.** ADR-0408 and the first draft of this clause say which positions a
+trait-object-type may stand in and say nothing about which routines its trait
+may declare. Building the access found that the second question is not
+optional: a routine whose receiver is a value parameter is passed differently
+by each implementation, so nothing can describe the call. 6.7.11.2.1 states
+the requirement and the error is reported at the trait-object-type, which is
+where a program asks for the facility.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -4816,6 +4897,7 @@ nothing but a requirement no processor here could meet.
 | 6.7.7.8 (the record component) | ADR-0187 |
 | 5.6, 6.4.15 | ADR-0189 |
 | 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |
+| 6.7.11, Annex E.13, Annex E.14 | ADR-0409 |
 | 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |
 | 6.5.1 | ADR-0299 |
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |

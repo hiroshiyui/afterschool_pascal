@@ -2791,6 +2791,55 @@ begin
   SelfOwnedField := found
 end;
 
+{ AP 6.7.11's tables, one per (trait, concrete type) pair Sema recorded
+  (ADR-0409). Internal constants, so nothing outside the module can name one
+  and LLVM is free to fold them away where a coercion is the only reader.
+
+  **It runs before `EmitOwnRels` and must**: slot 0 is `@ownrel` of the
+  concrete domain, and asking `OwnRelId` for it is what puts that routine on
+  the worklist the drain below empties. Emitted after that it would name a
+  function nothing defined.
+
+  The link beside each code address is the static link the routine expects,
+  and it is a *constant* because an implementation belongs to the whole
+  program or module and cannot be written inside a procedure -- the compiler
+  already refuses that -- so its enclosing activation is a global. }
+procedure EmitVtables;
+var v: vtabPtr; p: symListPtr; n: integer; nm, lnk: str;
+begin
+  v := vtabHead;
+  while v <> nil do begin
+    n := 0;
+    p := v^.routines;
+    while p <> nil do begin
+      n := n + 1;
+      p := p^.next
+    end;
+    writeln(ircode);
+    write(ircode, '; what a ');
+    WritePoolIr(v^.trait^.at, v^.trait^.len);
+    write(ircode, ' answers when it is a ');
+    if v^.forType^.aliasLen > 0 then
+      WritePoolIr(v^.forType^.aliasAt, v^.forType^.aliasLen);
+    writeln(ircode);
+    write(ircode, '@vtab', v^.id:1, ' = internal constant [', 2 * n + 1:1,
+          ' x ptr] [ptr @ownrel', OwnRelId(v^.forType):1);
+    p := v^.routines;
+    while p <> nil do begin
+      StrClear(nm);
+      AppendProcName(nm, p^.sym);
+      FrameGlobal(p^.sym^.owner, lnk);
+      write(ircode, ', ptr ');
+      PutOp(nm);
+      write(ircode, ', ptr ');
+      PutOp(lnk);
+      p := p^.next
+    end;
+    writeln(ircode, ']');
+    v := v^.next
+  end
+end;
+
 procedure EmitOwnRels;
 var r: ownRelPtr; more: boolean; own, empty, raw, cur, nextv, fld, blk: str;
     pend, sub, node, atEnd, link, held: str;
@@ -2819,6 +2868,54 @@ begin
                 '(ptr %own) #1 {');
         nextReg := 0;
         nextBlock := 0;
+        { AP 6.7.11's release (ADR-0409), which is why the table has a slot
+          0 at all. Behind a trait object the pointed-to type is not known
+          here, so the routine that releases it cannot be resolved at
+          translation time the way every other domain's is -- it is carried.
+
+          This is `@ownrel` of the *box*, and it does two releases: the
+          concrete one the table names, over the storage the trait object
+          refers to, and then the box itself. No file walk and no header:
+          a box is two pointers this emitter allocated and nothing a program
+          declared, so `HoldsFile` and `HeaderSize` have nothing to say
+          about it. }
+        if IsDyn(r^.dom) then begin
+          StartBlock(NewBlock);
+          bodyB := NewBlock;
+          doneB := NewBlock;
+          Def(empty);
+          writeln(ircode, 'icmp eq ptr %own, null');
+          write(ircode, '  br i1 ');
+          PutOp(empty);
+          writeln(ircode, ', label %L', doneB:1, ', label %L', bodyB:1);
+
+          StartBlock(bodyB);
+          Def(held);
+          writeln(ircode, 'load ptr, ptr %own');
+          Def(sub);
+          write(ircode, 'load ptr, ptr ');
+          PutOp(held);
+          writeln(ircode);
+          Def(node);
+          write(ircode, 'getelementptr inbounds ptr, ptr %own, i32 1');
+          writeln(ircode);
+          Def(atEnd);
+          write(ircode, 'load ptr, ptr ');
+          PutOp(node);
+          writeln(ircode);
+          write(ircode, '  call void ');
+          PutOp(sub);
+          write(ircode, '(ptr ');
+          PutOp(atEnd);
+          writeln(ircode, ')');
+          writeln(ircode, '  call void @pas_dispose(ptr %own)');
+          writeln(ircode, '  br label %L', doneB:1);
+
+          StartBlock(doneB);
+          writeln(ircode, '  ret void');
+          writeln(ircode, '}')
+        end
+        else begin
         chain := SelfOwnedField(r^.dom, threaded);
         StartBlock(NewBlock);
         loopB := NewBlock;
@@ -2990,6 +3087,7 @@ begin
         StartBlock(doneB);
         writeln(ircode, '  ret void');
         writeln(ircode, '}')
+        end
       end;
       r := r^.next
     end
@@ -4240,6 +4338,7 @@ end;
 procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
                        var v: str; line, col: integer);
 var link, a, alen, slot, half, target, resAddr, padded: str;
+    vtab, dynData: str;
     head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
     byAddr, comma, foreignPtr: boolean;
@@ -4401,6 +4500,54 @@ begin
     p := p^.next
   end;
 
+  { AP 6.7.11's call through a trait object (ADR-0409). There is no function
+    to name, so `target` and `link` are *loaded* -- which is not a new kind of
+    call: a procedural parameter has been called through a code-and-link pair
+    since ADR-0030, and this reads the same pair out of a table instead of out
+    of a frame slot.
+
+    It is done **here**, after the operand list is built, because what the
+    table is reached through is the first argument, and emitting the
+    designator a second time would evaluate a subscript twice. The first
+    operand is the receiver's box; its slot 0 is the table and its slot 1 is
+    the storage the trait object refers to, and the storage is what the
+    routine is handed -- an implementation's own `var Self` knows nothing
+    about a box.
+
+    Slot arithmetic: index 0 of the table is the release (which is why it is
+    a table and not one pointer), and routine *i* occupies 1 + 2i and 2 + 2i,
+    so a 1-based `dynSlot` reads 2n-1 and 2n. }
+  if callee^.dynSlot > 0 then begin
+    Def(vtab);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(head^.text);
+    writeln(ircode);
+    Def(half);
+    write(ircode, 'getelementptr inbounds ptr, ptr ');
+    PutOp(vtab);
+    writeln(ircode, ', i32 ', 2 * callee^.dynSlot - 1:1);
+    Def(target);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    Def(half);
+    write(ircode, 'getelementptr inbounds ptr, ptr ');
+    PutOp(vtab);
+    writeln(ircode, ', i32 ', 2 * callee^.dynSlot:1);
+    Def(link);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    Def(half);
+    write(ircode, 'getelementptr inbounds ptr, ptr ');
+    PutOp(head^.text);
+    writeln(ircode, ', i32 1');
+    Def(dynData);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    head^.text := dynData
+  end;
   result := ResultTypeOf(callee);
   { Where to build a result that lives in memory. Sema gave this call site a
     frame slot of its own; the callee writes through the address and hands
@@ -7476,6 +7623,7 @@ end;
 procedure EmitAssign;
 var dst, src, size, hdr, td, tl, sd, sl: str; t, comp: typePtr;
     align: integer;
+    boxed, dynAt: str; vtn: integer;
 begin
   { 6.5.6's substring-variable. Its type is "a new fixed-string-type" of
     capacity hi - lo + 1, and the *fixed*-string store is already exactly that
@@ -7620,6 +7768,44 @@ begin
     write(ircode, '  store ptr null, ptr ');
     PutOp(src);
     writeln(ircode);
+    { AP 6.7.11's coercion (ADR-0409), and the only place a trait object comes
+      into existence. The move is the move the source spelled -- `take`, and
+      the source is emptied above exactly as it is for an ordinary owned
+      pointer -- and what this adds is the box: two words holding the table
+      and the address the move produced.
+
+      It is an allocation, and that is the price of the representation this
+      increment chose over a two-word pointer: every pointer here stays one
+      word, so nothing that loads, stores or compares one had to learn that a
+      domain can be a `dyn`. The box is released by `@ownrel` of the
+      trait-object type, which the next few lines call on whatever the target
+      held.
+
+      The zero answer cannot happen -- Sema registers the table at the arm
+      that admits this assignment -- and is emitted as a null table rather
+      than as nothing, so a defect here is a trap at the first call and not a
+      wild jump. }
+    if IsDyn(s^.asTarget^.ntype^.elem) then begin
+      boxed := hdr;
+      Def(hdr);
+      writeln(ircode, 'call ptr @pas_new(i64 ', 2 * PtrSize:1, ')');
+      vtn := VtabId(s^.asTarget^.ntype^.elem^.dynTrait, s^.asValue^.ntype^.elem);
+      if vtn = 0 then write(ircode, '  store ptr null, ptr ')
+      else begin
+        write(ircode, '  store ptr @vtab', vtn:1, ', ptr ')
+      end;
+      PutOp(hdr);
+      writeln(ircode);
+      Def(dynAt);
+      write(ircode, 'getelementptr inbounds ptr, ptr ');
+      PutOp(hdr);
+      writeln(ircode, ', i32 1');
+      write(ircode, '  store ptr ');
+      PutOp(boxed);
+      write(ircode, ', ptr ');
+      PutOp(dynAt);
+      writeln(ircode)
+    end;
     EmitAddress(s^.asTarget, dst);
     Def(td);
     write(ircode, 'load ptr, ptr ');
@@ -8897,6 +9083,25 @@ begin
       MsgText('dispose of nil                          ');
       msg := MsgEnd;
       EmitTrapIf(raw, msg, s^.pcArgs^.line, s^.pcArgs^.col);
+      { AP 6.7.11 (ADR-0409): behind a trait object there is nothing here to
+        walk and nothing to step back over -- the box is two words this
+        emitter allocated, and what it refers to is released by the routine
+        the table carries. `@ownrel` of the trait-object type does both, so
+        the explicit dispose is the same release the end of a block performs
+        and not a second implementation of it.
+
+        It was one, for an afternoon: this arm disposed the box and left the
+        concrete object and everything *it* owned unreleased, which the
+        balance saw as `new=5 dispose=3` where the same program without the
+        `dispose` statement answered 5 and 5. A release written twice is
+        ADR-0388's fact stated twice, and the half nothing exercised is the
+        half that was wrong. }
+      if IsDyn(domain) then begin
+        write(ircode, '  call void @ownrel', OwnRelId(domain):1, '(ptr ');
+        PutOp(block);
+        writeln(ircode, ')')
+      end
+      else begin
       if HoldsFile(domain) then begin
         { ADR-0329: the tuple is in front of the block, and this is the walk
           that could not find it. }
@@ -8916,7 +9121,8 @@ begin
       end;
       write(ircode, '  call void @pas_dispose(ptr ');
       PutOp(block);
-      writeln(ircode, ')');
+      writeln(ircode, ')')
+      end;
       { ISO 7185 6.6.5.3 leaves the pointer undefined afterwards. Setting it to
         nil makes the next dereference trap instead of reading freed storage --
         stricter than the standard requires, and cheap. An expression that is
@@ -12317,6 +12523,7 @@ begin
       definition cannot be nested inside the one that calls it. A module-only
       translation reaches this arm, so it needs the drain as much as a program
       does -- a module's own variables are released by its finalization. }
+    EmitVtables;
     EmitOwnRels;
     writeln(ircode);
     EmitGlobals;
@@ -12376,6 +12583,7 @@ begin
     d := d^.next
   end;
 
+  EmitVtables;
   EmitOwnRels;
 
   writeln(ircode);

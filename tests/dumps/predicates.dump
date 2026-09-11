@@ -33,7 +33,7 @@ IsProcType 1 of 22: tyProc
 IsEmptySet 1 of 22: tySet
 IsRestricted 1 of 22: tyRestricted
 IsStructured 3 of 22: tyArray tyRecord tyOptional
-IsMemory 7 of 22: tyArray tyRecord tyFile tyOptional tyHandle tyString tyText
+IsMemory 8 of 22: tyArray tyRecord tyFile tyOptional tyHandle tyString tyText tyDyn
 IsOrdinal 4 of 22: tyInteger tyBoolean tyChar tyEnum
 IsCharArray 0 of 22:
 IsStringType 1 of 22: tyString

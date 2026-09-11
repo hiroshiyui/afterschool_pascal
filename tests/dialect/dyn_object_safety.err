@@ -1,0 +1,6 @@
+<source>:54:9: error: 'awkward' has no trait object: 'byvalue' would have to take 'var p: Self' or 'protected var p: Self' as its first parameter and only that
+<source>:54:9: error: 'awkward' has no trait object: 'clone' names 'Self' somewhere other than that first parameter, and a trait object carries one type and not two
+<source>:54:9: error: 'awkward' has no trait object: 'rank' names 'Self' somewhere other than that first parameter, and a trait object carries one type and not two
+<source>:54:9: error: 'awkward' has no trait object: 'pair' would have to take 'var p: Self' or 'protected var p: Self' as its first parameter and only that
+<source>:54:9: error: 'awkward' has no trait object: 'bare' would have to take 'var p: Self' or 'protected var p: Self' as its first parameter and only that
+<source>:64:3: error: other has no 'impl fine', so it answers nothing a good is asked

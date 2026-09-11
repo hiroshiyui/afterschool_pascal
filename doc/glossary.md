@@ -540,6 +540,34 @@ defined exactly once. It belongs to one translation: a program-block or a
 module-block, never inside a procedure and never in a module-heading, because
 its routines read frames only that translation has (AP 6.7.10, ADR-0341).
 
+**Trait object (`dyn T`).** A value that implements the trait `T`, where
+*which* implementation is not decided until the value is used (AP 6.7.11,
+ADR-0409). It is the answer to a question a **bound** cannot ask: a bound
+chooses the implementation where the type is written down, so one collection
+is one type, while a trait object carries the answer and a collection of them
+holds whatever answers. It stands in two positions only -- the domain of an
+`owned` pointer and a `var` or `protected var` parameter -- and is refused
+everywhere else, since every other position would hold a value whose lifetime
+nothing states. A trait has one only if each of its routines takes its
+receiver as a `var` first parameter and names `Self` nowhere else; see
+**object safety**.
+
+**Object safety.** The property of a trait that every one of its routines can
+be reached through a trait object: `Self` occurring exactly once, as the type
+of a `var` or `protected var` first parameter (AP 6.7.11.2.1, ADR-0409). The
+word is Rust's; the reason here is the calling convention, measured rather
+than assumed -- a receiver passed by value is passed differently by an
+implementation for a record and one for an integer, so no single description
+of the routine would serve both. A trait may be usable as a bound and not as a
+trait object, and that is not an inconsistency.
+
+**Table (of a trait object).** The per-(trait, concrete type) constant a trait
+object points at, holding each trait routine's code and static link -- and, in
+slot 0, the **release**. The release is there because it cannot be resolved
+where it is needed: everywhere else in this language a release is a function
+of the domain type, and behind a trait object that type is not known, so it is
+carried (ADR-0409). It is the only dispatch table this compiler emits.
+
 **`Self`.** Inside a trait heading, the type of the implementation the heading
 is being read for. It stands as a whole parameter type or a result type and
 never inside one, so a trait routine takes and returns whole values. A

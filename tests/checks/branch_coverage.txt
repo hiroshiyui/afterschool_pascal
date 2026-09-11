@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 852
-instrumented 11606
-decisions 5803
+uncovered 867
+instrumented 11776
+decisions 5888
 
 accept 0/4
 accumulate 1/32
@@ -73,7 +73,7 @@ boundschema 0/30
 boundschemafor 0/2
 boundslot 0/2
 boundvalue 1/24
-buildformals 7/120
+buildformals 7/126
 buildsearchpath 0/12
 calledsym 2/6
 calltakescaret 3/22
@@ -88,13 +88,14 @@ checkarguments 10/266
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 1/10
-checkcall 21/196
+checkcall 21/200
 checkcase 2/38
 checkcomponentvalue 0/10
 checkconstdecl 0/18
 checkdeclarations 4/68
 checkdefer 1/2
 checkdeferbody 1/16
+checkdyndomain 1/6
 checkedforsetbase 0/8
 checkedforsubrange 2/24
 checkedresulttype 0/16
@@ -132,8 +133,8 @@ checksetexpr 0/8
 checksetmember 2/12
 checksetvalue 1/12
 checkspawn 4/18
-checkstdproc 30/338
-checkstmt 16/274
+checkstdproc 30/346
+checkstmt 16/292
 checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
@@ -189,7 +190,7 @@ determinearg 5/10
 determinetuple 1/6
 discselectorfor 1/6
 discvalue 6/18
-dispatchtrait 2/22
+dispatchtrait 2/24
 dumparmlist 0/10
 dumpblock 0/4
 dumpcaselabels 0/4
@@ -234,10 +235,12 @@ dynamictail 1/16
 dynbounddisc 0/2
 dynlength 1/4
 dynsize 0/12
+dyntraitsym 2/26
+dynwantedderef 3/10
 earlier 0/2
 emitaddress 2/36
 emitarrayvalue 0/16
-emitassign 0/42
+emitassign 1/46
 emitbinary 5/118
 emitcall 7/110
 emitcase 0/24
@@ -273,7 +276,7 @@ emitmodule 1/6
 emitnewselectors 1/6
 emitnewtuple 2/10
 emitoptionaltest 1/4
-emitownrels 1/26
+emitownrels 1/28
 emitposglobals 0/2
 emitprocargument 1/6
 emitprocbody 0/14
@@ -290,7 +293,7 @@ emitsetbinary 0/4
 emitshortcircuit 0/10
 emitslicevalue 2/16
 emitspawn 1/20
-emitstdproc 2/56
+emitstdproc 2/58
 emitstmt 3/34
 emitstore 0/34
 emitstring 0/46
@@ -303,7 +306,8 @@ emittextcompare 1/6
 emittransfer 0/18
 emittuplecheck 0/2
 emitunary 0/2
-emitusercall 1/84
+emitusercall 1/86
+emitvtables 1/8
 emitwhile 0/6
 emitwith 2/8
 emitwrite 1/12
@@ -433,7 +437,7 @@ isconstantaccess 10/22
 iscontinuation 0/4
 isdesignator 1/22
 isdigit 0/2
-isdyn 1/2
+isdyn 0/2
 isemptyset 0/2
 isenum 1/2
 isequatable 0/14
@@ -448,7 +452,7 @@ isint64 1/2
 isinteger 1/2
 isinterfacename 0/2
 isinvocable 0/6
-ismemory 0/10
+ismemory 0/12
 ismemoryconstant 2/4
 isnil 0/2
 isnumeric 0/4
@@ -521,11 +525,13 @@ nextformal 1/8
 nonvarying 8/58
 notedeclarationsto 0/8
 notedefining 2/8
+notedyncoercion 5/20
 noteexportedinterface 1/8
 notehandlecloser 0/2
 noteunwrittenvarparams 0/20
 noteuse 0/6
 noteusefield 0/4
+notevtab 1/4
 notinghere 0/4
 offer 1/30
 ordinalhi 1/10
@@ -651,7 +657,7 @@ requiredfuncwide 0/4
 requiredtype 0/2
 reservedforeignname 14/42
 resolvearray 0/12
-resolvedyn 1/4
+resolvedyn 1/12
 resolveenum 0/6
 resolvefile 4/16
 resolvegotos 3/52
@@ -666,7 +672,7 @@ resolverestricted 3/14
 resolveset 1/8
 resolveslice 0/6
 resolvesubrange 3/36
-resolvetype 3/48
+resolvetype 3/52
 resolvevariantpart 4/78
 resulttypeof 2/8
 rootdesignator 1/10
@@ -725,6 +731,7 @@ tocomplex 0/2
 toint64 0/2
 tokenize 0/12
 toreal 0/6
+traitdispatchable 0/26
 transferable 4/20
 transferargs 0/2
 transfers 0/12
@@ -735,6 +742,7 @@ underlying 0/2
 variantfieldname 1/10
 variantselector 1/18
 variantstorageat 1/10
+vtabid 1/8
 walkfiles 5/42
 warnat 1/2
 warnpartialresult 0/22
@@ -755,6 +763,6 @@ writeordinalname 2/24
 writesresult 0/26
 writesymref 2/20
 writetrim 1/4
-writetypename 2/38
+writetypename 3/38
 writevariantref 0/6
 writeword 1/4

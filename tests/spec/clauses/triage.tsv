@@ -577,7 +577,9 @@ afterschool	6.7.10	testable
 afterschool	6.7.10.1	testable	
 afterschool	6.7.10.2	testable	
 afterschool	6.7.10.3	structural	states how a trait heading is read for each implementation; every requirement it carries is one of 6.7.9.1's or 6.7.10's and is reported there
-afterschool	6.7.11	not-implemented	AP 5.6's first user (ADR-0408): the trait-object-type is stated, spelled and restricted, and the processor accepts no occurrence of one -- so the traceability gate must refuse a scenario citing it, or a passing test would say the feature is there
-afterschool	6.7.11.1	not-implemented	the two positions a trait object may stand in; neither is accepted yet
-afterschool	6.7.11.2	not-implemented	the two-word value; no program can make one
-afterschool	6.7.11.3	not-implemented	says in the document what this row says in the triage, which 5.6 requires to be both places and compared
+afterschool	6.7.11	testable	the trait-object-type. AP 5.6's first and so far only user, marked for one increment and unmarked here (ADR-0408, ADR-0409): tests/dialect/dyn.pas is the behavioural case
+afterschool	6.7.11.1	testable	the two positions a trait object may stand in, and every position that is not one of them -- tests/dialect/dyn_positions.pas
+afterschool	6.7.11.2	testable	the value: it lives in memory, travels by address, and is refused every operation that would copy one
+afterschool	6.7.11.2.1	testable	object safety -- which routines a trait may declare and still have an object; tests/dialect/dyn_object_safety.pas
+afterschool	6.7.11.3	testable	the access: the implementation is selected where the value is used and not where the call is translated
+afterschool	6.7.11.4	testable	creation by the move alone, `new` refused, and the release the value carries

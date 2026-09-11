@@ -32,6 +32,7 @@ CLAUDE.md   | sanitize[valgrind] | \. (\d+) clean, 0 flagged
 CLAUDE.md   | sanitize[address]  | green at a level it had not asked for — (\d+) of them today
 CLAUDE.md   | sanitize[thread]   | without this row moving; (\w+) qualify
 CLAUDE.md   | lib-coverage       | the whole of `lib/` — (\d+) modules today
+CLAUDE.md   | predicate-kinds    | one cell of a (\d+) × (\d+) predicate table
 CLAUDE.md   | runtime-nonposix   | on its own and \*\*(five)\*\* come back, of seventeen
 README.md   | wasm32             | \*\*(\d+) of the (\d+) programs in this corpus run as
 CLAUDE.md   | wasm32             | \*\*(\d+) of (\d+) answer their golden\*\*

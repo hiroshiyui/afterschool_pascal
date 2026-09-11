@@ -416,4 +416,5 @@ the alternatives that were rejected and why.
 | [0405](0405-a-question-is-not-an-action.md) | A question is not an action | Accepted |
 | [0406](0406-a-case-is-run-where-nothing-else-is.md) | A case is run where nothing else is | Accepted |
 | [0407](0407-a-procedure-statement-selects-too.md) | A procedure-statement selects too | Accepted |
-| [0408](0408-a-type-nothing-admits-is-not-refused.md) | A type nothing admits is not refused | Accepted |
+| [0408](0408-a-type-nothing-admits-is-not-refused.md) | A type nothing admits is not refused | Accepted; staging superseded by [0409](0409-the-trait-object-carries-its-answer.md) |
+| [0409](0409-the-trait-object-carries-its-answer.md) | The trait object carries its answer | Accepted |

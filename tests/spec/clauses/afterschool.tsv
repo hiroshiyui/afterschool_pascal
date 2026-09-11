@@ -177,10 +177,12 @@
 6.7.10.1	Where an implementation may stand
 6.7.10.2	Selecting an implementation
 6.7.10.3	Reading a trait heading
-6.7.11	Trait-object-types [added] [not yet implemented]
+6.7.11	Trait-object-types
 6.7.11.1	Where a trait object may stand
 6.7.11.2	The value
-6.7.11.3	What this clause does not yet require
+6.7.11.2.1	Which routines a trait object answers
+6.7.11.3	Access
+6.7.11.4	Creation and release
 6.8	Expressions
 6.8.3	Operators
 6.8.3.5	Relational operators

@@ -476,7 +476,100 @@ map rather than repeating a number, and say what the program drops. Never
 clamp with `substr`: two long keys sharing a prefix become one key, which is a
 wrong answer where the other two shapes are merely a narrow one.
 
-## 8. Concurrency: tasks and channels
+## 8. Traits: where the virtual method went
+
+Turbo Pascal gives you `object` with `virtual` methods and a VMT, and Delphi
+gives you `class` and `interface`. This dialect has neither, and no
+inheritance at all. What it has instead splits that one feature in two, and
+which of the two you want is usually obvious once the question is put.
+
+**A trait is a set of routine headings a type may implement.**
+
+```pascal
+trait Renders;
+  procedure Draw(protected var p: Self);
+  function Area(protected var p: Self): integer;
+end;
+
+type Circle = record r: integer end;
+     Square = record s: integer end;
+
+impl Renders for Circle;
+  procedure Draw;
+  begin writeln('circle of radius ', p.r:1) end;
+  function Area;
+  begin Area := 3 * p.r * p.r end;
+end;
+
+impl Renders for Square;
+  procedure Draw;
+  begin writeln('square of side ', p.s:1) end;
+  function Area;
+  begin Area := p.s * p.s end;
+end;
+```
+
+`Self` is the implementing type. The bodies write their names alone — the
+trait already gave the heading, and a second copy is a copy that can disagree.
+Neither `trait` nor `impl` is a reserved word, so a program of your own that
+uses either as an identifier still compiles.
+
+Now `Draw(c)` picks the implementation from `c`'s type. That much is **not**
+a virtual method: it is chosen when the program is compiled, like an
+overloaded routine in a language that has them, and it costs nothing at run
+time.
+
+**When you want the type chosen at run time, that is `dyn`.**
+
+```pascal
+type Shape    = dyn Renders;      { "something that implements Renders" }
+     AnyShape = owned ^Shape;
+
+procedure Run;
+var bag: array [1..2] of AnyShape;
+    c: owned ^Circle; s: owned ^Square; i: integer;
+begin
+  new(c); c^.r := 2;
+  new(s); s^.s := 5;
+  bag[1] := take(c);                { the move attaches the implementation }
+  bag[2] := take(s);
+  for i := 1 to 2 do Draw(bag[i]^)  { and each answers for itself }
+end;
+```
+
+That is the VMT, and this is the one place the compiler emits a dispatch
+table. The differences from what you are used to are worth knowing up front.
+
+**A trait object lives behind an `owned` pointer or a `var` parameter, and
+nowhere else.** A `Shape` variable, field or array element is refused. The
+reason is section 6's: the value refers to storage it does not own, and those
+two positions are the two places the language can say who does — the `owned`
+pointer owns it, and a `var` parameter borrows it for the call. `owned ^dyn
+Renders` is not a spelling; name the type first, as above.
+
+**The release comes with it.** Disposing an `AnyShape` releases the circle or
+the square, and whatever *that* owns — a file, a chain of owned pointers,
+anything. You do not write a destructor and you cannot forget to call one.
+
+**Not every trait can have a `dyn`.** Each routine has to take its receiver as
+`var` or `protected var` and mention `Self` nowhere else. Write it that way
+from the start and both uses are open to you; write `procedure Draw(p: Self)`
+and you get the compile-time form only, and a message at the `dyn` declaration
+saying which heading is in the way. The reason is that a receiver passed *by
+value* is passed differently for a record than for an integer, so one table
+entry could not serve both.
+
+**There is no inheritance, and no `is` or `as`.** A trait object answers the
+trait's routines and nothing else; you cannot ask it what it really is. If you
+need that, you want a variant record, which the standard has had all along.
+
+The other half of traits is that a trait can be a **bound** on a generic — the
+subject of the previous section. `Map(K: Sortable; V: type; cap: integer)`
+requires its key type to implement `Sortable`, checked once where the client
+writes the type. A bound picks the implementation where the type is written; a
+`dyn` carries it. That is the whole distinction.
+
+## 9. Concurrency: tasks and channels
 
 There are two threads of control and the model is share-nothing.
 
@@ -522,7 +615,7 @@ that way. What is not there yet: you cannot hand a task a socket or a stream
 there is no select over several channels and no timeout. A program needing
 anything finer writes a second channel.
 
-## 9. Talking to C
+## 10. Talking to C
 
 An `external` directive after a heading binds a C symbol. There is no wrapper,
 no header, and no build step:
@@ -559,7 +652,7 @@ AFTERSCHOOL_PASCAL_LDFLAGS='-lssl -lcrypto' pascalcc client.pas -o client
 `examples/c_function.pas` binds five libc functions, including one with a
 `var real` out-parameter.
 
-## 10. In an editor
+## 11. In an editor
 
 `lsp/` holds a Language Server Protocol server written in this language. Build
 it once and point your editor at the binary for Pascal files; it needs no
@@ -615,7 +708,7 @@ use. It is here because a Pascal-lineage editor is an answer key: *this was
 easier in Turbo Pascal* becomes a finding rather than a matter of taste.
 `tui/README.md` has the keys and what it deliberately does not do.
 
-## 11. Where to go next
+## 12. Where to go next
 
 - **`examples/`** — twelve programs of a page each, each one a test case:
   `hello_args`, `word_count`, `word_freq`, `dir_sizes`, `json_pretty`,

@@ -56,7 +56,8 @@ export ApTypes = (
   nodeKind, symKind, fileBinding, typeKind, builtinKind, stdProcKind,
   typePtr, symPtr, constitPtr, ifacePtr, modRecPtr, producedPtr, instPtr,
   boundPtr, entryPtr, nodePtr, fieldPtr, variantPtr, numPtr, rangePtr,
-  implPtr, implRec,
+  implPtr, implRec, vtabPtr, vtabRec, vtabHead, vtabTail, nextVtab,
+  VtabId, NoteVtab,
   namePtr, symListPtr, nodeListPtr, numRec, rangeRec, nameRec, symListRec,
   nodeListRec, fieldRec, variantRec, typeRec, symbol, producedRec,
   instRec, boundRec, entryRec, constitRec, ifaceRec, modRec, discValPtr,
@@ -869,13 +870,18 @@ type
                 whole difference between this and a bound (6.7.3.10.5), where
                 the implementation is chosen at instantiation.
 
-                **Every type predicate answers false for it** and `IsDyn` is
-                the one that does not, which is the refusal doing its own
-                work: a kind no predicate admits is refused everywhere a
-                permission is asked for, rather than by a list of places that
-                remembered to say no (CLAUDE.md's rule). What that costs is
-                the *message*, so where a program writes one inline there is a
-                diagnostic of its own saying which two positions take one. }
+                **It answers `IsMemory` and `IsDyn` and nothing else**
+                (ADR-0409), which is the file's own shape (ADR-0021) and is
+                what refuses the operations rather than a list: a value that
+                lives in memory and may never be copied has no assignment, no
+                comparison, no value parameter and no function result, and
+                *does* have a `var` parameter, which is AP 6.7.11.1 b) for
+                free. Increment C1 had it answering false to every predicate
+                on the reasoning that a kind nothing admits is refused
+                everywhere, and compiling that showed the premise wrong: a
+                variable, a field and a component all **permit** by default,
+                so those are a positional rule and not a predicate's work
+                (ADR-0408). }
               tyDyn);
 
   { AP 6.7.3.10.5's category of a type parameter (ADR-0266). The set is small
@@ -1032,6 +1038,7 @@ type
   producedPtr = ^producedRec;
   instPtr = ^instRec;
   implPtr = ^implRec;
+  vtabPtr = ^vtabRec;
   boundPtr = ^boundRec;
   entryPtr = ^entryRec;
   { Forward, because a schema's symbol holds the *syntax* of its body: a
@@ -1475,6 +1482,21 @@ type
       discriminant tuple. Resolving it here would need a type that stands for
       every type, and there is none. }
     traitHeads: nodePtr;
+    { AP 6.7.11 (ADR-0409): this symbol stands for a trait routine reached
+      through a **trait object** rather than for a routine anything declared,
+      and `dynSlot` is its 1-based position in the trait's heading order. It
+      is what tells CodeGen to load a code address out of a vtable instead of
+      naming a function: a direct call cannot be emitted, the routine not
+      being known until the value is accessed.
+
+      Sema builds one per (trait-object type, routine name) and CheckArguments
+      walks it like any other callee -- its first parameter is a `var` of the
+      trait-object type where the implementation's own is a `var Self`, which
+      is the whole of the difference and is why the synthetic symbol exists
+      rather than a second argument-checking path. `dynType` is that
+      trait-object type, from which CodeGen reads the trait. }
+    dynSlot: integer;
+    dynType: typePtr;
     { 6.7.3.2 and 6.7.3.3: the schema a formal parameter was written as the
       bare name of. Its type is then produced *generically* -- the
       discriminants become skDisc symbols reading this parameter's descriptor
@@ -1694,6 +1716,30 @@ type
     forSchema: symPtr;
     routines, routineTail: symListPtr;
     next: implPtr
+  end;
+
+  { AP 6.7.11's vtable: one per (trait, concrete type) pair the program
+    actually coerces (ADR-0409). It is built in Sema, where the trait-keyed
+    scope and the implementation list are, and read by CodeGen, which emits
+    one internal constant per record after the last user function -- the
+    worklist shape `EmitOwnRels` already uses and for the same reason.
+
+    `routines` is in the trait's own **heading order**, which is what makes a
+    slot number a property of the trait rather than of an implementation: two
+    concrete types reached through one `dyn` must agree about which slot is
+    which, and nothing but the trait is common to them.
+
+    The release is not in this list. It is slot 0 of the emitted table and is
+    `@ownrel` of `forType`, which CodeGen asks `OwnRelId` for -- behind a
+    `dyn` the pointed-to type is not known at the release point, so a release
+    that is chosen at translation time has to be carried. That is the whole
+    reason a table exists at all beside the trait's own routines. }
+  vtabRec = record
+    trait: symPtr;
+    forType: typePtr;
+    id: integer;
+    routines: symListPtr;
+    next: vtabPtr
   end;
 
   { AP 6.4.4.1: one derived schema per (schema, tuple of type-ids), so
@@ -2582,6 +2628,15 @@ type
 
 
 var
+  { AP 6.7.11's vtables (ADR-0409), in registration order. Sema appends and
+    CodeGen drains, which is why the list is here rather than in either of
+    them: the trait-keyed scope that decides what is in a table belongs to
+    Sema and the constant that holds it is CodeGen's to write. The id names
+    the emitted global and is handed out from one, so `VtabId` answering zero
+    is a pair nothing coerced. }
+  vtabHead, vtabTail: vtabPtr;
+  nextVtab: integer;
+var
   { Which program-component the lexer is taking in (6.13): the source named on
     the command line, or the already-translated ones. }
   readingImports: boolean;
@@ -2959,12 +3014,14 @@ function IsReal(t: typePtr): boolean;
   and there is nothing for Base() to look through. }
 function IsInt64(t: typePtr): boolean;
 
-{ **The one predicate a trait object answers yes to** (ADR-0408). Every other
-  in this file answers no for `tyDyn`, which is what refuses it in each place
-  a permission is asked for without any of those places naming it -- the
-  refusal-by-construction CLAUDE.md prefers to an enumerated list. So this is
-  not a convenience: it is the only way to ask, and the places that will grant
-  a permission in increment C are exactly the places that will call it. }
+{ **AP 6.7.11's trait object, asked for by name** (ADR-0408, ADR-0409). The
+  only other predicate in this file that answers yes for `tyDyn` is IsMemory,
+  which is what gives it the file's shape -- in memory, never copied -- and
+  so refuses assignment, comparison, a value parameter and a result without
+  any of those places naming it. This is
+  not a convenience: it is the only way to ask, and the places that grant a
+  permission to a trait object -- the two positions AP 6.7.11.1 admits, the
+  coercion, and the dispatch -- are exactly the places that call it. }
 function IsDyn(t: typePtr): boolean;
 
 function IsComplex(t: typePtr): boolean;
@@ -3369,6 +3426,8 @@ procedure WriteTypeName(t: typePtr);
   because a spelling longer than the buffer cannot be compared, which is a fact
   about msgBuf and not about a second implementation. }
 procedure WriteDistinctTypeNote(a, b: typePtr);
+function VtabId(tr: symPtr; conc: typePtr): integer;
+function NoteVtab(tr: symPtr; conc: typePtr; rs: symListPtr): integer;
 
 end;
 
@@ -4166,7 +4225,7 @@ function IsMemory;
 begin
   if IsRestricted(t) then
     IsMemory := IsStructured(t) or IsOwned(t^.elem) or IsStringRep(t^.elem)
-  else IsMemory := IsStructured(t) or IsOwned(t) or IsStringRep(t)
+  else IsMemory := IsStructured(t) or IsOwned(t) or IsStringRep(t) or IsDyn(t)
 end;
 
 { ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
@@ -4901,6 +4960,46 @@ begin
   end
 end;
 
+{ The table for this (trait, concrete type) pair, or zero (AP 6.7.11,
+  ADR-0409). Asked by CodeGen at a coercion and at a release, where the pair
+  is read off the two node types and nothing is registered -- so a zero answer
+  there is a table Sema did not build and is a defect rather than a program
+  this compiler may emit code for. }
+function VtabId;
+var v: vtabPtr; found: integer;
+begin
+  found := 0;
+  v := vtabHead;
+  while v <> nil do begin
+    if found = 0 then
+      if (v^.trait = tr) and (v^.forType = conc) then found := v^.id;
+    v := v^.next
+  end;
+  VtabId := found
+end;
+
+{ Register one, or answer the id an earlier coercion of the same pair already
+  has. `routines` is the trait's heading order and is the caller's to build:
+  this module holds no implementation list. }
+function NoteVtab;
+var v: vtabPtr; id: integer;
+begin
+  id := VtabId(tr, conc);
+  if id = 0 then begin
+    new(v);
+    nextVtab := nextVtab + 1;
+    v^.trait := tr;
+    v^.forType := conc;
+    v^.id := nextVtab;
+    v^.routines := rs;
+    v^.next := nil;
+    if vtabTail = nil then vtabHead := v else vtabTail^.next := v;
+    vtabTail := v;
+    id := v^.id
+  end;
+  NoteVtab := id
+end;
+
 { 6.2.3.6: this module's own state, cleared before the program-block it
   supplies is activated. It was the program's own first statements while
   there was one component (ADR-0233). }
@@ -4908,6 +5007,9 @@ to begin do
   begin
     { Before the first NewType, which is InstallRequired's (ADR-0209). }
     nextTypeId := 0;
+    vtabHead := nil;
+    vtabTail := nil;
+    nextVtab := 0;
     poolLen := 0;
     tokCount := 0;
     pos := 1;

@@ -1,8 +1,10 @@
-{ --dump-ast over AP 6.7.11's trait-object-type (ADR-0408). A dump stops after
-  the *parse*, which is the whole reason this case can exist at all: the type
-  is refused by Sema in every position (6.7.11.3 is marked `[not yet
-  implemented]` and `tests/dialect/dyn_positions.pas` holds the refusals), so
-  a dump is the only place its shape can be read.
+{ --dump-ast over AP 6.7.11's trait-object-type (ADR-0408, ADR-0409). A dump
+  stops after the *parse*, and that is what this case is for: what the parser
+  builds is the same node wherever the denoter stands, and Sema then accepts
+  it in the two positions 6.7.11.1 permits and refuses it in the rest
+  (`tests/dialect/dyn_positions.pas` holds those). So the shape below is the
+  whole of what the syntax decides, with none of what the position decides
+  mixed into it.
 
   Both spellings are here. `dyn shape` is the ordinary one; `dyn other.shape`
   is 6.11.3's qualified name, which a trait needs because a trait may be

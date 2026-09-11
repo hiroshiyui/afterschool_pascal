@@ -1,16 +1,16 @@
 program dyn_type
   params
-    name output @11:18
+    name output @13:18
   block
     imports
     labels
     consts
     types
-      type d @14:3
-        dyn shape @14:7
-      type q @15:3
-        dyn other.shape @15:7
+      type d @16:3
+        dyn shape @16:7
+      type q @17:3
+        dyn other.shape @17:7
     vars
     procs
     body
-      compound @17:1
+      compound @19:1

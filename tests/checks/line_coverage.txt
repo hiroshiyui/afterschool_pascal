@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 394
-instrumented 20955
+instrumented 21253
 
 accept 0/4
 accumulate 0/84
@@ -80,7 +80,7 @@ boundschema 0/67
 boundschemafor 0/9
 boundslot 0/3
 boundvalue 1/35
-buildformals 7/156
+buildformals 7/164
 buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
@@ -96,13 +96,14 @@ checkarguments 6/325
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
-checkcall 12/300
+checkcall 12/305
 checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
 checkdeclarations 1/72
 checkdefer 0/14
 checkdeferbody 0/42
+checkdyndomain 0/7
 checkedforsetbase 0/29
 checkedforstore 0/2
 checkedforsubrange 0/52
@@ -142,15 +143,15 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
-checkstdproc 19/391
-checkstmt 2/273
+checkstdproc 19/397
+checkstmt 2/279
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
 checktake 0/27
 checktaskformals 0/33
 checktraitdecl 0/13
-checktypedecl 0/60
+checktypedecl 0/62
 checkvardecl 1/67
 checkvariantpartvalue 4/74
 checkwith 1/109
@@ -206,7 +207,7 @@ determinearg 0/4
 determinetuple 0/6
 discselectorfor 0/4
 discvalue 6/34
-dispatchtrait 0/25
+dispatchtrait 0/26
 dumparmlist 0/25
 dumpblock 0/28
 dumpcaselabels 0/11
@@ -255,10 +256,12 @@ dynamictail 0/13
 dynbounddisc 0/16
 dynlength 0/14
 dynsize 0/47
+dyntraitsym 0/45
+dynwantedderef 0/9
 earlier 0/1
 emitaddress 3/193
 emitarrayvalue 0/24
-emitassign 0/92
+emitassign 0/110
 emitat 0/1
 emitatdone 0/1
 emitbinary 4/212
@@ -302,7 +305,7 @@ emitmodule 0/22
 emitnewselectors 0/27
 emitnewtuple 7/65
 emitoptionaltest 0/13
-emitownrels 0/139
+emitownrels 0/172
 emitposglobals 0/8
 emitprocargument 0/27
 emitprocbody 0/43
@@ -319,7 +322,7 @@ emitsetbinary 0/61
 emitshortcircuit 0/28
 emitslicevalue 0/89
 emitspawn 0/121
-emitstdproc 2/259
+emitstdproc 2/263
 emitstmt 0/41
 emitstore 0/34
 emitstring 0/211
@@ -341,7 +344,8 @@ emittraprange 0/14
 emittry 0/18
 emittuplecheck 0/25
 emitunary 2/21
-emitusercall 0/149
+emitusercall 0/179
+emitvtables 0/27
 emitwhile 0/27
 emitwith 6/55
 emitwrite 0/60
@@ -583,18 +587,20 @@ nestwith 0/8
 newblock 0/2
 newnode 0/101
 newresultslot 0/7
-newsymbol 0/103
+newsymbol 0/105
 newtype 0/43
 nextformal 0/4
 nonvarying 3/42
 noteblockdeclarations 0/1
 notedeclarationsto 0/6
 notedefining 0/7
+notedyncoercion 0/31
 noteexportedinterface 0/6
 notehandlecloser 0/6
 noteunwrittenvarparams 0/17
 noteuse 0/8
 noteusefield 0/5
+notevtab 0/41
 notinghere 0/4
 offer 0/39
 opglobal 0/4
@@ -749,7 +755,7 @@ requiredprocname 0/13
 requiredtype 0/6
 reservedforeignname 4/16
 resolvearray 0/25
-resolvedyn 0/14
+resolvedyn 0/23
 resolveenum 0/15
 resolvefile 1/25
 resolvegotos 3/79
@@ -757,14 +763,14 @@ resolvehandle 0/33
 resolveinquiry 1/41
 resolvename 0/12
 resolveoptional 0/20
-resolvependingpointers 0/34
-resolvepointer 0/32
+resolvependingpointers 0/35
+resolvepointer 0/33
 resolverecord 0/20
 resolverestricted 6/31
 resolveset 1/22
 resolveslice 0/14
 resolvesubrange 7/74
-resolvetype 6/82
+resolvetype 6/87
 resolvevariantpart 1/145
 resultnameclash 0/7
 resulttypeof 0/5
@@ -772,13 +778,14 @@ rootdesignator 0/7
 rootname 0/12
 roundup 0/2
 row 0/59
-runcodegen 0/109
+runcodegen 0/111
 rundefersreversed 0/4
 runsema 2/93
 samelink 0/1
 sametuple 0/7
 satisfiesbound 0/13
 satisfiescat 0/6
+saywantedderef 0/7
 schemahastypedisc 0/6
 schemaisbusy 0/6
 schematicformal 0/3
@@ -838,6 +845,7 @@ tocomplex 0/5
 toint64 0/8
 tokenize 0/15
 toreal 0/7
+traitdispatchable 0/16
 transferable 0/14
 transferargs 0/10
 transfers 0/5
@@ -851,6 +859,7 @@ variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
 version 0/1
+vtabid 0/7
 walkfiles 0/130
 wantwords 0/1
 warnat 0/2
@@ -868,7 +877,7 @@ writeboundname 0/2
 writecatadmits 0/5
 writecatname 0/6
 writecontext 5/84
-writedistincttypenote 0/42
+writedistincttypenote 0/17
 writekeyword 0/2
 writekwlit 0/3
 writekwword 0/3

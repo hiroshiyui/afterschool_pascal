@@ -415,6 +415,18 @@ var
     record, an array or another slice is refused by the same test without a
     second rule. }
   sliceFormNode: nodePtr;
+  { AP 6.7.11.1 (ADR-0409): the one type-denoter that is allowed to be a
+    trait-object-type. `sliceFormNode` above is the same idiom and for the
+    same reason -- a denoter's *position* is a fact its resolution does not
+    carry, and there are two positions rather than a predicate.
+
+    Two nodes are ever offered it: a type-definition, which is where AP
+    6.7.11.1 NOTE 3 says the name is made, and a formal-parameter-section's
+    parameter-form. The domain of an owned pointer is the third permitted
+    position and needs nothing here, 6.4.4 making that domain a
+    type-*identifier* looked up by name and never resolved as a denoter -- so
+    it is granted by construction and the refusal below cannot see it. }
+  dynFormNode: nodePtr;
   currentProc: symPtr;
   { How many defer-statements enclose the statement being checked (AP
     6.9.3.11.3). CheckDeferBody answers that question for the *statements* a
@@ -5589,6 +5601,8 @@ begin
   s^.defined := false;
   s^.schemaBody := nil;
   s^.traitHeads := nil;
+  s^.dynSlot := 0;
+  s^.dynType := nil;
   s^.discBound := nil;
   s^.boundOf := nil;
   s^.boundTypes := nil;
@@ -7304,6 +7318,11 @@ procedure CheckExpr(e: nodePtr); forward;
   component-value takes, and is nil at the top, where a type-name says it. }
 procedure CheckStructValue(e: nodePtr; want: typePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
+function TraitDispatchable(h: nodePtr; var why: integer): boolean; forward;
+function NoteDynCoercion(dynT, src: typePtr;
+                        line, col: integer): boolean; forward;
+function DynWantedDeref(args: nodePtr; at, len: integer): boolean; forward;
+procedure SayWantedDeref(args: nodePtr; at, len: integer); forward;
 function InitialStateOf(d: nodePtr): nodePtr; forward;
 { The type an actual-discriminant names, or nil where it names no type.
   AP 6.4.7's type-valued discriminant is written in the position an expression
@@ -9544,6 +9563,28 @@ begin
           'tuple fixes are read from a frame the heap has not got')
 end;
 
+{ AP 6.7.11.1 a): the domain of an **owned** pointer, and of no other
+  (ADR-0409). 6.4.4 makes a domain a type-identifier looked up by name rather
+  than a denoter resolved by ResolveType, so the position test there cannot
+  see this one and it is asked separately -- at both places a domain is
+  settled, because a domain named later in its own type-definition-part is
+  settled by the deferred walk and by nothing else (6.2.2.9's exception).
+
+  `^D` over a trait object is not merely useless: `new` of one would allocate
+  the two words and fill in neither, so the first call through it would read
+  whatever the heap held for a code address. }
+procedure CheckDynDomain(t: typePtr; line, col: integer);
+begin
+  if t <> nil then
+    if IsDyn(t^.elem) and not t^.owns then begin
+      ErrorAt(line, col);
+      WriteTypeName(t^.elem);
+      write(' is the domain of an ''owned'' pointer and of no other: ');
+      writeln('nothing else releases what a trait object refers to');
+      t^.elem := intType
+    end
+end;
+
 function ResolvePointer(d: nodePtr): typePtr;
 var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
 begin
@@ -9587,8 +9628,10 @@ begin
     if (s <> nil) and (s^.kind = skType) and inTypePart and
        (d^.ptQualLen = 0) and (LookupInScope(d^.ptAt, d^.ptLen) = nil) then
       PendPointer(t, d, nil)
-    else if (s <> nil) and (s^.kind = skType) then
-      t^.elem := s^.stype
+    else if (s <> nil) and (s^.kind = skType) then begin
+      t^.elem := s^.stype;
+      CheckDynDomain(t, d^.line, d^.col)
+    end
     else if (s <> nil) and (s^.kind = skSchema) then begin
       { AP 6.4.4.1 (ADR-0213): `^Vec(integer)` binds the schema's type
         discriminants here and leaves its ordinal ones to `new`. What the rest
@@ -9649,8 +9692,10 @@ begin
     pendingHead := p^.next;
     if pendingHead = nil then pendingTail := nil;
     s := Lookup(p^.at, p^.len);
-    if (s <> nil) and (s^.kind = skType) then
-      p^.ptype^.elem := s^.stype
+    if (s <> nil) and (s^.kind = skType) then begin
+      p^.ptype^.elem := s^.stype;
+      CheckDynDomain(p^.ptype, p^.line, p^.col)
+    end
     else if (s <> nil) and (s^.kind = skSchema) then begin
       d := NewNode(nkPointer, p^.line, p^.col);
       d^.ptOwns := false;
@@ -9857,28 +9902,25 @@ begin
   ResolveHandle := t
 end;
 
-{ **AP 6.7.11's trait-object-type** (ADR-0408). The name must denote a trait
-  and nothing else: a trait is not a type, so there is no denoter here to
-  resolve and no recursion to bound -- which is why this is the shortest
-  Resolve in the file.
+{ **AP 6.7.11's trait-object-type** (ADR-0408, ADR-0409). The name must denote
+  a trait and nothing else: a trait is not a type, so there is no denoter here
+  to resolve and no recursion to bound.
 
-  **The refusal is written here and that was not the first design.** Every
-  type predicate answers false for `tyDyn` (`IsDyn` alone excepted), and the
-  plan was for that to refuse it everywhere by construction -- CLAUDE.md's
-  rule, and the shape a restricted type and a discriminant-selected variant
-  both take. Compiling it showed the premise was wrong: a type that answers
-  false to every predicate is not refused, it is treated as an **ordinary
-  small value**, so a `dyn` field, a `dyn` array element and a `dyn` variable
-  all compiled and only a `protected` warning came out. Refusal by
-  construction works where the default is to refuse and the predicate grants;
-  in each of those positions the default is to permit.
+  **Object safety is asked here and nowhere else.** This is where the program
+  asks for the facility, so a trait that cannot supply one is reported once,
+  at a place a reader can act on, with every heading that is in the way named
+  in the same run -- where asking at each coercion would report the same trait
+  once per concrete type and say nothing at the declaration.
 
-  So the refusal is one diagnostic, here, where the denoter is resolved --
-  which is also where a program can be told the two positions AP 6.7.11 will
-  permit, rather than being told something about assignment three passes
-  later. Increment C replaces it with the two grants. }
+  What is *not* here any more is the refusal ADR-0408 wrote. Where a trait
+  object may stand is a question about the denoter's **position**, and
+  ResolveType is the one place every denoter that becomes storage passes
+  through, so the test is there with the two grants named. The reason it is a
+  position test rather than a predicate is C1's finding: a type answering
+  false to every predicate is not refused, it is treated as an ordinary small
+  value, because a variable, a field and a component all permit by default. }
 function ResolveDyn(d: nodePtr): typePtr;
-var t: typePtr; s: symPtr;
+var t: typePtr; s: symPtr; h: nodePtr; why: integer;
 begin
   t := NewType(tyDyn);
   s := LookupName(d^.dyQualAt, d^.dyQualLen, d^.dyAt, d^.dyLen, d^.line, d^.col);
@@ -9890,14 +9932,34 @@ begin
     s := nil
   end;
   t^.dynTrait := s;
-  { AP 6.7.11 [not yet implemented]: the type is built, named by every
-    dispatch and refused. What a program is told is where one will be able to
-    stand, because the two positions are the feature and a message that only
-    said *no* would leave a reader to find them in a record. }
-  ErrorAt(d^.line, d^.col);
-  WriteTypeName(t);
-  write(' has no storage of its own yet: write ''owned ^T'' over a named ');
-  writeln('''dyn'' type, or a ''var'' parameter, when AP 6.7.11 is implemented');
+  { AP 6.7.11.1: object safety, asked **here** and not at each coercion. This
+    is where the program asks for the facility, so a trait that cannot supply
+    one is reported once and at the place a reader can act on -- where asking
+    at the coercion would report the same trait once per concrete type and
+    name none of the reason at the declaration. Every heading is examined
+    rather than the first that fails: a trait is a set of routines and a
+    reader fixing one would otherwise be told about the next on the next
+    run. }
+  if s <> nil then begin
+    h := s^.traitHeads;
+    while h <> nil do begin
+      if not TraitDispatchable(h, why) then begin
+        ErrorAt(d^.line, d^.col);
+        write('''');
+        WritePool(s^.at, s^.len);
+        write(''' has no trait object: ''');
+        WritePool(h^.pdAt, h^.pdLen);
+        if why = 1 then
+          writeln(''' would have to take ''var p: Self'' or ',
+                  '''protected var p: Self'' as its first parameter and only ',
+                  'that')
+        else
+          writeln(''' names ''Self'' somewhere other than that first ',
+                  'parameter, and a trait object carries one type and not two')
+      end;
+      h := h^.next
+    end
+  end;
   ResolveDyn := t
 end;
 
@@ -13274,6 +13336,22 @@ begin
     end;
     dynamicVarFor := savedDynamic;
     dynBoundsFor := savedBounds;
+    { AP 6.7.11.1. **Refusal by construction was tried and does not work
+      here**, which is ADR-0408's finding said a second time: every type
+      predicate answering false for a trait object refuses nothing, because
+      in each of these positions the default is to *permit* and a predicate
+      is what would have granted. A `dyn` variable, field, component, file
+      component, optional base and function result all compiled.
+
+      So this is a position test, and it is one place rather than six because
+      every denoter that becomes storage passes through here. What a program
+      is told is the two positions that work, not that this one does not. }
+    if IsDyn(t) and (d <> dynFormNode) then begin
+      ErrorAt(d^.line, d^.col);
+      WriteTypeName(t);
+      write(' refers to storage it does not own, so it stands only as the ');
+      writeln('domain of an ''owned'' pointer or as a ''var'' parameter')
+    end;
     CheckInitialState(d, t);
     d^.ntype := t;
     ResolveType := t
@@ -15556,7 +15634,14 @@ begin
     { A required identifier is recognised only when nothing else of that name
       was found: 6.1.3 lets a program declare its own `re`, and does not
       reserve the spelling. }
-    if c^.clBuiltin = biNone then begin
+    if (c^.clBuiltin = biNone) and
+       DynWantedDeref(c^.clArgs, c^.clAt, c^.clLen) then begin
+      ErrorAt(c^.line, c^.col);
+      SayWantedDeref(c^.clArgs, c^.clAt, c^.clLen);
+      c^.ntype := intType;
+      c^.nErrType := true
+    end
+    else if c^.clBuiltin = biNone then begin
       ErrorAt(c^.line, c^.col);
       write('unknown function ''');
       WritePool(c^.clAt, c^.clLen);
@@ -18145,6 +18230,22 @@ begin
       write(''' cannot release this here: an enclosing ''with'' is bound to ');
       writeln('what it owns, and the binding would name disposed storage')
     end
+    { AP 6.7.11 (ADR-0409): `new` gives the created variable the domain type,
+      and a trait object is not a type anything can be created *as* -- which
+      implementation it answers with is carried and not chosen, and `new` has
+      nowhere to get one from. What a program writes instead is `new` of the
+      concrete type and then the move, which is where the implementation is
+      attached. Refused rather than left alone: the storage is the right size,
+      so an unchecked `new` here would build a trait object whose table is
+      whatever the allocator returned. }
+    else if (n = 1) and (p^.pcStd = spNew) and (a^.ntype <> nil) and
+            IsDyn(a^.ntype^.elem) then begin
+      ErrorAt(p^.line, p^.col);
+      write('''new'' cannot create a ');
+      WriteTypeName(a^.ntype^.elem);
+      write(': it would have no implementation. Create the type that has ');
+      writeln('one and move it in with ''take''')
+    end
     { 6.7.5.3's `new(p)` gives the created variable the domain type, and a
       schema domain has no type until a tuple names one. `dispose(q)` is the
       opposite: the variable it removes already has its tuple. }
@@ -19605,6 +19706,22 @@ begin
                   (s^.asValue^.clBuiltin = biTake) and
                   (s^.asValue^.ntype = s^.asTarget^.ntype) then
             { admitted: the variable takes what the other stopped holding }
+          { AP 6.7.11's coercion (ADR-0409): the one place a trait object
+            comes into existence. `take` is still what is written -- the move
+            is the same move, and what the target gains beside the address is
+            the implementation, which is the whole difference between the two
+            types. Written as an arm of its own rather than inside
+            `Assignable`, which the relational operators share. }
+          else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  IsDyn(s^.asTarget^.ntype^.elem) and
+                  (s^.asValue^.kind = nkCall) and
+                  (s^.asValue^.clBuiltin = biTake) and
+                  IsOwnedPointer(s^.asValue^.ntype) and
+                  not IsDyn(s^.asValue^.ntype^.elem) then begin
+            if not NoteDynCoercion(s^.asTarget^.ntype^.elem, s^.asValue^.ntype,
+                                   s^.line, s^.col) then
+              s^.asValue^.nErrType := true
+          end
           { AP 6.4.14.6 again, for the one value a reader tries next. A
             handle takes `h := nil` as its release (AP 6.4.12.2, ADR-0202)
             because nothing else releases a handle; an owned pointer has
@@ -19773,6 +19890,11 @@ begin
             s^.pcSym := sym;
             CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
           end
+        end
+        else if (sym = nil) and DynWantedDeref(s^.pcArgs, s^.pcAt, s^.pcLen)
+        then begin
+          ErrorAt(s^.line, s^.col);
+          SayWantedDeref(s^.pcArgs, s^.pcAt, s^.pcLen)
         end
         else if sym = nil then begin
           ErrorAt(s^.line, s^.col);
@@ -20306,8 +20428,23 @@ begin
         end;
       { ADR-0125: this denoter, and only this one, may be `array of T`. }
       sliceFormNode := g^.grType;
+      dynFormNode := g^.grType;
       t := ResolveType(g^.grType);
       sliceFormNode := nil;
+      dynFormNode := nil;
+      { AP 6.7.11.1 b) is the *variable*-parameter-specification and the
+        protected one, and not the value form -- for the slice's reason one
+        paragraph down, read the other way round: a trait object refers to
+        storage, and a value parameter is a copy of storage whose size is not
+        known where the copy is made. }
+      if IsDyn(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+        ErrorAt(g^.grNames^.line, g^.grNames^.col);
+        write('a ');
+        WriteTypeName(t);
+        write(' parameter must be a ''var'' parameter: it refers to storage ');
+        writeln('the caller owns, and a value parameter is a copy. Write ',
+                '''protected var'' for one that may not be written through')
+      end;
       { A slice is a *view* of storage the caller owns, which is what makes it
         a slice rather than an array -- and a value parameter is by definition
         not a view. `protected var` is the read-only form, §6.6.3.7's own
@@ -22293,7 +22430,13 @@ begin
       hv^.frameIndex := -1;
       dynBoundsFor := hv;
       dynamicVarFor := hv;
+      { AP 6.7.11.1 NOTE 3: `type D = dyn T;` is where the name is made, and
+        6.4.14 then wants a type-*identifier* for the owned pointer's domain
+        -- so the type-definition is the one denoter position a trait object
+        must be written in, and `owned ^dyn T` is not a spelling at all. }
+      dynFormNode := d^.tdType;
       t := ResolveType(d^.tdType);
+      dynFormNode := nil;
       dynBoundsFor := nil;
       dynamicVarFor := nil;
       if hv^.discSyms = nil then
@@ -23382,6 +23525,57 @@ end;
   decision: left to the impl, the message arrives once per implementation, in
   the impl's own source, and describes a procedural parameter's parameter list
   to a reader who wrote neither. The mistake is in the trait. }
+{ Is this heading reachable through a trait object, and if not, why not
+  (AP 6.7.11.1, ADR-0409)?
+
+  **The answer was measured and not reasoned about.** With `Self` spelled as
+  the type of a `var` or `protected var` first parameter, `impl R for Circle`
+  and `impl R for integer` compile to `void @p2(ptr %link, ptr %a0)` and
+  `void @p4(ptr %link, ptr %a0)` -- the *same* LLVM signature -- so a table
+  can hold the routine itself. With `p: Self` by value they are `ptr` and
+  `i32`, because a record travels by address and an integer does not
+  (ADR-0017), and every call through the table would need an adapter emitted
+  per implementation.
+
+  `Self` anywhere but that first parameter is refused for a different reason
+  in each position, and neither is about the calling convention: as a result
+  type it is a value whose size the caller cannot know, and in a second
+  parameter it would need two trait objects to agree about a type neither of
+  them carries.
+
+  `why` is 1 where the first parameter is not a `var Self` and 2 where `Self`
+  stands somewhere else as well. }
+function TraitDispatchable;
+var g: nodePtr; ok: boolean; first: boolean;
+begin
+  why := 0;
+  ok := true;
+  g := h^.pdParams;
+  { A group is a formal-parameter-section and may name several parameters
+    (6.7.3.1), so `var p, q: Self` is two receivers and not one -- the second
+    is a `Self` standing somewhere other than the first parameter and is
+    refused by the same sentence that refuses a second group naming one. }
+  if g = nil then ok := false
+  else if not (g^.grByRef and (g^.grType <> nil) and
+               (g^.grType^.kind = nkNamed) and
+               PoolIs(g^.grType^.nmAt, g^.grType^.nmLen, 'self     ') and
+               (g^.grNames <> nil) and (g^.grNames^.next = nil)) then
+    ok := false;
+  if not ok then why := 1
+  else begin
+    first := true;
+    while g <> nil do begin
+      if not first then
+        if MentionsSelf(g^.grType) then begin ok := false; why := 2 end;
+      first := false;
+      g := g^.next
+    end;
+    if h^.pdResult <> nil then
+      if MentionsSelf(h^.pdResult) then begin ok := false; why := 2 end
+  end;
+  TraitDispatchable := ok
+end;
+
 procedure CheckSelfPositions(h: nodePtr);
 var g: nodePtr;
 begin
@@ -23543,6 +23737,126 @@ end;
 
   The selection follows `Base()`, as FindImpl does and for ADR-0018's reason,
   so a subrange selects its host's implementation. }
+{ The callee of a trait-keyed call whose first actual is a **trait object**
+  (AP 6.7.11, ADR-0409).
+
+  There is no routine to name: which implementation answers is not decided
+  until the value is accessed, which is what the type means. So what is
+  returned is a symbol standing for the trait's routine -- the same shape a
+  declared one has, so that CheckArguments walks it and nothing else in Sema
+  learns about trait objects -- carrying the vtable **slot** instead of a
+  body. CodeGen reads `dynSlot` and loads a code address where it would
+  otherwise write a name.
+
+  **Parameters 2..n and the result type are copied from an implementation**,
+  and that is sound rather than arbitrary: `TraitDispatchable` has already
+  refused a heading naming `Self` anywhere but the first parameter, so every
+  implementation of this routine resolved those denoters in a scope where
+  nothing differed. The first parameter is the one that does differ, and it
+  is replaced by a `var` of the trait-object type -- which is exactly
+  AP 6.7.11.1 b), so the receiver a program writes is checked as the borrow
+  it is.
+
+  Answering nil where no implementation exists is deliberate: with none there
+  can be no table and so no call, and `unknown function` is then the true
+  statement about a program whose trait nothing implements. }
+{ Did the program name the owner where it meant the trait object (AP 6.7.11,
+  ADR-0409)?
+
+  `Draw(bag[i])` over `bag: array [1..n] of owned ^Shape` is the mistake a
+  reader makes first, and `unknown procedure` is a dead end for it: nothing in
+  that message says the name exists, that the trait declares it, or that one
+  character is missing. The shape is exact -- an owned pointer whose domain is
+  a trait object whose trait declares this very spelling -- so a false
+  positive would need a program that had already written all of it. }
+function DynWantedDeref;
+var t: typePtr; yes: boolean;
+begin
+  yes := false;
+  if args <> nil then begin
+    t := QuietTypeOf(args);
+    if t <> nil then
+      if IsOwnedPointer(t) then
+        if IsDyn(t^.elem) then
+          if t^.elem^.dynTrait <> nil then
+            yes := FindTraitHead(t^.elem^.dynTrait, at, len) <> nil
+  end;
+  DynWantedDeref := yes
+end;
+
+procedure SayWantedDeref;
+var t: typePtr;
+begin
+  t := QuietTypeOf(args);
+  write('''');
+  WritePool(at, len);
+  write(''' is declared by trait ''');
+  WritePool(t^.elem^.dynTrait^.at, t^.elem^.dynTrait^.len);
+  write(''', and this names the owner rather than what it owns: write ''^'' ');
+  writeln('after the first argument')
+end;
+
+function DynTraitSym(t: typePtr; at, len: integer): symPtr;
+var tr, rep, callee, recv: symPtr; h: nodePtr; im: implPtr; p: symListPtr;
+    slot, n: integer;
+begin
+  callee := nil;
+  tr := t^.dynTrait;
+  if tr <> nil then
+    if FindTraitHead(tr, at, len) <> nil then begin
+      { The slot is the position in the trait's own heading order, because
+        that order is the only thing two concrete types reached through one
+        `dyn` have in common. }
+      slot := 0;
+      n := 0;
+      h := tr^.traitHeads;
+      while h <> nil do begin
+        n := n + 1;
+        if slot = 0 then
+          if PoolSame(h^.pdAt, h^.pdLen, at, len) then slot := n;
+        h := h^.next
+      end;
+      rep := nil;
+      im := implHead;
+      while im <> nil do begin
+        if im^.trait = tr then begin
+          p := im^.routines;
+          while p <> nil do begin
+            if rep = nil then
+              if PoolSame(p^.sym^.at, p^.sym^.len, at, len) then rep := p^.sym;
+            p := p^.next
+          end
+        end;
+        im := im^.next
+      end;
+      if rep <> nil then
+        if rep^.params <> nil then begin
+          callee := NewSymbol;
+          callee^.at := rep^.at;
+          callee^.len := rep^.len;
+          callee^.kind := rep^.kind;
+          callee^.stype := rep^.stype;
+          callee^.level := rep^.level;
+          callee^.owner := rep^.owner;
+          callee^.dynSlot := slot;
+          callee^.dynType := t;
+          recv := NewSymbol;
+          recv^.at := rep^.params^.sym^.at;
+          recv^.len := rep^.params^.sym^.len;
+          recv^.kind := skVarParam;
+          recv^.isProtected := rep^.params^.sym^.isProtected;
+          recv^.stype := t;
+          AppendSym(callee^.params, callee^.paramTail, recv);
+          p := rep^.params^.next;
+          while p <> nil do begin
+            AppendSym(callee^.params, callee^.paramTail, p^.sym);
+            p := p^.next
+          end
+        end
+    end;
+  DynTraitSym := callee
+end;
+
 function DispatchTrait;
 var t: typePtr; im: implPtr; p: symListPtr; found, cand: symPtr;
     seen: symPtr;
@@ -23552,7 +23866,11 @@ begin
   ambiguous := false;
   if args <> nil then begin
     t := QuietTypeOf(args);
-    if t <> nil then begin
+    { AP 6.7.11: a trait object selects nothing here -- the type it carries is
+      the *trait* and not an implementation of it, and the selection happens
+      at the call rather than at the translation. }
+    if IsDyn(t) then found := DynTraitSym(t, at, len)
+    else if t <> nil then begin
       im := implHead;
       while im <> nil do begin
         if im^.forType = Base(t) then
@@ -23584,6 +23902,68 @@ begin
     end
   end;
   DispatchTrait := found
+end;
+
+{ Record the table this coercion needs, or say why there is none
+  (AP 6.7.11, ADR-0409).
+
+  **This is the hazard the design was arranged around.** The permission is
+  granted here, where an assignment is checked, and *not* inside `Assignable`
+  -- ADR-0058's sentence, that a permission granted in a shared predicate
+  leaks to every caller, which in this tree has cost three defects and the
+  last of them a double free (ADR-0139, ADR-0143, ADR-0150). `Assignable` is
+  asked by the relational operators too, so granting it there would make two
+  trait objects comparable, and what would be compared is two box addresses.
+
+  The table is built in the **trait's** heading order rather than the
+  implementation's declaration order, so that two concrete types reached
+  through one `dyn` put the same routine in the same slot. }
+function NoteDynCoercion;
+var tr: symPtr; conc: typePtr; im: implPtr; h: nodePtr; p: symListPtr;
+    r: symPtr; rs, rsTail: symListPtr; ok: boolean;
+begin
+  ok := false;
+  tr := dynT^.dynTrait;
+  conc := src^.elem;
+  if (tr <> nil) and (conc <> nil) then begin
+    im := FindImpl(tr, conc);
+    if im = nil then begin
+      ErrorAt(line, col);
+      WriteTypeName(conc);
+      write(' has no ''impl ');
+      WritePool(tr^.at, tr^.len);
+      write(''', so it answers nothing a ');
+      WriteTypeName(dynT);
+      writeln(' is asked')
+    end
+    else begin
+      rs := nil;
+      rsTail := nil;
+      ok := true;
+      h := tr^.traitHeads;
+      while h <> nil do begin
+        r := nil;
+        p := im^.routines;
+        while p <> nil do begin
+          if r = nil then
+            if PoolSame(p^.sym^.at, p^.sym^.len, h^.pdAt, h^.pdLen) then
+              r := p^.sym;
+          p := p^.next
+        end;
+        { A missing routine is an implementation CheckImplDecl already
+          refused, so this cannot happen in a program that got here without a
+          diagnostic -- and a table with a hole in it would be a wild call
+          rather than a message, so the coercion is withdrawn rather than
+          trusted. }
+        if r = nil then ok := false
+        else AppendSym(rs, rsTail, r);
+        h := h^.next
+      end;
+      if ok then
+        if NoteVtab(tr, conc, rs) = 0 then ok := false
+    end
+  end;
+  NoteDynCoercion := ok
 end;
 
 { AP 6.7's implementation-declaration (ADR-0338, ADR-0339).
@@ -28671,10 +29051,16 @@ begin
       { A procedural parameter is a pair of pointers: the code, and the static
         link to call it with. ADR-0125's slice is the same two-word shape with
         a length in the second word instead of a link. }
-      { **The two-word company** (ADR-0030), which `tyDyn` joins: a
-        procedural parameter's code-and-link pair, a slice's
-        address-and-count, and a trait object's data-and-vtable (ADR-0408).
-        Each is two pointers and aligns as one does. }
+      { Two pointers wide, each of them, and aligned as one is. **A trait
+        object is here for a different reason from the other two and it
+        matters** (ADR-0409, AP Annex E.13): a procedural parameter and a
+        slice are ADR-0030's company, two words that travel as *separate
+        arguments* so that nothing depends on how a structure is passed. A
+        trait object is a two-word heap variable that travels by address like
+        a record, and an owned pointer to one is an ordinary single word --
+        so this line answers for its storage and says nothing about a calling
+        convention. ADR-0408 wrote it into the company before there was
+        anything to pass. }
       tyProc, tySlice, tyDyn: LlAlign := WordAlign;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin

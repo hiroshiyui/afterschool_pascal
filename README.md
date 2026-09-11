@@ -413,7 +413,7 @@ the emitted module is right for macOS, and one of them ships an archive.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **599 of the 600 programs in this repository's
+a file and a handle (ADR-0325). **601 of the 602 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 
@@ -1812,6 +1812,52 @@ translation: a program-block or a module-block, never inside a procedure and
 never in a module heading. A library that wants to ship an implementation for
 its clients cannot yet, and nothing has asked to.
 
+**A trait object holds a value whose type is not known until it is used**
+(AP 6.7.11, ADR-0409), which is what a bound cannot do: a bound chooses the
+implementation where the type is written, so one collection is one type.
+
+```pascal
+trait Renders;
+  procedure Draw(protected var p: Self);
+  function Area(protected var p: Self): integer;
+end;
+
+type Shape    = dyn Renders;      { "something that implements Renders" }
+     AnyShape = owned ^Shape;
+
+var bag: array [1..3] of AnyShape;
+    c: owned ^Circle; s: owned ^Square;
+...
+new(c); c^.r := 2;
+new(s); s^.s := 5;
+bag[1] := take(c);                { the move attaches the implementation }
+bag[2] := take(s);
+for i := 1 to 2 do Draw(bag[i]^)  { and each answers for itself }
+```
+
+`dyn` is not reserved, by the rule every dialect spelling follows: a program
+may declare a type, a field and a variable called `dyn`.
+
+**A trait object stands in two positions and no others**: the domain of an
+`owned` pointer, which names who owns the storage, and a `var` or `protected
+var` parameter, which borrows it for the call. Everything else — a variable, a
+field, an array element, a value parameter, a function result — would hold a
+value whose lifetime nothing states, and each is refused with a message saying
+where one *can* stand. `owned ^dyn Renders` is not a spelling: §6.4.14 wants a
+type-identifier for a domain, so the type is named first.
+
+The implementation travels with the value, and so does the release: disposing
+an `owned ^Shape` releases the circle or the square — and whatever *that* owns
+— before releasing the trait object.
+
+**Not every trait has a trait object.** Each of its routines must take its
+receiver as a `var` or `protected var` first parameter and name `Self` nowhere
+else, and a trait that does not is told so where the `dyn` type is declared,
+with the heading named. The reason is that a receiver passed by value is
+passed differently by each implementation — a record by address, an integer in
+a register — so nothing could describe the call. A trait meant to be used both
+ways takes its receiver by `var`, which costs a bound nothing.
+
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
 
@@ -2835,7 +2881,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 927 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 930 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

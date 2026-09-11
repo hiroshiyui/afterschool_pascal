@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 927 cases green at `-O2` and at `-O0`.
+and the suite is 930 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
@@ -135,16 +135,19 @@ before the field loop.
 Rust's decomposition — methods and traits without inheritance, no base class,
 no `is`/`as` — in three increments. **B is built** (traits, `impl … for`, the
 bound on a schema's discriminant: ADR-0338 – ADR-0341, ADR-0344, AP 6.7.9)
-and since ADR-0355 has a client that is not a test. **A and C are not**, and
-are judged separately: A is not a prerequisite for B, the record's staging
-sentence notwithstanding.
+and since ADR-0355 has a client that is not a test. **C is built** as well
+(ADR-0408, ADR-0409, AP 6.7.11), in two increments rather than the three that
+were planned — the release slot turned out to be inseparable from the value,
+because behind a `dyn` there is no type to resolve a release from, so an
+increment that left it out would have leaked every element of the collection
+the feature exists for. **A is not built**, and is judged separately: it is
+not a prerequisite for B, the record's staging sentence notwithstanding.
 
 | Increment | What it adds | What it would retire |
 | --- | --- | --- |
 | **A. Methods** | `impl T; … end;`, `x.M(a)` meaning `M(x, a)`, method names in the type's scope | the exported names that repeat their module's noun as a hand-spelled receiver — 118 of 484 when it was last counted on 2026-09-05, and the denominator is 580 now, so **run `tests/checks/export_unique.py` rather than quoting either**. No new representation |
-| **C. `dyn T`** | dynamic dispatch, only as `owned ^dyn T` and as a var parameter | nothing — it is what a heterogeneous collection needs, and the first vtable here |
 
-**Not settled**: whether to build A or C. B's payoff was a program's own
+**Not settled**: whether to build A. B's payoff was a program's own
 text — thirty call sites and fourteen routine parameters — and A's is
 call-site spellings that block no program; A's best argument arrived from B
 (ADR-0339): two modules exporting `Compare` collide under §6.11.2, and

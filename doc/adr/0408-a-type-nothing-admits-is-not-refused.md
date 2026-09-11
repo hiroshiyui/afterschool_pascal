@@ -6,6 +6,15 @@ Accepted. Increment C1 of [ADR-0315](0315-methods-and-traits-without-inheritance
 whose staging table this splits: the trait object's **type** lands here and its
 **value** does not.
 
+Its three-increment staging is **superseded by
+[ADR-0409](0409-the-trait-object-carries-its-answer.md)**, which built the
+value and found the release slot inseparable from it: there is no C3. The two
+claims about representation below — that a trait object is two words in
+ADR-0030's company, and that `owned ^dyn T` is two words where `owned ^T` is
+one — were reasoned about and not built, and ADR-0409 measured the cost and
+chose otherwise; AP Annex E.13 is the current statement. Everything else here
+stands.
+
 ## Context
 
 ADR-0315 proposed `dyn T`, the trait object, as increment C. Probing it before

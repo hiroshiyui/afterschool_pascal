@@ -1,7 +1,18 @@
-<source>:39:7: error: dyn shape has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
-<source>:41:17: error: dyn shape has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
-<source>:43:23: error: dyn shape has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
-<source>:47:6: error: dyn shape has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
-<source>:54:20: error: dyn shape has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
-<source>:60:12: error: 'point' is not a trait, so there is nothing for 'dyn' to name
-<source>:60:12: error: dyn ? has no storage of its own yet: write 'owned ^T' over a named 'dyn' type, or a 'var' parameter, when AP 6.7.11 is implemented
+<source>:58:17: error: dyn shape refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:60:23: error: dyn shape refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:63:7: error: d is the domain of an 'owned' pointer and of no other: nothing else releases what a trait object refers to
+<source>:68:15: error: d refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:69:8: error: d refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:73:6: error: dyn shape refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:79:19: error: a d parameter must be a 'var' parameter: it refers to storage the caller owns, and a value parameter is a copy. Write 'protected var' for one that may not be written through
+<source>:95:32: error: 'u' is already used in this block, so declaring it here would give one name two meanings
+<source>:97:3: error: unknown procedure 'ping'
+<source>:104:8: error: unknown type 'badheld'
+<source>:107:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type, or as the handle a spawn gives a task: anywhere else what it emptied would be owned by no one
+<source>:107:3: error: cannot assign owned ^point: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:111:19: error: d refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
+<source>:111:1: error: function 'result0' never assigns its result
+<source>:117:12: error: 'point' is not a trait, so there is nothing for 'dyn' to name
+<source>:129:3: error: 'new' cannot create a d: it would have no implementation. Create the type that has one and move it in with 'take'
+<source>:136:3: error: 'draw' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
+<source>:139:12: error: 'area' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
