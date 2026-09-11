@@ -1,0 +1,53 @@
+# **A key the menu does not use is ignored and does not stop the editor.**
+#
+# `MenuKey` dispatches over `KeyKind` with a `case` and no `otherwise`, which
+# is the right shape -- 6.9.3.5 makes a selector no label matches a trap
+# (ADR-0018), so a kind added later is a *reported* crash rather than a
+# silently swallowed key. What it costs is that the arm listing the kinds the
+# menu ignores has to be revisited whenever a kind is added, and ADR-0396 did
+# not: `kkOpen` and `kkNextDoc` arrived with the second document, and
+#
+#   runtime error: case: no label matches the selector at apedit.pas:1509:9
+#
+# is what F3 or F6 did with the menu open in v3.10.0. Every oracle here was
+# green, because no session had ever pressed one of those keys while a panel
+# was up -- and `kind-exhaustive`, which exists for exactly this and answers
+# it correctly when pointed at `tui/apedit.pas`, reads the compiler's own
+# three components and nothing else.
+#
+# So this session presses, with the menu bar up and again with a drop-down
+# open, every key `MenuKey` ignores that some *other* key of the editor is
+# bound to: F3 (Open), F6 (Next document), Ctrl-S, Ctrl-B, Ctrl-F, Ctrl-L,
+# Ctrl-G, Ctrl-Z, Ctrl-Y, Backspace, Delete, Home, End and an ordinary
+# character. The claim is the whole of what the goldens show: the menu is
+# still on screen and unmoved, and the editor is still running.
+name m.pas
+size 10 34
+push program p(output);
+push begin
+push end.
+draw
+func 10
+func 3
+func 6
+ctrl S
+ctrl B
+ctrl F
+ctrl L
+ctrl G
+ctrl Z
+ctrl Y
+keys z
+draw
+esc B
+esc B
+func 3
+func 6
+ctrl H
+esc 3~
+esc H
+esc F
+keys z
+draw
+ctrl C
+draw

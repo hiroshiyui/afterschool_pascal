@@ -24,6 +24,11 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **F3 and F6 no longer stop the editor when the menu is open.** `MenuKey`
+  dispatches over the key kinds with a `case` and no `otherwise`, and the two
+  kinds the second document added in v3.10.0 were not listed, so opening a
+  file or cycling documents from under an open menu exited with
+  `case: no label matches the selector`.
 - **The editor no longer discards another document's changes on one Ctrl-Q.**
   Since eight documents landed in v3.10.0, the quit guard asked whether the
   document *on screen* was modified, so typing into one file, opening a clean

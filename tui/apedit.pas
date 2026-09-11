@@ -1399,9 +1399,16 @@ begin
       ed.mode := mdEdit;
       ed.item := 0
     end;
+    { **Every remaining kind, named** -- a `case` with no `otherwise` traps on
+      a selector no label matches (6.9.3.5, ADR-0018), so a key this arm does
+      not list is not ignored, it *stops the editor*. `kkOpen` and `kkNextDoc`
+      arrived with ADR-0396 and were not added here, so F3 or F6 with the menu
+      open crashed the shipped editor. The bare list is the right shape and an
+      `otherwise` would be the wrong fix: it is the trap that says a kind was
+      added, and this is the arm that has to say what happens to it. }
     kkNone, kkChar, kkBack, kkDelete, kkHome, kkEnd, kkSave, kkQuit,
     kkBuild, kkUnknown, kkUndo, kkRedo, kkFind, kkAgain, kkGoto,
-    kkFunc: ;
+    kkOpen, kkNextDoc, kkFunc: ;
   end
 end;
 

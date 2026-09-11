@@ -89,7 +89,7 @@ that (ADR-0402): it drives the real `apide` under a **pseudo-terminal** —
 Python's, as `lsp/run.py`'s pipe is, and so not the binding ADR-0262
 declined — and requires every run the shell writes to be one the model
 decided, at the same columns, with the same cells, in the colour that role's
-table gives. Both tables, 12 of the 20 scripts, and the expectation
+table gives. Both tables, 13 of the 21 scripts, and the expectation
 **derived** from the session golden's own run decomposition rather than
 recorded: a golden of escape bytes agrees with whoever wrote it, which is how
 `crPrompt` came to be drawn nowhere.
@@ -173,6 +173,12 @@ tui/build.py '' session.pas   # the session replayer
 | Ctrl-F, Ctrl-L | find, find again — case-insensitive, and it wraps and says so |
 | Ctrl-G | go to a line by number |
 | Ctrl-C | close the question a dialog is asking, or the menu |
+
+A key the menu does not use is **ignored** while it is open, and that is
+checked: `MenuKey` dispatches with a `case` and no `otherwise`, so a kind
+added later stops the editor rather than being swallowed — which is the right
+shape and did stop it, F3 and F6 having arrived with ADR-0396 and not been
+added to the arm. `sessions/menu_keys.keys` presses every one of them.
 
 The bindings are on the **hint bar** along the bottom now (ADR-0389), so the
 table above is a reference rather than the only place they are written down.
