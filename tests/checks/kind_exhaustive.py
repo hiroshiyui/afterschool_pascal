@@ -146,9 +146,20 @@ CATALOGUE = "partial_cases.txt"
 # The field a *tag* dispatch reads. See dispatch().
 TAG_FIELD = "kind"
 
+# The corpora, and the labels the catalogue writes.  `selfhost` is the
+# compiler's three program-components, read through `components.translate`;
+# the rest are named as paths because that is what the catalogue has to spell
+# and what a reader of a failure needs to see.  **Adding one is a line here**,
+# which is the point of ADR-0404: the compiler answers this question about any
+# Pascal program, and asking it about only the compiler is how the editor came
+# to crash on a key kind that was added to it.
+SELFHOST = "selfhost"
+EXTRA = ("tui/apedit.pas", "tui/apide.pas", "tui/session.pas",
+         "lsp/pasls.pas")
 
 
-def where(root, routine):
+
+def where(label, root, routine):
     """Which of the three components a routine is defined in (ADR-0233).
 
     The dump reports a line and not a file -- a position in the component the
@@ -157,6 +168,8 @@ def where(root, routine):
     does not decide it."""
     pat = re.compile(r"^(?:procedure|function)\s+%s\b" % re.escape(routine),
                      re.I | re.M)
+    if label != SELFHOST:
+        return label
     for p in components.sources(root):
         for m in pat.finditer(p.read_text()):
             return f"selfhost/{p.name}"
@@ -239,6 +252,8 @@ def catalogue(path):
         enum:CONSTANT unused          -- a constant no case-statement names
     """
     listed, unused, chained = {}, {}, {}
+    label = SELFHOST
+    section = re.compile(r"^\[([^\]]+)\]$")
     partial = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+):(\d+)\s+names\s+"
                          r"(\d+)\s+of\s+(\d+)\b")
     chain = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+):(\d+)\s+chains\s+"
@@ -248,19 +263,30 @@ def catalogue(path):
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
+        # **A section header says which program the rows under it are about**
+        # (ADR-0404).  Rows before the first one belong to the compiler, which
+        # is what every row in this file meant when there was one corpus.
+        m = section.match(line)
+        if m:
+            label = m.group(1)
+            if label != SELFHOST and label not in EXTRA:
+                print(f"kind-exhaustive: {path.name}:{n}: [{label}] is not a "
+                      f"corpus this sweeps", file=sys.stderr)
+                sys.exit(1)
+            continue
         m = partial.match(line)
         if m:
-            listed[(m.group(1), m.group(2), int(m.group(3)))] = (
+            listed[(label, m.group(1), m.group(2), int(m.group(3)))] = (
                 n, int(m.group(4)), int(m.group(5)))
             continue
         m = chain.match(line)
         if m:
-            chained[(m.group(1), m.group(2), int(m.group(3)))] = (
+            chained[(label, m.group(1), m.group(2), int(m.group(3)))] = (
                 n, int(m.group(4)), int(m.group(5)))
             continue
         m = never.match(line)
         if m:
-            unused[(m.group(1), m.group(2))] = n
+            unused[(label, m.group(1), m.group(2))] = n
             continue
         print(f"kind-exhaustive: {path.name}:{n}: expected "
               f"`routine:enum:n names N of M`, `routine:enum:n chains N of M` "
@@ -269,40 +295,36 @@ def catalogue(path):
     return listed, unused, chained
 
 
-def main():
-    root = pathlib.Path(__file__).resolve().parents[2]
-    build = pathlib.Path(sys.argv[sys.argv.index("--build") + 1]) \
-        if "--build" in sys.argv else root / "build"
-    pascalc = build / "bin" / "pascalc"
-    if not pascalc.exists():
-        print(f"kind-exhaustive: {pascalc} is not built", file=sys.stderr)
-        return 77
+def sweep(label, argv, pascalc, root, listed, chained, seen):
+    """One corpus: ask the compiler what it dispatches on, and hold the
+    answers against the rows of the catalogue that name this corpus.
 
-    listed, unused, chained = catalogue(
-        pathlib.Path(__file__).with_name(CATALOGUE))
-
-    # The catalogue is written the way the source spells a name; the compiler
-    # folds identifiers, so it answers in lower case. Fold the keys to match,
-    # and keep the written spelling for the messages.
-    listed = {(r.lower(), e.lower(), n): (line, a, b, r, e)
-              for (r, e, n), (line, a, b) in listed.items()}
-    unused = {(e.lower(), c.lower()): (n, e, c)
-              for (e, c), n in unused.items()}
-
-    found, never_named, found_chains, enums = dispatch(
-        pascalc, components.translate(root))
-    if not found or not enums:
-        print("kind-exhaustive: --dump-dispatch reported no enumeration or no "
-              "case-statement over one at all", file=sys.stderr)
-        return 1
-
+    It was the compiler's own three components and nothing else until
+    ADR-0404, which is how `MenuKey` came to crash the editor on a key kind
+    ADR-0396 had added -- the compiler answers that question correctly about
+    any Pascal program and was never asked about this one."""
     bad = []
+    found, never_named, found_chains, enums = dispatch(pascalc, argv)
+    if not found or not enums:
+        bad.append("--dump-dispatch reported no enumeration or no "
+                   "case-statement over one at all")
+        return 0, 0, 0, 0, 0, bad, set(), set()
+
     partial = total = 0
     for routine, enum, n, named, count, other, line, missing in found:
         if other:
             continue
-        total += 1
+        # **A site belongs to the first corpus that reaches it.** `apedit.pas`
+        # is imported by both the shell and the session replayer, so its
+        # `case` statements are reported three times and would need the same
+        # argument written three times -- which is the *fact stated twice*
+        # ADR-0388 removed from this tree once. The corpora are in the order
+        # that makes the owner the program the code is in.
         key = (routine, enum, n)
+        if key in seen:
+            continue
+        seen.add(key)
+        total += 1
         entry = listed.pop(key, None)
         shown = f"{entry[3]}" if entry else routine
         shown_enum = f"{entry[4]}" if entry else enum
@@ -314,7 +336,7 @@ def main():
             continue
         partial += 1
         if entry is None:
-            bad.append(f"{where(root, routine)}:{line} ({routine}) names "
+            bad.append(f"{where(label, root, routine)}:{line} ({routine}) names "
                        f"{named} of {count} {enum} constants "
                        f"and argues for none of it -- missing "
                        f"{', '.join(missing[:6])}"
@@ -336,15 +358,23 @@ def main():
     # The chain half. Same five directions as the case half, and the reason a
     # chain naming every constant still needs no entry is the same too: there
     # is nothing left for a reader to be asked about.
-    if not found_chains:
-        print("kind-exhaustive: --dump-dispatch reported no if-chain "
-              f"dispatching on a field named {TAG_FIELD!r} at all",
-              file=sys.stderr)
-        return 1
-    chained = {(r.lower(), e.lower(), n): (line, a, b, r, e)
-               for (r, e, n), (line, a, b) in chained.items()}
+    # **The floor is the compiler's and not every program's.** A tree of
+    # if-chains over a tag is what the compiler is made of and its absence
+    # would mean this stopped reading; a program with no variant record at all
+    # legitimately has none, and `lsp/pasls.pas` is one.
+    if not found_chains and label == SELFHOST:
+        bad.append(f"--dump-dispatch reported no if-chain dispatching on a "
+                   f"field named {TAG_FIELD!r} at all")
+        return (total, partial, 0, 0, len(enums), bad, never_named,
+                set(enums))
     chain_partial = 0
+    chains_here = 0
     for routine, enum, n, named, count, line, missing in found_chains:
+        key = ("chain", routine, enum, n)
+        if key in seen:
+            continue
+        seen.add(key)
+        chains_here += 1
         entry = chained.pop((routine, enum, n), None)
         if not missing:
             if entry:
@@ -354,7 +384,7 @@ def main():
             continue
         chain_partial += 1
         if entry is None:
-            bad.append(f"{where(root, routine)}:{line} ({routine}) "
+            bad.append(f"{where(label, root, routine)}:{line} ({routine}) "
                        f"dispatches on "
                        f"{named} of {count} {enum} constants in "
                        f"an if-chain and argues for none of it -- missing "
@@ -375,11 +405,104 @@ def main():
         bad.append(f"{CATALOGUE}:{entry[0]} names {entry[3]}:{entry[4]}:"
                    f"{key[2]} as an if-chain, and there is no such chain")
 
+    return (total, partial, chains_here, chain_partial, len(enums), bad,
+            never_named, set(enums))
+
+def corpora(root):
+    """Every corpus this asks about, as (label, what to hand the compiler).
+
+    **The compiler's own components were the question and are now one entry**
+    (ADR-0404). `--dump-dispatch` answers about any Pascal program, and three
+    roots here hold one -- the compiler, the editor and the language server --
+    where this gate read the first and nothing else. That is the whole of why
+    a key kind ADR-0396 added could reach a `case` in `tui/apedit.pas` with no
+    arm for it and stop the editor, with every oracle green.
+
+    The import paths are what a program needs to *resolve* and not a second
+    list of what it is made of: the compiler follows an `import` transitively
+    from the source it is handed (ADR-0244), so naming the roots is enough and
+    a `.components` sidecar is not read here.
+    """
+    paths = []
+    for d in ("lib", "lib/dialect", "tui", "lsp"):
+        paths += ["--import-path", str(root / d)]
+    out = [(SELFHOST, components.translate(root))]
+    for rel in EXTRA:
+        out.append((rel, paths + [str(root / rel)]))
+    return out
+
+
+def main():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    build = pathlib.Path(sys.argv[sys.argv.index("--build") + 1]) \
+        if "--build" in sys.argv else root / "build"
+    pascalc = build / "bin" / "pascalc"
+    if not pascalc.exists():
+        print(f"kind-exhaustive: {pascalc} is not built", file=sys.stderr)
+        return 77
+
+    # A corpus named here and missing from the tree is a program this stopped
+    # asking about, which is the direction a multi-corpus gate rots in.
+    missing = [rel for rel in EXTRA if not (root / rel).exists()]
+    if missing:
+        print("kind-exhaustive: " + ", ".join(missing) + " named as a corpus "
+              "and not in the tree", file=sys.stderr)
+        return 1
+
+    listed, unused, chained = catalogue(
+        pathlib.Path(__file__).with_name(CATALOGUE))
+
+    bad = []
+    total = partial = chains = chain_partial = enums = swept = 0
+    seen = set()
+    # **Is a constant named by no case-statement *anywhere*?** That was a
+    # question about one program while there was one corpus, and it is a
+    # question about the tree now: `crText` is named by nothing in
+    # `apedit.pas`, which decides what a cell is *for*, and by `RoleColour` in
+    # `apide.pas`, which decides what it looks like. Asking each corpus on its
+    # own would have made eight entries out of a split ADR-0389 made on
+    # purpose. A constant is unused when every corpus that declares its
+    # enumeration leaves it unnamed.
+    never, declares = {}, {}
+    for label, argv in corpora(root):
+        # The catalogue is written the way the source spells a name; the
+        # compiler folds identifiers, so it answers in lower case. Fold the
+        # keys to match, and keep the written spelling for the messages.
+        mine = {(r.lower(), e.lower(), n): (line, a, b, r, e)
+                for (lb, r, e, n), (line, a, b) in listed.items()
+                if lb == label}
+        mine_chained = {(r.lower(), e.lower(), n): (line, a, b, r, e)
+                        for (lb, r, e, n), (line, a, b) in chained.items()
+                        if lb == label}
+        (t, p, c, cp, en, mine_bad,
+         mine_never, mine_enums) = sweep(label, argv, pascalc, root,
+                                         mine, mine_chained, seen)
+        for key in mine_never:
+            never.setdefault(key, set()).add(label)
+        for e in mine_enums:
+            declares.setdefault(e, set()).add(label)
+        # **A failure says which program it is about.** The compiler's own
+        # messages are left as they were, every one of them having named a
+        # `selfhost/` path already; a second corpus needs the label in front
+        # or a routine name is the only clue which program it is in.
+        bad += mine_bad if label == SELFHOST else [f"{label}: {m}"
+                                                   for m in mine_bad]
+        total += t
+        partial += p
+        chains += c
+        chain_partial += cp
+        enums += en
+        swept += 1
+
     # The constants no case-statement names at all, which the compiler unions
     # over the *declared* enumerations rather than over the sites -- an
     # enumeration no case mentions has every constant unnamed and appears at
-    # no site to be found at. `stdKind` is exactly that one.
-    for key in sorted(never_named):
+    # no site to be found at.
+    unused = {(e.lower(), c.lower()): (n, e, c)
+              for (_lb, e, c), n in unused.items()}
+    for key in sorted(never):
+        if never[key] != declares.get(key[0], set()):
+            continue          # some corpus names it, so it is dispatched on
         if unused.pop(key, None) is None:
             bad.append(f"{key[1]} is named by no case-statement at all -- "
                        f"it is unused, or {key[0]} outlived it. Add "
@@ -396,9 +519,9 @@ def main():
         return 1
 
     print(f"kind-exhaustive: {total} case-statements over "
-          f"{len(enums)} enumerations; {total - partial} name every constant "
-          f"and {partial} argue for a subset. "
-          f"{len(found_chains)} tag-dispatch if-chains, {chain_partial} of "
+          f"{enums} enumerations across {swept} corpora; {total - partial} "
+          f"name every constant and {partial} argue for a subset. "
+          f"{chains} tag-dispatch if-chains, {chain_partial} of "
           f"them arguing for a subset")
     return 0
 

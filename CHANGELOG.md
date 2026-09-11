@@ -15,6 +15,9 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **Every program here is checked for a `case` that has stopped covering its
+  enumeration**, not only the compiler (ADR-0404). The editor and the language
+  server join the sweep; the crash above is what the widening found.
 - **The editor's shell is checked.** `tui-terminal` drives the editor under a
   pseudo-terminal and requires every coloured run it writes to be one the
   model decided, in the colour that role's table gives, over both the

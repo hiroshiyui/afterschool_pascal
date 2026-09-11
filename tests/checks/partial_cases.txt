@@ -571,3 +571,72 @@ CheckDeclarations:nodeKind:1 chains 2 of 68
 # --dump-ast's walker over the same chain, for the same reason: it names the
 # two new kinds and hands a procedure-declaration to the code that was there.
 DumpProc:nodeKind:1 chains 2 of 68
+
+# ==========================================================================
+# The editor (ADR-0404)
+# ==========================================================================
+#
+# `--dump-dispatch` answers about any Pascal program and this gate asked it
+# about the compiler and nothing else, for six months. What that cost is
+# recorded in the commit before ADR-0404's: `MenuKey` dispatches over
+# `KeyKind` with a `case` and no `otherwise`, ADR-0396 added two kinds to that
+# enumeration, and F3 or F6 with the menu open stopped the shipped editor with
+# `case: no label matches the selector`. The compiler had the answer all along.
+#
+# A site belongs to the **first** corpus that reaches it, so `apedit.pas`'s
+# own dispatches are argued for once here and not again under the two programs
+# that import it.
+
+[tui/apedit.pas]
+
+# `PromptKey` is the keyboard while a question is open, and `EditKey` is what
+# decides that: the menu has its own handler (`MenuKey`), so `mdMenu` never
+# reaches this and `mdEdit` is the mode in which there is no question. The
+# guard is the `if ed.mode = mdMenu` before the call, which is why a constant
+# left off here is unreachable rather than merely unlikely.
+promptkey:editmode:1 names 5 of 6
+
+# The four keys a question has a meaning for: a character extends the answer,
+# Backspace shortens it, Ctrl-C withdraws it and Enter submits it. Every other
+# key is ignored *on purpose* -- a person typing an answer has not asked for
+# anything else to happen, which is the whole of ADR-0387's decision that a
+# prompt is a mode. Unlike a case-statement this is a chain, so a kind left
+# off takes the trailing else, and here that is the behaviour wanted.
+promptkey:keykind:1 chains 4 of 25
+
+[tui/apide.pas]
+
+# `Obey` is the shell's half of a request the model handed back: a write, a
+# build, a quit, an open. Nothing else can be pending, because `EditTakeCommand`
+# answers only what `ed.pend` was set to and the four places that set it set
+# one of these. ADR-0388, ADR-0391, ADR-0396.
+obey:keykind:1 chains 4 of 25
+
+# The main loop tests two kinds before handing the key to the model: Ctrl-Q,
+# which is the quit guard and is the shell's because the loop is (ADR-0401),
+# and Ctrl-S, which is this side's only when there is a name to write under.
+# Every other key goes to `EditKey` unexamined, which is ADR-0381's line.
+apide:keykind:1 chains 2 of 25
+
+# --- compared with `=`, not dispatched ------------------------------------
+#
+# `mdMenu` is tested by `EditKey` with an `if` to route a key to `MenuKey`
+# instead of `PromptKey`, which is a question with two answers and not a
+# dispatch over six.
+editmode:mdMenu unused
+
+# `PasFS`'s three kinds are compared one at a time by the editor's `Open`,
+# which wants to know whether a path is a regular file and has nothing to say
+# about the other two.
+FileKind:fkRegular unused
+FileKind:fkDirectory unused
+FileKind:fkOther unused
+
+# The language server's two, each compared with `=` where it matters: the
+# encoding decides one arithmetic in one routine (ADR-0237) and the transport
+# decides which framing to read (ADR-0241). Neither has a third value to
+# dispatch over.
+PosEncoding:peUtf8 unused
+PosEncoding:peUtf16 unused
+TransportKind:tpLsp unused
+TransportKind:tpMcp unused

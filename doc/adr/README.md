@@ -411,3 +411,4 @@ the alternatives that were rejected and why.
 | [0400](0400-icu-reads-the-same-database.md) | ICU reads the same database | Accepted |
 | [0401](0401-a-guard-that-asked-the-wrong-document.md) | A guard that asked the wrong document | Accepted |
 | [0402](0402-what-the-shell-emits.md) | What the shell emits | Accepted |
+| [0404](0404-the-compiler-answers-about-any-program.md) | The compiler answers this about any program | Accepted |
