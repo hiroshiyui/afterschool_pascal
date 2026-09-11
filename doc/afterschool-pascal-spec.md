@@ -3657,9 +3657,14 @@ and it is why a trait meant to serve subranges takes its receiver **by value**:
 so a `protected var` receiver of type `integer` is not usable at a subrange of
 integer, and the call says so (ADR-0340).
 
-NOTE 14 — Only a function-designator selects an implementation. A trait may
-declare a procedure and an implementation may define it, and calling it is not
-yet provided.
+NOTE 14 — A procedure-statement selects by the same rule, and the routine it
+selects shall be a procedure: a trait's function reached by a
+procedure-statement is refused where any other function is (§6.9.2.3). This
+note said the opposite — *only a function-designator selects an
+implementation* — for the life of the clause, contradicting the normative
+sentence above it, which has named a procedure-statement from the day it was
+written. What was true was a statement about the processor and not about the
+language, and §5.6's marker is where such a thing belongs (ADR-0407).
 
 **6.7.10.3 Reading a trait heading.** For each implementation-declaration, each
 heading of the trait shall be read again, with `Self` denoting the type the

@@ -19262,6 +19262,9 @@ procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     forEntry: symListPtr; owning: symPtr; badFunc, thruOwned: boolean;
     counterAt, counterLen: integer; chn: chainPtr;
+    { AP 6.7.10.2's ambiguity, for the procedure half (ADR-0407). Named apart
+      from anything else here because `DispatchTrait` writes through it. }
+    traitAmbig: boolean;
 begin
   if s <> nil then
     case s^.kind of
@@ -19666,6 +19669,41 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'wait     ') or
             IsRequiredProc(s^.pcAt, s^.pcLen)) then
           CheckStdProc(s)
+        { **AP 6.7.10.2 names a procedure-statement beside a
+          function-designator**, and only the function half was built: a trait
+          may declare a procedure, an implementation may define it, and
+          calling one reported *unknown procedure* (ADR-0407). Placed here
+          rather than after the error for CheckCall's placement and its
+          reason -- the ordinary lookup has failed, so a program that declares
+          its own routine of the name goes on meaning what it meant
+          (6.2.2.11), and the required procedures are consulted last, as
+          `LookupBuiltin` is on the function side. That symmetry is the whole
+          argument for the position: the two halves of one clause resolving a
+          name in two orders is a fact stated twice. }
+        else if DispatchTrait(s^.pcAt, s^.pcLen, s^.pcArgs, traitAmbig) <> nil
+        then begin
+          sym := DispatchTrait(s^.pcAt, s^.pcLen, s^.pcArgs, traitAmbig);
+          if traitAmbig then begin
+            ErrorAt(s^.line, s^.col);
+            write('''');
+            WritePool(s^.pcAt, s^.pcLen);
+            write(''' is declared by more than one trait implemented for the ');
+            writeln('type of its first argument, so this call selects none of them')
+          end
+          { A trait's *function* called as a procedure-statement is refused
+            where any other function is, and by the same test: a call that
+            yields a value is not a statement (6.9.2.3). }
+          else if ResultTypeOf(sym) <> nil then begin
+            ErrorAt(s^.line, s^.col);
+            write('''');
+            WritePool(s^.pcAt, s^.pcLen);
+            writeln(''' is not a procedure')
+          end
+          else begin
+            s^.pcSym := sym;
+            CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
+          end
+        end
         else if sym = nil then begin
           ErrorAt(s^.line, s^.col);
           write('unknown procedure ''');

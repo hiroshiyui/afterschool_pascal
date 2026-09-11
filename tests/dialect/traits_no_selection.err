@@ -1,5 +1,7 @@
-<source>:47:11: error: unknown function 'rank'
-<source>:48:11: error: unknown function 'rank'
-<source>:49:11: error: unknown function 'rank'
-<source>:51:3: error: unknown procedure 'emit'
-<source>:53:11: error: 'rank' is declared by more than one trait implemented for the type of its first argument, so this call selects none of them
+<source>:56:11: error: unknown function 'rank'
+<source>:57:11: error: unknown function 'rank'
+<source>:58:11: error: unknown function 'rank'
+<source>:65:3: error: unknown procedure 'emit'
+<source>:68:3: error: 'emit' is declared by more than one trait implemented for the type of its first argument, so this call selects none of them
+<source>:72:3: error: 'rank' is not a procedure
+<source>:73:11: error: 'rank' is declared by more than one trait implemented for the type of its first argument, so this call selects none of them

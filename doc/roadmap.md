@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 924 cases green at `-O2` and at `-O0`.
+and the suite is 925 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
@@ -327,7 +327,7 @@ contributor who wants it starts from a page of findings rather than nothing.
 **And `wasm64-wasi` is the seventh** (ADR-0386) — WebAssembly's memory64,
 admitted on the layout claim alone because no sysroot for it exists. It landed
 in a class with x86-64, aarch64 and both Darwin triples and every one of the
-11 162 frame offsets matched theirs, and it cost **nothing** in the layout
+11 164 frame offsets matched theirs, and it cost **nothing** in the layout
 rules: ADR-0325's generalisation spent a third time and the first time free.
 
 **And the sixth target is `wasm32-wasi`, admitted the same day** (ADR-0383) —

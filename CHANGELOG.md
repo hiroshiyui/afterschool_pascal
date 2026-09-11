@@ -13,6 +13,18 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A trait may declare a procedure, and calling one now selects an
+  implementation.** AP 6.7.10.2 has named *a function-designator or a
+  procedure-statement* since it was written and only the function half was
+  built, so `Emit(p)` over a type implementing the trait reported
+  `unknown procedure 'emit'` while `Size(p)` beside it resolved (ADR-0407).
+  The specification's own NOTE 14 had recorded the gap and thereby
+  contradicted the clause above it; it now says what the procedure half
+  additionally requires — that the routine selected is a procedure, a trait's
+  function used as a statement being refused where any other function is.
+
 ## [3.11.0] - 2026-09-11
 
 **The editor replaces, and two things it shipped broken a day ago do not do

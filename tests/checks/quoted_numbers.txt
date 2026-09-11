@@ -79,8 +79,12 @@ README.md                     | setjmp-arity | Five of the (seven) are POSIX
 # The frames `target-layout` actually compared, which moves whenever a target
 # joins the LP64 class or a frame is added to the corpus -- and it moved on the
 # day wasm64 was admitted, from a number nothing quoted to one two documents do.
-doc/roadmap.md                | target-layout | one of the\s+(11 162) frame offsets
-doc/design-digest.md          | target-layout | matched every one of the (11 162) frame
+# **The capture group held the number itself and that was the defect**: a row
+# reading `(11 162)` matches only while the answer is 11 162, so when it moved
+# the row simply stopped matching and the gate reported a *reworded sentence*.
+# A capture group says **where the number is**, never which number it is.
+doc/roadmap.md                | target-layout | one of the\s+(\d[\d ]*\d) frame offsets
+doc/design-digest.md          | target-layout | matched every one of the (\d[\d ]*\d) frame
 tui/README.md   | tui-palette        | every pairing clears at (\d+\.\d+):1 or better
 
 # How much of the session corpus a person at a terminal could have driven

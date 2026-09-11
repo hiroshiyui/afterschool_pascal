@@ -413,7 +413,7 @@ the emitted module is right for macOS, and one of them ships an archive.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **597 of the 598 programs in this repository's
+a file and a handle (ADR-0325). **598 of the 599 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 
@@ -2835,7 +2835,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 924 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 925 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

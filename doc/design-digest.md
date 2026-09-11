@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 162 frame offsets, with nothing in the gate
+  matched every one of the 11 164 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5759,6 +5759,25 @@ expression or a function result therefore selects nothing and falls to
 nothing. **The cost of "only after" is that an ordinary declaration hides the
 trait's routine of that spelling entirely**, and what the program is then told
 is that its argument has the wrong type (AP 6.7.10.2 NOTE 11).
+
+**A procedure-statement selects by the same lookup** (ADR-0407), and did not
+for the life of the clause. AP 6.7.10.2 has named *a function-designator or a
+procedure-statement* from the day it was written and only the function half
+was built, so the normative sentence and its own NOTE 14 contradicted each
+other -- which is what AP 5.6's `[not yet implemented]` marker exists to
+prevent, and the gap was written into prose instead, where no gate reads it.
+The arm is placed where the function's is: ordinary lookup first, the trait
+next, the **required procedures last**, as `LookupBuiltin` is on the other
+side. Asking the trait after the required procedures was the smaller change
+and was rejected -- one clause resolving a name in two orders depending on
+which half you read is the *fact stated twice* ADR-0388 removed once. A
+trait's *function* reached by a procedure-statement is refused by the test
+every other function is. The test that says so is
+`tests/dialect/traits_no_selection.pas`, which **gained four claims and lost
+one**: its subject is what a trait-keyed call cannot select and it had been
+asserting the function half of every limitation and the procedure half of
+none. Neither arm records a **use**, which is `doc/sop.md` §7's row and the
+reason the procedure arm was written to match rather than fixed alone.
 
 **A trait heading is re-parsed per implementation**, by token position, exactly
 as AP 6.7.3.5 re-reads a generic's body. Sharing the parsed nodes does not
