@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 369 frame offsets, with nothing in the gate
+  matched every one of the 11 427 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5782,6 +5782,42 @@ type and then `owned ^D`. **AP 6.7.11 is the first clause to carry AP 5.6's
 `[not yet implemented]` marker**, which ADR-0189 wrote, ADR-0195 gated both
 ways, and nothing had used -- the gap ADR-0407 had just found written into
 prose instead. It carried it for one increment.
+
+**A method is the call already made** (ADR-0410), which is increment A and the
+last of ADR-0315's three. `impl T;` is the trait form with the trait left out
+-- `im^.trait = nil`, and everything in `CheckImplDecl` is reused but three
+arms that invert because there is no trait to take a heading from -- and
+`x.M(a)` is a second spelling for the selection 6.7.10.2 already makes from
+the first actual's type. So a method is callable both ways and neither name is
+in the scope 6.11.2 merges, which is the point: 139 of 486 exported names in
+this library repeat their module's noun to work around that scope.
+
+**The receiver decides which half of the compiler sees the call**, which is
+what probing found and ADR-0315 does not have. `p.M(2)` is 6.11.3's *qualified
+name* -- the same tokens as `Greeting.Greet(x)` -- so Sema tells them apart by
+what the qualifier denotes (ADR-0044, an eighth time) and rewrites the node,
+putting the receiver at the head of the argument list. `q^.M(2)` and
+`a[1].M(2)` do not parse at all today, so the **parser** takes them: a
+complete variable-access followed by `(` has one reading, there being no
+procedural type. And `p.M` with no arguments is a field selection, so it is
+the **husk** (ADR-0173's shape one node kind over): the node stays, the call
+hangs on `fdCall`, and every later pass reads that field first.
+
+Three predicates had to be told about the third spelling and one of them was a
+defect: `IsDesignator` answers **false** for a method result, or 6.6.3.3's
+*a var parameter needs a variable* never fires and the emitted call passes a
+value where the callee wants an address; `IsCallValue` answers **true**, or a
+method result is refused as an actual for a structured *value* parameter; and
+`CalledSym` reads the husk rather than falling through to `vrCall`, which is a
+different arm of the variant record (ADR-0223). ADR-0179 had already written
+the lesson: the rule is about the **construct**, so a site asks by name and a
+new spelling joins the predicate rather than every site.
+
+**Chaining needs a by-value receiver**, and that is 6.6.3.3 rather than a rule
+this construct invented: a method result is a function-access, so
+`p.Doubled.Len` is refused where `Len` takes `protected var` and accepted
+where it takes `self` by value. Giving the result a temporary would be a
+second name for a value nobody declared, which is what ADR-0201 refuses.
 
 **The trait object carries its answer** (ADR-0409), which is increment C2 and
 the whole feature. A value of `dyn T` is a **box**: a two-word heap variable

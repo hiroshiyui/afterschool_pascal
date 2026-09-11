@@ -6891,10 +6891,14 @@ begin
     end;
 
     nkField:
+      { A method call's result, where the result lives in memory: the call is
+        the storage, exactly as it is for an ordinary one (ADR-0410). }
+      if e^.fdCall <> nil then
+        EmitExpr(e^.fdCall, v)
       { 6.11.3's qualified name denotes one symbol, so it is addressed as a
         bare name is -- the base is an interface-identifier and has no address
         of its own. }
-      if e^.fdQualified <> nil then begin
+      else if e^.fdQualified <> nil then begin
         if e^.fdQualified^.kind = skConst then
           ConstAddress(e^.fdQualified, v)
         else if IsInvocable(e^.fdQualified) then
@@ -7195,9 +7199,15 @@ begin
     { A schema-discriminant is the value the type was produced with, so it is
       a constant here and there is nothing to load (6.8.4). }
     nkField:
+      { AP 6.7.10.4's method call with no arguments (ADR-0410). The husk rule:
+        this node's tokens are a field selection's and Sema decided they were
+        a call, so the call is read first and the selection below never runs.
+        `nkVar.vrCall` is the same shape for a bare `argcount`. }
+      if e^.fdCall <> nil then
+        EmitExpr(e^.fdCall, v)
       { A qualified name reaches whatever the interface holds, and the three
         things it can hold each behave as the bare form does. }
-      if e^.fdQualified <> nil then
+      else if e^.fdQualified <> nil then
         if e^.fdQualified^.kind = skConst then EmitConst(e^.fdQualified, v)
         else if IsInvocable(e^.fdQualified) then
           EmitUserCall(e^.fdQualified, nil, e^.fdSlot, v, e^.line, e^.col)

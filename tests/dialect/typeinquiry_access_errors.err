@@ -3,5 +3,5 @@
 <source>:30:42: error: 'k' is a parameter of another formal-parameter-list, so 'type of' cannot name it here
 <source>:37:24: error: 'type of x' names the very parameter it is the type of
 <source>:37:32: error: undeclared identifier 'x'
-<source>:37:33: error: cannot select a field of a value of type integer
+<source>:37:33: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
 <source>:37:24: error: 'type of' names a variable-access, and this is not one

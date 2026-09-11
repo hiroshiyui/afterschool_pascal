@@ -50,6 +50,7 @@ lib_toml_build 0
 lib_toml_errors 0
 lib_vector 0
 lsp_diag 0
+methods 0
 module_examples 0
 new_selectors 0
 new_threatens_result 5

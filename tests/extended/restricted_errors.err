@@ -4,7 +4,7 @@
 <source>:48:19: error: a restricted string parameter must be a var parameter; whether a restricted value may be copied into a value parameter is not decided here
 <source>:48:43: error: a value of type stag cannot be written
 <source>:52:10: error: operator '+' needs numeric operands, found ri and integer
-<source>:55:12: error: cannot select a field of a value of type widget
+<source>:55:12: error: cannot select a field of a value of type widget, and no routine of that name is implemented for it
 <source>:58:8: error: a value of a restricted type cannot be compared; 6.4.2.5 allows only assignment, parameter passing and a function result
 <source>:61:11: error: a value of type ri cannot be written
 <source>:64:8: error: the selector of a case statement must be an ordinal type, found ri

@@ -4,6 +4,19 @@ Date: 2026-09-03
 
 ## Status
 
+**Superseded**, 2026-09-11, by the records that built it: B by
+[ADR-0338](0338-a-bound-belongs-where-the-type-is-written-down.md) –
+[ADR-0341](0341-a-trait-crosses-a-component-and-an-implementation-need-not.md),
+C by [ADR-0408](0408-a-type-nothing-admits-is-not-refused.md) and
+[ADR-0409](0409-the-trait-object-carries-its-answer.md), and A by
+[ADR-0410](0410-a-method-is-the-call-already-made.md). **All three increments
+are built**, in six records rather than three, and each of those says where
+this one was wrong. What survives here and is worth reading is the argument
+against Object Pascal's model and the costing of the three increments; the
+staging, the orphan rule and the spellings did not.
+
+The paragraph below is as it was written while A and C were open.
+
 **Proposed**, 2026-09-03. **Increment B is built; A and C are not.** This is
 the first record in this tree whose status is not *Accepted*, and the reason is
 that it was asked for as a design: the shape was to be argued before any code

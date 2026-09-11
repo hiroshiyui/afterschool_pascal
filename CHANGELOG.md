@@ -15,6 +15,28 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **A type may have routines of its own: `impl T;` and `x.M(a)`** (ADR-0410,
+  AP 6.7.10, AP 6.7.10.4). `impl Point;` declares routines belonging to
+  `Point`, with the receiver written as an ordinary first parameter, and
+  `p.Shift(1, 1)` calls one. It is not a second mechanism: `x.M(a)` and
+  `M(x, a)` denote the same call, the routine having been selected from its
+  first argument's type since traits landed, so a method may be written either
+  way and any variable may be the receiver — `p.Len`, `q^.Len`, `a[1].Len`,
+  `b.inner.Len`.
+
+  What it buys is that **a method is not an exported name**: a module exports
+  the *type*, and its routines travel with it, so two modules may each have a
+  `Put` where §6.11.2 refuses that to two exported names. 139 of this
+  library's 486 exported names repeat their own module's noun to work around
+  exactly that.
+
+  A type may not have a field and a routine of one name, and is told so where
+  the implementation is written. A method called on what a method returned
+  needs that second method to take its receiver by value, §6.6.3.3 wanting a
+  variable for a `var` parameter. `impl` reserves nothing.
+
+  This completes ADR-0315's three increments, all of them now built.
+
 - **A collection may hold values of different types: `dyn T`, the trait
   object** (ADR-0408, ADR-0409, AP 6.7.11). `type Shape = dyn Renders;` denotes
   *something that implements `Renders`*, and `owned ^Shape` owns one; `take`

@@ -1631,7 +1631,8 @@ begin
                n^.fdDiscValue := 0;
                n^.fdDiscSym := nil;
                n^.fdQualified := nil;
-               n^.fdSlot := nil
+               n^.fdSlot := nil;
+               n^.fdCall := nil
              end;
     nkCall: begin
               n^.clBuiltin := biNone;
@@ -2975,6 +2976,7 @@ end;
   deeper for the tree's walkers, so each counts. }
 function ParseSelectors;
 var levels, l, c: integer; done, more, isSub: boolean; n, ix: nodePtr;
+    call, head, tail: nodePtr;
 begin
   levels := 0;
   done := false;
@@ -3046,7 +3048,36 @@ begin
         n^.fdLine := tok[pos].line;
         n^.fdCol := tok[pos].col;
         pos := pos + 1;
-        base := n
+        { AP 6.7.10.4's method call, where the receiver is **not** a simple
+          name (ADR-0410). `q^.M(2)`, `a[1].M(2)` and `p.f.M(2)` reach here,
+          and the parser can take them without asking Sema anything: a
+          complete variable-access followed by `(` is a syntax error in both
+          standards -- a program cannot call a variable, there being no
+          procedural type (ADR-0030) -- so the juxtaposition has exactly one
+          reading. That is ADR-0140's test for a dialect spelling, applied to
+          a position rather than to a word.
+
+          A *simple* receiver never arrives here: `p.M(2)` is taken one level
+          up as 6.11.3's qualified name, which has the same tokens, and Sema
+          tells those two apart by what the qualifier denotes. Two paths, and
+          they meet at the same node -- an ordinary call whose first actual is
+          the receiver. }
+        if Check(tkLParen) then begin
+          call := NewNode(nkCall, n^.fdLine, n^.fdCol);
+          call^.clQualAt := 0;
+          call^.clQualLen := 0;
+          call^.clAt := n^.fdAt;
+          call^.clLen := n^.fdLen;
+          pos := pos + 1;
+          head := nil;
+          tail := nil;
+          ParseActualParameters(head, tail, ctxCallArgs);
+          base^.next := head;
+          call^.clArgs := base;
+          base := call
+        end
+        else
+          base := n
       end
     end
     else
@@ -4017,8 +4048,25 @@ begin
       ref^.vrLen := len;
       pos := pos + 1;
       s^.asTarget := ParseSelectors(ref);
-      Expect(tkAssign, ctxAssign);
-      s^.asValue := ParseExpr
+      { AP 6.7.10.4 (ADR-0410): the chain may have ended in a method call --
+        `q^.Shift(1)` -- and then the statement is that call rather than an
+        assignment to it. The node is remade rather than the call being left
+        as an assignment target, so that nothing downstream has to learn that
+        a target might be a call. }
+      if (not aborted) and (s^.asTarget <> nil) and
+         (s^.asTarget^.kind = nkCall) then begin
+        ref := s^.asTarget;
+        s := NewNode(nkProcCall, l, c);
+        s^.pcQualAt := 0;
+        s^.pcQualLen := 0;
+        s^.pcAt := ref^.clAt;
+        s^.pcLen := ref^.clLen;
+        s^.pcArgs := ref^.clArgs
+      end
+      else begin
+        Expect(tkAssign, ctxAssign);
+        s^.asValue := ParseExpr
+      end
     end
     else begin
       { Anything else beginning with an identifier is a procedure call. A
@@ -4762,26 +4810,41 @@ begin
   pos := pos + 1;                        { 'impl' }
   d^.imAt := tok[pos].at;
   d^.imLen := tok[pos].len;
-  pos := pos + 1;                        { the trait's identifier }
-  if not Check(tkFor) then begin
-    ErrorAtCur;
-    writeln('expected ''for'' and the type this implements the trait for');
-    Bail
-  end;
-  if not aborted then begin
+  { Kept because the identifier's position is wanted either way and which
+    thing it names is not known for one more token. }
+  d^.imForLine := CurLine;
+  d^.imForCol := CurCol;
+  pos := pos + 1;                        { the trait's, or the type's }
+  { AP 6.7.10's implementation-declaration has two forms and `for` is the
+    whole of what separates them (ADR-0410). Without it this is an
+    **inherent** implementation -- the routines a type has of its own, which
+    no trait declared -- so the identifier already read is the *type* and
+    there is no trait. One token of lookahead, and it is a token that cannot
+    begin anything else here: `for` is a word-symbol, so a program that wrote
+    `impl` as an identifier is unaffected by either form. }
+  if Check(tkFor) then begin
     pos := pos + 1;                      { 'for' }
     if not Check(tkIdent) then begin
       ErrorAtCur;
       writeln('expected the name of a type or a schema after ''for''');
       Bail
+    end;
+    if not aborted then begin
+      d^.imForLine := CurLine;
+      d^.imForCol := CurCol;
+      d^.imForAt := tok[pos].at;
+      d^.imForLen := tok[pos].len;
+      pos := pos + 1;
+      Expect(tkSemi, ctxImplFor)
     end
-  end;
-  if not aborted then begin
-    d^.imForLine := CurLine;
-    d^.imForCol := CurCol;
-    d^.imForAt := tok[pos].at;
-    d^.imForLen := tok[pos].len;
-    pos := pos + 1;
+  end
+  else begin
+    { An inherent implementation: the type is what was read, and `imLen = 0`
+      is how every later question asks whether there is a trait. }
+    d^.imForAt := d^.imAt;
+    d^.imForLen := d^.imLen;
+    d^.imAt := 0;
+    d^.imLen := 0;
     Expect(tkSemi, ctxImplFor)
   end;
   head := nil;
@@ -6678,6 +6741,16 @@ begin
   else if e^.kind = nkVar then
     IsCallValue := (e^.vrCall <> nil) or
                    ((e^.vrField = nil) and IsInvocable(e^.vrSym))
+  { AP 6.7.10.4's method-designator with no arguments is a **third** spelling
+    of a function-designator (ADR-0410), and it arrives as a third node kind
+    for the reason the second does: `p.Sum` and `p.Sum(1)` are a field
+    selection and a qualified call to the parser, and Sema tells each from
+    what the names denote. This is ADR-0179's finding one construct later --
+    the rule is about the construct, so it is asked by name here and not by
+    listing node kinds at every site. Without it a method result was refused
+    as an actual for a *structured value* parameter, which is a copy and
+    needs no variable. }
+  else if e^.kind = nkField then IsCallValue := e^.fdCall <> nil
   else IsCallValue := false
 end;
 
@@ -6716,6 +6789,12 @@ begin
   CalledSym := nil;
   if IsCallValue(e) then
     if e^.kind = nkCall then CalledSym := e^.clSym
+    { AP 6.7.10.4's third spelling, and the arm has to be here rather than
+      falling through: the two below read `vrCall` and `vrSym`, which belong
+      to the nkVar arm of the variant, and reading them of an nkField is
+      §6.5.3.3's wrong-arm read -- an error §3.1 lets a processor leave
+      undetected and `variant-check` exists to refuse (ADR-0223). }
+    else if e^.kind = nkField then CalledSym := e^.fdCall^.clSym
     else if e^.vrCall <> nil then CalledSym := e^.vrCall^.clSym
     else CalledSym := e^.vrSym
 end;
@@ -6744,7 +6823,18 @@ begin
   { A qualified name is the whole selection, so what it denotes is what
     decides -- there is no base variable underneath it. }
   else if e^.kind = nkField then
-    if e^.fdQualified <> nil then
+    { AP 6.7.10.4 (ADR-0410): a node carrying a method call denotes what the
+      call returned, and a function-access is not a variable-access -- so
+      6.6.3.3 refuses it as an actual for a variable parameter, which is what
+      `k.Twice.Plus(1)` needs said. Read **first**, which is the husk rule:
+      without it the selection below answers about the *receiver* and calls a
+      method result a designator, and the emitted IR passed an `i32` where the
+      callee's `var` parameter wanted a pointer. clang refused the module; a
+      receiver that travels by address would have been a wrong answer with no
+      diagnostic anywhere. }
+    if e^.fdCall <> nil then
+      IsDesignator := false
+    else if e^.fdQualified <> nil then
       IsDesignator := IsVariable(e^.fdQualified)
     else
       IsDesignator := (not e^.fdIsDisc) and IsDesignator(e^.fdBase)
@@ -15505,10 +15595,98 @@ begin
   end
 end;
 
+{ Does `t` have an implementation supplying a routine spelled `at`/`len`
+  (AP 6.7.10.4, ADR-0410)?
+
+  Asked only where a field selection has already failed, and asked of the
+  *name* rather than of a signature, because what it decides is which
+  construct this is and not whether the call is right -- the call is then
+  checked like any other. `Base(t)` for ADR-0018's reason, which is the same
+  reason FindImpl and DispatchTrait have it: a subrange answers for its host,
+  and carries no implementation of its own. }
+function MethodSym(t: typePtr; at, len: integer): symPtr;
+var im: implPtr; p: symListPtr; found: symPtr;
+begin
+  found := nil;
+  if t <> nil then begin
+    im := implHead;
+    while im <> nil do begin
+      if im^.forType = Base(t) then begin
+        p := im^.routines;
+        while p <> nil do begin
+          if found = nil then
+            if PoolSame(p^.sym^.at, p^.sym^.len, at, len) then found := p^.sym;
+          p := p^.next
+        end
+      end;
+      im := im^.next
+    end
+  end;
+  { The *first* that answers, where DispatchTrait examines every one and
+    reports an ambiguity. That is not a disagreement: this is asked to decide
+    which construct a spelling is and what its result type is, and an
+    ambiguity is about which routine runs -- which DispatchTrait reports at
+    the call, where the reader wrote it. Two implementations supplying one
+    spelling for one type agree about the result type, `Self` being refused
+    anywhere but a receiver. }
+  MethodSym := found
+end;
+
+function MethodOf(t: typePtr; at, len: integer): boolean;
+begin
+  MethodOf := MethodSym(t, at, len) <> nil
+end;
+
+{ `x.M(a)` is a method call written the other way round (AP 6.7.10.4,
+  ADR-0410), and this is the whole of what makes it one: the receiver becomes
+  the first actual and the qualifier goes away, after which the ordinary
+  resolution runs and selects exactly as `M(x, a)` does.
+
+  **Only Sema can decide this**, which is ADR-0044's recurring answer met an
+  eighth time. The parser builds `Greeting.Greet(x)` and `p.Shift(x)` as the
+  same node -- 6.11.3's qualified name -- because the two are the same tokens,
+  and what tells them apart is what the qualifier *denotes*. So the question
+  is asked here, of the symbol, and a qualifier that names an interface is
+  left alone to mean what it has always meant.
+
+  It is asked **before** the qualified lookup rather than after it fails,
+  because that lookup reports `does not name an imported interface` on the way
+  past and a method call is not an error to be recovered from.
+
+  `LookupQuiet` and not `Lookup`: a qualifier that names nothing at all is the
+  interface path's diagnostic to give, not this one's -- `foo.Bar(x)` where
+  nothing is called `foo` should say what it has always said. }
+function MethodReceiver(qAt, qLen, line, col: integer): nodePtr;
+var s: symPtr; recv: nodePtr;
+begin
+  recv := nil;
+  if qLen > 0 then begin
+    s := LookupQuiet(0, 0, qAt, qLen);
+    if s <> nil then
+      if (s^.kind = skVar) or (s^.kind = skParam) or
+         (s^.kind = skVarParam) then begin
+        recv := NewNode(nkVar, line, col);
+        recv^.vrAt := qAt;
+        recv^.vrLen := qLen
+      end
+  end;
+  MethodReceiver := recv
+end;
+
 procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last: nodePtr; t: typePtr;
     n, at2, len2: integer; stepped, ambig, refused: boolean;
 begin
+  { AP 6.7.10.4: a qualifier that names a variable is a receiver and not an
+    interface, so the call is rewritten into the form the selection already
+    understands and this arm never sees it. }
+  def := MethodReceiver(c^.clQualAt, c^.clQualLen, c^.line, c^.col);
+  if def <> nil then begin
+    def^.next := c^.clArgs;
+    c^.clArgs := def;
+    c^.clQualAt := 0;
+    c^.clQualLen := 0
+  end;
   { 6.11.3's qualified name. A required function is never one of the answers,
     so this returns whatever the interface holds or nothing at all. }
   if c^.clQualLen > 0 then begin
@@ -16895,6 +17073,34 @@ begin
         end;
         if found then
           { the discriminant answered, and e^.ntype is already set }
+        { AP 6.7.10.4's method call with no arguments (ADR-0410). Asked
+          **above** the record split and not inside it, because an
+          implementation is written for a type and not for a record --
+          ADR-0315 settled that deliberately, the names this retires belonging
+          to a schema and a handle as often as to a record -- so `n.Twice` for
+          an integer `n` has to reach this. Asked **after** the field lookup
+          and after 6.8.4's discriminant, so that a field or a discriminant of
+          that spelling goes on meaning what it meant: this is not a
+          preference between two readings but the absence of one, a type being
+          refused a routine whose name is a field of it where the
+          implementation is checked. }
+        else if ((not IsRecord(b)) or (FindField(b, e^.fdAt, e^.fdLen) = nil))
+                and MethodOf(b, e^.fdAt, e^.fdLen) then begin
+          e^.fdCall := NewNode(nkCall, e^.fdLine, e^.fdCol);
+          e^.fdCall^.clQualAt := 0;
+          e^.fdCall^.clQualLen := 0;
+          e^.fdCall^.clAt := e^.fdAt;
+          e^.fdCall^.clLen := e^.fdLen;
+          e^.fdCall^.clArgs := e^.fdBase;
+          e^.fdBase^.next := nil;
+          { The receiver was checked at the head of this arm, and CheckExpr
+            is not idempotent -- ADR-0254's marker is what says so, and it
+            is set here for the reason it exists. }
+          e^.fdBase^.nChecked := true;
+          CheckCall(e^.fdCall);
+          e^.ntype := e^.fdCall^.ntype;
+          e^.nErrType := e^.fdCall^.nErrType
+        end
         else
         if not IsRecord(b) then begin
           if (b <> nil) and (b^.schema <> nil) then begin
@@ -16912,19 +17118,24 @@ begin
             ErrorAt(e^.line, e^.col);
             write('cannot select a field of a value of type ');
             WriteTypeName(b);
-            writeln
+            writeln(', and no routine of that name is implemented for it')
           end;
           e^.ntype := intType
         end
         else begin
           f := FindField(b, e^.fdAt, e^.fdLen);
           if f = nil then begin
+            { AP 6.7.10.4 gave this position a second reading, so the message
+              has to name both: `x.M` is a field selection *or* a method
+              designator, and what is wrong is that it is neither
+              (ADR-0410). Saying only *not a field* would describe half the
+              question and send a reader looking at the record. }
             ErrorAt(e^.line, e^.col);
             write('''');
             WritePool(e^.fdAt, e^.fdLen);
-            write(''' is not a field of ');
+            write(''' is neither a field of ');
             WriteTypeName(b);
-            writeln;
+            writeln(' nor a routine implemented for it');
             e^.ntype := intType
           end
           else begin
@@ -19436,6 +19647,9 @@ var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     { AP 6.7.10.2's ambiguity, for the procedure half (ADR-0407). Named apart
       from anything else here because `DispatchTrait` writes through it. }
     traitAmbig: boolean;
+    { AP 6.7.10.4's receiver, moved out of the qualifier and into the
+      argument list (ADR-0410). }
+    recv: nodePtr;
 begin
   if s <> nil then
     case s^.kind of
@@ -19807,7 +20021,18 @@ begin
       nkWrite: CheckWrite(s);
       nkRead:  CheckRead(s);
 
-      nkProcCall: if s^.pcQualLen > 0 then begin
+      nkProcCall: begin
+        { AP 6.7.10.4, the procedure-statement's half. Written before the
+          arm below rather than inside it, so that the qualified path reports
+          about an interface only where a qualifier is one. }
+        recv := MethodReceiver(s^.pcQualAt, s^.pcQualLen, s^.line, s^.col);
+        if recv <> nil then begin
+          recv^.next := s^.pcArgs;
+          s^.pcArgs := recv;
+          s^.pcQualAt := 0;
+          s^.pcQualLen := 0
+        end;
+        if s^.pcQualLen > 0 then begin
         { 6.11.3's qualified name in a procedure-statement. }
         sym := LookupName(s^.pcQualAt, s^.pcQualLen, s^.pcAt, s^.pcLen,
                           s^.line, s^.col);
@@ -19930,6 +20155,7 @@ begin
             s^.pcSym := sym;
             CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
           end
+        end
         end
       end;
 
@@ -23675,7 +23901,7 @@ end;
   function`, which is the right message for a call whose first argument is not
   a designator, because no such call can select an implementation. }
 function QuietTypeOf(e: nodePtr): typePtr;
-var t: typePtr; s: symPtr; f: fieldPtr;
+var t, found: typePtr; s: symPtr; f: fieldPtr;
 begin
   t := nil;
   if e <> nil then
@@ -23691,17 +23917,43 @@ begin
         if t^.kind = tyPointer then t := t^.elem else t := nil
     end
     else if e^.kind = nkField then begin
-      t := QuietTypeOf(e^.fdBase);
-      if t <> nil then
-        if IsRecord(t) then begin
-          f := t^.fields;
-          t := nil;
-          while f <> nil do begin
-            if PoolSame(f^.at, f^.len, e^.fdAt, e^.fdLen) then t := f^.ftype;
-            f := f^.next
-          end
+      { AP 6.7.10.4 (ADR-0410): a node carrying a method call has that call's
+        type, and reading it costs nothing this routine was avoiding -- the
+        call has been checked, so the type is recorded rather than derived.
+        Without this arm a method selected *on the result of a method*
+        resolves nothing, which is what `p.Doubled.Len` found. }
+      { A node already carrying a method call has that call's type, and
+        reading it costs nothing this routine was avoiding -- the call has
+        been checked, so the type is recorded rather than derived. }
+      if e^.fdCall <> nil then
+        t := e^.fdCall^.ntype
+      else begin
+        t := QuietTypeOf(e^.fdBase);
+        if t <> nil then begin
+          found := nil;
+          if IsRecord(t) then begin
+            f := t^.fields;
+            while f <> nil do begin
+              if PoolSame(f^.at, f^.len, e^.fdAt, e^.fdLen) then
+                found := f^.ftype;
+              f := f^.next
+            end
+          end;
+          { AP 6.7.10.4 (ADR-0410): a method selected on what a method
+            returned -- `k.Twice.Plus(1)` -- asks for this type **before** the
+            receiver has been checked, so the husk above is not there yet and
+            the answer has to come from the declaration. That is exactly what
+            this routine is allowed to read: a designator's type is a fact
+            about a declaration, and a routine's result type is one. It also
+            subsumes the old *not a record, so no type* arm, a type with no
+            field of that spelling and a type with no fields at all being one
+            question once methods exist. }
+          if found = nil then
+            t := ResultTypeOf(MethodSym(t, e^.fdAt, e^.fdLen))
+          else
+            t := found
         end
-        else t := nil
+      end
     end
     else if e^.kind = nkIndex then begin
       t := QuietTypeOf(e^.ixBase);
@@ -23873,8 +24125,15 @@ begin
     else if t <> nil then begin
       im := implHead;
       while im <> nil do begin
+        { AP 6.7.10 (ADR-0410): an **inherent** implementation has no trait to
+          ask for a heading, and what it declares is the whole answer -- so it
+          is admitted here and the routine scan below is what finds the name.
+          Written as a disjunct rather than by making FindTraitHead tolerate
+          nil, because `or` short-circuits: the helper is then never called
+          with one and gains no branch nothing reaches. }
         if im^.forType = Base(t) then
-          if FindTraitHead(im^.trait, at, len) <> nil then begin
+          if (im^.trait = nil) or
+             (FindTraitHead(im^.trait, at, len) <> nil) then begin
             cand := nil;
             p := im^.routines;
             while p <> nil do begin
@@ -24012,9 +24271,18 @@ begin
             'cannot be written inside a procedure or a function');
     ok := false
   end;
-  tr := LookupQuiet(0, 0, d^.imAt, d^.imLen);
+  { AP 6.7.10 (ADR-0410): `imLen = 0` is the inherent form, `impl T;`, and
+    there is no name here to look up -- the routines are the type's own and no
+    trait declared them. Everything below is shared: the position rules, the
+    type lookup, the duplicate check, the scope with `Self` bound in it, and
+    the declaration of each routine. What differs is only where a heading
+    comes from, which is the loop at the end. }
+  tr := nil;
+  if d^.imLen > 0 then tr := LookupQuiet(0, 0, d^.imAt, d^.imLen);
   if not ok then
     { already reported }
+  else if d^.imLen = 0 then
+    { inherent: no trait to find }
   else if tr = nil then begin
     ErrorAt(d^.line, d^.col);
     write('unknown trait ''');
@@ -24053,11 +24321,27 @@ begin
       ok := false
     end
   end
+  { AP 6.7.10 (ADR-0410): the inherent form naming a **trait** is a `for` that
+    was left out, and that is what the message should say. It is the likeliest
+    way to write this construct wrongly now that both forms parse -- the two
+    differ by one word-symbol -- and the old reading, *this name is not a
+    type*, describes the half the program got right. }
+  else if (d^.imLen = 0) and (ty^.kind = skTrait) then begin
+    ErrorAt(d^.imForLine, d^.imForCol);
+    write('''');
+    WritePool(d^.imForAt, d^.imForLen);
+    write(''' is a trait, so this needs ''for'' and the type it is ');
+    writeln('implemented for; ''impl <type>;'' gives a type routines of its own');
+    ok := false
+  end
   else begin
     ErrorAt(d^.imForLine, d^.imForCol);
     write('''');
     WritePool(d^.imForAt, d^.imForLen);
-    writeln(''' is not a type, so a trait cannot be implemented for it');
+    if d^.imLen = 0 then
+      writeln(''' is not a type, so it can have no routines of its own')
+    else
+      writeln(''' is not a type, so a trait cannot be implemented for it');
     ok := false
   end;
 
@@ -24066,9 +24350,13 @@ begin
       ErrorAt(d^.line, d^.col);
       write('''');
       WritePool(d^.imForAt, d^.imForLen);
-      write(''' already implements ''');
-      WritePool(d^.imAt, d^.imLen);
-      writeln('''');
+      if tr = nil then
+        writeln(''' already has an ''impl'' of its own')
+      else begin
+        write(''' already implements ''');
+        WritePool(d^.imAt, d^.imLen);
+        writeln('''')
+      end;
       ok := false
     end;
 
@@ -24115,8 +24403,24 @@ begin
         trait keeps its headings unresolved: the same denoter is resolved once
         per implementation with `Self` bound to a different type each time,
         exactly as 6.4.7's body is resolved once per discriminant tuple. }
-      h := FindTraitHead(tr, r^.pdAt, r^.pdLen);
-      if h = nil then begin
+      h := nil;
+      if tr <> nil then h := FindTraitHead(tr, r^.pdAt, r^.pdLen);
+      { An inherent implementation has no trait to take a heading from, so
+        each routine writes its own -- which inverts the two arms below
+        exactly (ADR-0410). A routine here that repeats only its name has
+        nothing to adopt, and 6.7's parameterless definition is the *other*
+        construct: that one completes a heading already given, and there is
+        none. }
+      if tr = nil then begin
+        if (r^.pdParams = nil) and (r^.pdResult = nil) then begin
+          ErrorAt(r^.pdNameLine, r^.pdNameCol);
+          write('''');
+          WritePool(r^.pdAt, r^.pdLen);
+          write(''' needs its parameters here: no trait gave this one a ');
+          writeln('heading, so there is nothing for the name alone to adopt')
+        end
+      end
+      else if h = nil then begin
         ErrorAt(r^.pdNameLine, r^.pdNameCol);
         write('''');
         WritePool(d^.imAt, d^.imLen);
@@ -24158,6 +24462,29 @@ begin
         r^.pdResult := fresh^.pdResult;
         r^.pdIsFunction := fresh^.pdIsFunction
       end;
+      { AP 6.7.10.4 (ADR-0410): a type may not have a field and a routine of
+        one spelling. `x.f` would otherwise mean the field in one program and
+        the routine in another, decided by which was written first, and the
+        selection is the reader's to make rather than the compiler's.
+
+        Refused **here** and not at the call, which is ADR-0315's own
+        reading: at the call there is a working program to break, and here
+        there is a declaration nobody has used yet. It applies to a trait
+        implementation as much as to an inherent one -- the ambiguity is
+        about the field and the routine, and which of them a trait declared
+        does not enter into it. }
+      if t <> nil then
+        if IsRecord(Base(t)) then
+          if FindField(Base(t), r^.pdAt, r^.pdLen) <> nil then begin
+            ErrorAt(r^.pdNameLine, r^.pdNameCol);
+            write('''');
+            WritePool(r^.pdAt, r^.pdLen);
+            write(''' is already a field of ');
+            WriteTypeName(t);
+            write(', so ''.');
+            WritePool(r^.pdAt, r^.pdLen);
+            writeln(''' would name two things')
+          end;
       DeclareProcHeading(r, owner);
       if r^.pdBody <> nil then CheckProcBody(r);
       if r^.pdSym <> nil then
@@ -24168,8 +24495,12 @@ begin
     { Every heading the trait gives must be supplied. Reported once per
       missing routine and at the implementation's own heading, which is the
       only position an *absence* has -- there is no source to point at for
-      something nobody wrote. }
-    h := tr^.traitHeads;
+      something nobody wrote.
+
+      An inherent implementation has no headings to be missing: what it
+      declares is what it has, so the completeness question does not arise
+      (ADR-0410). }
+    if tr = nil then h := nil else h := tr^.traitHeads;
     while h <> nil do begin
       r := d^.imRoutines;
       ok := false;

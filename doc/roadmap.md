@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 930 cases green at `-O2` and at `-O0`.
+and the suite is 933 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
@@ -135,7 +135,10 @@ before the field loop.
 Rust's decomposition — methods and traits without inheritance, no base class,
 no `is`/`as` — in three increments. **B is built** (traits, `impl … for`, the
 bound on a schema's discriminant: ADR-0338 – ADR-0341, ADR-0344, AP 6.7.9)
-and since ADR-0355 has a client that is not a test. **C is built** as well
+and since ADR-0355 has a client that is not a test. **A is built**
+(ADR-0410, AP 6.7.10, AP 6.7.10.4): `impl T;` is the trait form with the trait
+left out, and `x.M(a)` is the call `M(x, a)` already made, the routine having
+been selected from its first actual's type since B landed. **C is built** as well
 (ADR-0408, ADR-0409, AP 6.7.11), in two increments rather than the three that
 were planned — the release slot turned out to be inseparable from the value,
 because behind a `dyn` there is no type to resolve a release from, so an
@@ -143,11 +146,21 @@ increment that left it out would have leaked every element of the collection
 the feature exists for. **A is not built**, and is judged separately: it is
 not a prerequisite for B, the record's staging sentence notwithstanding.
 
-| Increment | What it adds | What it would retire |
-| --- | --- | --- |
-| **A. Methods** | `impl T; … end;`, `x.M(a)` meaning `M(x, a)`, method names in the type's scope | the exported names that repeat their module's noun as a hand-spelled receiver — 118 of 484 when it was last counted on 2026-09-05, and the denominator is 580 now, so **run `tests/checks/export_unique.py` rather than quoting either**. No new representation |
+**All three increments are built**, in six records rather than three, and
+ADR-0315 is superseded by them. What it proposed for A survived almost
+unchanged and what it did not have is the *receiver*: a method call arrives at
+the compiler three ways — a simple name is §6.11.3's qualified form, a complex
+one is a variable-access the parser can finish, and a parameterless one is a
+field selection — and the first and third are Sema's to tell apart.
 
-**Not settled**: whether to build A. B's payoff was a program's own
+**What is not settled is the library.** ADR-0315's judgement stands: one
+module is rewritten as proof and the rest judged after reading it. Nothing is
+forced — `export-unique` reads the export-part and a method is not in one, so
+the prefixed names may coexist with methods indefinitely. The count it would
+retire has moved twice and is worth **running** rather than quoting: it was
+118 of 484 on 2026-09-05 and the denominator is 580 now, so
+`tests/checks/export_unique.py` is the answer and neither number in this
+sentence is. B's payoff was a program's own
 text — thirty call sites and fourteen routine parameters — and A's is
 call-site spellings that block no program; A's best argument arrived from B
 (ADR-0339): two modules exporting `Compare` collide under §6.11.2, and

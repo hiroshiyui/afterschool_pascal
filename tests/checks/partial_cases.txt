@@ -211,6 +211,18 @@ stdProcKind:spUnpack unused
 #
 # A new *designator* node kind is therefore the change these are waiting for,
 # and it would fail all of them at once, which is the point.
+# AP 6.7.10 (ADR-0410): an implementation-declaration names something, and
+# this chain gives **two** kinds words of their own -- a type, which is the
+# one that works, and a trait, which is the `for` left out of the other form
+# and is the likeliest way to write the construct wrongly now that both forms
+# parse. The other eleven are not missing: they reach the trailing `else`,
+# which says *this is not a type*, and that is the correct and complete thing
+# to say about a constant, a variable, a parameter, a procedure, a schema, an
+# interface or a label standing where a type-identifier belongs. The chain is
+# not choosing between behaviours here -- every arm refuses -- so what the
+# arms buy is the wording and nothing else, which is why a twelfth kind
+# needs no arm.
+CheckImplDecl:symKind:1 chains 2 of 13
 IsDesignator:nodeKind:1 chains 6 of 69
 IsConstantAccess:nodeKind:1 chains 4 of 69
 OwnedRoot:nodeKind:1 chains 4 of 69
@@ -218,7 +230,18 @@ RootDesignator:nodeKind:1 chains 3 of 69
 ContainerOf:nodeKind:1 chains 3 of 69
 PackedComponent:nodeKind:1 chains 3 of 69
 ConstAccessNode:nodeKind:1 chains 3 of 69
-IsCallValue:nodeKind:1 chains 2 of 69
+# AP 6.7.10.4 (ADR-0410) gave a function-designator a **third** spelling, so
+# these two moved together: `p.Sum` is a method call whose tokens are a field
+# selection's, and it arrives as an nkField carrying the call. Both routines
+# are about the *construct* rather than about a node kind -- which is
+# ADR-0179's finding, and is why a site asks them by name instead of listing
+# kinds -- so a fourth spelling would move these two and nothing else.
+IsCallValue:nodeKind:1 chains 3 of 69
+# CalledSym is IsCallValue's companion and its chain is the same question
+# asked for a symbol rather than a boolean, guarded by IsCallValue so that
+# only the three spellings reach it at all. The other 66 constants are not
+# missing: they answer `false` above and never arrive.
+CalledSym:nodeKind:1 chains 2 of 69
 VariantSelector:nodeKind:1 chains 2 of 69
 ThreatSym:nodeKind:1 chains 2 of 69
 EvalConstAccess:nodeKind:1 chains 2 of 69

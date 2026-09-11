@@ -577,6 +577,7 @@ afterschool	6.7.10	testable
 afterschool	6.7.10.1	testable	
 afterschool	6.7.10.2	testable	
 afterschool	6.7.10.3	structural	states how a trait heading is read for each implementation; every requirement it carries is one of 6.7.9.1's or 6.7.10's and is reported there
+afterschool	6.7.10.4	testable	the method-designator, `x.M(a)` -- tests/dialect/methods.pas is the behavioural case and methods_errors.pas the refusals
 afterschool	6.7.11	testable	the trait-object-type. AP 5.6's first and so far only user, marked for one increment and unmarked here (ADR-0408, ADR-0409): tests/dialect/dyn.pas is the behavioural case
 afterschool	6.7.11.1	testable	the two positions a trait object may stand in, and every position that is not one of them -- tests/dialect/dyn_positions.pas
 afterschool	6.7.11.2	testable	the value: it lives in memory, travels by address, and is refused every operation that would copy one

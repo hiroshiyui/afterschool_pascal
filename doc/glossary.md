@@ -540,6 +540,29 @@ defined exactly once. It belongs to one translation: a program-block or a
 module-block, never inside a procedure and never in a module-heading, because
 its routines read frames only that translation has (AP 6.7.10, ADR-0341).
 
+**Method.** A routine belonging to a type, declared by an
+implementation-declaration and called with a dot (AP 6.7.10, AP 6.7.10.4,
+ADR-0410). It is an ordinary routine with an ordinary first parameter -- the
+**receiver**, which the program writes and may name anything -- so `x.M(a)`
+and `M(x, a)` denote one call and a method needs no scope of its own. Not a
+virtual method: which implementation answers is decided from the receiver's
+static type, and the construct that decides at the time of access is the
+**trait object**.
+
+**Inherent implementation (`impl T;`).** An implementation-declaration with no
+trait: the routines a type has of its own, which no trait declared. It differs
+from `impl Tr for T;` in three places and no others -- each routine writes its
+own heading, no trait's headings are read, and there is nothing to be missing
+-- and `for` is the whole of what tells the two forms apart.
+
+**Receiver.** The first parameter of a method, and what a method-designator
+puts in front of the dot. Its three forms are the language's own and nothing
+was invented for them: `self: T` is a copy, `protected var self: T` is a
+borrow that cannot be written through, and `var self: T` is one that can. The
+choice is visible to callers -- only a by-value receiver may be called on what
+another method returned, §6.6.3.3 wanting a variable-access for a variable
+parameter and a function result not being one.
+
 **Trait object (`dyn T`).** A value that implements the trait `T`, where
 *which* implementation is not decided until the value is used (AP 6.7.11,
 ADR-0409). It is the answer to a question a **bound** cannot ask: a bound

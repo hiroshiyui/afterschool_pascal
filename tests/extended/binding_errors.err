@@ -8,4 +8,4 @@
 <source>:33:10: error: 'unbind' needs a file variable, found integer: only a file variable is bindable
 <source>:34:16: error: 'binding' needs a file variable, found integer: only a file variable is bindable
 <source>:37:10: error: 'bind' needs a file variable, found string: only a file variable is bindable
-<source>:40:9: error: 'size' is not a field of BindingType
+<source>:40:9: error: 'size' is neither a field of BindingType nor a routine implemented for it

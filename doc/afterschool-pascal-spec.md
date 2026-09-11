@@ -3574,16 +3574,24 @@ as two modules declaring one spelling are, and ISO/IEC 10206:1991 §6.11's
 
 **6.7.10 Implementation-declarations [added].**
 
-    implementation-declaration = 'impl' trait-identifier 'for' type-identifier
+    implementation-declaration = trait-implementation | inherent-implementation .
+    trait-implementation       = 'impl' trait-identifier 'for' type-identifier
                                  ';' { implementation-routine ';' } 'end' .
+    inherent-implementation    = 'impl' type-identifier ';'
+                                 { inherent-routine ';' } 'end' .
     implementation-routine     = ( 'procedure' | 'function' ) identifier ';'
                                  block .
+    inherent-routine           = procedure-declaration | function-declaration .
 
-An implementation-declaration shall declare that the type its
-type-identifier denotes **implements** the trait its trait-identifier denotes.
+A trait-implementation shall declare that the type its type-identifier denotes
+**implements** the trait its trait-identifier denotes. An
+inherent-implementation shall declare routines the type its type-identifier
+denotes has of its own, which no trait declares.
 
 `impl` shall not be a word-symbol, for 6.7.9's reason and by the same
-two-token test.
+two-token test. The two forms shall be distinguished by the presence of
+`for`, which is a word-symbol, so no program that uses `impl` as an identifier
+is affected by either.
 
 The type-identifier shall denote a type. It shall not denote a schema, and it
 shall not denote a subrange-type.
@@ -3592,6 +3600,21 @@ Each implementation-routine shall name a routine the trait declares, and shall
 write that name **alone**: the heading is the trait's, read with `Self` bound
 to the type this implementation is for, and shall not be written a second time.
 Every routine the trait declares shall be defined exactly once.
+
+Each inherent-routine shall write its own heading, no trait having given it
+one, and `Self` shall denote the type the implementation is for.
+
+For a given type there shall be at most one inherent-implementation in a
+program-component.
+
+It shall be an error for an implementation of either form to declare a routine
+whose identifier is a field-identifier of the type the implementation is for,
+and the error shall be reported at the routine's identifier.
+
+NOTE 12a — That last requirement is what keeps 6.7.10.4's selection a question
+with one answer. Without it `x.f` would denote a field in one program and a
+routine in another, decided by whichever was written first, and the reader
+would have no way to tell which from the text in front of them.
 
 For a given trait and a given type there shall be at most one
 implementation-declaration in a program-component.
@@ -3675,6 +3698,43 @@ NOTE 15 — Read again rather than copied, and the reason is AP 6.7.3.5's:
 resolution annotates the nodes it reads, so one heading shared between two
 implementations reports the first implementation's types at the second
 (ADR-0340). Re-reading is parsing, so it cannot disagree with parsing.
+
+NOTE 16 — An inherent-implementation reads nothing again: it has no trait, so
+each of its routines wrote the heading it has.
+
+**6.7.10.4 A method-designator [added].** A variable-access followed by `.`,
+an identifier, and an actual-parameter-list shall denote the call selected by
+6.7.10.2 for that identifier, where the variable-access is the first
+actual-parameter and the actual-parameter-list supplies the rest. A
+variable-access followed by `.` and an identifier that is not a
+field-identifier of the variable's type shall denote that call with the
+variable-access as its only actual-parameter.
+
+It shall be an error for the identifier to be one no implementation of the
+variable's type supplies, and the error shall be reported as it is for any
+other identifier that denotes nothing.
+
+NOTE 17 — `p.Shift(1)` and `Shift(p, 1)` denote the same call, and neither is
+the definition of the other. 6.7.10.2 selects from the first actual-parameter's
+type in both, so a method requires no scope of its own and is not an exported
+name: what a module exports is the *type*, and its routines travel with it.
+Two modules may therefore each supply a `Put`, which §6.11.2 would refuse to
+two exported names.
+
+NOTE 18 — The spelling is available because no field can be a routine. §6.7.3.1's
+procedural parameter is the only place a routine is a value, so there is no
+procedural type and `record f: procedure end` is not a type-denoter; a complete
+variable-access followed by `(` is therefore a syntax error in both ISO 7185 and
+ISO/IEC 10206:1991, and the juxtaposition is available in the sense 6.0.1
+requires (ADR-0140, ADR-0410). Had this language ever had a procedural type in
+a record, the spelling would have been spent.
+
+NOTE 19 — A processor cannot decide from the syntax alone which construct a
+variable-access spelled as a single identifier begins: `i.f(x)` is §6.11.3's
+qualified name where `i` denotes an imported interface and a method-designator
+where it denotes a variable. What separates them is what the identifier
+denotes, which is the recurring answer of §6.4.3.3, §6.7.1 and §6.8.7.4 met
+once more.
 
 ### 6.8 Expressions [extended]
 

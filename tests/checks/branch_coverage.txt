@@ -15,9 +15,9 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 867
-instrumented 11776
-decisions 5888
+uncovered 869
+instrumented 11858
+decisions 5929
 
 accept 0/4
 accumulate 1/32
@@ -75,7 +75,7 @@ boundslot 0/2
 boundvalue 1/24
 buildformals 7/126
 buildsearchpath 0/12
-calledsym 2/6
+calledsym 3/8
 calltakescaret 3/22
 canname 2/14
 catofname 0/8
@@ -88,7 +88,7 @@ checkarguments 10/266
 checkarrayvalue 3/40
 checkbinary 28/252
 checkblock 1/10
-checkcall 21/200
+checkcall 21/202
 checkcase 2/38
 checkcomponentvalue 0/10
 checkconstdecl 0/18
@@ -101,11 +101,11 @@ checkedforsubrange 2/24
 checkedresulttype 0/16
 checkedwidth 0/2
 checkexports 1/10
-checkexpr 19/182
+checkexpr 19/188
 checkforeignheading 0/64
 checkgoto 1/4
 checkhandlebirth 0/4
-checkimpldecl 2/42
+checkimpldecl 3/70
 checkimports 0/52
 checkinitialstate 2/18
 checklabeled 1/10
@@ -134,7 +134,7 @@ checksetmember 2/12
 checksetvalue 1/12
 checkspawn 4/18
 checkstdproc 30/346
-checkstmt 16/292
+checkstmt 16/294
 checkstorage 0/2
 checkstringargs 1/14
 checkstructvalue 1/34
@@ -190,7 +190,7 @@ determinearg 5/10
 determinetuple 1/6
 discselectorfor 1/6
 discvalue 6/18
-dispatchtrait 2/24
+dispatchtrait 1/26
 dumparmlist 0/10
 dumpblock 0/4
 dumpcaselabels 0/4
@@ -238,7 +238,7 @@ dynsize 0/12
 dyntraitsym 2/26
 dynwantedderef 3/10
 earlier 0/2
-emitaddress 2/36
+emitaddress 2/38
 emitarrayvalue 0/16
 emitassign 1/46
 emitbinary 5/118
@@ -254,7 +254,7 @@ emitconstglobals 0/2
 emitdeclares 0/4
 emitdeferrunner 0/4
 emitexittarget 0/2
-emitexpr 3/28
+emitexpr 3/30
 emitexterns 1/44
 emitfinis 0/2
 emitfor 2/20
@@ -428,14 +428,14 @@ isalpha 0/6
 isarith 0/2
 isarray 0/2
 isboolean 1/2
-iscallvalue 3/10
+iscallvalue 3/12
 ischannel 0/2
 ischar 1/2
 ischararray 1/12
 iscomplex 1/2
 isconstantaccess 10/22
 iscontinuation 0/4
-isdesignator 1/22
+isdesignator 1/24
 isdigit 0/2
 isdyn 0/2
 isemptyset 0/2
@@ -510,6 +510,8 @@ lower 0/4
 makeconstreal 2/10
 mentions 5/18
 mentionsself 3/16
+methodreceiver 1/10
+methodsym 1/12
 moduledigest 0/6
 more 0/8
 msgtext 1/4
@@ -562,9 +564,9 @@ parsefieldgroups 0/14
 parsefor 1/8
 parseformaldiscriminants 1/12
 parseformalparameters 0/38
-parseidentstatement 0/96
+parseidentstatement 0/102
 parseif 0/2
-parseimpldecl 0/16
+parseimpldecl 0/14
 parseimportpart 0/26
 parselabel 1/6
 parselabelpart 0/4
@@ -586,7 +588,7 @@ parserecordtype 0/4
 parserepeat 2/10
 parseselect 0/14
 parseselectarm 0/10
-parseselectors 0/20
+parseselectors 0/22
 parsesimpleexpr 2/22
 parsestatement 0/32
 parsestructuredvalue 0/20
@@ -638,7 +640,7 @@ putslottype 0/6
 putstoragetypeat 1/2
 putstructat 1/14
 puttaskargtype 0/2
-quiettypeof 2/36
+quiettypeof 2/40
 reaches 0/4
 readimportsin 3/16
 readone 3/16
@@ -674,7 +676,7 @@ resolveslice 0/6
 resolvesubrange 3/36
 resolvetype 3/52
 resolvevariantpart 4/78
-resulttypeof 2/8
+resulttypeof 1/8
 rootdesignator 1/10
 rootname 1/6
 roundup 0/2

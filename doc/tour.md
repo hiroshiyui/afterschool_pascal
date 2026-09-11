@@ -514,10 +514,41 @@ trait already gave the heading, and a second copy is a copy that can disagree.
 Neither `trait` nor `impl` is a reserved word, so a program of your own that
 uses either as an identifier still compiles.
 
-Now `Draw(c)` picks the implementation from `c`'s type. That much is **not**
-a virtual method: it is chosen when the program is compiled, like an
+Now `Draw(c)` picks the implementation from `c`'s type — and so does
+`c.Draw`, which is the same call written the other way round. That much is
+**not** a virtual method: it is chosen when the program is compiled, like an
 overloaded routine in a language that has them, and it costs nothing at run
 time.
+
+**A type can have routines without any trait at all**, which is where the
+`object` you are looking for mostly went:
+
+```pascal
+impl Circle;
+  function Area(protected var self: Circle): integer;
+  begin Area := 3 * self.r * self.r end;
+  procedure Grow(var self: Circle; by: integer);
+  begin self.r := self.r + by end;
+end;
+...
+c.Grow(2);
+writeln(c.Area)
+```
+
+`impl T;` is the trait form with the trait left out. The receiver is written —
+it is an ordinary first parameter, and `self` is not a keyword, so call it what
+you like. Which of the three forms you give it is the same choice Turbo Pascal
+made with `var`: `self: T` copies, `protected var self: T` borrows read-only,
+`var self: T` borrows and may write.
+
+Any variable can be the receiver — `p.Area`, `q^.Area`, `a[1].Area`,
+`b.inner.Area` — and `p.Area` and `Area(p)` are the same call, so nothing is
+hidden from a `grep` that the prefix form would have shown you.
+
+The payoff is the one Delphi's units never had: **a method is not an exported
+name**. Two modules may each have a `Put`, because what a module exports is
+the type and the routines travel with it. Without this you write `JsonPut` and
+`MapPut` — which is what this project's own library does 139 times.
 
 **When you want the type chosen at run time, that is `dyn`.**
 

@@ -1,0 +1,1 @@
+<source>:16:6: error: 'ord' is a trait, so this needs 'for' and the type it is implemented for; 'impl <type>;' gives a type routines of its own

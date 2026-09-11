@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 394
-instrumented 21253
+instrumented 21369
 
 accept 0/4
 accumulate 0/84
@@ -82,7 +82,7 @@ boundslot 0/3
 boundvalue 1/35
 buildformals 7/164
 buildsearchpath 0/26
-calledsym 0/5
+calledsym 0/6
 calltakescaret 0/18
 canname 0/6
 catofname 0/5
@@ -96,7 +96,7 @@ checkarguments 6/325
 checkarrayvalue 2/60
 checkbinary 6/165
 checkblock 0/29
-checkcall 12/305
+checkcall 12/311
 checkcase 0/83
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -111,11 +111,11 @@ checkedfptoint 0/23
 checkedresulttype 0/21
 checkedwidth 0/14
 checkexports 0/28
-checkexpr 6/269
+checkexpr 6/281
 checkforeignheading 0/131
 checkgoto 0/9
 checkhandlebirth 0/6
-checkimpldecl 0/122
+checkimpldecl 0/154
 checkimports 0/86
 checkinitialstate 0/24
 checklabeled 0/21
@@ -144,7 +144,7 @@ checksetmember 0/15
 checksetvalue 0/36
 checkspawn 0/24
 checkstdproc 19/397
-checkstmt 2/279
+checkstmt 2/285
 checkstorage 0/3
 checkstringargs 0/13
 checkstructvalue 0/39
@@ -259,7 +259,7 @@ dynsize 0/47
 dyntraitsym 0/45
 dynwantedderef 0/9
 earlier 0/1
-emitaddress 3/193
+emitaddress 3/195
 emitarrayvalue 0/24
 emitassign 0/110
 emitat 0/1
@@ -281,7 +281,7 @@ emitdeclares 0/156
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
-emitexpr 6/51
+emitexpr 6/53
 emitexterns 0/61
 emitfbin 0/7
 emitfinis 0/5
@@ -483,14 +483,14 @@ isalpha 0/1
 isarith 0/1
 isarray 0/1
 isboolean 0/2
-iscallvalue 0/5
+iscallvalue 0/6
 ischannel 0/1
 ischar 0/2
 ischararray 0/5
 iscomplex 0/1
 isconstantaccess 4/12
 iscontinuation 0/6
-isdesignator 0/15
+isdesignator 0/17
 isdigit 0/1
 isdyn 0/1
 isemptyset 0/1
@@ -570,6 +570,9 @@ makeconstreal 0/15
 makeconststr 0/6
 mentions 0/13
 mentionsself 0/16
+methodof 0/1
+methodreceiver 0/9
+methodsym 0/12
 moduledigest 0/9
 more 0/18
 msgend 0/3
@@ -585,7 +588,7 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/101
+newnode 0/102
 newresultslot 0/7
 newsymbol 0/105
 newtype 0/43
@@ -639,9 +642,9 @@ parsefieldgroups 0/19
 parsefor 0/29
 parseformaldiscriminants 0/35
 parseformalparameters 0/44
-parseidentstatement 0/91
+parseidentstatement 0/99
 parseif 0/11
-parseimpldecl 0/32
+parseimpldecl 0/35
 parseimportpart 0/58
 parselabel 0/16
 parselabelpart 0/6
@@ -664,7 +667,7 @@ parserecordtype 0/15
 parserepeat 1/18
 parseselect 0/27
 parseselectarm 0/34
-parseselectors 0/56
+parseselectors 0/69
 parsesimpleexpr 1/29
 parsestatement 0/32
 parsestructuredvalue 0/29
@@ -729,7 +732,7 @@ putsymkindword 0/14
 puttaskargtype 0/2
 puttaskname 0/1
 putusenumbers 0/1
-quiettypeof 0/26
+quiettypeof 0/31
 reaches 0/6
 readimportsin 2/15
 readone 0/41

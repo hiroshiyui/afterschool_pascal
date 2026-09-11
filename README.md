@@ -413,7 +413,7 @@ the emitted module is right for macOS, and one of them ships an archive.
 
 **The third is 32-bit**, which is what made those rules stop being constants: a
 pointer is four bytes there, and so are the alignments of an `i64`, a `double`,
-a file and a handle (ADR-0325). **601 of the 602 programs in this repository's
+a file and a handle (ADR-0325). **603 of the 604 programs in this repository's
 corpus build and run for it**; the one that does not allocates 2 GB on purpose
 and has nowhere to put it in a 32-bit address space.
 
@@ -1812,6 +1812,47 @@ translation: a program-block or a module-block, never inside a procedure and
 never in a module heading. A library that wants to ship an implementation for
 its clients cannot yet, and nothing has asked to.
 
+**A type may have routines of its own, and they are called with a dot**
+(AP 6.7.10, ADR-0410):
+
+```pascal
+type Point = record x, y: integer end;
+
+impl Point;
+  function Len(protected var self: Point): integer;
+  begin Len := self.x * self.x + self.y * self.y end;
+  procedure Shift(var self: Point; dx, dy: integer);
+  begin self.x := self.x + dx; self.y := self.y + dy end;
+end;
+...
+p.Shift(1, 1);
+writeln(p.Len)
+```
+
+`impl T;` is the trait form with the trait left out. The receiver is an
+ordinary first parameter and you write it: `self: T` is Rust's `self`,
+`protected var self: T` is `&self`, and `var self: T` is `&mut self`. `self`
+is not a keyword — call it what you like — and the name `Self` denotes the
+type, as it does in a trait implementation.
+
+**`x.M(a)` and `M(x, a)` are the same call**, because AP 6.7.10.2 has selected
+a routine from its first argument's type since traits landed. So a method may
+be written either way, and the receiver may be any variable: `p.Len`,
+`q^.Len`, `a[1].Len`, `b.inner.Len`.
+
+**A method is not an exported name.** What a module exports is the *type*, and
+its routines travel with it — so two modules may each have a `Put`, which
+§6.11.2 refuses to two exported names. That is what this is for: 139 of 486
+exported names in the library below repeat their own module's noun to work
+around exactly that, and a method is the receiver those prefixes are spelling
+by hand.
+
+Two things to know. A type may not have a field and a routine of one name, and
+is told so where the implementation is written rather than at the call. And a
+method called **on what a method returned** needs that second method to take
+its receiver by value — §6.6.3.3 wants a variable for a `var` parameter, and a
+function result is not one.
+
 **A trait object holds a value whose type is not known until it is used**
 (AP 6.7.11, ADR-0409), which is what a bound cannot do: a bound chooses the
 implementation where the type is written, so one collection is one type.
@@ -2881,7 +2922,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 930 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 933 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 427 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

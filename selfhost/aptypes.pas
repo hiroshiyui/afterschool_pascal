@@ -2149,7 +2149,17 @@ type
                      fdDiscSym: symPtr;
                      { The same slot vrSlot is, for 6.11.3's qualified name
                        denoting a parameterless function. }
-                     fdSlot: symPtr);
+                     fdSlot: symPtr;
+                     { AP 6.7.10.4's method call with no arguments, written
+                       `p.Len` (ADR-0410). The tokens are a field selection's
+                       and the parser cannot tell them apart -- a method takes
+                       no empty argument list, Pascal having none -- so Sema
+                       decides by asking whether the base's type has an
+                       implementation supplying the name, and hangs the call
+                       here. **The husk rule** (ADR-0044): this node stays and
+                       every later pass reads this field first, exactly as
+                       `nkVar.vrCall` does for a bare `argcount`. }
+                     fdCall: nodePtr);
       nkDeref:      (drBase: nodePtr);
       nkBinary:     (bnOp: binaryOp; bnLhs, bnRhs: nodePtr);
       nkUnary:      (unOp: unaryOp; unArg: nodePtr);
