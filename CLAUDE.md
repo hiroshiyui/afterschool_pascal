@@ -743,14 +743,28 @@ order the only correct one. A type-denoter is a `TypeExpr`, deliberately not an
 group naming a schema (ADR-0040), where each name gets its *own* type because
 each reads its own descriptor.
 
-The runtime is **four translation units**, each bounded by what it may depend on
+The runtime is **five translation units**, each bounded by what it may depend on
 (`runtime-isoc` above). `runtime/pasrt.c` holds anything not expressible in IR,
 where `width < 0` / `prec < 0` mean "not given" and nothing else — a width the
 program *wrote* is checked against §6.9.3.1's or §6.10.3.1's least value before
 it gets there (ADR-0064). `runtime/pasrt_posix.c` holds what needs POSIX — including, since ADR-0362,
 the argument vector and the `posix_spawn` behind `PasProcess.Execute`, because
 argv is a `char *[]` and AP 6.7.7.6.2's boundary cannot spell an array of
-pointers. **A command assembled out of values goes through `Execute` and never
+pointers. **`runtime/pasrt_file.c` is the other half of that one** (ADR-0405),
+and the cut is *a question and not an action*: what asks the operating system
+about a file or a descriptor that already exists — how big, what is in this
+directory, is there anything to read yet — against what makes it **do**
+something, which is a process, a socket, a terminal or a new directory. Those
+are one unit's worth of POSIX and two units' worth of **portability**, a
+target being free to have a file system and no processes at all, and
+`wasm32-wasi` is exactly that target: the first unit compiles for it and the
+second cannot. Each is bounded separately by `runtime-isoc`, in both
+directions and per unit, so a header two of them share takes a row each and
+striking the last use in one fails rather than being covered by the other.
+**A header being present is not the target having the thing** — wasi-libc
+ships `<sys/ioctl.h>` and has no `struct winsize`, so the terminal stays next
+door however the units are cut, and `mkdtemp` is undeclared there, which is
+why making a private directory is on the *action* side. **A command assembled out of values goes through `Execute` and never
 through `Run`**: `system` takes a line, so a shell reads every value in it as
 syntax, and that cost this project a command injection reachable over LSP and
 over MCP.

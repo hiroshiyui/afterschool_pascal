@@ -325,15 +325,24 @@ if run_capture([cc] + std + [
 #
 # Both directions, like everything else here: a header appearing without an
 # entry, and an entry naming a header the file no longer includes.
-posix_src = root / "runtime" / "pasrt_posix.c"
-if not posix_src.is_file():
-    err("runtime-isoc: no runtime/pasrt_posix.c -- ADR-0186 says the runtime",
-        "has two translation units, and this one is where anything needing a",
-        "POSIX type lives. If it went away, strike its section from",
-        "%s." % list_path)
-    finish(1)
+# **Two units are bounded this way since ADR-0405**, not one: `pasrt_file.c`
+# asks the operating system about a file or a descriptor that already exists
+# and `pasrt_posix.c` makes it do something, and the cut is what lets the first
+# compile for a target with a file system and no processes. Each is bounded
+# separately, because what a unit may depend on is a claim about that unit.
+POSIX_UNITS = ("pasrt_posix.c", "pasrt_file.c")
+posix_srcs = []
+for unit in POSIX_UNITS:
+    src = root / "runtime" / unit
+    if not src.is_file():
+        err("runtime-isoc: no runtime/%s -- ADR-0186 and ADR-0405 say the" % unit,
+            "runtime has these units, and this is where anything needing a",
+            "POSIX type lives. If it went away, strike its section from",
+            "%s." % list_path)
+        finish(1)
+    posix_srcs.append(src)
 
-posix_text = posix_src.read_text()
+posix_text = "\n".join(s.read_text() for s in posix_srcs)
 # --- the conditionals, and there is meant to be almost none -------------
 #
 # **No translation unit here held a preprocessor conditional until ADR-0373**,
@@ -353,7 +362,8 @@ COND_RE = re.compile(r"(?m)^[ \t]*#[ \t]*if(?:def|ndef)?[ \t]+(.*)$")
 NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 cond_used = set()
-for unit in ("pasrt.c", "pasrt_posix.c", "pasrt_task.c", "pasrt_unicode.c"):
+for unit in ("pasrt.c", "pasrt_posix.c", "pasrt_file.c", "pasrt_task.c",
+             "pasrt_unicode.c"):
     text = (root / "runtime" / unit).read_text()
     for expr in COND_RE.findall(text):
         for name in NAME_RE.findall(expr):
@@ -386,30 +396,36 @@ if cond_gone:
         "in the change that removed the conditional.")
     finish(1)
 
-posix_used = sorted({"<%s>" % h for h in INCLUDE_RE.findall(posix_text)
-                     if h[: -len(".h")] not in iso_headers})
-posix_named = sorted(set(re.findall(r"(?m)^header: (<[a-z0-9_/]+\.h>)",
-                                    list_text)))
-
-extra = [h for h in posix_used if h not in set(posix_named)]
-gone = [h for h in posix_named if h not in set(posix_used)]
-if extra:
-    err("runtime-isoc: runtime/pasrt_posix.c includes a non-ISO header this",
-        "catalogue does not name:")
-    for h in extra:
-        err("          " + h)
-    err("        That file's headers *are* its porting surface (ADR-0186).",
-        "Add it to %s with the argument for why ISO C could not do it."
-        % list_path)
-    finish(1)
-if gone:
-    err("runtime-isoc: the catalogue names a header runtime/pasrt_posix.c no",
-        "longer includes:")
-    for h in gone:
-        err("          " + h)
-    err("        Good news, and it still fails, for verify/'s KNOWN_GAP",
-        "reason. Strike the entry in the change that removed it.")
-    finish(1)
+# Per unit and in both directions: a header a unit includes with no row for
+# *that unit*, and a row naming a header that unit no longer includes. A
+# header two units share has a row each, so dropping the last use in one of
+# them fails rather than being covered by the other's row.
+posix_named = set(re.findall(r"(?m)^header: ([a-z0-9_]+\.c) (<[a-z0-9_/]+\.h>)",
+                             list_text))
+for src in posix_srcs:
+    unit = src.name
+    used = {"<%s>" % h for h in INCLUDE_RE.findall(src.read_text())
+            if h[: -len(".h")] not in iso_headers}
+    named = {h for (u, h) in posix_named if u == unit}
+    extra = sorted(used - named)
+    gone = sorted(named - used)
+    if extra:
+        err("runtime-isoc: runtime/%s includes a non-ISO header this" % unit,
+            "catalogue does not name for it:")
+        for h in extra:
+            err("          " + h)
+        err("        A unit's headers *are* its porting surface (ADR-0186,",
+            "ADR-0405). Add `header: %s <name.h>` to %s with the argument"
+            % (unit, list_path), "for why ISO C could not do it.")
+        finish(1)
+    if gone:
+        err("runtime-isoc: the catalogue names a header runtime/%s no" % unit,
+            "longer includes:")
+        for h in gone:
+            err("          " + h)
+        err("        Good news, and it still fails, for verify/'s KNOWN_GAP",
+            "reason. Strike the entry in the change that removed it.")
+        finish(1)
 
 # It still has to be *clean* C -- POSIX rather than ISO, which is what the
 # feature macro selects, and nothing warned about at all.
@@ -425,14 +441,16 @@ if gone:
 posix_std = ["-std=c11", "-D_POSIX_C_SOURCE=200809L"]
 if platform.system() == "Darwin":
     posix_std.append("-D_DARWIN_C_SOURCE")
-p3_log = work / "p3.txt"
-if run_capture([cc] + posix_std + [
-        "-pedantic-errors", "-Wall", "-Wextra", "-Werror",
-        "-I" + str(root / "runtime"),
-        "-c", str(posix_src), "-o", str(work / "posix.o")], p3_log) != 0:
-    err("runtime-isoc: runtime/pasrt_posix.c is not clean POSIX C11:")
-    head20(p3_log)
-    finish(1)
+for src in posix_srcs:
+    p3_log = work / ("p3-%s.txt" % src.stem)
+    if run_capture([cc] + posix_std + [
+            "-pedantic-errors", "-Wall", "-Wextra", "-Werror",
+            "-I" + str(root / "runtime"),
+            "-c", str(src), "-o", str(work / (src.stem + ".o"))],
+            p3_log) != 0:
+        err("runtime-isoc: runtime/%s is not clean POSIX C11:" % src.name)
+        head20(p3_log)
+        finish(1)
 
 # And nothing the *compiler* emits may call into it: everything there is
 # `pasx_`, which is what makes the whole file optional for a port (ADR-0131).
@@ -445,7 +463,7 @@ for line in posix_text.splitlines():
                 bad.add(n)
 bad = sorted(bad)
 if bad:
-    err("runtime-isoc: runtime/pasrt_posix.c defines or calls a pas_ name:")
+    err("runtime-isoc: a POSIX unit defines or calls a pas_ name:")
     for n in bad:
         err("          " + n)
     err("        Everything in that file has to be pasx_, or a system",
@@ -559,13 +577,17 @@ if run_capture([cc, "-std=c11", "-Wall", "-Wextra", "-Werror",
 # `wc -l` over `echo "$var"`: an empty variable is still one line.
 n = len(found) or 1
 h = len(posix_named) or 1
+per_unit = ", ".join(
+    "%s by %d (%s)" % (u, sum(1 for (x, _) in posix_named if x == u),
+                       " ".join(sorted(y for (x, y) in posix_named if x == u)))
+    for u in POSIX_UNITS)
 out("runtime-isoc: runtime/pasrt.c is strict ISO C11 apart from %d catalogued"
     % n,
-    "names (%s), runtime/pasrt_posix.c is bounded by" % (" ".join(found) + " "),
-    "%d catalogued headers (%s)," % (h, " ".join(posix_named) + " "),
+    "names (%s), the two POSIX units are bounded by" % (" ".join(found) + " "),
+    "%d catalogued headers -- %s --," % (h, per_unit),
     "runtime/pasrt_unicode.c needs no catalogue at all,",
     "runtime/pasrt_task.c is bounded by <pthread.h> alone, the emitted",
-    "module names nothing but its own, and the four units hold %d catalogued"
+    "module names nothing but its own, and the five units hold %d catalogued"
     % len(cond_named),
     "preprocessor conditional(s)")
 finish(0)

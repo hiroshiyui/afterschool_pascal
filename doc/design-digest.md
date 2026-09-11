@@ -3804,6 +3804,25 @@ silences. All four earlier dependencies happened to be functions.
 
 - `runtime/pasrt.c` keeps its five names and its check unchanged; the split
   cost that claim nothing.
+- **`runtime/pasrt_file.c` is the file half of that unit** (ADR-0405), split
+  off because `pasrt_posix.c` held two different kinds of thing: what the
+  operating system is *asked about* -- a file's size and kind, a directory's
+  entries, whether a descriptor has anything to read -- and what it is asked
+  to **do**, which is a process, a socket, a terminal, a new directory. One
+  unit's worth of POSIX and two units' worth of portability, a target being
+  free to have a file system and no processes at all. The rule is *a question
+  and not an action* and it came first; that it also points the same way as
+  portability is why `mkdtemp`'s private directory stayed on the action side
+  even though `wasm32-wasi` is exactly the target the split was measured on.
+  **A header being present is not the target having the thing**: wasi ships
+  `<sys/ioctl.h>` with no `struct winsize`, so the terminal could not have
+  moved however the units were cut, and `pasx_term_isatty` follows the rest of
+  the terminal rather than being separated from it for one target's
+  convenience. The one call across the cut -- `pasx_exec_getc` waiting on a
+  child's pipe -- goes through `runtime/pasrt_file.h` rather than a prototype
+  beside the caller, because C checks a call against whatever declaration is in
+  scope and the linker checks only the name.
+
 - `runtime/pasrt_posix.c` is bounded by its **headers**, which is the
   granularity a port cares about — `<sys/stat.h>` rather than whichever members
   are read today — and both directions are checked.

@@ -513,10 +513,17 @@ rather than a header.
 `runtime/pasrt_posix.c` wants five of the seventeen headers it names:
 `<netdb.h>`, `<spawn.h>`, `<sys/wait.h>`, `<signal.h>` and `<termios.h>` — so
 there are no processes, no terminal and no name resolution, while sockets are
-*half* there, wasi having an interface of its own. The directory walk, the
-file information and the file model are not what is missing. Whether a first
-port ships `PasProcess` or `PasNet` at all is the open question, and one that
-ships neither is a much smaller thing.
+*half* there, wasi having an interface of its own.
+
+**The directory walk, the file information and the file model were never what
+was missing, and since ADR-0405 they are a unit of their own.**
+`runtime/pasrt_file.c` is what the operating system is *asked about* — a
+file's size and kind, a directory's entries, whether a descriptor has anything
+to read — against `pasrt_posix.c`, which is what it is asked to **do**. That
+is one unit's worth of POSIX and two units' worth of portability, and this
+target is the one that shows the difference: the first compiles for it and the
+second cannot. Whether a first port ships `PasProcess` or `PasNet` at all is
+the open question, and one that ships neither is a much smaller thing.
 
 **Two findings are worth knowing before starting**, both from the Windows
 work and both about *running* rather than compiling: the runtime had to be

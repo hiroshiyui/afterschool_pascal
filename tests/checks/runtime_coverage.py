@@ -77,7 +77,8 @@ import sys
 import tempfile
 
 RATCHET = "runtime_coverage.txt"
-UNITS = ("pasrt", "pasrt_posix", "pasrt_unicode", "pasrt_task")
+UNITS = ("pasrt", "pasrt_posix", "pasrt_file", "pasrt_unicode",
+         "pasrt_task")
 
 # A run that reached nothing prints the same shape of tally as a clean one --
 # the empty comparison this repository has been caught by more than once
@@ -102,7 +103,13 @@ def skip(message, require):
 # are reported rather than gated (ADR-0354). Written down rather than derived,
 # so a stray match in a comment cannot quietly ungate one; the *deterministic*
 # claim is checked against the source further down.
-TIMED = {"runtime/pasrt_posix.c", "runtime/pasrt_task.c"}
+# **A unit is reported rather than gated when which of its lines run is a
+# property of how loaded the machine is.** `pasrt_file.c` joins the two:
+# `pasx_fd_ready` polls with a timeout, and whether the timeout arm or the
+# ready arm runs is a race, which is the whole of ADR-0354's argument and
+# followed the routine across ADR-0405's cut.
+TIMED = {"runtime/pasrt_posix.c", "runtime/pasrt_file.c",
+         "runtime/pasrt_task.c"}
 
 
 def main():
@@ -258,7 +265,7 @@ def main():
             "# and is not swept here, for lib_coverage.txt's reason: a number",
             "# that moves with whether a machine has libssl is not a ratchet.",
             "#",
-            "# **Two units are reported and not gated, and the number that",
+            "# **Three units are reported and not gated, and the number that",
             "# says why is 28 against 25.** runtime/pasrt_task.c's select",
             "# waits with a deadline, and the arm that runs when the deadline",
             "# wins is reached only when a receive loses a race -- so on this",
@@ -266,7 +273,8 @@ def main():
             "# core under a busy loop they do here as well (ADR-0354). A line",
             "# whose coverage is a property of how loaded the machine is",
             "# cannot be held by a ratchet in either direction without lying",
-            "# on some machine, so pasrt_task.c and pasrt_posix.c -- the two",
+            "# on some machine, so pasrt_task.c, pasrt_posix.c and",
+            "# pasrt_file.c -- the three",
             "# units holding a wait with a deadline -- are printed and not",
             "# compared, and pasrt.c and pasrt_unicode.c, which hold none,",
             "# fail in both directions like lib_coverage.txt does.",
@@ -298,9 +306,9 @@ def main():
     if args.write_ratchet:
         path.write_text(body)
         print("runtime-coverage: wrote %s: %d uncovered of %d over the "
-              "gated units (%d of %d over all four)"
+              "gated units (%d of %d over all %d)"
               % (path.relative_to(root), gated_unc, gated_ins,
-                 total_unc, total_ins))
+                 total_unc, total_ins, len(UNITS)))
         return 0
 
     if not path.exists():

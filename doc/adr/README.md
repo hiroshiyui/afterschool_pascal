@@ -413,3 +413,4 @@ the alternatives that were rejected and why.
 | [0402](0402-what-the-shell-emits.md) | What the shell emits | Accepted |
 | [0403](0403-one-action-is-not-one-operation.md) | One action is not one operation | Accepted |
 | [0404](0404-the-compiler-answers-about-any-program.md) | The compiler answers this about any program | Accepted |
+| [0405](0405-a-question-is-not-an-action.md) | A question is not an action | Accepted |

@@ -253,7 +253,8 @@ def sweep(pascalcc, pascalc, mode, san, work, sanskip):
         return sanskip('clang here cannot link %s' % san)
 
     rtdir.mkdir(parents=True, exist_ok=True)
-    units = ['pasrt', 'pasrt_posix', 'pasrt_unicode', 'pasrt_task']
+    units = ['pasrt', 'pasrt_posix', 'pasrt_file', 'pasrt_unicode',
+             'pasrt_task']
     for u in units:
         r = subprocess.run(['clang'] + sanflags
                            + ['-O1', '-I', str(ROOT / 'runtime'),

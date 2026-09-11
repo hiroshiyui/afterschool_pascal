@@ -93,16 +93,25 @@ access
 # by what it may depend on, and no `#if` makes that bound depend on who is
 # compiling.** Adding one back is a decision with a record.
 
-# --- runtime/pasrt_posix.c: the headers, not the names ----------------------
+# --- the two POSIX units: the headers, not the names ------------------------
 #
-# The second translation unit (ADR-0186) is not held to ISO C, because what
-# puts a routine there is needing a POSIX *type*. So what is bounded for it is
-# the set of headers it may include -- the right granularity for "what a port
-# has to supply", and one a gate can check without conjuring a struct.
+# The units that are not held to ISO C (ADR-0186), because what puts a routine
+# in one is needing a POSIX *type*. So what is bounded for them is the set of
+# headers each may include -- the right granularity for "what a port has to
+# supply", and one a gate can check without conjuring a struct.
 #
-# Everything in that file is `pasx_`, the prefix a Pascal program binds by name
-# (ADR-0131), so a system without these loses library routines and not the
-# language. Format below: `header: <name.h>`, with the argument above it.
+# **There are two of them since ADR-0405**, and the row says which:
+# `pasrt_file.c` asks the operating system about a file or a descriptor that
+# already exists, and `pasrt_posix.c` makes it *do* something -- start a
+# process, open a socket, put a terminal into raw mode, make a directory. A
+# header both include takes a row each, because what each unit may depend on
+# is a separate claim: striking the last use in one of them has to fail, and a
+# single row would make it silent.
+#
+# Everything in both files is `pasx_`, the prefix a Pascal program binds by
+# name (ADR-0131), so a system without these loses library routines and not
+# the language. Format below: `header: <unit> <name.h>`, with the argument
+# above it.
 
 # ADR-0185: what a file *is*, for PasFS.Info. ISO C reaches none of the three
 # answers -- <time.h> knows nothing of files, so a modification time has no
@@ -115,11 +124,12 @@ access
 # `struct stat` and cross it, and `struct stat` is a different struct on macOS.
 # This file is compiled by the C compiler of the machine being built for, which
 # is the only place that layout question has a known answer.
-header: <sys/stat.h>
+header: pasrt_file.c <sys/stat.h>
 
 # F_OK, for telling "nothing there" from "you may not look" without ENOENT --
 # one header already in pasrt.c's own dependency for `access`.
-header: <unistd.h>
+header: pasrt_file.c <unistd.h>
+header: pasrt_posix.c <unistd.h>
 
 # ADR-0188: the name of a directory entry, for PasDir. The offset of `d_name`
 # is what differs between systems -- glibc puts an `unsigned short` and an
@@ -131,13 +141,13 @@ header: <unistd.h>
 # `opendir` and `closedir` are *not* here and need not be: neither has a struct
 # in its signature, so lib/dialect/pasdir.pas binds them itself and owns the
 # `DIR *` as a handle (AP 6.4.12). Only the member access needed a header.
-header: <dirent.h>
+header: pasrt_file.c <dirent.h>
 
 # ADR-0203: a TCP connection, for PasNet. `struct sockaddr` is the reason --
 # it is not one struct but a family of them, a program never declares the one
 # it is using, and a library may not declare any of them (ADR-0185's fifth
 # decision). Everything socket-shaped is behind `pasx_socket_*`.
-header: <sys/socket.h>
+header: pasrt_posix.c <sys/socket.h>
 
 # ADR-0203: `getaddrinfo` and `getnameinfo`, which is what keeps this list at
 # two headers rather than four. Both ends of every call in PasNet are
@@ -145,7 +155,7 @@ header: <sys/socket.h>
 # family, a port number or an address, and <netinet/in.h> and <arpa/inet.h>
 # are not needed at all. It is also what gives a caller IPv6 without asking:
 # the loop takes the first address that works.
-header: <netdb.h>
+header: pasrt_posix.c <netdb.h>
 
 # ADR-0205: `struct pollfd`, for PasNet.Wait. This is the header that makes a
 # server serve more than one client, and it is a *type* dependency rather than
@@ -157,7 +167,8 @@ header: <netdb.h>
 # It buys the readiness of a *descriptor* and nothing else: whether a line is
 # already sitting in the runtime's own buffer is the other half of the
 # question and is answered above it, in C the compiler can see.
-header: <poll.h>
+header: pasrt_file.c <poll.h>
+header: pasrt_posix.c <poll.h>
 
 # ADR-0262: `struct termios`, for PasTerm's raw mode. It is the worst subject
 # ADR-0185's fifth decision has met so far -- not merely a layout that differs
@@ -171,7 +182,7 @@ header: <poll.h>
 # about the device behind one, so whether input is echoed, whether it is
 # assembled into lines, and whether a read waits for a newline have no standard
 # answer. `isatty` is in <unistd.h> above and needs no type.
-header: <termios.h>
+header: pasrt_posix.c <termios.h>
 
 # ADR-0262: `TIOCGWINSZ` and `struct winsize`, for the size of the window.
 # **POSIX has no window size** -- this is the one entry here naming something
@@ -180,7 +191,7 @@ header: <termios.h>
 # opinion recorded before the window was last resized, and there is nothing
 # else. The request and the struct are BSD-derived and are on every Unix this
 # compiler admits a target for.
-header: <sys/ioctl.h>
+header: pasrt_posix.c <sys/ioctl.h>
 
 # ADR-0362: `posix_spawn_file_actions_t`, for PasProcess.Execute -- running a
 # command as *words* rather than as a line a shell re-reads. The type is what
@@ -193,7 +204,7 @@ header: <sys/ioctl.h>
 # ISO C has one way to run a command, `system`, and it is a *string*: the shell
 # decides where the words are, so every value in it is read as syntax. That is
 # the defect this entry exists to have closed.
-header: <spawn.h>
+header: pasrt_posix.c <spawn.h>
 
 # ADR-0362: `WIFEXITED` and `WEXITSTATUS`, for what the child did. They are
 # macros over a wait status and `waitpid` is declared here beside them, so
@@ -202,7 +213,7 @@ header: <spawn.h>
 # because `system` is ISO C and its caller is a *module*; here the runtime is
 # already reading the status and the macros of the system that wrote it are
 # the right reader.
-header: <sys/wait.h>
+header: pasrt_posix.c <sys/wait.h>
 
 # ADR-0362: `O_WRONLY`, `O_CREAT` and `O_TRUNC`, for the mode of
 # PasProcess.ExecuteToFile -- the child's output sent straight to a file. They
@@ -214,4 +225,5 @@ header: <sys/wait.h>
 # ISO C's `fopen` cannot be asked for this at all -- what has to be opened is
 # descriptor 1 *of another process*, before it runs, and a `FILE *` in this one
 # is not that.
-header: <fcntl.h>
+header: pasrt_file.c <fcntl.h>
+header: pasrt_posix.c <fcntl.h>

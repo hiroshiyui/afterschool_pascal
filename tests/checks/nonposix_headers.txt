@@ -119,6 +119,13 @@
 # at all, which is a build flag and not a source change.
 unit  pasrt.c            compiles
 unit  pasrt_posix.c      blocked
+# **The half of the old pasrt_posix.c that a target without processes can
+# still have** (ADR-0405). It asks the operating system about a file or a
+# descriptor that already exists -- how big, what is in this directory, is
+# there anything to read yet -- and every header it needs, wasi has. That this
+# row says `compiles` is the whole point of the split and is what moved the
+# corpus rows in `wasm32_known.txt`.
+unit  pasrt_file.c       compiles
 unit  pasrt_task.c       blocked
 unit  pasrt_unicode.c    compiles
 

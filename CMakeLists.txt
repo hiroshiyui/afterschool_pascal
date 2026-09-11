@@ -57,7 +57,15 @@ set(APASCAL_WARNINGS -Wall -Wextra)
 # through it (ADR-0189). Nothing calls it yet -- it is AP 6.4.15's runtime half,
 # landed before the language rests on it precisely so that it can be judged on
 # its own.
+# **Five, and the fifth is a portability cut and not a POSIX one** (ADR-0405).
+# pasrt_posix.c held two different kinds of thing: what an operating system
+# answers *about a file*, and what it does besides files -- a process, a
+# socket, a terminal. Those are one unit's worth of POSIX and two of
+# portability, a target being free to have a file system and no processes at
+# all. pasrt_file.c is the first half, and it compiles for wasm32-wasi where
+# the second cannot.
 add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c
+                         runtime/pasrt_file.c
                          runtime/pasrt_unicode.c runtime/pasrt_task.c)
 target_include_directories(pasrt PUBLIC runtime)
 target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})

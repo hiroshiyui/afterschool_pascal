@@ -13,6 +13,16 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **The runtime's POSIX half is two translation units.** What the operating
+  system is *asked about* — a file's size and kind, a directory's entries,
+  whether a descriptor has anything to read — is now `runtime/pasrt_file.c`,
+  and what it is asked to *do* — a process, a socket, a terminal, a private
+  directory — stays in `runtime/pasrt_posix.c` (ADR-0405). Nothing a program
+  can call changed; what changed is that a target with a file system and no
+  processes gets the first half, which is what `wasm32-wasi` is.
+
 ### Added
 
 - **The editor replaces.** `Ctrl-R` asks for a pattern and a replacement and
