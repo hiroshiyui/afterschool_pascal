@@ -28,8 +28,8 @@ procedure ShowAll(protected var q: List; label_: ListItem);
 var k: integer; item: ListItem;
 begin
   write(label_);
-  for k := 1 to ListLen(q) do
-    if ListGet(q, k, item) then write(' ', item);
+  for k := 1 to q.Len do
+    if q.Get(k, item) then write(' ', item);
   writeln
 end;
 
@@ -38,38 +38,38 @@ end;
 procedure BuiltAndAbandoned;
 var local: List; k: integer;
 begin
-  for k := 1 to 50 do ListPush(local, 'x')
+  for k := 1 to 50 do local.Push('x')
 end;
 
 begin
-  writeln('fresh is empty: ', ListEmpty(l));
+  writeln('fresh is empty: ', l.Empty);
 
-  ListPush(l, 'b');
-  ListPush(l, 'a');
-  ListAppend(l, 'c');
+  l.Push('b');
+  l.Push('a');
+  l.Append('c');
   ShowAll(l, 'built:');
-  writeln('len ', ListLen(l):1);
+  writeln('len ', l.Len:1);
 
-  if ListPeek(l, s) then writeln('peek ', s);
-  if ListPop(l, s) then writeln('pop ', s);
+  if l.Peek(s) then writeln('peek ', s);
+  if l.Pop(s) then writeln('pop ', s);
   ShowAll(l, 'after pop:');
 
-  ListPush(l, 'a');
-  ListReverse(l);
+  l.Push('a');
+  l.Reverse;
   ShowAll(l, 'reversed:');
 
-  if ListDrop(l, 2) then writeln('dropped the second');
+  if l.Drop(2) then writeln('dropped the second');
   ShowAll(l, 'after drop:');
-  writeln('drop past the end: ', ListDrop(l, 9));
+  writeln('drop past the end: ', l.Drop(9));
 
   { a move between two variables of the type is what take is for, and the
     module needs no routine of its own for it }
   other := take(l);
   ShowAll(other, 'moved:');
-  writeln('the old head is empty: ', ListEmpty(l));
+  writeln('the old head is empty: ', l.Empty);
 
-  ListClear(other);
-  writeln('cleared: ', ListEmpty(other), ' len ', ListLen(other):1);
+  other.Clear;
+  writeln('cleared: ', other.Empty, ' len ', other.Len:1);
 
   for i := 1 to 4000 do BuiltAndAbandoned;
   writeln('4000 chains built and abandoned, every one released by its block')
