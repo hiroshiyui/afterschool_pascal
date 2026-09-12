@@ -420,3 +420,4 @@ the alternatives that were rejected and why.
 | [0409](0409-the-trait-object-carries-its-answer.md) | The trait object carries its answer | Accepted |
 | [0410](0410-a-method-is-the-call-already-made.md) | A method is the call already made | Accepted |
 | [0411](0411-an-implementation-travels-with-its-type.md) | An implementation travels with its type | Accepted |
+| [0412](0412-the-receiver-decides.md) | The receiver decides | Accepted |

@@ -234,7 +234,7 @@ own exception and compare by length instead.
   `PtrSize`, `WordAlign`, `WideAlign` and `CLongSize` each already had the arm
   an LP64 target needs, and wasm64 took the *default* side of every condition.
   `target-layout` put it in a class with x86-64, aarch64 and both Darwins and
-  matched every one of the 11 455 frame offsets, with nothing in the gate
+  matched every one of the 11 473 frame offsets, with nothing in the gate
   edited to admit it — the target list being read from the compiler's own
   `--target=` refusal. It is ADR-0325's generalisation spent a third time and
   the first time free.
@@ -5857,6 +5857,44 @@ the first mutation of the change passed all 935. `stale-component` builds the
 case by hand instead: the module translated *alone*, the client with another
 component in front of it, which is the ordinary library situation and which
 fails under a counter with `undefined reference to p4`.
+
+**The receiver decides** (ADR-0412, AP 6.7.10.2 amended). 6.7.10.2 identified a
+routine from the first actual-parameter's type only where the identifier had no
+defining-point in force, which is right for the bare spelling `Len(x)` and wrong
+for `x.Len`: a method-designator names its receiver, so there is no second
+reading for the scope to settle. Reading the scope first meant a routine of one
+implementation could not call another type's routine of the same name from
+inside an implementation that had one -- which is the collision an
+implementation exists to remove. NOTE 17's *neither is the definition of the
+other* is narrowed by NOTE 10a accordingly: the two spellings agree where the
+identifier is free and part where it is not.
+
+**It was found by writing a library, and so were three more** (`doc/sop.md`
+§4a's claim, for the fourth time and by its largest margin). `PasJson` has two
+types with routines and they share `Free`, `Len` and `At` -- which is exactly
+what 6.11.2 would refuse to two exported names and therefore exactly what
+methods are for, so the first real client was the first thing to ask. Beside
+the selection rule it found that a parameterless method statement took only a
+bare-name receiver, that `a.M(x).N(y)` as a statement lost its second link,
+that a designator's type was not found in a variant part -- `QuietTypeOf`
+carried its own copy of `FindField` that walked the fixed list -- and, because
+a method is exported by nothing, that §6.9.4 b)'s threat never reached a formal
+produced from a schema. That last one has two faces from one missing call: a
+`protected var s: string` could be passed to a `var s: string` and written
+through with no diagnostic, and ADR-0283's advice, which is supposed to be
+*exact*, was offered for parameters that could not take the word. It survived
+because that advice is never given about an **exported** routine and every
+routine of the shape in this tree was one.
+
+The mechanism is two fields on the call node. `clMethod`/`pcMethod` say the
+*parser* saw a receiver -- it knows that before anything knows a type -- and
+`clRecvType`/`pcRecvType` hold the type, filled in by whichever of the three
+spellings built the node: the husk has it already, the qualified form reads it
+from the qualifier, and the parser's with-arguments form has its receiver
+checked at the head of CheckCall and marked with ADR-0254's `nChecked` so
+CheckArguments leaves it alone. Undo the selection and `methods` fails with
+`argument 1 of 'len' is cell, but the value is link`, and nine library cases
+go with it.
 
 **The trait object carries its answer** (ADR-0409), which is increment C2 and
 the whole feature. A value of `dyn T` is a **box**: a two-word heap variable

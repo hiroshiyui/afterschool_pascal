@@ -71,13 +71,19 @@ impl small;
   begin self := 1 end;
 end;
 
-var p: Point; n: Named; k: integer;
+var p: Point; n: Named; k: integer; arr: array [1..2] of Point;
 
 
 begin
   { a name no implementation of the type supplies }
   k := p.Missing;
   p.Missing(1);
+  { the same two, where the receiver is **not** a bare name: a bare one is
+    6.11.3's qualified form and these are the designator the parser finishes
+    on its own, which is a second place the name has to be looked for
+    (ADR-0410, ADR-0412) }
+  k := arr[1].Missing(1);
+  arr[1].Missing;
   { a method-designator on something with no implementations at all }
   k := k.Len;
   { the receiver named where the routine belongs to another type }

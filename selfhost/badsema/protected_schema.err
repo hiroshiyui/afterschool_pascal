@@ -1,0 +1,3 @@
+<source>:26:18: error: 's' is a protected parameter, so it cannot be passed to the var parameter 's' of 'sinkstring'
+<source>:30:18: error: 'v' is a protected parameter, so it cannot be passed to the var parameter 'v' of 'sinkvector'
+<source>:34:9: error: 'v' is a protected parameter, so it cannot be passed to the var parameter 'v' of 'p'

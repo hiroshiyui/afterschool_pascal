@@ -122,8 +122,21 @@ type BadHeld = owned ^Bad;
   *outermost* block owns is refused by AP 6.4.14.7 whatever its type is
   (ADR-0201), so writing them up there would have reported that instead and
   this case would have asserted nothing about 6.7.11.1 b). }
+{ A record whose *variant* part holds the owner, so the hint below is asked
+  about a designator whose type QuietTypeOf has to find in a variant (ADR-0412).
+  It answered nil for one -- a walk of the fixed field list where ApTypes
+  already owns the question -- and the hint was then not given at all, leaving
+  `unknown procedure` for the one mistake it exists to explain. }
+type
+  Slot = (slNone, slOne);
+  Box = record
+    case k: Slot of
+      slNone: ();
+      slOne: (owner: Held)
+  end;
+
 procedure Permitted;
-var keep: Held; pt: owned ^Point;
+var keep: Held; pt: owned ^Point; bx: Box;
 begin
   { `new` has no implementation to put in the table }
   new(keep);
@@ -134,6 +147,9 @@ begin
   { the owner named where the trait object was meant -- one character, and
     the message says which }
   Draw(keep);
+  { and the same mistake where the owner is a field of a variant part }
+  bx.k := slOne;
+  Draw(bx.owner);
   { the same mistake in a function-designator, which resolves a name by its
     own order and so needs its own arm }
   h.dyn := Area(keep);

@@ -2199,9 +2199,17 @@ type
         binding to the operand rather than storage for a result -- so the
         operand is evaluated once however many of the three are emitted, which
         is a `with` statement's shape and not a new one. }
+      { clRecvType is AP 6.7.10.4's receiver type, and it is what makes the
+        dot form select from the receiver and not from the scope (ADR-0412).
+        Nil where the call was not written as a method-designator.
+        clMethod is pcMethod's counterpart: the parser knows a receiver is
+        there -- `v^.text.At(i)` -- before anything knows its type, so it
+        says so and Sema fills the type in. The other two spellings set the
+        type directly, each already holding it where it builds the node. }
       nkCall:       (clAt, clLen, clQualAt, clQualLen: integer; clArgs: nodePtr;
                      clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr;
-                     clOk, clFail, clVal: nodePtr);
+                     clOk, clFail, clVal: nodePtr;
+                     clMethod: boolean; clRecvType: typePtr);
       nkEmpty:      ();
       { asFactory: AP 6.4.12.6 (ADR-0255). The value is a call of a function
         of *this program* answering a handle, so the target's address is what
@@ -2271,9 +2279,17 @@ type
         argument out of pcArgs, so that after Sema the node says what it does
         rather than what it was written as. Every rule about assigning a
         result then reaches it through the one routine that decides them. }
+      { pcMethod says the parser built this from a variable-access followed by
+        `.` and a name with no argument list -- AP 6.7.10.4's parameterless
+        method statement -- so the first actual is the receiver and its type
+        is what selects. pcRecvType is that type, and the two spellings fill
+        it in at different moments, which is why the flag is separate: the
+        qualified form knows the receiver only once the qualifier has been
+        looked up. }
       nkProcCall:   (pcAt, pcLen, pcQualAt, pcQualLen: integer; pcArgs: nodePtr;
                      pcSym: symPtr; pcStd: stdProcKind;
-                     pcSelect, pcTagVals: numPtr; pcExit: nodePtr);
+                     pcSelect, pcTagVals: numPtr; pcExit: nodePtr;
+                     pcMethod: boolean; pcRecvType: typePtr);
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);

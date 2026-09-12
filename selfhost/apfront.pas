@@ -3066,6 +3066,8 @@ begin
           call := NewNode(nkCall, n^.fdLine, n^.fdCol);
           call^.clQualAt := 0;
           call^.clQualLen := 0;
+          call^.clMethod := true;
+          call^.clRecvType := nil;
           call^.clAt := n^.fdAt;
           call^.clLen := n^.fdLen;
           pos := pos + 1;
@@ -3215,6 +3217,8 @@ begin
         e^.clLen := tok[pos].len;
         e^.clQualAt := 0;
         e^.clQualLen := 0;
+        e^.clMethod := false;
+        e^.clRecvType := nil;
         e^.clArgs := nil;
         pos := pos + 1;
         e := AfterCall(e)
@@ -3227,6 +3231,8 @@ begin
         call := NewNode(nkCall, CurLine, CurCol);
         call^.clQualAt := tok[pos].at;
         call^.clQualLen := tok[pos].len;
+        call^.clMethod := false;
+        call^.clRecvType := nil;
         call^.clAt := tok[pos + 2].at;
         call^.clLen := tok[pos + 2].len;
         call^.clArgs := nil;
@@ -3241,6 +3247,8 @@ begin
         call := NewNode(nkCall, CurLine, CurCol);
         call^.clQualAt := 0;
         call^.clQualLen := 0;
+        call^.clMethod := false;
+        call^.clRecvType := nil;
         call^.clAt := tok[pos].at;
         call^.clLen := tok[pos].len;
         call^.clArgs := nil;
@@ -3866,10 +3874,15 @@ end;
   This scans to the matching ')' -- the same bracket-depth walk
   LooksLikeSubrange makes, and for the same reason: the token that decides is
   not a fixed distance away. }
-function CallTakesCaret(from: integer): boolean;
-var i, depth: integer; ok, done: boolean; k: tokenKind;
+{ The token after the argument-list that starts at `from`, or tkEof where
+  there is no such list. Two callers ask two questions of it and both are
+  about a statement that begins with a designator: whether the call is
+  dereferenced, and -- since AP 6.7.10.4 gave a call a *selector* after it --
+  whether it is selected from at all (ADR-0412). }
+function AfterCallKind(from: integer): tokenKind;
+var i, depth: integer; res: tokenKind; done: boolean; k: tokenKind;
 begin
-  ok := false;
+  res := tkEof;
   if (from <= tokCount) and (tok[from].kind = tkLParen) then begin
     depth := 0;
     i := from;
@@ -3881,7 +3894,7 @@ begin
       else if (k = tkRParen) or (k = tkRBracket) then begin
         depth := depth - 1;
         if depth = 0 then begin
-          ok := (i < tokCount) and (tok[i + 1].kind = tkCaret);
+          if i < tokCount then res := tok[i + 1].kind;
           done := true
         end
       end
@@ -3890,7 +3903,23 @@ begin
       i := i + 1
     end
   end;
-  CallTakesCaret := ok
+  AfterCallKind := res
+end;
+
+function CallTakesCaret(from: integer): boolean;
+begin
+  CallTakesCaret := AfterCallKind(from) = tkCaret
+end;
+
+{ Does a designator continue after the argument-list? `a.b(x).c(y)` and
+  `a.b(x)[i]` are one designator and not a statement that has ended, so the
+  qualified-name path below must decline them and let ParseSelectors assemble
+  the whole chain (AP 6.7.10.4, ADR-0412). }
+function CallThenSelector(from: integer): boolean;
+var k: tokenKind;
+begin
+  k := AfterCallKind(from);
+  CallThenSelector := (k = tkPeriod) or (k = tkLBracket) or (k = tkCaret)
 end;
 
 function ParseIdentStatement: nodePtr;
@@ -4024,10 +4053,17 @@ begin
       sixth means the statement is a call of `b` through interface `a`. }
     if (k = tkPeriod) and (PeekKind(2) = tkIdent) and
        (PeekKind(3) <> tkAssign) and (PeekKind(3) <> tkLBracket) and
-       (PeekKind(3) <> tkPeriod) and (PeekKind(3) <> tkCaret) then begin
+       (PeekKind(3) <> tkPeriod) and (PeekKind(3) <> tkCaret) and
+       { ...and the call is the whole statement. `info.Put(x)` is this
+         branch; `info.Member(x).Append(y)` is one designator whose first
+         selector happens to be a call, and consuming only `info.Member(x)`
+         here left `.Append(y)` with nothing to belong to (ADR-0412). }
+       not ((PeekKind(3) = tkLParen) and CallThenSelector(pos + 3)) then begin
       s := NewNode(nkProcCall, l, c);
       s^.pcQualAt := at;
       s^.pcQualLen := len;
+      s^.pcMethod := false;
+      s^.pcRecvType := nil;
       s^.pcAt := tok[pos + 2].at;
       s^.pcLen := tok[pos + 2].len;
       s^.pcArgs := nil;
@@ -4059,6 +4095,13 @@ begin
         s := NewNode(nkProcCall, l, c);
         s^.pcQualAt := 0;
         s^.pcQualLen := 0;
+        { The chain may have ended in a *method* call -- `a[i].Put(x, y)`,
+          `p.Member(x).Append(y)` -- and the statement it is remade into has
+          to go on selecting from the receiver, or `Put` reaches the required
+          procedure of that spelling instead (AP 6.7.10.4, ADR-0412). The
+          type is nil here and filled in by Sema, a type being its answer. }
+        s^.pcMethod := ref^.clMethod;
+        s^.pcRecvType := nil;
         s^.pcAt := ref^.clAt;
         s^.pcLen := ref^.clLen;
         s^.pcArgs := ref^.clArgs
@@ -4080,6 +4123,8 @@ begin
         s := NewNode(nkProcCall, l, c);
         s^.pcQualAt := 0;
         s^.pcQualLen := 0;
+        s^.pcMethod := true;
+        s^.pcRecvType := nil;
         s^.pcAt := ref^.fdAt;
         s^.pcLen := ref^.fdLen;
         s^.pcArgs := ref^.fdBase;
@@ -4096,6 +4141,8 @@ begin
       s := NewNode(nkProcCall, l, c);
       s^.pcQualAt := 0;
       s^.pcQualLen := 0;
+      s^.pcMethod := false;
+      s^.pcRecvType := nil;
       s^.pcAt := at;
       s^.pcLen := len;
       s^.pcArgs := nil;
@@ -14177,6 +14224,24 @@ begin
         end
         else if BadVarActual(a, callee, i) then
           { the message is BadVarActual's }
+        { 6.9.4 b), for a formal produced from a schema. The arm below has
+          had this since ADR-0046 and this one never did, so a `string` var
+          parameter passed on to another was neither recorded as a threat nor
+          refused when the actual was protected -- one missing call with two
+          faces (ADR-0412). Invisible until methods, because 6.7.3.1's advice
+          is never given about an *exported* routine and every routine of this
+          shape in the tree was one; a method is exported by nothing, so
+          `PasJson`'s `TextInto` was advised to protect a parameter it hands
+          to `Into`. Guarded on skVarParam, this arm taking the value forms
+          too. }
+        else if (p^.sym^.kind = skVarParam) and not p^.sym^.isProtected then
+          if Threatened(a) then begin
+            write('it cannot be passed to the var parameter ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            write(''' of ''');
+            WritePool(callee^.at, callee^.len);
+            writeln('''')
+          end
       end
       else if p^.sym^.kind = skVarParam then begin
         if not IsDesignator(a) then begin
@@ -15681,6 +15746,11 @@ begin
   end
 end;
 
+{ A designator's type without reporting anything, defined with the other
+  walkers far below and needed here: CheckCall reads it for a
+  method-designator's receiver before the name is resolved (ADR-0412). }
+function QuietTypeOf(e: nodePtr): typePtr; forward;
+
 { Does `t` have an implementation supplying a routine spelled `at`/`len`
   (AP 6.7.10.4, ADR-0410)?
 
@@ -15768,6 +15838,10 @@ begin
     understands and this arm never sees it. }
   def := MethodReceiver(c^.clQualAt, c^.clQualLen, c^.line, c^.col);
   if def <> nil then begin
+    { The receiver's type, before the qualifier is thrown away: it is what
+      selects the routine below (AP 6.7.10.4, ADR-0412). }
+    c^.clMethod := true;
+    c^.clRecvType := QuietTypeOf(def);
     def^.next := c^.clArgs;
     c^.clArgs := def;
     c^.clQualAt := 0;
@@ -15804,7 +15878,31 @@ begin
     scope chain first, so a local `abs` would win. The required one is a symbol
     too (6.2.2.10), and LookupUser is what turns it back into the nil this
     branch reads as "not the program's own". }
+  { The parser knows a receiver is there before it knows its type, so the
+    type is read here (AP 6.7.10.4, ADR-0412). The receiver is *checked*
+    rather than asked quietly, because it may be a call -- `doc.Member('n')`
+    is the receiver of `.NumberOr(0.0)` -- and a call has no type until it
+    has been resolved. ADR-0254's marker is what makes that safe: CheckExpr
+    is not idempotent, and CheckArguments reads the flag and leaves the
+    receiver alone. }
+  if c^.clMethod and (c^.clRecvType = nil) then begin
+    CheckExpr(c^.clArgs);
+    c^.clArgs^.nChecked := true;
+    c^.clRecvType := c^.clArgs^.ntype
+  end;
   sym := LookupUser(c^.clAt, c^.clLen);
+  { AP 6.7.10.4 (ADR-0412): where the call was *written* as a
+    method-designator, the receiver's type selects and a name in scope does
+    not shadow it. 6.7.10.2's "no defining-point in force" gates the bare
+    spelling, where there is nothing but the scope to go on; the dot form
+    supplies a receiver explicitly, and reading the scope first made a
+    method unable to call another type's routine of the same name from
+    inside an implementation that had one -- which is the collision methods
+    exist to remove. Falls back to whatever the scope found, so a receiver
+    whose type implements nothing of the name reports as it always did. }
+  if c^.clRecvType <> nil then
+    if MethodSym(c^.clRecvType, c^.clAt, c^.clLen) <> nil then
+      sym := MethodSym(c^.clRecvType, c^.clAt, c^.clLen);
   { Before the instantiation below, so a call to a generic reports the generic
     the programmer wrote and not the translation AP 6.7.3.10 made of it: the
     instantiation's defining-point is the generic's own text, but the symbol
@@ -17175,6 +17273,10 @@ begin
           e^.fdCall := NewNode(nkCall, e^.fdLine, e^.fdCol);
           e^.fdCall^.clQualAt := 0;
           e^.fdCall^.clQualLen := 0;
+          { AP 6.7.10.4 (ADR-0412): the receiver's type, recorded before the
+            name is resolved, because it is what selects. }
+          e^.fdCall^.clMethod := true;
+          e^.fdCall^.clRecvType := b;
           e^.fdCall^.clAt := e^.fdAt;
           e^.fdCall^.clLen := e^.fdLen;
           e^.fdCall^.clArgs := e^.fdBase;
@@ -17329,6 +17431,8 @@ begin
             e^.vrCall^.clLen := e^.vrLen;
             e^.vrCall^.clQualAt := 0;
             e^.vrCall^.clQualLen := 0;
+            e^.vrCall^.clMethod := false;
+            e^.vrCall^.clRecvType := nil;
             e^.vrCall^.clArgs := nil;
             CheckExpr(e^.vrCall);
             e^.ntype := e^.vrCall^.ntype
@@ -17466,6 +17570,8 @@ begin
     p := NewNode(nkProcCall, line, col);
     p^.pcQualAt := 0;
     p^.pcQualLen := 0;
+    p^.pcMethod := false;
+    p^.pcRecvType := nil;
     p^.pcAt := at;
     p^.pcLen := len;
     p^.pcArgs := args;
@@ -20113,10 +20219,20 @@ begin
           about an interface only where a qualifier is one. }
         recv := MethodReceiver(s^.pcQualAt, s^.pcQualLen, s^.line, s^.col);
         if recv <> nil then begin
+          s^.pcRecvType := QuietTypeOf(recv);
           recv^.next := s^.pcArgs;
           s^.pcArgs := recv;
           s^.pcQualAt := 0;
           s^.pcQualLen := 0
+        end;
+        { The other spelling of the same statement, where the parser already
+          put the receiver in the argument list because the receiver is not a
+          bare name -- `v^.text.Free` (AP 6.7.10.4, ADR-0412). Its type is
+          read here rather than at parse time, a type being Sema's answer. }
+        if s^.pcMethod then begin
+          CheckExpr(s^.pcArgs);
+          s^.pcArgs^.nChecked := true;
+          s^.pcRecvType := s^.pcArgs^.ntype
         end;
         if s^.pcQualLen > 0 then begin
         { 6.11.3's qualified name in a procedure-statement. }
@@ -20138,6 +20254,12 @@ begin
       end
       else begin
         sym := LookupUser(s^.pcAt, s^.pcLen);
+        { AP 6.7.10.4 (ADR-0412): CheckCall's rule, for the statement half --
+          a call written with a receiver selects from the receiver's type and
+          is not shadowed by a name in scope. }
+        if s^.pcRecvType <> nil then
+          if MethodSym(s^.pcRecvType, s^.pcAt, s^.pcLen) <> nil then
+            sym := MethodSym(s^.pcRecvType, s^.pcAt, s^.pcLen);
         NoteUse(s^.line, s^.col, s^.pcLen, sym);
         { A user-declared procedure of the same name wins, exactly as it does
           for the required functions in CheckCall. }
@@ -23986,8 +24108,8 @@ end;
   A nil answer is not an error -- it falls through to the ordinary `unknown
   function`, which is the right message for a call whose first argument is not
   a designator, because no such call can select an implementation. }
-function QuietTypeOf(e: nodePtr): typePtr;
-var t, found: typePtr; s: symPtr; f: fieldPtr;
+function QuietTypeOf;
+var t, found: typePtr; s: symPtr; fld: fieldPtr;
 begin
   t := nil;
   if e <> nil then
@@ -24016,14 +24138,18 @@ begin
       else begin
         t := QuietTypeOf(e^.fdBase);
         if t <> nil then begin
+          { FindField and not a walk of `t^.fields`, which is what stood
+            here: that list is the *fixed* part, so a field declared in a
+            variant part answered no type, and a method selected on one --
+            `v^.text.Len` over a variant field -- was reported as an unknown
+            routine (ADR-0412). ApTypes already owns this question and
+            descends into the variants; a second copy of it here was a fact
+            stated twice, which is the shape this tree removes rather than
+            corrects. }
           found := nil;
           if IsRecord(t) then begin
-            f := t^.fields;
-            while f <> nil do begin
-              if PoolSame(f^.at, f^.len, e^.fdAt, e^.fdLen) then
-                found := f^.ftype;
-              f := f^.next
-            end
+            fld := FindField(t, e^.fdAt, e^.fdLen);
+            if fld <> nil then found := fld^.ftype
           end;
           { AP 6.7.10.4 (ADR-0410): a method selected on what a method
             returned -- `k.Twice.Plus(1)` -- asks for this type **before** the

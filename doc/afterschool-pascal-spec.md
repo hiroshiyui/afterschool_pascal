@@ -3754,10 +3754,28 @@ traits, it shall be an error, and the error shall be reported.
 Where the first actual-parameter is not a variable-access, no implementation
 shall be selected.
 
-NOTE 10 — This lookup is consulted only after an ordinary one has failed, which
-is ISO/IEC 10206:1991 §6.2.2.11's own placement, so a program that declares
-its own routine of the name goes on meaning what it meant. A parameter or a
-variable of the name shadows the trait routine for the same reason.
+Where the identifier is that of a method-designator (6.7.10.4), it shall be
+identified as a routine of the implementation as above **whether or not** it
+has a defining-point in force, and no defining-point shall shadow that
+identification.
+
+NOTE 10 — The first paragraph's lookup is consulted only after an ordinary one
+has failed, which is ISO/IEC 10206:1991 §6.2.2.11's own placement, so a program
+that writes the bare spelling and declares its own routine of the name goes on
+meaning what it meant. A parameter or a variable of the name shadows the trait
+routine for the same reason.
+
+NOTE 10a — The paragraph above is where the two spellings part, and it is the
+correction ADR-0412 made to NOTE 17's "neither is the definition of the other".
+A bare `Len(x)` has nothing but the scope to go on, so the scope decides it. A
+method-designator names its receiver, so the receiver decides it, and a name in
+scope is not a competing reading of anything. Without this, a routine of an
+implementation could not call another type's routine of the same spelling from
+inside an implementation that had one — the enclosing routine's own identifier
+is in force throughout its block — which is exactly the collision an
+implementation exists to remove (NOTE 17). It was found by writing `PasJson`
+with methods: `JsonChars` and `JsonPtr` each have a `Free`, a `Len` and an
+`At`, and `v^.text.Free` inside `JsonPtr`'s own `Free` bound to `JsonPtr`'s.
 
 NOTE 11 — What "only after" costs is that a declaration in force **hides** the
 trait's routine of that spelling entirely: the identifier is identified, and
@@ -5116,6 +5134,7 @@ where a program asks for the facility.
 | 6.7.11, Annex E.13, Annex E.14 | ADR-0409 |
 | 6.7.10, 6.7.10.1 – 6.7.10.4 | ADR-0410 |
 | 6.7.10.5, 6.13.2 (amended) | ADR-0411 |
+| 6.7.10.2 (amended), 6.7.10.4 (amended) | ADR-0412 |
 | 6.7.5.7 | ADR-0084 |
 | 6.1.3 | ADR-0072 |
 | 5.7 | — (this document, 2026-09-12) |

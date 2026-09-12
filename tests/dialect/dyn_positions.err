@@ -13,6 +13,8 @@
 <source>:111:19: error: d refers to storage it does not own, so it stands only as the domain of an 'owned' pointer or as a 'var' parameter
 <source>:111:1: error: function 'result0' never assigns its result
 <source>:117:12: error: 'point' is not a trait, so there is nothing for 'dyn' to name
-<source>:129:3: error: 'new' cannot create a d: it would have no implementation. Create the type that has one and move it in with 'take'
-<source>:136:3: error: 'draw' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
-<source>:139:12: error: 'area' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
+<source>:135:15: error: an owned pointer cannot be a field of a variant part: the arms share storage, and releasing one means disposing what it identifies -- which needs an answer to which arm this is
+<source>:142:3: error: 'new' cannot create a d: it would have no implementation. Create the type that has one and move it in with 'take'
+<source>:149:3: error: 'draw' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
+<source>:152:3: error: 'draw' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument
+<source>:155:12: error: 'area' is declared by trait 'shape', and this names the owner rather than what it owns: write '^' after the first argument

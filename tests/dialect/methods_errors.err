@@ -7,6 +7,8 @@
 <source>:69:6: error: a subrange takes its host's implementation, so it cannot carry one of its own
 <source>:79:9: error: 'missing' is neither a field of point nor a routine implemented for it
 <source>:80:3: error: unknown procedure 'missing'
-<source>:82:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
-<source>:84:9: error: 'doubled' is neither a field of named nor a routine implemented for it
-<source>:90:4: error: argument 1 of 'move' is a var parameter and needs a variable
+<source>:85:15: error: unknown function 'missing'
+<source>:86:3: error: unknown procedure 'missing'
+<source>:88:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
+<source>:90:9: error: 'doubled' is neither a field of named nor a routine implemented for it
+<source>:96:4: error: argument 1 of 'move' is a var parameter and needs a variable

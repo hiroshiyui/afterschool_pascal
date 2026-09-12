@@ -217,6 +217,97 @@ begin
   dispose(q)
 end;
 
+{ **Three claims a library found and no probe had asked (ADR-0412).** Each is
+  about *which* routine a receiver selects, and each was wrong in a way that
+  only showed once two types in one translation had routines of one name --
+  which is the whole of what ADR-0315 wanted methods for, so the first real
+  client was the first thing to ask.
+
+  a) A receiver in a **variant part**. QuietTypeOf walked the record's fixed
+     field list instead of asking ApTypes, so `box.tail.Len` answered no type
+     and the method was reported unknown.
+
+  b) A receiver whose routine name is also a routine of the **enclosing**
+     implementation. 6.7.10.2 gates the *bare* spelling on the identifier
+     having no defining-point in force, and reading the scope first meant
+     `Cell`'s own `Len` shadowed `Link`'s: inside `impl Cell` the call
+     `c.tail.Len` bound to Cell's Len and was refused on its argument type.
+     The dot form supplies a receiver explicitly and now selects from it.
+
+  c) A **chain** as a statement. `a.M(x).N(y)` is one designator, and the
+     qualified-name path consumed `a.M(x)` and left `.N(y)` with nothing to
+     belong to. }
+type
+  Link = ^LinkRec;
+  LinkRec = record len: integer end;
+  Which = (wOne, wTwo);
+  Cell = ^CellRec;
+  CellRec = record
+    head: Link;
+    case k: Which of
+      wOne: ();
+      { the variant field, which is claim a) }
+      wTwo: (tail: Link)
+  end;
+
+impl Link;
+  function Len(t: Link): integer;
+  begin Len := t^.len end;
+  procedure Bump(t: Link; by: integer);
+  begin t^.len := t^.len + by end;
+  function Self_(t: Link): Link;
+  begin Self_ := t end;
+end;
+
+impl Cell;
+  { a routine of Link's spelling, which is claim b): every call below that
+    means Link's `Len` has to reach it past this one }
+  function Len(c: Cell): integer;
+  begin Len := 100 end;
+
+  function HeadLen(c: Cell): integer;
+  begin HeadLen := c^.head.Len end;
+
+  function TailLen(c: Cell): integer;
+  begin TailLen := c^.tail.Len end;
+
+  { and the chain, from inside the implementation that shadows }
+  function TailTwice(c: Cell): integer;
+  begin TailTwice := c^.tail.Self_.Len end;
+
+  { a method *with* an argument answering a type that has methods of its own,
+    so a chain can start from a bare name -- which is 6.11.3's qualified form
+    and a different path from the one above }
+  function Nth(c: Cell; i: integer): Link;
+  begin if i = 1 then Nth := c^.head else Nth := c^.tail end;
+end;
+
+procedure Receivers2;
+var c: Cell; arr: array [1..2] of Link;
+begin
+  new(c); c^.k := wTwo;
+  new(c^.head); c^.head^.len := 3;
+  new(c^.tail); c^.tail^.len := 4;
+  new(arr[1]); arr[1]^.len := 5;
+  { a) the variant field, read from outside and from inside -- and in the
+       **bare** spelling too, which is where 6.7.10.2 asks for the first
+       actual's type and got nothing for a field declared in a variant part:
+       the type walk read the fixed field list where ApTypes already owns the
+       question, and the call was then reported as an unknown procedure }
+  writeln(c^.tail.Len:1, ' ', c.TailLen:1, ' ', Len(c^.tail):1);
+  { b) the enclosing implementation does not shadow, and its own Len is still
+       reachable by its own receiver }
+  writeln(c.HeadLen:1, ' ', c.Len:1);
+  { c) a chain as a statement, with a subscript and with a field -- and from a
+       **bare** name, which the qualified-name path took on its own and then
+       consumed only `c.Nth(2)`, leaving `.Bump(7)` belonging to nothing }
+  arr[1].Self_.Bump(10);
+  c^.tail.Self_.Bump(20);
+  c.Nth(2).Bump(7);
+  writeln(arr[1].Len:1, ' ', c^.tail.Len:1, ' ', c.TailTwice:1);
+  dispose(c^.head); dispose(c^.tail); dispose(c); dispose(arr[1])
+end;
+
 procedure TraitsToo;
 var p: Point; l: Line;
 begin
@@ -236,5 +327,6 @@ begin
   BothSpellings;
   Foreign_;
   TraitsToo;
-  DeepReceivers
+  DeepReceivers;
+  Receivers2
 end.
