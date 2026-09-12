@@ -48,18 +48,18 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Thirty-six routines take this
-shape -- some of them methods since the conversion described below, the shape of
-an answer being no different for one: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
-`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `StreamOpenRead`,
-`StreamOpenWrite`, `StreamOpenAppend`, `StreamWriteText`, `StreamWriteLine` and `StreamFlush`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
-`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept` and `NetWait`, `PasDir`'s
-`OpenDir` and `ListDir`, `PasStream`'s three `StreamOpen`s, and the methods
-`Socket.WriteText`, `Socket.WriteLine`, `Socket.ReadLine`, `Socket.Service`,
-`Stream.WriteText`, `Stream.WriteLine`, `Stream.Flush`, `Stream.Close`,
-`Dir.NextEntry` and `Dir.Close` — the four `Open`s included, because the stream or
-directory they answer goes into the `var` parameter and what is left to return
-is whether the world refused.
+**`ErrorCode`.** `errNone` is success, and this is the commonest shape in the
+library: `PasFS`'s `Remove`, `Rename`, `MakeDirectory` and `RemoveDirectory`,
+`PasEnv`'s `Define` and `Undefine`, `PasUnicode`'s `ToText`, `Fold`, `Upper`
+and `Lower`, the four that open a socket or a directory, and the methods a
+`Socket`, a `Stream` and a `Dir` carry — `WriteText`, `WriteLine`, `ReadLine`,
+`Flush`, `Close`, `NextEntry`. **A method answers it exactly as an exported
+routine does**, the shape of an answer being no different for one.
+
+The opening routines are in that list deliberately: the stream or directory
+they answer goes into a `var` parameter, so what is left to return is whether
+the world refused. No count is given here -- it was wrong twice, and the
+routines are `grep`-able where a number in prose is only re-countable.
 
 `Dir.NextEntry` is the one that uses more than two of the six codes, and it is
 worth reading as the shape rather than as an exception: `errNone` with a name,
