@@ -25,62 +25,62 @@ var
 
 { nested, so it can reach `v` }
 procedure keep(line: string);
-begin SVecPush(v, line) end;
+begin v.Push(line) end;
 
 procedure dump(what: string(8); u: StrVecPtr);
 var k: integer;
 begin
-  write(what, ' (', SVecLen(u):1, '/', SVecCap(u):1, '):');
-  for k := 1 to SVecLen(u) do write(' [', SVecGet(u, k), ']');
+  write(what, ' (', u.Len:1, '/', u.Cap:1, '):');
+  for k := 1 to u.Len do write(' [', u.At(k), ']');
   writeln
 end;
 
 begin
   { --- growth from a small capacity, and the accessors --- }
   SVecNew(v, 1);
-  for i := 1 to 5 do SVecPush(v, 'item' + chr(ord('0') + i));
+  for i := 1 to 5 do v.Push('item' + chr(ord('0') + i));
   dump('pushed', v);
-  writeln('pop: ', SVecPop(v), ' then ', SVecLen(v):1, ' left');
-  SVecSet(v, 2, 'changed');
-  writeln('get 2: ', SVecGet(v, 2), ' indexof changed: ', SVecIndexOf(v, 'changed'):1,
-          ' indexof none: ', SVecIndexOf(v, 'none'):1);
+  writeln('pop: ', v.Pop, ' then ', v.Len:1, ' left');
+  v.Put(2, 'changed');
+  writeln('get 2: ', v.At(2), ' indexof changed: ', v.IndexOf('changed'):1,
+          ' indexof none: ', v.IndexOf('none'):1);
   { §6.7.2.5: the shorter operand is padded, so a trailing space is equal }
-  writeln('padded equal: ', SVecIndexOf(v, 'item1 '):1);
-  SVecReserve(v, 100);
-  writeln('reserved: ', SVecCap(v):1, ' len ', SVecLen(v):1);
-  SVecClear(v);
-  writeln('cleared: ', SVecLen(v):1, ' pop of empty: [', SVecPop(v), ']');
+  writeln('padded equal: ', v.IndexOf('item1 '):1);
+  v.Reserve(100);
+  writeln('reserved: ', v.Cap:1, ' len ', v.Len:1);
+  v.Clear;
+  writeln('cleared: ', v.Len:1, ' pop of empty: [', v.Pop, ']');
 
   { --- split and join are inverses, and join reports the whole length --- }
-  SVecSplit(v, 'a,b,,d', ',');
+  v.Split('a,b,,d', ',');
   dump('split', v);
-  n := SVecJoin(v, ',', joined);
+  n := v.Join(',', joined);
   writeln('joined: [', joined, '] ', n:1);
-  SVecClear(v);
-  SVecSplit(v, '', ',');
-  writeln('split of empty: ', SVecLen(v):1, ' [', SVecGet(v, 1), ']');
-  SVecClear(v);
-  for i := 1 to 10 do SVecPush(v, 'abcdefgh');
-  n := SVecJoin(v, '-', joined);
+  v.Clear;
+  v.Split('', ',');
+  writeln('split of empty: ', v.Len:1, ' [', v.At(1), ']');
+  v.Clear;
+  for i := 1 to 10 do v.Push('abcdefgh');
+  n := v.Join('-', joined);
   writeln('truncated join: length ', length(joined):1, ' of ', n:1,
           ' fits=', n <= joined.capacity);
 
   { --- sort: order, stability, and a size past the insertion cutoff --- }
-  SVecClear(v);
+  v.Clear;
   for i := 1 to 20 do
-    SVecPush(v, 'k' + chr(ord('a') + (i * 7) mod 5) + ' #' + chr(ord('0') + i mod 10));
-  SVecSort(v);
+    v.Push('k' + chr(ord('a') + (i * 7) mod 5) + ' #' + chr(ord('0') + i mod 10));
+  v.Sort;
   dump('sorted', v);
   ok := true;
-  for i := 2 to SVecLen(v) do
-    if SVecGet(v, i) < SVecGet(v, i - 1) then ok := false;
+  for i := 2 to v.Len do
+    if v.At(i) < v.At(i - 1) then ok := false;
   writeln('ascending: ', ok);
   SVecNew(w, 4);
-  SVecSort(w);
-  SVecPush(w, 'only');
-  SVecSort(w);
+  w.Sort;
+  w.Push('only');
+  w.Sort;
   dump('tiny', w);
-  SVecFree(w);
+  w.Free;
   writeln('freed: ', w = nil);
 
   { --- a file's lines, through a nested procedure --- }
@@ -90,11 +90,11 @@ begin
   writeln('wrote: ',
           WriteAllText(p, 'pear' + chr(10) + 'apple' + chr(10) + 'fig'
                        + chr(10)));
-  SVecClear(v);
+  v.Clear;
   ok := ForEachLine(p, buf, keep);
   dump('read', v);
-  SVecSort(v);
-  n := SVecJoin(v, ' < ', joined);
+  v.Sort;
+  n := v.Join(' < ', joined);
   writeln('sorted lines: ', joined);
-  SVecFree(v)
+  v.Free
 end.

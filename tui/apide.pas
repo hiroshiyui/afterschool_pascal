@@ -311,17 +311,17 @@ begin
     EditSay(ed, 'this document has no name -- Ctrl-S to give it one');
     exit
   end;
-  e := NewArgs(v);
-  if e = errNone then e := AddArg(v, Compiler);
-  if e = errNone then e := AddArg(v, EditName(ed));
-  if e = errNone then e := AddArg(v, '-o');
-  if e = errNone then e := AddArg(v, Sink);
+  e := v.Init;
+  if e = errNone then e := v.Add(Compiler);
+  if e = errNone then e := v.Add(EditName(ed));
+  if e = errNone then e := v.Add('-o');
+  if e = errNone then e := v.Add(Sink);
   if e <> errNone then begin
     EditSay(ed, 'could not build the command');
     exit
   end;
   out := '';
-  r := ExecuteInto(v, out);
+  r := v.ExecuteInto(out);
   if not r.ok then begin
     EditSay(ed, 'could not run ' + Compiler + ': ' + ErrorText(r.cause));
     exit

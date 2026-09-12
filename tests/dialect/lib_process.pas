@@ -57,17 +57,17 @@ begin
 
   SVecNew(names, 2);
   report('lines', CaptureLines('printf ''x\n\ny''', names));
-  for i := 1 to SVecLen(names) do
-    writeln('  ', i:1, ': [', SVecGet(names, i), ']');
-  SVecClear(names);
+  for i := 1 to names.Len do
+    writeln('  ', i:1, ': [', names.At(i), ']');
+  names.Clear;
   { a directory of the harness's own, listed through the shell }
   dir := binding(fresh).name + '.d';
   r := Run('rm -rf ' + dir + ' && mkdir ' + dir + ' && touch ' + dir + '/b ' + dir + '/a ' + dir + '/c');
   report('listing', CaptureLines('ls -1 ' + dir, names));
-  for i := 1 to SVecLen(names) do
-    writeln('  ', SVecGet(names, i));
+  for i := 1 to names.Len do
+    writeln('  ', names.At(i));
   r := Run('rm -rf ' + dir);
-  SVecFree(names);
+  names.Free;
 
   { **The process identifier, pinned against the operating system rather
     than against a golden.** A number that differs on every run cannot be

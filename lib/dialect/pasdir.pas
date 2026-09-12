@@ -184,7 +184,7 @@ begin
   if e = errNone then begin
     e := NextEntry(d, nm);
     while e = errNone do begin
-      if (nm <> '.') and (nm <> '..') then SVecPush(names, nm);
+      if (nm <> '.') and (nm <> '..') then names.Push(nm);
       e := NextEntry(d, nm)
     end;
     { reaching the end is how a listing succeeds }

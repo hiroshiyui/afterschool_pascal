@@ -78,7 +78,7 @@ begin
   writeln('made          = ', ErrorText(e));
   SVecNew(names, 8);
   writeln('empty list    = ', ErrorText(ListDir(d, names)));
-  writeln('empty count   = ', SVecLen(names):1);
+  writeln('empty count   = ', names.Len:1);
 
   { ...which is not the same as having no entries at all: `.` and `..` are
     there, and `NextEntry` gives them where `ListDir` leaves them out. }
@@ -90,18 +90,18 @@ begin
   make(d + '/beta');
   e := MakeDirectory(d + '/sub');
 
-  SVecClear(names);
+  names.Clear;
   writeln('list          = ', ErrorText(ListDir(d, names)));
-  writeln('count         = ', SVecLen(names):1);
-  SVecSort(names);
-  for k := 1 to SVecLen(names) do
-    writeln('  [', k:1, '] ', SVecGet(names, k));
+  writeln('count         = ', names.Len:1);
+  names.Sort;
+  for k := 1 to names.Len do
+    writeln('  [', k:1, '] ', names.At(k));
 
   { What an entry *is* comes from PasFS and not from here: `d_type` is not
     POSIX, so the module answers a name and the caller composes one `stat`. }
-  for k := 1 to SVecLen(names) do begin
-    fi := Info(d + '/' + SVecGet(names, k));
-    write('  kind ', SVecGet(names, k), ' = ');
+  for k := 1 to names.Len do begin
+    fi := Info(d + '/' + names.At(k));
+    write('  kind ', names.At(k), ' = ');
     if not fi.ok then writeln(ErrorText(fi.cause))
     else if fi.val.kind = fkDirectory then writeln('directory')
     else if fi.val.kind = fkRegular then writeln('regular')
@@ -156,5 +156,5 @@ begin
   e := Remove(d + '/gamma');
   e := RemoveDirectory(d + '/sub');
   writeln('removed       = ', ErrorText(RemoveDirectory(d)));
-  SVecFree(names)
+  names.Free
 end.

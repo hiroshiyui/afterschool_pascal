@@ -1,7 +1,8 @@
 { PasList -- a sequence of strings the block that declares it owns.
 
   Every other container here is freed by hand: `VecNew` and `VecFree`,
-  `SVecNew` and `SVecFree`, and a program that forgets the second leaks. This
+  `SVecNew` and `StrVecPtr`'s `Free`, and a program that forgets the second
+  leaks. This
   one has no `Free` at all, and cannot need one. The head is an `owned ^` (AP
   6.4.14, ADR-0181), so the chain is disposed when the variable holding it
   ceases to exist -- at the end of the block, on a `goto` out of it, on
