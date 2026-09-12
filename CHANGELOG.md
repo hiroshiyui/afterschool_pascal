@@ -43,6 +43,46 @@ appears below in the release where it still existed.
   for the reason above; the three TOML cases answer their goldens unchanged,
   which is what says the rewrite moved no behaviour.
 
+- **Eight more library modules read as methods of their types** (AP 6.7.10).
+  `PasVector` exports 4 names where it exported 15, `PasMap` 6 of 16,
+  `PasStrVec` 6 of 19, `PasRegex` 20 of 31, `PasProcess` 12 of 22, `PasNet` 10
+  of 14, `PasTls` 16 of 20 and `PasHttp` 27 of 38 — with `PasJson` and
+  `PasToml`, **157 exported names where there were 284**. A vector is
+  `v.Push(x)`, `v.At(i)` and `v.Len`; a socket and a TLS connection both have
+  `Close`, `WriteText`, `WriteLine` and `ReadLine`; a match is
+  `m.GroupInto(1, s)`. **Every caller must change**, and the old spellings are
+  gone rather than deprecated, for the reason given above.
+
+  Five spellings could not simply lose a prefix and the compiler said so:
+  `IVecSet`/`SVecSet` are `Put` (§6.1.2 reserves `set`) and `BeginRequest`/
+  `BeginResponse` are `BeginWrite`/`BeginRead` (it reserves `begin`);
+  `RegexFaultOf`, `RegexGroups` and `RegexSteps` are `FaultOf`, `GroupCount`
+  and `StepCount`, each beside a field of that spelling; and `RegexFaultText`
+  is `RegexFault`'s own `Text`, an enumerated type being able to carry an
+  implementation. Nine receivers gained `protected var`: §6.7.3.1's advice is
+  deferred for an exported routine and fires on a method.
+
+  **`PasFile` is deliberately unconverted**, and so are `PasProcess`'s `Run`,
+  `Capture` and `CaptureLines` and `PasNet`'s `NetWait`: their first parameter
+  is a type produced from a schema, or a schema, and neither may carry an
+  inherent implementation.
+
+- **At most one implementation of a type per *program*** (ADR-0413,
+  AP 6.7.10). The rule said *in a program-component*, which every component
+  satisfies separately — so the language permitted two modules each giving one
+  type routines of its own, and no program that imports both can be given a
+  meaning. The library rule that follows: a module must not implement a type it
+  does not declare.
+
+  One thing it **does** change about what the compiler accepts: an
+  **inherent** implementation for a type produced from a schema is now refused,
+  `a type produced from schema 'string' is the same type wherever it is
+  written, so it cannot carry an implementation of its own`. 6.4.7 interns a
+  production by its tuple, so routines of its own would be routines of every
+  `string(255)` in the program. The **trait** form is unaffected — `impl
+  Sortable for Name` over a string-type of one's own is what that facility is
+  for, and three cases in the corpus rely on it.
+
 ### Fixed
 
 - **A method-designator selects from its receiver and not from the scope**

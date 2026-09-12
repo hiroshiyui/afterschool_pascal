@@ -3189,9 +3189,9 @@ over MCP from whatever drives the model.
   control (AP 6.9.3.12), and `fork` in a process with more than one leaves the
   child holding a lock nothing will unlock. The `p` form searches `PATH`,
   which is what a driver needs.
-- **`DropArgs` is the way back out of a guess.** A builder that walks a
+- **`ArgV.Drop` is the way back out of a guess.** A builder that walks a
   workspace trying `.components` sidecars gets all but one of them wrong;
-  `ArgsLen` is the mark and `DropArgs` the reset. `take` moves a handle — that
+  `v.Len` is the mark and `v.Drop` the reset. `take` moves a handle — that
   was probed too — but a move replaces where an append was wanted.
 - **The empty vector is guarded twice and neither guard is spare.**
   AP 6.4.12.3 makes lending an empty handle to a foreign routine a run-time
@@ -3199,8 +3199,8 @@ over MCP from whatever drives the model.
   stopped program; the C checks because it is C. Removing the Pascal one is
   what the compiler refused, in those words.
 - **Five entry points because nobody can write `2>&1` any more.**
-  `ExecuteInto` leaves standard error alone as `Capture` does; `ExecuteBoth`,
-  `ExecuteLines` and `ExecuteToFile` join it, each answering *what did this
+  `v.ExecuteInto` leaves standard error alone as `Capture` does;
+  `v.ExecuteBoth`, `v.ExecuteLines` and `v.ExecuteToFile` join it, each answering *what did this
   command report*, whose answer is on both streams.
 - **`Run` stays.** A pipeline and a redirection are what a shell is for. The
   rule is at the routine: prefer `Execute` wherever any part of the command
@@ -3208,11 +3208,11 @@ over MCP from whatever drives the model.
 - **A boundary answers; it does not stop** (ADR-0363). The audit of the day it
   landed found six things, four of them older than it. `chr(0)` in a word or a
   path is `errSyntax` at the routine, where ADR-0122's trap had stopped the
-  language server on one request. `ExecuteToFile` opens with `O_NOFOLLOW`, and
+  language server on one request. `v.ExecuteToFile` opens with `O_NOFOLLOW`, and
   `pasls` works in a `mkdtemp` directory of its own (`PasFS.TemporaryDirectory`)
   taken away at `exit` — the fallback when none can be made is
   `/dev/null/doc.pas`, a path nothing can create, never the old guessable
-  name. `Deadline(v, seconds)` kills the child and closes the pipe on expiry,
+  name. `v.Deadline(seconds)` kills the child and closes the pipe on expiry,
   so a grandchild holding the write end cannot hold this side; reading is
   `poll` over the runtime's own buffer because a `FILE` reads ahead. Pipes and
   sockets are `FD_CLOEXEC`, and every `fopen` in the ISO C unit carries the
@@ -3277,8 +3277,8 @@ wanted.
   statement and its last nothing can close a socket, so the question does not
   arise: ADR-0187's *an ownership question is only a question while something
   holds the address*, a second time.
-- **Readiness is two questions and `poll` answers one of them.** `NetReadLine`
-  buffers, so a client sending two lines in one write leaves the second in the
+- **Readiness is two questions and `poll` answers one of them.**
+  `Socket.ReadLine` buffers, so a client sending two lines in one write leaves the second in the
   runtime with the descriptor quiet. Asking only `poll` leaves a server
   sitting still holding a line it was handed — which is the mutation that
   argues for `pasx_socket_pending`, and why this is a call of the module
@@ -5430,9 +5430,12 @@ And not as a parameter: §6.7.3.4's procedural parameter cannot carry a handle,
 and a variant record over the two transports needs both types declared, which
 is the import again.
 
-So the grammar is exported and each transport is a caller. `BeginRequest` and
-`NextPiece` turn a `Request` into octets; `BeginResponse`, `WantsLine`,
-`FeedLine` and `FeedEnd` turn a sequence of lines into a `Response`. A
+So the grammar is exported and each transport is a caller. `Request`'s
+`BeginWrite` and `NextPiece` turn it into octets; `Response`'s `BeginRead`,
+`WantsLine`, `FeedLine` and `FeedEnd` turn a sequence of lines into one. Those
+six are methods since ADR-0413's batch and were `BeginRequest`, `NextPiece`,
+`BeginResponse` and the rest; `Begin` alone is a word-symbol, which is why the
+two openers are `BeginWrite` and `BeginRead` rather than dropping the prefix. A
 transport is twelve lines each way, and `lib/dialect/pashttps.pas` is those
 twenty-four over `PasTls`.
 
@@ -5442,7 +5445,7 @@ Three things are worth carrying out of it.
   The response's state lives in the `Response`, that record being built; the
   request's lives in a `RequestCursor` of its own, because `Send` takes the
   request `protected` and state inside it would take that away.
-- **`FeedEnd` is a routine because a close means three things.** Before a
+- **`FeedEnd` is a routine of its own because a close means three things.** Before a
   status-line it is `errAbsent` — no response, not a bad one; inside the header
   section or a chunked body it is `errSyntax`; in an uncounted body it is
   RFC 9112 §6.3 rule 6 working, `errNone` with `byClose`. Those three answers
@@ -5899,6 +5902,18 @@ through with no diagnostic, and ADR-0283's advice, which is supposed to be
 because that advice is never given about an **exported** routine and every
 routine of the shape in this tree was one.
 
+**Ten modules read this way now** — `PasJson`, `PasToml`, `PasVector`,
+`PasMap`, `PasStrVec`, `PasRegex`, `PasProcess`, `PasNet`, `PasTls` and
+`PasHttp` — exporting 157 names where they exported 284. The count is not the
+result; the collisions are. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are
+one spelling in every container here and `Close`, `WriteText`, `WriteLine` and
+`ReadLine` one spelling on both transports, each of which `export-unique` would
+have refused to two exported names. Five things stop a name simply losing its
+prefix and `lib/dialect/README.md` lists them, all five found by the compiler
+refusing: a word-symbol (`Set`, `Begin`), a **field** of the receiver spelled
+alike, a receiver wanting `protected var` because ADR-0283's advice is deferred
+only for an *exported* routine, a type produced from a schema, and a schema.
+
 **And the second library was cheap, which is the other half of the evidence.**
 `PasToml` was rewritten the same way the day after and found nothing: no
 compiler defect, no clause to amend, two name clashes the compiler named at
@@ -5915,6 +5930,33 @@ checked at the head of CheckCall and marked with ADR-0254's `nChecked` so
 CheckArguments leaves it alone. Undo the selection and `methods` fails with
 `argument 1 of 'len' is cell, but the value is link`, and nine library cases
 go with it.
+
+**One implementation per program, and a translation is what enforces it**
+(ADR-0413, AP 6.7.10 amended). ADR-0410 wrote the uniqueness requirement as *at
+most one inherent-implementation in a program-component*, which was the same
+sentence as *in a program* while an implementation was a fact about one
+translation. ADR-0411 made an implementation reach the clients of its module
+and nobody revisited it, so the document came to permit two modules each
+implementing one type -- each conforming, and no program able to import both,
+because 6.7.10.2 selects from the receiver's type and finds two candidates.
+The clause now says *in a program*, and the library rule that follows is one
+sentence: a module must not give an implementation to a type it does not
+declare. `lib/dialect/pashttps.pas` is the live case and keeps its prefixed
+names, its three routines each taking a `PasTls` connection first.
+
+What the processor enforces is stricter and Annex E.15 says so rather than the
+clause being written down to it: *at most one visible in this translation*,
+where visible is every component handed to it. A component is refused when a
+sibling that implements the same type is merely `--import`ed, though neither
+imports the other -- probed, and the safe direction, since refusing on
+reachability would need a summary of what each imported component implements
+and a `--import` gives this compilation a heading (ADR-0317's sentence one
+clause over). **The harness could not state any of this**: `tests/run_test.py`
+bailed with a message of its own when a component failed to translate and
+compared nothing, so the one refusal that can only happen while translating a
+component had no golden. It now compares against the case's `.err` when there
+is one, and `tests/dialect/impl_two_modules.pas` is what fails when the
+comparison is taken out.
 
 **The trait object carries its answer** (ADR-0409), which is increment C2 and
 the whole feature. A value of `dyn T` is a **box**: a two-word heap variable

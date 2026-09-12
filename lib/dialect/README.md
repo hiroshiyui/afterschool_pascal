@@ -48,13 +48,14 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Thirty-six exported routines take this
-shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
+**`ErrorCode`.** `errNone` is success. Thirty-six routines take this
+shape -- some of them methods since the conversion described below, the shape of
+an answer being no different for one: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
 `RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `StreamOpenRead`,
 `StreamOpenWrite`, `StreamOpenAppend`, `StreamWriteText`, `StreamWriteLine` and `StreamFlush`, `PasDir`'s
 `OpenDir`, `NextEntry` and `ListDir`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
-`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept`, `NetService`, `NetWriteText`,
-`NetWriteLine`, `NetReadLine` and `NetWait` — the four `Open`s included, because the stream or
+`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept`, `NetService` and `NetWait`,
+and `Socket`'s `WriteText`, `WriteLine` and `ReadLine` — the four `Open`s included, because the stream or
 directory they answer goes into the `var` parameter and what is left to return
 is whether the world refused.
 
@@ -135,11 +136,44 @@ prefix. **An implementation is outside that scope** (AP 6.7.10.5, ADR-0411),
 so a routine reached as `v.Free` is named by nothing a client imports and
 carries no prefix at all.
 
-Two modules read that way today. `PasJson` exports 25 names where it exported
-50 and `PasToml` 31 where it exported 59, and in each the byte buffer and the
-document node both have a `Free`, a `Len` and an `At` — three collisions
-`export-unique` would have refused to two exported names, which is what the
-construct is for (ADR-0412).
+Ten modules read that way today, and between them they export **157 names
+where they exported 284**: `PasJson` 25 of 50, `PasToml` 31 of 59, `PasVector`
+4 of 15, `PasMap` 6 of 16, `PasStrVec` 6 of 19, `PasRegex` 20 of 31,
+`PasProcess` 12 of 22, `PasNet` 10 of 14, `PasTls` 16 of 20 and `PasHttp` 27 of
+38. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are now spelled the same way
+in every container here, and `Close`, `WriteText`, `WriteLine` and `ReadLine`
+the same way on a socket and on a TLS connection — every one of them a
+collision `export-unique` would have refused to two exported names, which is
+what the construct is for (ADR-0412).
+
+**Five things stop a name simply losing its prefix, and every one of them was
+met converting these ten.** Each is the compiler saying so rather than a
+convention, so a converter finds them at the first compile:
+
+- **A word-symbol cannot be a method name.** §6.1.2 reserves `set` and
+  `begin`, so `IVecSet` and `SVecSet` are `Put`, and `PasHttp`'s
+  `BeginRequest` and `BeginResponse` are `BeginWrite` and `BeginRead`.
+- **A method and a *field* of the receiver's record are one name**, not just a
+  method and a parameter: `'fault' is already a field of regex, so '.fault'
+  would name two things`. `PasRegex`'s `RegexFaultOf`, `RegexGroups` and
+  `RegexSteps` are `FaultOf`, `GroupCount` and `StepCount` beside the `fault`,
+  `groups` and `steps` they read.
+- **A receiver nothing writes through wants `protected var`** (§6.7.3.1).
+  ADR-0283 defers that advice for an **exported** routine, so ceasing to
+  export a routine is what exposes it, and `warning-free` fails without the
+  word. It is a fixed point: protecting one receiver exposes the next, and in
+  two of these modules it reached the *clients'* parameters as well.
+- **A type produced from a schema cannot carry an inherent implementation**
+  (AP 6.7.10, ADR-0413). 6.4.7 interns a production by its tuple, so
+  `string(255)` is the same type in every module; routines of its own would be
+  routines of every `string(255)` anywhere. That is why `lib/pasfile.pas` is
+  **not** converted — its routines take a `FilePath`, which is one — and why
+  `PasProcess`'s `Run`, `Capture` and `CaptureLines`, which take a
+  `CommandLine`, stay exported. The *trait* form is unaffected and is how a
+  string-type of one's own becomes sortable or a map key.
+- **A schema itself cannot carry one either**, there being nothing to select
+  from until a discriminant is chosen: `PasNet.NetWait` takes a `SocketList`
+  and stays exported.
 
 What this does **not** license is dropping a prefix from an exported routine.
 The test is whether the name is reached through a receiver: `TomlParse` and the

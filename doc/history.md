@@ -10769,3 +10769,72 @@ That last one is a divergence not yet recorded: AP 6.7.10 says *at most one
 inherent-implementation in a program-component* and the compiler enforces *at
 most one visible in a translation*, refusing the second component even where it
 does not import the first.
+
+**Eight more modules, three of them at once, and the batch is what found the
+rules.** `PasVector`, `PasMap`, `PasStrVec`, `PasRegex`, `PasProcess`,
+`PasNet`, `PasTls` and `PasHttp` were converted in three independent passes.
+With `PasJson` and `PasToml` the ten now export **157 names where they exported
+284**, and the collisions §6.11.2 would have refused are the point of the
+count: `Free`, `Len`, `At`, `Get`, `Put` and `Count` are spelled the same way in
+every container here, and `Close`, `WriteText`, `WriteLine` and `ReadLine` the
+same way on a socket and on a TLS connection.
+
+**Five things stop a name simply losing its prefix**, and the compiler said so
+each time rather than a convention being remembered. A **word-symbol** cannot
+be a method name, so `IVecSet` and `SVecSet` are `Put` and `BeginRequest` and
+`BeginResponse` are `BeginWrite` and `BeginRead`. A method and a **field** of
+the receiver's record are one name — not just a method and a parameter, which
+was PasToml's lesson — so `RegexFaultOf`, `RegexGroups` and `RegexSteps` are
+`FaultOf`, `GroupCount` and `StepCount`. A receiver nothing writes through
+wants `protected var`, and **ceasing to export a routine is what exposes
+that**: ADR-0283 defers the advice for an exported routine, so nine receivers
+and four client parameters took the word and `warning-free` would have failed
+without it — a fixed point, as that record says. An **enumerated type can carry
+an implementation**, probed, so `RegexFaultText` is `RegexFault`'s own `Text`.
+And a **schema** cannot, there being nothing to select from until a discriminant
+is chosen, which is why `NetWait` keeps its name.
+
+**The fifth was a defect in the language, and it is the increment's finding.**
+`lib/pasfile.pas` looked like the third-best candidate — nine of fourteen
+exported names take a `FilePath` first — and `FilePath` is `string(255)`, a
+production of 6.4.7's schema, which that clause **interns by its tuple**. So
+`PasFile.FilePath` *is* `PasStrVec.StrItem`, *is* `PasJson.JsonName`, *is* every
+`string(255)` anyone declares. An implementation for it would have handed ten
+file routines to all of them, claimed by whichever component was translated
+first, and a second module wanting one could not have had it. AP 6.7.10 refused
+a schema and a subrange and said nothing about a production; it now refuses one
+for the **inherent** form, and `tests/dialect/methods_errors.pas` holds the
+refusal. The **trait** form is deliberately untouched — `impl Sortable for Name`
+over a string-type of one's own is what that facility exists for, and
+`traits.pas`, `lib_sortx` and `lib_container` all do it. The first attempt
+refused both and broke those three cases, which is the mutation written down:
+widen the refusal to the trait form and they fail while `methods_errors` still
+passes.
+
+**And the ownership rule turned out not to be one.** The plan for the network
+batch assumed a module may not implement a type another module owns; probing
+found that it may, and that the implementation is reachable from a client that
+never asked for it. What is refused is a **second** implementation — so
+`PasHttp`'s `Send`, `Receive` and `Exchange` and `PasHttps`'s three routines
+keep their exported names because `PasNet` and `PasTls` implement `Socket` and
+`Connection` themselves, and not because those modules own them. ADR-0413 is
+that distinction: AP 6.7.10's *at most one in a program-component* was too
+narrow to be a rule about meaning once ADR-0411 made an implementation reach a
+module's clients, the clause now says *in a program*, and Annex E.15 records
+that the processor enforces the stricter *visible in this translation* —
+refusing a component whose sibling implements the same type though neither
+imports the other.
+
+**`tests/run_test.py` could not state any of that.** It bailed with a message
+of its own when one of §6.13's components failed to translate and compared
+nothing, so the one refusal that can only happen while translating a component
+had no golden anywhere. It now compares against the case's `.err` when there is
+one, `tests/dialect/impl_two_modules.pas` is the case, and reverting the harness
+change is what makes it fail.
+
+**What is left.** `PasFile` and `PasTime` (2 of 35), `PasTerm` (1 of 29) and
+`PasContainer` (0 of 31, generic) are not candidates and now each have a reason
+rather than a measurement. `PasNet.NetService` is the one judgement call left
+open: its first parameter is a `Socket` and by the receiver test it is a method,
+and it keeps its name because it answers for the socket's identity in the system
+beside `NetAccept`.

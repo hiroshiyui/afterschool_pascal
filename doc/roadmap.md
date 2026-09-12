@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 937 cases green at `-O2` and at `-O0`.
+and the suite is 938 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
@@ -34,7 +34,7 @@ twice over (v3.7.0, ADR-0360 – ADR-0364).
 
 | | |
 | --- | --- |
-| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383) and 570 of the 605 corpus programs run there (ADR-0385) — the runtime is two translation units short of five, and ADR-0405 is what made that a smaller number than it was: the file model was never what the target lacked |
+| **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383) and 571 of the 606 corpus programs run there (ADR-0385) — the runtime is two translation units short of five, and ADR-0405 is what made that a smaller number than it was: the file model was never what the target lacked |
 | **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
