@@ -126,10 +126,16 @@ type
 
   { PasContainer's vector over `char`, which is what makes a string value
     unbounded. A caller never names `Vec` and never imports PasContainer: the
-    eight routines below are the whole of what it needs. It is the same type
-    `PasJson` calls `JsonChars` -- 6.4.7 interns a schema production per
-    tuple -- so a program holding both may pass one where the other is asked
-    for, which is a consequence of the language and not a promise made here. }
+    nine methods of `impl TomlChars` are the whole of what it needs.
+
+    **It is not the same type `PasJson` calls `JsonChars`**, and this comment
+    said it was until a probe was taken. 6.4.7 interns the *production*
+    `Vec(char)`, so both pointers have one domain; the pointer types are two
+    objects and ADR-0017's name equivalence keeps them apart, so a program
+    importing both modules is refused `cannot assign jsonchars to a variable
+    of type tomlchars`. That is also what lets each module carry an
+    implementation for its own buffer: one type, one implementation
+    (AP 6.7.10, ADR-0413), and these are two types. }
   TomlChars = ^Vec(char);
 
   { 6.4.3.4's record, and the two things TOML has that it has not.
