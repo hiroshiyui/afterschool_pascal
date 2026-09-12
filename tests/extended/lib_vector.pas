@@ -19,52 +19,52 @@ begin
   { grows from 1 through 2, 4, 8, 16 -- five reallocations, and every element
     written before them is still there afterwards }
   IVecNew(v, 1);
-  writeln('empty len=', IVecLen(v):1, ' cap=', IVecCap(v):1);
+  writeln('empty len=', v.Len:1, ' cap=', v.Cap:1);
   for i := 1 to 10 do
-    IVecPush(v, i * i);
-  writeln('len=', IVecLen(v):1, ' cap=', IVecCap(v):1);
-  for i := 1 to IVecLen(v) do
-    write(IVecGet(v, i):1, ' ');
+    v.Push(i * i);
+  writeln('len=', v.Len:1, ' cap=', v.Cap:1);
+  for i := 1 to v.Len do
+    write(v.Get(i):1, ' ');
   writeln;
-  writeln('sum=', IVecSum(v):1);
+  writeln('sum=', v.Sum:1);
 
   { pop is the inverse, and the length is what it moves }
-  writeln('pop=', IVecPop(v):1, ' pop=', IVecPop(v):1, ' len=', IVecLen(v):1);
+  writeln('pop=', v.Pop:1, ' pop=', v.Pop:1, ' len=', v.Len:1);
 
-  { set and get address the same storage }
-  IVecSet(v, 1, 100);
-  writeln('a1=', IVecGet(v, 1):1);
+  { put and get address the same storage }
+  v.Put(1, 100);
+  writeln('a1=', v.Get(1):1);
 
   { reserve grows once and no push after it reallocates }
   IVecNew(w, 2);
-  IVecReserve(w, 50);
-  writeln('reserved cap=', IVecCap(w):1);
+  w.Reserve(50);
+  writeln('reserved cap=', w.Cap:1);
   for i := 1 to 50 do
-    IVecPush(w, i);
-  writeln('after 50 pushes cap=', IVecCap(w):1, ' len=', IVecLen(w):1);
+    w.Push(i);
+  writeln('after 50 pushes cap=', w.Cap:1, ' len=', w.Len:1);
 
   { reserve never shrinks }
-  IVecReserve(w, 4);
-  writeln('reserve(4) leaves cap=', IVecCap(w):1);
+  w.Reserve(4);
+  writeln('reserve(4) leaves cap=', w.Cap:1);
 
   { clear keeps the storage }
-  IVecClear(w);
-  writeln('cleared len=', IVecLen(w):1, ' cap=', IVecCap(w):1);
+  w.Clear;
+  writeln('cleared len=', w.Len:1, ' cap=', w.Cap:1);
 
   { fill sets both the length and the contents }
-  IVecFill(w, 5, 7);
+  w.Fill(5, 7);
   sum := 0;
-  for i := 1 to IVecLen(w) do
-    sum := sum + IVecGet(w, i);
-  writeln('filled len=', IVecLen(w):1, ' sum=', sum:1);
+  for i := 1 to w.Len do
+    sum := sum + w.Get(i);
+  writeln('filled len=', w.Len:1, ' sum=', sum:1);
 
   { popping an empty vector answers 0 and stays empty }
-  IVecClear(w);
-  writeln('pop empty=', IVecPop(w):1, ' len=', IVecLen(w):1);
+  w.Clear;
+  writeln('pop empty=', w.Pop:1, ' len=', w.Len:1);
 
-  IVecFree(v);
-  IVecFree(w);
+  v.Free;
+  w.Free;
   { freeing nil is harmless, which is what lets a caller free unconditionally }
-  IVecFree(w);
+  w.Free;
   writeln('freed')
 end.

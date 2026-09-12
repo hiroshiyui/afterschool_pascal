@@ -25,8 +25,8 @@ begin
   if c <> errNone then
     writeln('compile ', ErrorText(c))
   else
-    writeln(yes, '=', RegexMatches(r, yes), '  ', no, '=', RegexMatches(r, no),
-            '  code=', RegexLength(r):1)
+    writeln(yes, '=', r.Matches(yes), '  ', no, '=', r.Matches(no),
+            '  code=', r.Length:1)
 end;
 
 { Every way a pattern can be bad: the code a caller branches on, the position
@@ -36,7 +36,7 @@ var c: ErrorCode; p: integer; r: Regex;
 begin
   c := RegexCompile(r, pat, p);
   writeln(pat, ' ':10 - length(pat), '| ', ErrorText(c), ' at ', p:1,
-          ': ', RegexFaultText(RegexFaultOf(r)))
+          ': ', r.FaultOf.Text)
 end;
 
 begin
@@ -62,24 +62,24 @@ begin
     there somewhere else in it -- which is the only way to tell an anchor
     from a literal that happens not to occur. }
   e := RegexCompile(re, '^ab', at);
-  writeln('^ab       | in abx=', RegexSearch(re, 'abx', m),
-          '  in xab=', RegexSearch(re, 'xab', m));
+  writeln('^ab       | in abx=', re.Search('abx', m),
+          '  in xab=', re.Search('xab', m));
   e := RegexCompile(re, 'ab$', at);
-  writeln('ab$       | in xab=', RegexSearch(re, 'xab', m),
-          '  in abx=', RegexSearch(re, 'abx', m));
+  writeln('ab$       | in xab=', re.Search('xab', m),
+          '  in abx=', re.Search('abx', m));
   e := RegexCompile(re, '^$', at);
-  writeln('^$        | in empty=', RegexSearch(re, '', m),
-          '  in a=', RegexSearch(re, 'a', m));
+  writeln('^$        | in empty=', re.Search('', m),
+          '  in a=', re.Search('a', m));
 
   { --- a search reports where it began and ended ------------------------- }
   e := RegexCompile(re, '[0-9]+', at);
-  if RegexSearch(re, 'x 12 y 345', m) then
+  if re.Search('x 12 y 345', m) then
     writeln('search    | start=', m.start:1, ' stop=', m.stop:1);
   { and it can be walked to the end of the subject }
   write('walk      |');
   i := 1;
-  while RegexSearchFrom(re, 'a12b345c6', i, m) do begin
-    e := RegexGroupInto(m, 'a12b345c6', 0, s);
+  while re.SearchFrom('a12b345c6', i, m) do begin
+    e := m.GroupInto('a12b345c6', 0, s);
     write(' ', s);
     if m.stop > m.start then i := m.stop else i := m.stop + 1
   end;
@@ -87,27 +87,27 @@ begin
 
   { --- capture, which the construction affords in bounded time ----------- }
   e := RegexCompile(re, '(\w+)=([0-9]+)', at);
-  writeln('capture   | groups=', RegexGroups(re):1);
-  if RegexSearch(re, 'set width=1920 now', m) then begin
-    e := RegexGroupInto(m, 'set width=1920 now', 1, s);
+  writeln('capture   | groups=', re.GroupCount:1);
+  if re.Search('set width=1920 now', m) then begin
+    e := m.GroupInto('set width=1920 now', 1, s);
     write('          | 1=[', s, ']');
-    e := RegexGroupInto(m, 'set width=1920 now', 2, s);
+    e := m.GroupInto('set width=1920 now', 2, s);
     write(' 2=[', s, ']');
-    e := RegexGroupInto(m, 'set width=1920 now', 0, s);
+    e := m.GroupInto('set width=1920 now', 0, s);
     writeln(' 0=[', s, ']');
     { A group that does not fit is reported and nothing is written, which is
       the other direction of the same guard. }
-    e := RegexGroupInto(m, 'set width=1920 now', 1, tiny);
+    e := m.GroupInto('set width=1920 now', 1, tiny);
     writeln('into tiny | ', ErrorText(e))
   end;
   { A group in an alternative that was not taken took no part, and says so
     with 0 rather than with an empty span at some position it never reached. }
   e := RegexCompile(re, '(x)|(y)', at);
-  if RegexSearch(re, 'y', m) then begin
-    e := RegexGroupInto(m, 'y', 1, s);
-    writeln('untaken   | 1 start=', RegexGroupStart(m, 1):1,
+  if re.Search('y', m) then begin
+    e := m.GroupInto('y', 1, s);
+    writeln('untaken   | 1 start=', m.GroupStart(1):1,
             ' code=', ErrorText(e),
-            '  2 start=', RegexGroupStart(m, 2):1)
+            '  2 start=', m.GroupStart(2):1)
   end;
 
   { --- every way a pattern can be bad ------------------------------------ }
@@ -129,14 +129,14 @@ begin
   for i := 1 to 400 do big := big + 'ab';
   e := RegexCompile(re, big, at);
   writeln('800 chars | ', ErrorText(e), ' at ', at:1, ': ',
-          RegexFaultText(RegexFaultOf(re)));
+          re.FaultOf.Text);
   e := RegexCompile(re, '(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)', at);
   writeln('10 groups | ', ErrorText(e), ' at ', at:1, ': ',
-          RegexFaultText(RegexFaultOf(re)));
+          re.FaultOf.Text);
   { A pattern that was refused matches nothing, so a caller that ignored the
     code above gets no match rather than a wrong one. }
-  writeln('refused   | matches=', RegexMatches(re, 'abcdefghij'),
-          ' searches=', RegexSearch(re, 'abcdefghij', m));
+  writeln('refused   | matches=', re.Matches('abcdefghij'),
+          ' searches=', re.Search('abcdefghij', m));
 
   { --- why this module is not a backtracking matcher ---------------------- }
   { `(a|a)*b` against a run of a's with no b is the standard demonstration: a
@@ -151,14 +151,14 @@ begin
   e := RegexCompile(re, '(a|a)*b', at);
   big := '';
   for i := 1 to 2000 do big := big + 'a';
-  writeln('blowup    | match=', RegexMatches(re, big),
+  writeln('blowup    | match=', re.Matches(big),
           ' within bound=',
-          RegexSteps(re) <= 2 * RegexLength(re) * (length(big) + 2));
+          re.StepCount <= 2 * re.Length * (length(big) + 2));
   { The other classic shape, and the same claim. }
   e := RegexCompile(re, 'a?a?a?a?a?a?a?a?a?a?aaaaaaaaaa', at);
   big := '';
   for i := 1 to 10 do big := big + 'a';
-  writeln('a?xN      | match=', RegexMatches(re, big),
+  writeln('a?xN      | match=', re.Matches(big),
           ' within bound=',
-          RegexSteps(re) <= 2 * RegexLength(re) * (length(big) + 2))
+          re.StepCount <= 2 * re.Length * (length(big) + 2))
 end.

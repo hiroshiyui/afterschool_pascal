@@ -13,7 +13,7 @@
   carrying every program counter that is still alive at the current byte. The
   set of live counters is deduplicated at each byte, so one byte costs at most
   one visit per instruction, and the run costs at most the length of the
-  program times the length of the subject. `RegexSteps` reports the visits the
+  program times the length of the subject. `StepCount` reports the visits the
   last run actually made, so the bound is a number a caller can assert rather
   than a promise it has to believe.
 
@@ -49,8 +49,8 @@
   **So capture is supported, and it is supported because the construction
   affords it in bounded time.** Each live thread carries the whole slot array,
   which multiplies the bound above by a constant -- `SlotMax`, twenty -- and
-  by nothing else. `RegexGroupStart`, `RegexGroupStop` and `RegexGroupInto`
-  are the readers; group 0 is the whole match, so the same three routines
+  by nothing else. `GroupStart`, `GroupStop` and `GroupInto` are the readers
+  of a `RegexMatch`; group 0 is the whole match, so the same three routines
   answer for it.
 
   One capture answer here differs from a backtracking library's, and it is the
@@ -125,6 +125,31 @@
 
 module PasRegex;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Twenty names are exported where thirty-one were:
+  `Regex`, `RegexMatch` and `RegexFault` each have an implementation in the
+  block below, and an implementation is selected from the *type* of the
+  receiver rather than from a name in scope (AP 6.7.10.2), so none of its
+  routines is an exported name and none can collide with another module's --
+  `Length`, `Search` and `Text` are all spellings a second module would want,
+  which is what the construct is for (ADR-0412).
+
+  The third of those is the one worth pointing at: `RegexFault` is an
+  enumerated type, and it carries `Text` because a receiver's *type* is all
+  the selection needs -- there is nothing about an implementation that wants a
+  record. `FaultText`, which stays exported, is the string type that method
+  answers and is not a routine at all.
+
+  Three of them could not simply drop the prefix: a method and a field of the
+  receiver's record are one name, so `RegexFaultOf` is `FaultOf` beside the
+  `fault` field it reads, and `RegexGroups` and `RegexSteps` are `GroupCount`
+  and `StepCount` beside `groups` and `steps`. The compiler says so rather
+  than letting the shorter spelling mean two things.
+
+  What stays exported is what has no receiver to be selected from: the types,
+  the three bounds, the twelve faults, and `RegexCompile`, which *produces* a
+  compiled pattern out of text rather than asking one about itself. }
+
 export PasRegex = (ProgMax, GroupMax, SlotMax,
                    RegexFault, rxNone, rxUnclosedGroup, rxUnopenedGroup,
                    rxDanglingRepeat, rxUnterminatedClass, rxEmptyClass,
@@ -132,11 +157,7 @@ export PasRegex = (ProgMax, GroupMax, SlotMax,
                    rxBackReference, rxPatternTooLong, rxTooManyGroups,
                    FaultText, Regex, RegexMatch,
 
-                   RegexCompile, RegexFaultOf, RegexFaultText,
-                   RegexGroups, RegexLength, RegexSteps,
-
-                   RegexMatches, RegexSearch, RegexSearchFrom,
-                   RegexGroupStart, RegexGroupStop, RegexGroupInto);
+                   RegexCompile);
 
 import PasError;
 
@@ -215,7 +236,7 @@ type
     n: integer;            { instructions in use; 0 after a failed compile }
     groups: integer;
     fault: RegexFault;
-    steps: integer;        { visits made by the last match, for RegexSteps }
+    steps: integer;        { visits made by the last match, for `StepCount` }
     code: array [1..ProgMax] of Inst
   end;
 
@@ -231,77 +252,14 @@ type
 
 { Compile `pat` into `re`. `errNone` and `re` is ready; otherwise `re` matches
   nothing, `at` is the 1-based position in `pat` where the trouble was
-  noticed, and `RegexFaultOf(re)` says which trouble it was. On success `at`
-  is one past the end of the pattern.
+  noticed, and `re.FaultOf` says which trouble it was. On success `at` is
+  one past the end of the pattern.
 
   The code is the category: `errSyntax` for a pattern that is not one,
   `errRange` for a back-reference -- well formed, and outside what a bounded
   matcher can represent -- and `errFull` for one of this module's own
   capacities. }
 function RegexCompile(var re: Regex; pat: string; var at: integer): ErrorCode;
-
-{ Why the last compile failed, or `rxNone`. }
-function RegexFaultOf(var re: Regex): RegexFault;
-
-{ A sentence for a fault, for a caller assembling a message. `rxNone` has one
-  too, for the same reason `PasError.ErrorText` gives `errNone` one. }
-function RegexFaultText(f: RegexFault): FaultText;
-
-{ How many capturing groups the pattern has, which is the largest `n` the
-  three group readers will answer for. }
-function RegexGroups(var re: Regex): integer;
-
-{ How many instructions it compiled to -- the other half of the bound below,
-  and how a caller sees how much of `ProgMax` a pattern spent. }
-function RegexLength(var re: Regex): integer;
-
-{ Instruction visits made by the last match or search on this `Regex`.
-
-  This is the claim the construction is here for, and it is a number rather
-  than a sentence so that a test can assert it:
-
-      RegexSteps(re) <= 2 * RegexLength(re) * (length(s) + 2)
-
-  for every pattern and every subject, with no exceptions and no pattern that
-  is the bad case. }
-function RegexSteps(var re: Regex): integer;
-
-{ Whether the whole of `s` matches -- not a prefix of it and not a part.
-  A pattern that has an alternative reaching the end of `s` matches, even
-  where an earlier alternative matched a shorter prefix, so this asks what it
-  says rather than asking whether the leftmost match happens to cover `s`. }
-function RegexMatches(var re: Regex; s: string): boolean;
-
-{ The leftmost match in `s`, reported in `m`. False when there is none, and
-  `m` is then all zeroes.
-
-  Leftmost first: among the matches beginning at the earliest position, the
-  one the pattern's alternatives reach first wins, with a repeat preferring to
-  match. This is the rule a person reading `a|ab` expects, and it is not the
-  longest match. }
-function RegexSearch(var re: Regex; s: string; var m: RegexMatch): boolean;
-
-{ The same, beginning the search at byte `from`, which is how a caller walks
-  every match: search again from `m.stop`, and from `m.stop + 1` when the
-  match was empty, or a pattern that can match nothing will not advance. }
-function RegexSearchFrom(var re: Regex; s: string; from: integer;
-                         var m: RegexMatch): boolean;
-
-{ Where group `n` began and ended in the subject, `n` = 0 being the whole
-  match. 0 from both when the group took no part in the match -- which is an
-  ordinary answer for a group inside an alternative that was not taken, and is
-  why the two are asked rather than a length being offered. }
-function RegexGroupStart(var m: RegexMatch; n: integer): integer;
-function RegexGroupStop(var m: RegexMatch; n: integer): integer;
-
-{ The text of group `n`, copied out of the subject it was matched against.
-  `errAbsent` when the group took no part, `errFull` when the text does not
-  fit `out`, and `out` is untouched unless the answer is `errNone`. The
-  subject must be the one the match was made against; nothing here remembers
-  it, because a copy of the subject in every match record is a copy of a
-  document per match. }
-function RegexGroupInto(var m: RegexMatch; s: string; n: integer;
-                        var out: string): ErrorCode;
 
 end;
 
@@ -322,22 +280,27 @@ begin
   end
 end;
 
-function RegexFaultText;
-begin
-  case f of
-    rxNone:              RegexFaultText := 'no fault';
-    rxUnclosedGroup:     RegexFaultText := 'a group is not closed';
-    rxUnopenedGroup:     RegexFaultText := 'a group is closed that never opened';
-    rxDanglingRepeat:    RegexFaultText := 'a repeat with nothing to repeat';
-    rxUnterminatedClass: RegexFaultText := 'a character class is not closed';
-    rxEmptyClass:        RegexFaultText := 'a character class with nothing in it';
-    rxBadRange:          RegexFaultText := 'a range that runs backwards';
-    rxTrailingEscape:    RegexFaultText := 'the pattern ends in an escape';
-    rxUnknownEscape:     RegexFaultText := 'an escape with no meaning';
-    rxBackReference:     RegexFaultText := 'a back reference has no bounded match';
-    rxPatternTooLong:    RegexFaultText := 'the pattern needs more instructions than there are';
-    rxTooManyGroups:     RegexFaultText := 'more groups than can be captured'
-  end
+impl RegexFault;
+
+  { A sentence for a fault, for a caller assembling a message. `rxNone` has one
+    too, for the same reason `PasError.ErrorText` gives `errNone` one. }
+  function Text(f: RegexFault): FaultText;
+  begin
+    case f of
+      rxNone:              Text := 'no fault';
+      rxUnclosedGroup:     Text := 'a group is not closed';
+      rxUnopenedGroup:     Text := 'a group is closed that never opened';
+      rxDanglingRepeat:    Text := 'a repeat with nothing to repeat';
+      rxUnterminatedClass: Text := 'a character class is not closed';
+      rxEmptyClass:        Text := 'a character class with nothing in it';
+      rxBadRange:          Text := 'a range that runs backwards';
+      rxTrailingEscape:    Text := 'the pattern ends in an escape';
+      rxUnknownEscape:     Text := 'an escape with no meaning';
+      rxBackReference:     Text := 'a back reference has no bounded match';
+      rxPatternTooLong:    Text := 'the pattern needs more instructions than there are';
+      rxTooManyGroups:     Text := 'more groups than can be captured'
+    end
+  end;
 end;
 
 { The first fault is the one reported. A later one is a consequence of it, and
@@ -922,74 +885,123 @@ begin
   Run := matched
 end;
 
-function RegexMatches;
-var m: RegexMatch;
-begin
-  RegexMatches := Run(re, s, 1, true, true, m)
+{ --- reading a Regex ------------------------------------------------------ }
+
+impl Regex;
+
+  { Why the last compile failed, or `rxNone`. }
+  function FaultOf(protected var re: Regex): RegexFault;
+  begin
+    FaultOf := re.fault
+  end;
+
+  { How many capturing groups the pattern has, which is the largest `n` the
+    three group readers will answer for. }
+  function GroupCount(protected var re: Regex): integer;
+  begin
+    GroupCount := re.groups
+  end;
+
+  { How many instructions it compiled to -- the other half of the bound
+    below, and how a caller sees how much of `ProgMax` a pattern spent. }
+  function Length(protected var re: Regex): integer;
+  begin
+    Length := re.n
+  end;
+
+  { Instruction visits made by the last match or search on this `Regex`.
+
+    This is the claim the construction is here for, and it is a number rather
+    than a sentence so that a test can assert it:
+
+        re.StepCount <= 2 * re.Length * (length(s) + 2)
+
+    for every pattern and every subject, with no exceptions and no pattern that
+    is the bad case. }
+  function StepCount(protected var re: Regex): integer;
+  begin
+    StepCount := re.steps
+  end;
+
+  { Whether the whole of `s` matches -- not a prefix of it and not a part.
+    A pattern that has an alternative reaching the end of `s` matches, even
+    where an earlier alternative matched a shorter prefix, so this asks what it
+    says rather than asking whether the leftmost match happens to cover `s`. }
+  function Matches(var re: Regex; s: string): boolean;
+  var m: RegexMatch;
+  begin
+    Matches := Run(re, s, 1, true, true, m)
+  end;
+
+  { The leftmost match in `s`, reported in `m`. False when there is none, and
+    `m` is then all zeroes.
+
+    Leftmost first: among the matches beginning at the earliest position, the
+    one the pattern's alternatives reach first wins, with a repeat preferring to
+    match. This is the rule a person reading `a|ab` expects, and it is not the
+    longest match. }
+  function Search(var re: Regex; s: string; var m: RegexMatch): boolean;
+  begin
+    Search := Run(re, s, 1, false, false, m)
+  end;
+
+  { The same, beginning the search at byte `from`, which is how a caller walks
+    every match: search again from `m.stop`, and from `m.stop + 1` when the
+    match was empty, or a pattern that can match nothing will not advance. }
+  function SearchFrom(var re: Regex; s: string; from: integer;
+                      var m: RegexMatch): boolean;
+  begin
+    SearchFrom := Run(re, s, from, false, false, m)
+  end;
 end;
 
-function RegexSearchFrom;
-begin
-  RegexSearchFrom := Run(re, s, from, false, false, m)
-end;
+{ --- reading a RegexMatch ------------------------------------------------- }
 
-function RegexSearch;
-begin
-  RegexSearch := Run(re, s, 1, false, false, m)
-end;
+impl RegexMatch;
 
-{ --- reading a Regex and a RegexMatch ------------------------------------- }
+  { Where group `n` began in the subject, `n` = 0 being the whole match. 0
+    when the group took no part in the match -- which is an ordinary answer for
+    a group inside an alternative that was not taken, and is why the beginning
+    and the end are asked separately rather than a length being offered. }
+  function GroupStart(protected var m: RegexMatch; n: integer): integer;
+  begin
+    if (n < 0) or (n > GroupMax) then GroupStart := 0
+    else GroupStart := m.slot[2 * n + 1]
+  end;
 
-function RegexFaultOf;
-begin
-  RegexFaultOf := re.fault
-end;
+  { Where group `n` ended, under the same rule as `GroupStart`. }
+  function GroupStop(protected var m: RegexMatch; n: integer): integer;
+  begin
+    if (n < 0) or (n > GroupMax) then GroupStop := 0
+    else GroupStop := m.slot[2 * n + 2]
+  end;
 
-function RegexGroups;
-begin
-  RegexGroups := re.groups
-end;
-
-function RegexLength;
-begin
-  RegexLength := re.n
-end;
-
-function RegexSteps;
-begin
-  RegexSteps := re.steps
-end;
-
-function RegexGroupStart;
-begin
-  if (n < 0) or (n > GroupMax) then RegexGroupStart := 0
-  else RegexGroupStart := m.slot[2 * n + 1]
-end;
-
-function RegexGroupStop;
-begin
-  if (n < 0) or (n > GroupMax) then RegexGroupStop := 0
-  else RegexGroupStop := m.slot[2 * n + 2]
-end;
-
-function RegexGroupInto;
-var a, b, k: integer;
-begin
-  a := RegexGroupStart(m, n);
-  b := RegexGroupStop(m, n);
-  if (a = 0) or (b = 0) or (b < a) then
-    RegexGroupInto := errAbsent
-  else if b - a > out.capacity then
-    RegexGroupInto := errFull
-  else begin
-    { Built into `out` itself rather than through a local, which is
-      `JsonChars.Into`'s lesson: an accumulator of some other capacity makes
-      the guard above a claim about the wrong string. }
-    out := '';
-    for k := a to b - 1 do
-      out := out + s[k];
-    RegexGroupInto := errNone
-  end
+  { The text of group `n`, copied out of the subject it was matched against.
+    `errAbsent` when the group took no part, `errFull` when the text does not
+    fit `out`, and `out` is untouched unless the answer is `errNone`. The
+    subject must be the one the match was made against; nothing here remembers
+    it, because a copy of the subject in every match record is a copy of a
+    document per match. }
+  function GroupInto(protected var m: RegexMatch; s: string; n: integer;
+                     var out: string): ErrorCode;
+  var a, b, k: integer;
+  begin
+    a := m.GroupStart(n);
+    b := m.GroupStop(n);
+    if (a = 0) or (b = 0) or (b < a) then
+      GroupInto := errAbsent
+    else if b - a > out.capacity then
+      GroupInto := errFull
+    else begin
+      { Built into `out` itself rather than through a local, which is
+        `JsonChars.Into`'s lesson: an accumulator of some other capacity makes
+        the guard above a claim about the wrong string. }
+      out := '';
+      for k := a to b - 1 do
+        out := out + s[k];
+      GroupInto := errNone
+    end
+  end;
 end;
 
 end.

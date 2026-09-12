@@ -21,9 +21,24 @@
 
 module PasVector;
 
-export PasVector = (IntVec, IVecPtr, IVecCapMax,
-                    IVecNew, IVecFree, IVecPush, IVecPop, IVecGet, IVecSet,
-                    IVecLen, IVecCap, IVecClear, IVecReserve, IVecFill, IVecSum);
+{ **What a client is given is the type, and the type carries its routines**
+  (AP 6.7.10.5, ADR-0411). Four names are exported where fifteen were:
+  `IVecPtr` has an implementation in the block below, and an implementation is
+  selected from the *type* of the receiver rather than from a name in scope
+  (AP 6.7.10.2), so none of its routines is an exported name and none can
+  collide with another module's. That is what retired the `IVec` prefix from
+  eleven of them: `IVecPush` became `Push` and `IVecLen` became `Len`, and
+  what makes the short spelling safe is that §6.11.2's one scope is never
+  reached.
+
+  `IVecSet` is the one that could not simply drop its prefix: §6.1.2 reserves
+  `set`, so the store is spelled `Put`, as `PasToml`'s store into a table is.
+
+  What stays exported is what has no receiver to be selected from: the two
+  types, the bound, and `IVecNew`, which *produces* a vector rather than
+  acting on one. }
+
+export PasVector = (IntVec, IVecPtr, IVecCapMax, IVecNew);
 
 const
   { The largest capacity that may be asked for. Bounded so that doubling and
@@ -47,52 +62,10 @@ type
   because a library that halts is a library that cannot be tested. }
 procedure IVecNew(var v: IVecPtr; cap: integer);
 
-{ Release the storage and set `v` to nil. Passing a nil `v` is harmless. }
-procedure IVecFree(var v: IVecPtr);
-
-{ Append `x`, doubling the capacity when it is full. Silently does nothing once
-  the vector is at IVecCapMax and full -- the alternative is halting, and a caller
-  who cares can compare IVecLen before and after. }
-procedure IVecPush(var v: IVecPtr; x: integer);
-
-{ Remove and return the last element. The vector must not be empty; when it is,
-  the result is 0 and the length stays 0. }
-function IVecPop(var v: IVecPtr): integer;
-
-{ Element `i`, for `i` in 1..IVecLen(v). Outside that range the array's own
-  bounds check traps for `i` above the *capacity*, and for `i` between the
-  length and the capacity the value is whatever the storage last held --
-  unchecked, exactly as PasSort's `less` is unchecked, and for the same reason:
-  the check would cost every access and the precondition is the caller's. }
-function IVecGet(v: IVecPtr; i: integer): integer;
-
-{ Store `x` at `i`, under the same precondition as IVecGet. }
-procedure IVecSet(v: IVecPtr; i, x: integer);
-
-{ The number of live elements. }
-function IVecLen(v: IVecPtr): integer;
-
-{ The number that fit before the next growth. }
-function IVecCap(v: IVecPtr): integer;
-
-{ Forget every element without releasing the storage. }
-procedure IVecClear(var v: IVecPtr);
-
-{ Grow so that at least `want` elements fit, if that is more than fits now.
-  Never shrinks. A caller who knows the final size calls this once and no
-  push after it reallocates. }
-procedure IVecReserve(var v: IVecPtr; want: integer);
-
-{ Set the length to `count` and every element to `x`. Grows if needed. }
-procedure IVecFill(var v: IVecPtr; count, x: integer);
-
-{ The sum of the elements. Traps on overflow, as any addition here does. }
-function IVecSum(v: IVecPtr): integer;
-
 end;
 
 { The one place storage is allocated, so the one place a capacity is clamped.
-  Kept separate from IVecNew because IVecReserve needs it too and the clamp must
+  Kept separate from IVecNew because `Reserve` needs it too and the clamp must
   be the same both times. }
 procedure Claim(var v: IVecPtr; cap, keep: integer);
 var q: IVecPtr; i: integer;
@@ -107,97 +80,121 @@ begin
   v := q
 end;
 
+impl IVecPtr;
+
+  { Release the storage and set `v` to nil. Passing a nil `v` is harmless. }
+  procedure Free(var v: IVecPtr);
+  begin
+    if v <> nil then begin
+      dispose(v);
+      v := nil
+    end
+  end;
+
+  { Grow so that at least `want` elements fit, if that is more than fits now.
+    Never shrinks. A caller who knows the final size calls this once and no
+    push after it reallocates. }
+  procedure Reserve(var v: IVecPtr; want: integer);
+  begin
+    if want > v^.cap then
+      Claim(v, want, v^.n)
+  end;
+
+  { Append `x`, doubling the capacity when it is full. Silently does nothing
+    once the vector is at IVecCapMax and full -- the alternative is halting,
+    and a caller who cares can compare `Len` before and after. }
+  procedure Push(var v: IVecPtr; x: integer);
+  var want: integer;
+  begin
+    if v^.n = v^.cap then begin
+      { doubling, written so that the product is never formed above the type }
+      if v^.cap > IVecCapMax div 2 then want := IVecCapMax
+      else want := v^.cap * 2;
+      if want > v^.cap then
+        Claim(v, want, v^.n)
+    end;
+    if v^.n < v^.cap then begin
+      v^.n := v^.n + 1;
+      v^.a[v^.n] := x
+    end
+  end;
+
+  { Remove and return the last element. The vector must not be empty; when it
+    is, the result is 0 and the length stays 0. }
+  function Pop(var v: IVecPtr): integer;
+  begin
+    if v^.n = 0 then
+      Pop := 0
+    else begin
+      Pop := v^.a[v^.n];
+      v^.n := v^.n - 1
+    end
+  end;
+
+  { Element `i`, for `i` in 1..`v.Len`. Outside that range the array's own
+    bounds check traps for `i` above the *capacity*, and for `i` between the
+    length and the capacity the value is whatever the storage last held --
+    unchecked, exactly as PasSort's `less` is unchecked, and for the same
+    reason: the check would cost every access and the precondition is the
+    caller's. }
+  function Get(v: IVecPtr; i: integer): integer;
+  begin
+    Get := v^.a[i]
+  end;
+
+  { Store `x` at `i`, under the same precondition as `Get`. }
+  procedure Put(v: IVecPtr; i, x: integer);
+  begin
+    v^.a[i] := x
+  end;
+
+  { The number of live elements. }
+  function Len(v: IVecPtr): integer;
+  begin
+    Len := v^.n
+  end;
+
+  { The number that fit before the next growth. }
+  function Cap(v: IVecPtr): integer;
+  begin
+    Cap := v^.cap
+  end;
+
+  { Forget every element without releasing the storage. }
+  procedure Clear(var v: IVecPtr);
+  begin
+    v^.n := 0
+  end;
+
+  { Set the length to `count` and every element to `x`. Grows if needed. }
+  procedure Fill(var v: IVecPtr; count, x: integer);
+  var i: integer;
+  begin
+    if count < 0 then count := 0;
+    v.Reserve(count);
+    if count > v^.cap then count := v^.cap;
+    for i := 1 to count do
+      v^.a[i] := x;
+    v^.n := count
+  end;
+
+  { The sum of the elements. Traps on overflow, as any addition here does. }
+  function Sum(v: IVecPtr): integer;
+  var i, total: integer;
+  begin
+    total := 0;
+    for i := 1 to v^.n do
+      total := total + v^.a[i];
+    Sum := total
+  end;
+end;
+
 procedure IVecNew;
 begin
   if cap < 1 then cap := 1;
   if cap > IVecCapMax then cap := IVecCapMax;
   new(v, cap);
   v^.n := 0
-end;
-
-procedure IVecFree;
-begin
-  if v <> nil then begin
-    dispose(v);
-    v := nil
-  end
-end;
-
-procedure IVecPush;
-var want: integer;
-begin
-  if v^.n = v^.cap then begin
-    { doubling, written so that the product is never formed above the type }
-    if v^.cap > IVecCapMax div 2 then want := IVecCapMax
-    else want := v^.cap * 2;
-    if want > v^.cap then
-      Claim(v, want, v^.n)
-  end;
-  if v^.n < v^.cap then begin
-    v^.n := v^.n + 1;
-    v^.a[v^.n] := x
-  end
-end;
-
-procedure IVecReserve;
-begin
-  if want > v^.cap then
-    Claim(v, want, v^.n)
-end;
-
-function IVecPop;
-begin
-  if v^.n = 0 then
-    IVecPop := 0
-  else begin
-    IVecPop := v^.a[v^.n];
-    v^.n := v^.n - 1
-  end
-end;
-
-function IVecGet;
-begin
-  IVecGet := v^.a[i]
-end;
-
-procedure IVecSet;
-begin
-  v^.a[i] := x
-end;
-
-function IVecLen;
-begin
-  IVecLen := v^.n
-end;
-
-function IVecCap;
-begin
-  IVecCap := v^.cap
-end;
-
-procedure IVecClear;
-begin
-  v^.n := 0
-end;
-
-procedure IVecFill;
-var i: integer;
-begin
-  if count < 0 then count := 0;
-  IVecReserve(v, count);
-  if count > v^.cap then count := v^.cap;
-  for i := 1 to count do
-    v^.a[i] := x;
-  v^.n := count
-end;
-
-function IVecSum;
-var i, total: integer;
-begin
-  total := 0;
-  for i := 1 to v^.n do
-    total := total + v^.a[i];
-  IVecSum := total
 end;
 
 end.
