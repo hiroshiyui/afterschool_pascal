@@ -126,33 +126,21 @@ before the field loop.
 
 ### Known limitations
 
-What is still open in the dialect's own terms; every fact the two old
-standards-headed lists stated is in
-[`doc/implementation-defined.md`](implementation-defined.md), the register of
-what this processor decides
-([history](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards)).
+**Nothing here is open.** Every limitation this chapter held is decided, and
+recorded where a reader looks it up, which is what
+[`doc/implementation-defined.md`](implementation-defined.md) is for: the
+dangling ordinary pointer in its §3 (D.4, D.5) and the three capacities — a
+nesting depth of 1000, a set's base type within 0..255, and one statement's
+live string values — in its §6. The *reasoning* for keeping the pointer
+unchecked is AP 6.4.4.3 and its three NOTEs, where the dialect says outright
+that the default is the unchecked one and why 6.0.1 leaves no alternative;
+the chapter as it stood under the standards is
+[in history](history.md#the-known-limitations-chapter-as-it-stood-under-the-standards).
 
-**One gap, decided kept: an ordinary pointer can dangle** (ADR-0019; the
-register's §3, D.4 and D.5). Measured both ways out and both fail — *retire*
-on the numbers, 0 of 41 type-definitions convertible, and on containment,
-`new(p); q := p; dispose(p)` being conforming Extended Pascal; *check* on
-cost, i386 leaving no spare address bits (ADR-0336). So the safe subset is
-`owned ^T` with the non-escaping borrow, and §6.4.4's pointer is the
-**unmarked default** — the inversion of Rust's `unsafe`, a fact about
-containment and not a lapse.
-
-**Three capacities**, each a decision with a record:
-
-| A program meets | Decided in |
-| --- | --- |
-| nesting deeper than 1000 levels is refused, an operator chain counting toward the same limit | ADR-0020, ADR-0110; the register's §6 |
-| a set's base type must have its values in 0..255, so `set of integer` and `set of 1..m` are refused | ADR-0028, ADR-0133; §6 |
-| one *statement* holding more live string values than the arena holds is the limit, and both ways of exhausting it are reported | ADR-0111; §6 |
-
-The adversarial audits that used to fill this chapter — five (ADR-0162,
-ADR-0167, ADR-0168, ADR-0171, ADR-0342) — are [open question
+The five adversarial audits that used to fill this chapter (ADR-0162,
+ADR-0167, ADR-0168, ADR-0171, ADR-0342) are [open question
 §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
-instrument.
+instrument, and that question is where they are now.
 
 ---
 
@@ -377,12 +365,12 @@ written — and the check is a reader, not a gate (`doc/sop.md` §7).
 ### Where the ideas come from
 
 Rust, Swift and Zig are the reference points, each borrowing tied to the open
-decision it settled — and **every row that named one is settled**, the table
-being [in history](history.md#the-roadmap-as-it-stood-on-2026-09-07) row by
-row. What is left of it: **`comptime`** is *later*, constant-expressions
-everywhere (ADR-0054) being as far as anything needs; explicit allocator
-passing was tried and does not survive contact (ADR-0116); and ARC was
-withdrawn as posed, containment fixing what `^T` means (ADR-0201).
+decision it settled, and **every row that named one is settled** — the table
+is [in history](history.md#the-roadmap-as-it-stood-on-2026-09-07) row by row,
+and three of its answers were *no*: explicit allocator passing does not
+survive contact (ADR-0116), ARC was withdrawn as posed because containment
+fixed what `^T` means (ADR-0201), and `comptime` is **later**, since
+constant-expressions everywhere (ADR-0054) are as far as anything has needed.
 
 ### The open questions
 
