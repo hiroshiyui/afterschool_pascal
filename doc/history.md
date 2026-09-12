@@ -8591,6 +8591,90 @@ procedure, and a number quoted in a document is re-read by nobody.**
 Verified rather than assumed: the string-arena row still says **eight**
 producers and there are eight, a fourth audit running.
 
+**Read end to end a seventh time on 2026-09-10**, after the WebAssembly
+increment and the editor's second milestone, and **the register was current
+again** — the third time an audit has found every stale thing outside it. What
+was stale:
+
+- `doc/glossary.md`'s **Admitted target** entry said there were *five* and that
+  *every one is POSIX*, where there are seven and two of them are not machines
+  at all.
+- The editor and the WebAssembly corpus had no entry in
+  `doc/design-digest.md`, which is where a landed mechanism belongs.
+- `tui/sessions/` was a corpus `doc/developer-guide.md` did not list.
+- README's platform tiers stopped at macOS though a third tier runs on every
+  push.
+- `doc/roadmap.md` had no row for `tui/` at all, so open work read as absent.
+
+One row here *had* had its own closing condition partly met —
+`AFTERSCHOOL_PASCAL_*` and the harnesses that ignore what they are handed,
+where ADR-0384 made exactly the judgement the row asked for, for one variable,
+and gated it in both directions.
+
+**Read end to end an eighth time on 2026-09-11**, before v3.11.0: **four stale
+rows in 102, and one of them was the register's own most-warned-about shape
+doing real damage.** *Nothing checks that a harness works only inside the
+directory it made* ended with the words *every local parallel run now exercises
+it* — a row naming its own closing condition, and wrong, because what wrote
+outside its directory was not a harness. Every harness did work in a directory
+it had made; the **program under test** was started with no `cwd` at all and
+ran in the invoker's, so the one corpus case that names a file relatively raced
+its own concurrent copy and failed on CI on three jobs across two pushes while
+a local parallel run passed (ADR-0406). The row could not have been read as
+covering that, and the sentence is why nobody tried.
+
+The other three were counts a cut moved: `runtime`'s report-only units are
+three since ADR-0405 and the register said two, `runtime-nonposix` bites one of
+*five* units and the register said four, and the directory walk whose error
+paths nothing can arrange is in a different file now. Every one of the four was
+found by reading the row and none by a gate — `quoted-numbers` holds what a
+*document* quotes, and a count written into a sentence in §7 is not catalogued
+unless somebody catalogues it.
+
+**Read end to end a ninth time on 2026-09-12**, after ADR-0411, and the first
+audit asked for by name rather than taken on a clock: **two rows of 108 had
+closed and neither had been struck, and three other documents carried one of
+them as live.**
+
+- **§6.4.3.3's region *is* asked of a constant occurrence.** `array [1..fred]`,
+  `array [1..fred+1]`, `set of 1..fred` and `string(fred)` beside a field
+  `fred` are all refused, with a message that names the region, and ADR-0134
+  did it — saying so in the comment on `ErrorFieldNotA` and in
+  `doc/implementation-defined.md` §6.1, which records the entry as the *last*
+  one and closed. `CLAUDE.md` and one of `doc/design-digest.md`'s two bullets
+  on the clause still said it was not asked, and the digest's own other bullet
+  said it was fixed — a fact stated twice, disagreeing with itself, which is
+  the shape ADR-0388 removed from a program and nothing removes from prose.
+- **An `unreachable_diagnostics.txt` entry naming no message is caught**, and
+  always was: `listed - uncovered` holds it whether the message was deleted or
+  a golden now names it, and a probe entry is reported. What made the row read
+  as open was the gate's own wording, which said *a golden now names it* about
+  a message nobody can write; it now says which of the two happened.
+- **A headline describing a closed defect.** The `tls` row led with
+  the swallowed-diagnostics defect ADR-0366 had fixed six days earlier rather
+  than with the gap it was recorded for.
+- **A pair of counts neither current nor reproducible.** *204 of the 390
+  testable triage rows carry the clause's title*: re-measured from
+  `triage.tsv`, 44 of 144 structural rows share one sentence and 145 of 399
+  testable rows carry no reason at all.
+
+Every one of the four was found by reading a row and probing what it claimed,
+and none by a gate. Chasing the last of them found a fifth thing outside the
+register: three documents said **563 of 598** corpus programs run as
+WebAssembly where the gate had been answering **570 of 605**, and
+`quoted-numbers` has a row for each of those three sentences and had never
+evaluated one — it reads the ctest log after the suite in the `test` job, and
+`wasm32` needs a sysroot that job has not got, so it answers in a job of its
+own and its rows come back *unchecked* every time.
+
+The same audit, extended to the specification, found **two extensions of the
+language with no clause**: `halt`'s exit status and the underscore in an
+identifier, each carried in `doc/implementation-defined.md` §5 for as long as
+it had existed, so a reader holding the specification did not know either was
+legal. Both have clauses now (AP 6.7.5.7, AP 6.1.3), and writing the second
+corrected it — the draft refused a leading `_` and `_` alone, and a probe found
+the processor admits both.
+
 ### The rows struck as closed
 
 | Blind spot | Consequence | Recorded |
