@@ -31,9 +31,9 @@
   `PasFS.Info(dir + '/' + name)`, which is one `stat` and an honest answer.
 
   **The order is the file system's**, which is neither sorted nor stable, and
-  `.` and `..` are entries like any others. `NextEntry` gives every entry; `ListDir`
-  is the convenience and skips those two, so an empty vector means an empty
-  directory.
+  `.` and `..` are entries like any others. `NextEntry` gives every entry;
+  `ListDir` is the convenience and skips those two, so an empty vector means an
+  empty directory.
 
   **A directory changed while it is being read** has no answer here and none in
   POSIX: whether an entry created or removed after `OpenDir` appears is
@@ -46,7 +46,22 @@
 
 module PasDir;
 
-export PasDir = (EntryNameMax, EntryName, Dir, OpenDir, NextEntry, CloseDir, ListDir);
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Five names are exported where seven were: `Dir` has
+  an implementation in the block below, and an implementation is selected from
+  the *type* of the receiver rather than from a name in scope (AP 6.7.10.2), so
+  neither of its routines is an exported name and neither can collide with
+  another module's. `NextEntry` keeps its spelling and loses its export;
+  `CloseDir` is `Close`, which is what a `Stream`, a `Socket` and a TLS
+  `Connection` are already closed by.
+
+  What stays exported is what a caller has to name **before there is a receiver
+  to select from**: the type, its bound, `OpenDir`, which takes its `Dir` as
+  somewhere to put an answer rather than asking one about itself, and
+  `ListDir`, whose first parameter is a path. Both keep their names for
+  §6.11.2's reason, being names in one scope with every other module's. }
+
+export PasDir = (EntryNameMax, EntryName, Dir, OpenDir, ListDir);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -83,36 +98,6 @@ type
   whichever way this answers. }
 function OpenDir(var d: Dir; path: PathName): ErrorCode;
 
-{ The next entry's name into `name`, which is a string of the caller's own
-  capacity -- StreamReadLine's shape, so an EntryName is a convenience and
-  not an obligation.
-
-  `errNone` and `name` holds it; `errAbsent` when the directory is exhausted,
-  which is the ordinary end of a loop and not a failure; `errFull` for a name
-  longer than `name` can hold, whose entry is consumed rather than retried,
-  there being no way to put one back; `errIO` for anything else.
-
-      while NextEntry(d, nm) = errNone do writeln(nm)
-
-  **The capacity is checked on the far side**, by the routine that measured the
-  name, so an over-long one is a code and never the trap an over-long copy
-  would be. That is the one place a library can close doc/sop.md §7's "a
-  foreign string of unstated length has no safe reception": the length *is*
-  stated, to whoever holds the pointer.
-
-  `name` is set to the null-string on every answer but `errNone`. }
-function NextEntry(var d: Dir; var name: string): ErrorCode;
-
-{ Release the directory now rather than at the block's end, and leave `d`
-  empty. Harmless on an empty one.
-
-  AP 6.4.12.2's second form of assignment: `d := nil` releases what the
-  variable holds and leaves it empty. It was `opendir` of the empty path until
-  ADR-0202, the type having had one form of assignment and that one from an
-  external function, which cost a refused system call and a stale errno. This
-  module and PasStream are the two callers that argued for the form. }
-procedure CloseDir(var d: Dir);
-
 { Every entry of a directory onto `names`, in the file system's own order,
   with `.` and `..` left out -- so an empty vector means an empty directory.
 
@@ -146,46 +131,80 @@ begin
   if d = nil then OpenDir := errIO else OpenDir := errNone
 end;
 
-function NextEntry;
-var got: OptEntryName; status: integer;
-begin
-  status := 0;
-  { the caller's capacity and not EntryNameMax: what must not be exceeded is the
-    string this answer is going into, and 6.4.3.3.3 makes that readable }
-  got := ExtDirNext(d, name.capacity, status);
-  name := '';
-  { The value decides the successful case and the code decides the rest: a
-    routine answering 0 with no name would be a defect over there, and reading
-    `got^` for it is the trap that says so rather than a null-string entry. }
-  if got = nil then begin
-    if status = 1 then NextEntry := errAbsent
-    else if status = 3 then NextEntry := errFull
-    else NextEntry := errIO
-  end
-  else begin
-    name := got^;
-    NextEntry := errNone
-  end
+{ --- the directory -------------------------------------------------------- }
+
+impl Dir;
+
+  { The next entry's name into `name`, which is a string of the caller's own
+    capacity -- `Stream.ReadLine`'s shape, so an EntryName is a convenience and
+    not an obligation.
+
+    `errNone` and `name` holds it; `errAbsent` when the directory is exhausted,
+    which is the ordinary end of a loop and not a failure; `errFull` for a name
+    longer than `name` can hold, whose entry is consumed rather than retried,
+    there being no way to put one back; `errIO` for anything else.
+
+        while d.NextEntry(nm) = errNone do writeln(nm)
+
+    **The capacity is checked on the far side**, by the routine that measured
+    the name, so an over-long one is a code and never the trap an over-long
+    copy would be. That is the one place a library can close doc/sop.md §7's "a
+    foreign string of unstated length has no safe reception": the length *is*
+    stated, to whoever holds the pointer.
+
+    `name` is set to the null-string on every answer but `errNone`. }
+  function NextEntry(protected var d: Dir; var name: string): ErrorCode;
+  var got: OptEntryName; status: integer;
+  begin
+    status := 0;
+    { the caller's capacity and not EntryNameMax: what must not be exceeded is
+      the string this answer is going into, and 6.4.3.3.3 makes that readable }
+    got := ExtDirNext(d, name.capacity, status);
+    name := '';
+    { The value decides the successful case and the code decides the rest: a
+      routine answering 0 with no name would be a defect over there, and reading
+      `got^` for it is the trap that says so rather than a null-string entry. }
+    if got = nil then begin
+      if status = 1 then NextEntry := errAbsent
+      else if status = 3 then NextEntry := errFull
+      else NextEntry := errIO
+    end
+    else begin
+      name := got^;
+      NextEntry := errNone
+    end
+  end;
+
+  { Release the directory now rather than at the block's end, and leave `d`
+    empty. Harmless on an empty one.
+
+    AP 6.4.12.2's second form of assignment: `d := nil` releases what the
+    variable holds and leaves it empty. It was `opendir` of the empty path
+    until ADR-0202, the type having had one form of assignment and that one
+    from an external function, which cost a refused system call and a stale
+    errno. This module and PasStream are the two callers that argued for the
+    form. }
+  procedure Close(var d: Dir);
+  begin
+    { 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
+    d := nil
+  end;
 end;
 
-procedure CloseDir;
-begin
-  { 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
-  d := nil
-end;
+{ --- the whole of one ----------------------------------------------------- }
 
 function ListDir;
 var d: Dir; e: ErrorCode; nm: EntryName;
 begin
   { `d` is a local of this activation, so the directory is closed when ListDir
     returns -- by every path out of it, including the failures below. That is
-    what the handle-type is for and it is why nothing here says CloseDir. }
+    what the handle-type is for and it is why nothing here says `d.Close`. }
   e := OpenDir(d, path);
   if e = errNone then begin
-    e := NextEntry(d, nm);
+    e := d.NextEntry(nm);
     while e = errNone do begin
       if (nm <> '.') and (nm <> '..') then names.Push(nm);
-      e := NextEntry(d, nm)
+      e := d.NextEntry(nm)
     end;
     { reaching the end is how a listing succeeds }
     if e = errAbsent then e := errNone

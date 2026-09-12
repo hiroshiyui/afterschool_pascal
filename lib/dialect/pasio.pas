@@ -119,7 +119,7 @@ function WriteText(fd: integer; s: IOLine): ErrorCode;
   is told `true` at end of file and forever after. This is a permission to
   *try* a read and never a promise that one will yield anything, and a caller
   deciding whether a whole *message* has arrived has to say what a message is
-  and read one. `PasLsp.LspPending` is that caller. }
+  and read one. `PasLsp`'s `LspReader.Pending` is that caller. }
 function FdReady(fd: integer; timeoutMs: integer): boolean;
 
 { Whether a successful read reached the end of the input -- `ok` and a count

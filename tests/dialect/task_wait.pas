@@ -30,7 +30,7 @@ task Writer(s: Stream; note: StreamLine);
 var e: ErrorCode; slept: integer;
 begin
   slept := Sleep(1);
-  e := StreamWriteLine(s, note)
+  e := s.WriteLine(note)
 end;
 
 var s, back: Stream;
@@ -66,9 +66,9 @@ begin
 
   e := StreamOpenRead(back, path);
   writeln('reopened      : ', e = errNone);
-  if StreamReadLine(back, line) then
+  if back.ReadLine(line) then
     writeln('read back     : ', line);
-  StreamClose(back);
+  back.Close;
 
   { A task-variable is a handle-variable in every other respect too: it may be
     released early, and it is empty afterwards. The activation it named is
