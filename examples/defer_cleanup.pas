@@ -6,7 +6,7 @@
   completes, in the reverse of the order the defers were written; a normal
   end, an `exit` and a `try` that fails all run it. The Stream is a handle
   and closes itself when its variable dies. Uses PasFS (MakeDirectory,
-  Remove, RemoveDirectory, Exists) and PasStream (StreamOpenWrite, StreamWriteLine). }
+  Remove, RemoveDirectory, Exists) and PasStream (StreamOpenWrite, and `Stream.WriteLine`). }
 program defer_cleanup(output);
 
 import PasError; PasFS; PasStream;
@@ -30,13 +30,13 @@ begin
   defer e := Remove(path);
   defer s := nil;                { close the stream before removing the file }
 
-  e := StreamWriteLine(s, 'first line');
+  e := s.WriteLine('first line');
   writeln('  wrote a file; it exists: ', Exists(path));
   if early then begin
     writeln('  leaving early');
     exit
   end;
-  e := StreamWriteLine(s, 'second line');
+  e := s.WriteLine('second line');
   writeln('  reached the end of the block')
 end;
 

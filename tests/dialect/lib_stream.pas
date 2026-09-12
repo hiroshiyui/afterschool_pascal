@@ -23,7 +23,7 @@ var r: Stream;
 begin
   if StreamOpenRead(r, path) = errNone then begin
     writeln(what, ':');
-    while StreamReadLine(r, line) do
+    while r.ReadLine(line) do
       writeln('  [', line, ']')
   end
   else
@@ -35,8 +35,8 @@ procedure writer(path: PathName);
 var w: Stream;
 begin
   e := StreamOpenWrite(w, path);
-  e := StreamWriteLine(w, 'from writer');
-  e := StreamWriteText(w, 'no newline at the end')
+  e := w.WriteLine('from writer');
+  e := w.WriteText('no newline at the end')
 end;
 
 begin
@@ -47,36 +47,36 @@ begin
   writer(p);
   dump(p, 'after the block');
 
-  { explicit StreamClose, then the file is complete while the block goes on }
+  { an explicit `s.Close`, then the file is complete while the block goes on }
   e := StreamOpenWrite(s, q);
   writeln('open for writing: ', ErrorText(e));
-  e := StreamWriteLine(s, 'one');
-  e := StreamWriteLine(s, '');
-  e := StreamWriteLine(s, 'three');
-  StreamClose(s);
+  e := s.WriteLine('one');
+  e := s.WriteLine('');
+  e := s.WriteLine('three');
+  s.Close;
   writeln('closed, empty: ', s = nil);
   dump(q, 'after Close');
 
   { append keeps what was there }
   e := StreamOpenAppend(s, q);
-  e := StreamWriteLine(s, 'four, and the rest of a long line');
-  StreamClose(s);
+  e := s.WriteLine('four, and the rest of a long line');
+  s.Close;
   dump(q, 'after append');
 
   { a line longer than the string loses its tail and only its tail }
   e := StreamOpenRead(t, q);
   n := 0;
-  while StreamReadLine(t, short) do begin
+  while t.ReadLine(short) do begin
     n := n + 1;
     writeln('short ', n:1, ': [', short, ']')
   end;
   writeln('lines: ', n:1);
-  StreamClose(t);
+  t.Close;
 
-  { StreamFlush makes a write visible to a second reader of the same file }
+  { `Flush` makes a write visible to a second reader of the same file }
   e := StreamOpenWrite(s, p);
-  e := StreamWriteLine(s, 'flushed');
-  e := StreamFlush(s);
+  e := s.WriteLine('flushed');
+  e := s.Flush;
   dump(p, 'while still open');
 
   { a missing file, and a directory that cannot be created in }
@@ -84,6 +84,6 @@ begin
   writeln('missing: ', ErrorText(e), ', empty: ', t = nil);
   e := StreamOpenWrite(t, '/nonexistent-apascal/x');
   writeln('uncreatable: ', ErrorText(e));
-  StreamClose(t);
+  t.Close;
   writeln('close of empty: ', t = nil)
 end.

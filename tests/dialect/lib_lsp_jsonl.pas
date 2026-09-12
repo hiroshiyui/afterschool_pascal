@@ -34,7 +34,7 @@ begin
   seen := 0;
   repeat
     body.Init;
-    e := JsonlRead(r, body);
+    e := r.ReadJsonl(body);
     if e = errNone then begin
       seen := seen + 1;
       res := JsonParseChars(body, at);

@@ -3778,8 +3778,8 @@ begin
   while running do begin
     body.Init;
     { The one place the two transports differ on the way in. }
-    if transport = tpMcp then e := JsonlRead(reader, body)
-    else e := LspRead(reader, body);
+    if transport = tpMcp then e := reader.ReadJsonl(body)
+    else e := reader.Read(body);
     if e = errFull then begin
       { A document larger than the buffer can hold. The frame's bytes have all
         been consumed either way, so the stream is where the next header
@@ -3820,9 +3820,9 @@ begin
           changes to two files checks. }
         if transport <> tpMcp then
           while (ChangedUri(parsed.val) <> '') and (held = nil) and
-                LspPending(reader) do begin
+                reader.Pending do begin
             nextBody.Init;
-            if LspRead(reader, nextBody) <> errNone then
+            if reader.Read(nextBody) <> errNone then
               { The input ended or was refused mid-drain. Nothing is lost:
                 this message is still dispatched below and the next turn of
                 the loop reports it. }

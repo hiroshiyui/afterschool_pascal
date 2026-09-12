@@ -37,9 +37,25 @@
 
 module PasLsp;
 
+{ **What a client is given is the type, and the type carries its routines**
+  (AP 6.7.10.5, ADR-0411). Seven names are exported where ten were:
+  `LspReader` has an implementation in the block below, and an implementation
+  is selected from the *type* of the receiver rather than from a name in scope
+  (AP 6.7.10.2), so none of its routines is an exported name and none can
+  collide with another module's -- which matters more here than anywhere, this
+  module's private `Ready` having already collided with `PasIO`'s once
+  (see `PasIO.FdReady`). `LspRead` is `Read`, `JsonlRead` is `ReadJsonl` and
+  `LspPending` is `Pending`.
+
+  What stays exported is what has no receiver to be selected from: the type,
+  its two bounds, the header string, `LspOpen`, which takes its `LspReader` as
+  somewhere to put an answer rather than asking one about itself, and the two
+  writers, whose first parameter is a descriptor and which hold no state at
+  all. They keep their names for §6.11.2's reason, being names in one scope
+  with every other module's. }
+
 export PasLsp = (LspBufMax, LspHeadMax, LspHeader, LspReader,
-                 LspOpen, LspRead, LspPending, LspWrite,
-                 JsonlRead, JsonlWrite);
+                 LspOpen, LspWrite, JsonlWrite);
 
 import PasError; PasIO; PasJson;
 
@@ -82,31 +98,15 @@ procedure LspOpen(var r: LspReader; fd: integer);
   is not a reason on its own; a third caller wanting the reader and neither
   framing would be. }
 
-{ Read one message's body, appending it to `body`. `errAbsent` at the end of
-  the input, which is how a server's loop ends and is not a failure;
-  `errSyntax` for a frame that is not one -- a missing or unreadable
-  `Content-Length`, or an input that stops inside a body; `errFull` for a
-  header line longer than `LspHeadMax`, or a **body** larger than `JsonChars`
-  can hold -- and in that second case every promised byte has still been
-  consumed, so a caller may report this frame and read the next (ADR-0276);
-  `errIO` where the read was refused. }
-function LspRead(var r: LspReader; var body: JsonChars): ErrorCode;
-
 { Write one message: the header, the blank line, and the body's bytes. }
 function LspWrite(fd: integer; var body: JsonChars): ErrorCode;
 
-{ The other framing: MCP's stdio transport, where "messages are delimited by
-  newlines, and MUST NOT contain embedded newlines" and the encoding is UTF-8.
-  One message to a line, and the line is the whole of the frame -- there is no
-  count to agree with, which is why this is the easier of the two and why it
-  says what the harder one was for.
-
-  An empty line is skipped rather than reported. The specification says a
-  client "MUST NOT write anything to the server's stdin that is not a valid MCP
-  message", so a blank line is not one; being generous about what arrives and
-  strict about what is produced is the rule this module already followed for a
-  header it did not recognise. }
-function JsonlRead(var r: LspReader; var body: JsonChars): ErrorCode;
+{ **The other framing**: MCP's stdio transport, where "messages are delimited
+  by newlines, and MUST NOT contain embedded newlines" and the encoding is
+  UTF-8. One message to a line, and the line is the whole of the frame --
+  there is no count to agree with, which is why this is the easier of the two
+  and why it says what the harder one was for. `LspReader.ReadJsonl` is the
+  reading half and this is the writing one. }
 
 { `body` and then one newline. **A body holding a newline is refused**
   (`errSyntax`) rather than written: the framing has nothing else to say where
@@ -114,24 +114,6 @@ function JsonlRead(var r: LspReader; var body: JsonChars): ErrorCode;
   neither would parse. `Render` emits none today and this is what says so
   on the day it does. }
 function JsonlWrite(fd: integer; var body: JsonChars): ErrorCode;
-
-{ Would `LspRead` have something to work with without waiting? True when this
-  reader already holds unread bytes, or when the descriptor says a read would
-  not block (ADR-0257).
-
-  It is `pasx_socket_pending`'s two-halves shape and needs both for the same
-  reason ADR-0205 gives: bytes already taken off the descriptor are bytes the
-  descriptor no longer has, so asking `poll` alone would say "nothing there"
-  about a frame sitting in this buffer.
-
-  **It is a permission to try, not a promise of a whole frame.** A client that
-  has sent a header has sent the body, so a caller draining what has arrived
-  can read one frame per `true` and expect it to complete; but a descriptor
-  that is a *regular file* -- a session replayed from one, which is how this
-  server is tested -- answers true at end of input and forever after, and the
-  read is what discovers otherwise. A caller must be able to take
-  `errAbsent` for an answer. }
-function LspPending(var r: LspReader): boolean;
 
 end;
 
@@ -169,13 +151,6 @@ begin
       Ready := true
     end
   end
-end;
-
-function LspPending;
-begin
-  if r.head <= r.tail then LspPending := true
-  else if r.ended then LspPending := false
-  else LspPending := FdReady(r.fd, 0)
 end;
 
 function NextByte(var r: LspReader; var c: char; var e: ErrorCode): boolean;
@@ -283,89 +258,133 @@ begin
     end
 end;
 
-function LspRead;
-var line: LspHeader; e: ErrorCode; n, k, got: integer; c: char;
-    going, sawAny: boolean;
-begin
-  e := errNone;
-  n := -1;
-  sawAny := false;
-  going := true;
-  while going do
-    if not ReadHeaderLine(r, line, e) then begin
-      { No line at all. Before any header that is the end of the stream; after
-        one it is a frame that stopped in its headers. }
-      going := false;
-      if e = errNone then
-        if sawAny then e := errSyntax else e := errAbsent
-    end
-    else begin
-      sawAny := true;
-      if line = '' then
-        going := false
-      else begin
-        got := ContentLength(line);
-        if got >= 0 then n := got
-      end
-    end;
-  if (e = errNone) and (n < 0) then e := errSyntax;
-  if e = errNone then begin
-    k := 0;
-    while (k < n) and (e = errNone) do
-      if NextByte(r, c, e) then begin
-        body.Add(c);
-        k := k + 1
-      end
-      else if e = errNone then
-        { The input ended inside the body: the count was a promise. }
-        e := errSyntax
-  end;
-  { A body larger than `JsonChars` can hold. Every byte the header promised
-    has still been *consumed*, so the stream is where the next header begins
-    and a caller may skip this message and carry on -- which is the whole
-    reason this is reported rather than left to look like malformed JSON
-    (ADR-0276). It used to be neither: the buffer wrote one past its array and
-    the program stopped. }
-  if (e = errNone) and (body.Len < n) then e := errFull;
-  LspRead := e
-end;
+{ --- the reader ---------------------------------------------------------- }
 
-function JsonlRead;
-var e: ErrorCode; c: char; going, any, full: boolean;
-begin
-  e := errNone;
-  going := true;
-  any := false;
-  full := false;
-  while going do
-    if not NextByte(r, c, e) then begin
-      going := false;
-      { Nothing at all before the end of the input is the end of the session,
-        which is not a failure. A partial line is one: the sender stopped in
-        the middle of a message. }
-      if e = errNone then
-        if any then e := errSyntax else e := errAbsent
-    end
-    else if c = chr(10) then begin
-      { An empty line is no message. Keep reading rather than answering with
-        one that would not parse. }
-      if any then going := false
-    end
-    else if c <> chr(13) then begin
-      { A carriage return before the newline is not the framing's and is not
-        the message's either: dropped, so a sender that writes CRLF is read
-        the same as one that does not. }
-      body.Add(c);
-      any := true;
-      { A line longer than `JsonChars` can hold. Unlike the framed transport
-        there is no count to compare against, so the buffer is asked directly
-        -- and the loop goes on to the newline anyway, so that the *next* line
-        is a message and not this one's tail (ADR-0276). Recorded in a flag
-        rather than in `e`, which `NextByte` is free to write to. }
-      if body.Full then full := true
+impl LspReader;
+
+  { Would `Read` have something to work with without waiting? True when this
+    reader already holds unread bytes, or when the descriptor says a read would
+    not block (ADR-0257).
+
+    It is `pasx_socket_pending`'s two-halves shape and needs both for the same
+    reason ADR-0205 gives: bytes already taken off the descriptor are bytes the
+    descriptor no longer has, so asking `poll` alone would say "nothing there"
+    about a frame sitting in this buffer.
+
+    **It is a permission to try, not a promise of a whole frame.** A client that
+    has sent a header has sent the body, so a caller draining what has arrived
+    can read one frame per `true` and expect it to complete; but a descriptor
+    that is a *regular file* -- a session replayed from one, which is how this
+    server is tested -- answers true at end of input and forever after, and the
+    read is what discovers otherwise. A caller must be able to take
+    `errAbsent` for an answer. }
+  function Pending(protected var r: LspReader): boolean;
+  begin
+    if r.head <= r.tail then Pending := true
+    else if r.ended then Pending := false
+    else Pending := FdReady(r.fd, 0)
+  end;
+
+  { Read one message's body, appending it to `body`. `errAbsent` at the end of
+    the input, which is how a server's loop ends and is not a failure;
+    `errSyntax` for a frame that is not one -- a missing or unreadable
+    `Content-Length`, or an input that stops inside a body; `errFull` for a
+    header line longer than `LspHeadMax`, or a **body** larger than `JsonChars`
+    can hold -- and in that second case every promised byte has still been
+    consumed, so a caller may report this frame and read the next (ADR-0276);
+    `errIO` where the read was refused. }
+  function Read(var r: LspReader; var body: JsonChars): ErrorCode;
+  var line: LspHeader; e: ErrorCode; n, k, got: integer; c: char;
+      going, sawAny: boolean;
+  begin
+    e := errNone;
+    n := -1;
+    sawAny := false;
+    going := true;
+    while going do
+      if not ReadHeaderLine(r, line, e) then begin
+        { No line at all. Before any header that is the end of the stream; after
+          one it is a frame that stopped in its headers. }
+        going := false;
+        if e = errNone then
+          if sawAny then e := errSyntax else e := errAbsent
+      end
+      else begin
+        sawAny := true;
+        if line = '' then
+          going := false
+        else begin
+          got := ContentLength(line);
+          if got >= 0 then n := got
+        end
+      end;
+    if (e = errNone) and (n < 0) then e := errSyntax;
+    if e = errNone then begin
+      k := 0;
+      while (k < n) and (e = errNone) do
+        if NextByte(r, c, e) then begin
+          body.Add(c);
+          k := k + 1
+        end
+        else if e = errNone then
+          { The input ended inside the body: the count was a promise. }
+          e := errSyntax
     end;
-  if (e = errNone) and full then e := errFull;
-  JsonlRead := e
+    { A body larger than `JsonChars` can hold. Every byte the header promised
+      has still been *consumed*, so the stream is where the next header begins
+      and a caller may skip this message and carry on -- which is the whole
+      reason this is reported rather than left to look like malformed JSON
+      (ADR-0276). It used to be neither: the buffer wrote one past its array and
+      the program stopped. }
+    if (e = errNone) and (body.Len < n) then e := errFull;
+    Read := e
+  end;
+
+  { The other framing, read: MCP's stdio transport, one message to a line --
+    see `JsonlWrite` above for what the framing is.
+
+    An empty line is skipped rather than reported. The specification says a
+    client "MUST NOT write anything to the server's stdin that is not a valid
+    MCP message", so a blank line is not one; being generous about what arrives
+    and strict about what is produced is the rule this module already followed
+    for a header it did not recognise. }
+  function ReadJsonl(var r: LspReader; var body: JsonChars): ErrorCode;
+  var e: ErrorCode; c: char; going, any, full: boolean;
+  begin
+    e := errNone;
+    going := true;
+    any := false;
+    full := false;
+    while going do
+      if not NextByte(r, c, e) then begin
+        going := false;
+        { Nothing at all before the end of the input is the end of the session,
+          which is not a failure. A partial line is one: the sender stopped in
+          the middle of a message. }
+        if e = errNone then
+          if any then e := errSyntax else e := errAbsent
+      end
+      else if c = chr(10) then begin
+        { An empty line is no message. Keep reading rather than answering with
+          one that would not parse. }
+        if any then going := false
+      end
+      else if c <> chr(13) then begin
+        { A carriage return before the newline is not the framing's and is not
+          the message's either: dropped, so a sender that writes CRLF is read
+          the same as one that does not. }
+        body.Add(c);
+        any := true;
+        { A line longer than `JsonChars` can hold. Unlike the framed transport
+          there is no count to compare against, so the buffer is asked directly
+          -- and the loop goes on to the newline anyway, so that the *next* line
+          is a message and not this one's tail (ADR-0276). Recorded in a flag
+          rather than in `e`, which `NextByte` is free to write to. }
+        if body.Full then full := true
+      end;
+    if (e = errNone) and full then e := errFull;
+    ReadJsonl := e
+  end;
 end;
 
 function JsonlWrite;

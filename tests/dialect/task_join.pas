@@ -24,7 +24,7 @@ task Writer(s: Stream; note: StreamLine);
 var e: ErrorCode; slept: integer;
 begin
   slept := Sleep(1);
-  e := StreamWriteLine(s, note)
+  e := s.WriteLine(note)
 end;
 
 { Nothing in this block joins anything: the join is what its `end` performs,
@@ -50,8 +50,8 @@ begin
   writeln('block left    : TRUE');
   e := StreamOpenRead(back, path);
   writeln('reopened      : ', e = errNone);
-  if StreamReadLine(back, line) then
+  if back.ReadLine(line) then
     writeln('read back     : ', line);
-  StreamClose(back);
+  back.Close;
   e := Remove(path)
 end.

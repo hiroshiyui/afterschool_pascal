@@ -44,17 +44,17 @@ begin
 end;
 
 { Opened, read to its end and closed by leaving this block: `walk` is a local
-  handle, so the release is the activation's and nothing here says CloseDir.
+  handle, so the release is the activation's and nothing here says `walk.Close`.
   That is the whole reason the directory is a handle-type. }
 function CountEntries(path: PathName): integer;
 var walk: Dir; nm: EntryName; n: integer; e: ErrorCode;
 begin
   n := 0;
   if OpenDir(walk, path) = errNone then begin
-    e := NextEntry(walk, nm);
+    e := walk.NextEntry(nm);
     while e = errNone do begin
       n := n + 1;
-      e := NextEntry(walk, nm)
+      e := walk.NextEntry(nm)
     end
   end;
   CountEntries := n
@@ -113,11 +113,11 @@ begin
   seen := 0;
   dots := 0;
   writeln('opened        = ', ErrorText(OpenDir(walk, d)));
-  e := NextEntry(walk, nm);
+  e := walk.NextEntry(nm);
   while e = errNone do begin
     seen := seen + 1;
     if (nm = '.') or (nm = '..') then dots := dots + 1;
-    e := NextEntry(walk, nm)
+    e := walk.NextEntry(nm)
   end;
   { The end of a directory is `errAbsent` -- the ordinary end of a loop, and
     not a failure a caller has to sort out from one. }
@@ -126,7 +126,7 @@ begin
 
   { Released now rather than at the block's end. `walk = nil` is the only
     comparison a handle has, and it is how a caller asks whether it is open. }
-  CloseDir(walk);
+  walk.Close;
   writeln('closed        = ', walk = nil);
 
   { --- a caller's string that is too short --- }
@@ -136,13 +136,13 @@ begin
     below are what is left of the six. }
   writeln('short open    = ', ErrorText(OpenDir(walk, d)));
   seen := 0;
-  e := NextEntry(walk, tiny);
+  e := walk.NextEntry(tiny);
   while (e = errNone) or (e = errFull) do begin
     if e = errFull then seen := seen + 1;
-    e := NextEntry(walk, tiny)
+    e := walk.NextEntry(tiny)
   end;
   writeln('too long      = ', seen:1, ' of 6 did not fit ', tiny.capacity:1);
-  CloseDir(walk);
+  walk.Close;
 
   { --- the failing directions --- }
   writeln('no such dir   = ', ErrorText(OpenDir(walk, d + '/not-there')));
