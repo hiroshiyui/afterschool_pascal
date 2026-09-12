@@ -35,18 +35,18 @@ begin
 
   { JsonNewText: a value parameter wider than a line }
   v := JsonNewText(w);
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  writeln('new text: ', JsonCharsLen(out):1);
-  JsonCharsFree(out);
+  out.Init;
+  v.Render(out);
+  writeln('new text: ', out.Len:1);
+  out.Free;
 
-  { JsonTextAdd: and appended to, by another one }
-  JsonTextAdd(v, w);
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  writeln('after add: ', JsonCharsLen(out):1);
-  JsonCharsFree(out);
-  JsonFree(v);
+  { TextAdd: and appended to, by another one }
+  v.TextAdd(w);
+  out.Init;
+  v.Render(out);
+  writeln('after add: ', out.Len:1);
+  out.Free;
+  v.Free;
 
   { JsonParse: a whole document that fits in one string, and does not fit in
     a line }
@@ -56,23 +56,23 @@ begin
   r := JsonParse(w, at);
   writeln('parse ok=', r.ok, ' at=', at:1);
   doc := r.val;
-  e := JsonTextInto(JsonMember(doc, 'k'), back);
+  e := doc.Member('k').TextInto(back);
   writeln('read back ok=', e = errNone, ' len=', length(back):1);
-  JsonFree(doc);
+  doc.Free;
 
-  { JsonCharsAddLine: the buffer takes one too }
-  JsonCharsNew(b);
-  JsonCharsAddLine(b, w);
-  writeln('buffer: ', JsonCharsLen(b):1);
-  JsonCharsFree(b);
+  { AddText: the buffer takes one too }
+  b.Init;
+  b.AddText(w);
+  writeln('buffer: ', b.Len:1);
+  b.Free;
 
   { and the narrow actuals still pass }
   line := 'still a line';
   v := JsonNewText(line);
-  JsonTextAdd(v, '!');
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  writeln('narrow: ', JsonCharsLen(out):1);
-  JsonCharsFree(out);
-  JsonFree(v)
+  v.TextAdd('!');
+  out.Init;
+  v.Render(out);
+  writeln('narrow: ', out.Len:1);
+  out.Free;
+  v.Free
 end.

@@ -36,12 +36,12 @@ var v, back: JsonPtr; out: JsonChars; text: string(255); q: JsonResult;
     y, z: real; where: integer;
 begin
   v := JsonNewObject;
-  JsonPut(v, 'n', JsonNewNumber(x));
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  if JsonCharsInto(out, text) <> errNone then text := '';
-  JsonCharsFree(out);
-  JsonFree(v);
+  v.Put('n', JsonNewNumber(x));
+  out.Init;
+  v.Render(out);
+  if out.Into(text) <> errNone then text := '';
+  out.Free;
+  v.Free;
   { The rendered text is the input to both readers: nothing else is compared,
     and neither reader is shown the value it is meant to arrive at. }
   y := x + 1.0;
@@ -50,8 +50,8 @@ begin
   q := JsonParse(text, where);
   if q.ok then begin
     back := q.val;
-    z := JsonNumberOr(JsonMember(back, 'n'), x + 1.0);
-    JsonFree(back)
+    z := back.Member('n').NumberOr(x + 1.0);
+    back.Free
   end;
   writeln(what, ' -> ', text, ' reads=', y = x, ' parses=', z = x)
 end;
@@ -62,12 +62,12 @@ procedure Whole(what: string; n: integer);
 var v: JsonPtr; out: JsonChars; text: string(255);
 begin
   v := JsonNewObject;
-  JsonPut(v, 'n', JsonNewInteger(n));
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  if JsonCharsInto(out, text) <> errNone then text := '';
-  JsonCharsFree(out);
-  JsonFree(v);
+  v.Put('n', JsonNewInteger(n));
+  out.Init;
+  v.Render(out);
+  if out.Into(text) <> errNone then text := '';
+  out.Free;
+  v.Free;
   writeln(what, ' -> ', text)
 end;
 
@@ -114,7 +114,7 @@ begin
     it wrote with a fraction or an exponent is a real. }
   r := JsonParse('{"i":3,"f":3.0,"e":3e0,"big":0.75}', at);
   doc := r.val;
-  writeln('reparsed i=', JsonIntegerOr(JsonMember(doc, 'i'), -1):1,
-          ' f as int=', JsonIntegerOr(JsonMember(doc, 'f'), -1):1);
-  JsonFree(doc)
+  writeln('reparsed i=', doc.Member('i').IntegerOr(-1):1,
+          ' f as int=', doc.Member('f').IntegerOr(-1):1);
+  doc.Free
 end.

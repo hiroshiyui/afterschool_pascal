@@ -33,7 +33,7 @@ begin
   LspOpen(r, StdIn);
   seen := 0;
   repeat
-    JsonCharsNew(body);
+    body.Init;
     e := JsonlRead(r, body);
     if e = errNone then begin
       seen := seen + 1;
@@ -43,13 +43,13 @@ begin
         Say(line)
       end
       else begin
-        writestr(line, 'message ', seen:1, ' bytes=', JsonCharsLen(body):1,
-                 ' id=', JsonIntegerOr(JsonMember(res.val, 'id'), -1):1);
+        writestr(line, 'message ', seen:1, ' bytes=', body.Len:1,
+                 ' id=', res.val.Member('id').IntegerOr(-1):1);
         Say(line);
-        JsonFree(res.val)
+        res.val.Free
       end
     end;
-    JsonCharsFree(body)
+    body.Free
   until e <> errNone;
   { `errAbsent` and not a failure: the end of the input is how a session ends.
     A *partial* line would be errSyntax, which is the distinction this reports
@@ -59,26 +59,26 @@ begin
 
   { One message written back. No header and no count: the line is the frame. }
   reply := JsonNewObject;
-  JsonPut(reply, 'jsonrpc', JsonNewText('2.0'));
-  JsonPut(reply, 'id', JsonNewInteger(1));
-  JsonPut(reply, 'result', JsonNewObject);
-  JsonCharsNew(out);
-  JsonRender(reply, out);
+  reply.Put('jsonrpc', JsonNewText('2.0'));
+  reply.Put('id', JsonNewInteger(1));
+  reply.Put('result', JsonNewObject);
+  out.Init;
+  reply.Render(out);
   e := JsonlWrite(StdOut, out);
-  JsonCharsFree(out);
-  JsonFree(reply);
+  out.Free;
+  reply.Free;
   writestr(line, 'write code=', ErrorText(e));
   Say(line);
 
   { And a body holding a newline, which this framing cannot carry: refused
     rather than written, because a message containing one would be read back
     as two and neither would parse. Nothing reaches the stream. }
-  JsonCharsNew(out);
-  JsonCharsAdd(out, '{');
-  JsonCharsAdd(out, chr(10));
-  JsonCharsAdd(out, '}');
+  out.Init;
+  out.Add('{');
+  out.Add(chr(10));
+  out.Add('}');
   e := JsonlWrite(StdOut, out);
-  JsonCharsFree(out);
+  out.Free;
   writestr(line, 'newline in a body: ', ErrorText(e));
   Say(line)
 end.

@@ -111,7 +111,7 @@ function JsonlRead(var r: LspReader; var body: JsonChars): ErrorCode;
 { `body` and then one newline. **A body holding a newline is refused**
   (`errSyntax`) rather than written: the framing has nothing else to say where
   a message ends, so a message containing one would be read back as two and
-  neither would parse. `JsonRender` emits none today and this is what says so
+  neither would parse. `Render` emits none today and this is what says so
   on the day it does. }
 function JsonlWrite(fd: integer; var body: JsonChars): ErrorCode;
 
@@ -313,7 +313,7 @@ begin
     k := 0;
     while (k < n) and (e = errNone) do
       if NextByte(r, c, e) then begin
-        JsonCharsAdd(body, c);
+        body.Add(c);
         k := k + 1
       end
       else if e = errNone then
@@ -326,7 +326,7 @@ begin
     reason this is reported rather than left to look like malformed JSON
     (ADR-0276). It used to be neither: the buffer wrote one past its array and
     the program stopped. }
-  if (e = errNone) and (JsonCharsLen(body) < n) then e := errFull;
+  if (e = errNone) and (body.Len < n) then e := errFull;
   LspRead := e
 end;
 
@@ -355,14 +355,14 @@ begin
       { A carriage return before the newline is not the framing's and is not
         the message's either: dropped, so a sender that writes CRLF is read
         the same as one that does not. }
-      JsonCharsAdd(body, c);
+      body.Add(c);
       any := true;
       { A line longer than `JsonChars` can hold. Unlike the framed transport
         there is no count to compare against, so the buffer is asked directly
         -- and the loop goes on to the newline anyway, so that the *next* line
         is a message and not this one's tail (ADR-0276). Recorded in a flag
         rather than in `e`, which `NextByte` is free to write to. }
-      if JsonCharsFull(body) then full := true
+      if body.Full then full := true
     end;
   if (e = errNone) and full then e := errFull;
   JsonlRead := e
@@ -372,9 +372,9 @@ function JsonlWrite;
 var e: ErrorCode; n, k, m: integer;
     chunk: array [1..LspBufMax] of char;
 begin
-  n := JsonCharsLen(body);
+  n := body.Len;
   for k := 1 to n do
-    if JsonCharsAt(body, k) = chr(10) then begin
+    if body.At(k) = chr(10) then begin
       JsonlWrite := errSyntax;
       exit(errSyntax)
     end;
@@ -385,7 +385,7 @@ begin
     while (k < n) and (m < LspBufMax) do begin
       k := k + 1;
       m := m + 1;
-      chunk[m] := JsonCharsAt(body, k)
+      chunk[m] := body.At(k)
     end;
     e := WriteAll(fd, chunk[1..m])
   end;
@@ -400,7 +400,7 @@ function LspWrite;
 var hdr: IOLine; e: ErrorCode; n, k, m: integer;
     chunk: array [1..LspBufMax] of char;
 begin
-  n := JsonCharsLen(body);
+  n := body.Len;
   writestr(hdr, 'Content-Length: ', n:1, chr(13), chr(10), chr(13), chr(10));
   e := WriteText(fd, hdr);
   k := 0;
@@ -409,7 +409,7 @@ begin
     while (k < n) and (m < LspBufMax) do begin
       k := k + 1;
       m := m + 1;
-      chunk[m] := JsonCharsAt(body, k)
+      chunk[m] := body.At(k)
     end;
     e := WriteAll(fd, chunk[1..m])
   end;

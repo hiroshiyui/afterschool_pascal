@@ -70,12 +70,12 @@ var v: JsonPtr;
     junk: ErrorCode;
 begin
   v := DiagJson(d, line, enc);
-  JsonCharsNew(b);
-  JsonRender(v, b);
-  junk := JsonCharsInto(b, text);
+  b.Init;
+  v.Render(b);
+  junk := b.Into(text);
   writeln('  ', what, '  ', text);
-  JsonCharsFree(b);
-  JsonFree(v)
+  b.Free;
+  v.Free
 end;
 
 begin
@@ -104,14 +104,14 @@ begin
   writeln;
   writeln('one diagnostic as the protocol writes it:');
   r := DiagParse('hello.pas:12:7: error: ''x'' is not declared');
-  JsonCharsNew(out);
+  out.Init;
   { No line to convert with, so the byte column comes back unchanged -- which
     is what every caller that never meets a non-ASCII line sees. }
   one := DiagJson(r.val, '', peUtf16);
-  JsonRender(one, out);
-  e := JsonCharsInto(out, s);
+  one.Render(out);
+  e := out.Into(s);
   writeln('  ', s);
-  JsonCharsFree(out);
+  out.Free;
 
   { ...and the same object for the other severity, which is the whole of what
     3.17's DiagnosticSeverity 2 changes: one number, and every other field
@@ -122,13 +122,13 @@ begin
     is owned by it from then on -- overwriting it here would leak the object
     and `heap-balance` would say so. }
   r := DiagParse('hello.pas:3:5: warning: ''b'' is declared here and never used');
-  JsonCharsNew(out);
+  out.Init;
   two := DiagJson(r.val, '', peUtf16);
-  JsonRender(two, out);
-  e := JsonCharsInto(out, s);
+  two.Render(out);
+  e := out.Into(s);
   writeln('  ', s);
-  JsonCharsFree(out);
-  JsonFree(two);
+  out.Free;
+  two.Free;
 
   writeln;
   writeln('a byte column, as a UTF-16 code unit column:');
@@ -172,17 +172,17 @@ begin
   writeln;
   writeln('and the notification that carries them:');
   arr := JsonNewArray;
-  JsonAppend(arr, one);
+  arr.Append(one);
   d.line := 3;
   d.col := 1;
   d.severity := dsWarning;
   d.message := 'a second one';
-  JsonAppend(arr, DiagJson(d, '', peUtf16));
+  arr.Append(DiagJson(d, '', peUtf16));
   note := DiagPublish('file:///tmp/hello.pas', arr);
-  JsonCharsNew(out);
-  JsonRender(note, out);
-  e := JsonCharsInto(out, s);
+  out.Init;
+  note.Render(out);
+  e := out.Into(s);
   writeln('  ', s);
-  JsonCharsFree(out);
-  JsonFree(note)
+  out.Free;
+  note.Free
 end.

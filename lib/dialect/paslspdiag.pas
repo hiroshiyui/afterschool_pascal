@@ -144,7 +144,7 @@ function Utf16Column(line: DiagLine; col: integer): integer;
 { One `Diagnostic` as the protocol's own object: a zero-width range at the
   position, the severity the compiler's own word gave, and `pascalc` as the
   source. The caller owns
-  what comes back and frees it with `JsonFree`, or appends it to something it
+  what comes back and frees it with `Free`, or appends it to something it
   frees.
 
   `line` is the source line the diagnostic is on, needed only for the column
@@ -154,7 +154,7 @@ function Utf16Column(line: DiagLine; col: integer): integer;
 function DiagJson(d: Diagnostic; line: DiagLine; enc: PosEncoding): JsonPtr;
 
 { A `textDocument/publishDiagnostics` notification for `uri`, over an array
-  `diags` the caller built with `JsonNewArray` and `JsonAppend`. The array
+  `diags` the caller built with `JsonNewArray` and `Append`. The array
   becomes part of the result and must not be freed separately.
 
   The URI is schematic because it is a path and not a line: a client that can
@@ -286,8 +286,8 @@ var pos, range, obj: JsonPtr;
   var p: JsonPtr;
   begin
     p := JsonNewObject;
-    JsonPut(p, 'line', JsonNewInteger(d.line - 1));
-    JsonPut(p, 'character', JsonNewInteger(character - 1));
+    p.Put('line', JsonNewInteger(d.line - 1));
+    p.Put('character', JsonNewInteger(character - 1));
     At := p
   end;
 
@@ -297,10 +297,10 @@ begin
   if enc = peUtf16 then character := Utf16Column(line, d.col)
   else character := d.col;
   range := JsonNewObject;
-  JsonPut(range, 'start', At);
+  range.Put('start', At);
   { A zero-width range: the compiler reports a point and inventing an end for
     it would be inventing a claim about the source. An editor shows a caret. }
-  JsonPut(range, 'end', At);
+  range.Put('end', At);
 
   { 3.17's DiagnosticSeverity: 1 is Error and 2 is Warning. A case and not an
     `if`, so that a severity added to the enumeration is a translation error
@@ -311,10 +311,10 @@ begin
   end;
 
   obj := JsonNewObject;
-  JsonPut(obj, 'range', range);
-  JsonPut(obj, 'severity', JsonNewInteger(sev));
-  JsonPut(obj, 'source', JsonNewText('pascalc'));
-  JsonPut(obj, 'message', JsonNewText(d.message));
+  obj.Put('range', range);
+  obj.Put('severity', JsonNewInteger(sev));
+  obj.Put('source', JsonNewText('pascalc'));
+  obj.Put('message', JsonNewText(d.message));
   pos := obj;
   DiagJson := pos
 end;
@@ -323,14 +323,14 @@ function DiagPublish;
 var msg, params: JsonPtr;
 begin
   params := JsonNewObject;
-  JsonPut(params, 'uri', JsonNewText(uri));
-  JsonPut(params, 'diagnostics', diags);
+  params.Put('uri', JsonNewText(uri));
+  params.Put('diagnostics', diags);
 
   msg := JsonNewObject;
-  JsonPut(msg, 'jsonrpc', JsonNewText('2.0'));
+  msg.Put('jsonrpc', JsonNewText('2.0'));
   { A notification and not a request: no `id`, and the client sends no reply. }
-  JsonPut(msg, 'method', JsonNewText('textDocument/publishDiagnostics'));
-  JsonPut(msg, 'params', params);
+  msg.Put('method', JsonNewText('textDocument/publishDiagnostics'));
+  msg.Put('params', params);
   DiagPublish := msg
 end;
 

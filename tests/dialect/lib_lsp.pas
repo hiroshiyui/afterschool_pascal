@@ -36,27 +36,27 @@ begin
   LspOpen(r, StdIn);
   seen := 0;
   repeat
-    JsonCharsNew(body);
+    body.Init;
     e := LspRead(r, body);
     if e = errNone then begin
       seen := seen + 1;
       res := JsonParseChars(body, at);
       if not res.ok then begin
-        writestr(line, 'message ', seen:1, ' bytes=', JsonCharsLen(body):1,
+        writestr(line, 'message ', seen:1, ' bytes=', body.Len:1,
                  ' not JSON: ', ErrorText(res.cause));
         Say(line)
       end
       else begin
-        ignore := JsonTextInto(JsonMember(res.val, 'method'), line);
-        writestr(line, 'message ', seen:1, ' bytes=', JsonCharsLen(body):1,
-                 ' id=', JsonIntegerOr(JsonMember(res.val, 'id'), -1):1);
+        ignore := res.val.Member('method').TextInto(line);
+        writestr(line, 'message ', seen:1, ' bytes=', body.Len:1,
+                 ' id=', res.val.Member('id').IntegerOr(-1):1);
         Say(line);
-        ignore := JsonTextInto(JsonMember(res.val, 'method'), line);
+        ignore := res.val.Member('method').TextInto(line);
         Say('  method=' + line);
-        JsonFree(res.val)
+        res.val.Free
       end
     end;
-    JsonCharsFree(body)
+    body.Free
   until e <> errNone;
 
   { `errAbsent` is how a server's loop ends and is not a failure -- the client
@@ -67,16 +67,16 @@ begin
   { And one message written back, which is the half of the module a reader of
     the input cannot see. The header is <CR><LF> twice over, always. }
   reply := JsonNewObject;
-  JsonPut(reply, 'jsonrpc', JsonNewText('2.0'));
-  JsonPut(reply, 'id', JsonNewInteger(1));
+  reply.Put('jsonrpc', JsonNewText('2.0'));
+  reply.Put('id', JsonNewInteger(1));
   params := JsonNewObject;
-  JsonPut(params, 'capabilities', JsonNewObject);
-  JsonPut(reply, 'result', params);
-  JsonCharsNew(out);
-  JsonRender(reply, out);
+  params.Put('capabilities', JsonNewObject);
+  reply.Put('result', params);
+  out.Init;
+  reply.Render(out);
   e := LspWrite(StdOut, out);
-  JsonCharsFree(out);
-  JsonFree(reply);
+  out.Free;
+  reply.Free;
   Say('');
   writestr(line, 'write code=', ErrorText(e));
   Say(line)

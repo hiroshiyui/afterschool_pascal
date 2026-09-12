@@ -41,25 +41,29 @@
 
 module PasJson;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Twenty-five names are exported where fifty were:
+  `JsonChars` and `JsonPtr` each have an implementation in the block below,
+  and an implementation is selected from the *type* of the receiver rather
+  than from a name in scope (AP 6.7.10.2), so none of its routines is an
+  exported name and none can collide with another module's. That is what
+  retired the `Json` prefix from twenty-four of them: `JsonCharsAddLine`
+  became `AddText` and `JsonIntegerOr` became `IntegerOr`, and what makes
+  the short spelling safe is that §6.11.2's one scope is never reached.
+
+  What stays exported is what has no receiver to be selected from: the types,
+  the three bounds, the seven constructors, and the two entry points that
+  build a document out of bytes. }
+
 export PasJson = (JsonKind, jsNull, jsFalse, jsTrue, jsNumber, jsString,
                   jsArray, jsObject,
                   JsonName, JsonLine, JsonChars, JsonPtr, JsonResult,
                   JsonDepthMax, JsonNameMax, JsonLineMax,
 
-                  JsonCharsNew, JsonCharsFree, JsonCharsAdd, JsonCharsAddLine,
-                  JsonCharsLen, JsonCharsAt, JsonCharsInto, JsonCharsFull,
-
-                  JsonParse, JsonParseChars, JsonFree,
-
-                  JsonKindOf, JsonCount, JsonAt, JsonMember, JsonNameAt,
-                  JsonNumberOr, JsonIntegerOr, JsonBooleanOr, JsonIsNull,
-                  JsonTextLen, JsonTextAt, JsonTextInto,
+                  JsonParse, JsonParseChars,
 
                   JsonNewNull, JsonNewBoolean, JsonNewNumber, JsonNewInteger,
-                  JsonNewText, JsonNewArray, JsonNewObject,
-                  JsonAppend, JsonPut, JsonTextAdd,
-
-                  JsonRender);
+                  JsonNewText, JsonNewArray, JsonNewObject);
 
 import PasError; PasContainer; PasText;
 
@@ -70,8 +74,7 @@ const
     this module imposes: every routine below that takes a string in one piece
     takes a schematic one, so the capacity is the caller's (ADR-0291). A
     document larger than any string goes through `JsonChars`, which is bounded
-    by PasContainer's CapMax and says so: `JsonCharsFull` is how a caller
-    asks, and until ADR-0276 this comment claimed there was no bound and a
+    by PasContainer's CapMax and says so: `Full` is how a caller asks, and until ADR-0276 this comment claimed there was no bound and a
     buffer past it trapped. }
   JsonLineMax = 255;
   { Nesting, so a hostile document cannot exhaust the stack -- the parser is
@@ -90,13 +93,13 @@ type
 
   { PasContainer's vector over `char`, which is what makes a string value
     unbounded. A caller never names `Vec` and never imports PasContainer: the
-    seven routines below are the whole of what it needs. }
+    eight methods of `impl JsonChars` are the whole of what it needs. }
   JsonChars = ^Vec(char);
 
   JsonPtr = ^JsonNode;
   JsonNode = record
     { The next sibling of an array element or an object member. A document is
-      a tree of these and nothing here is shared, so `JsonFree` is a walk. }
+      a tree of these and nothing here is shared, so `Free` is a walk. }
     next: JsonPtr;
     { The member name, for a member of an object; empty otherwise, and never
       read for anything else. In the fixed part because it belongs to the
@@ -119,93 +122,25 @@ type
     `errFull` for a member name longer than `JsonNameMax`. }
   JsonResult = Fallible(JsonPtr);
 
-{ --- the byte buffer ------------------------------------------------------ }
-
-{ An empty buffer. Every `JsonChars` a caller holds comes from here or from a
-  routine that says it answers one. }
-procedure JsonCharsNew(var b: JsonChars);
-
-{ Release it and leave `b` nil. A nil `b` is harmless. }
-procedure JsonCharsFree(var b: JsonChars);
-
-procedure JsonCharsAdd(var b: JsonChars; c: char);
-
-{ Append a whole string, which is how a caller assembles a document to parse.
-  Schematic, so a caller holding a longer capacity than `JsonLine` is not
-  refused at this boundary (ADR-0291). }
-procedure JsonCharsAddLine(var b: JsonChars; s: string);
-
-function JsonCharsLen(var b: JsonChars): integer;
-
-{ Has this buffer reached the largest extent it can have, so that the next
-  character would be dropped? A caller assembling someone else's bytes -- a
-  message body, a document -- asks this and reports `errFull`, which is this
-  module's rule everywhere else a bound is met (ADR-0276). }
-function JsonCharsFull(var b: JsonChars): boolean;
-
-{ The i'th byte, 1-based. Out of range is the caller's error and traps, as an
-  array subscript does. }
-function JsonCharsAt(var b: JsonChars; i: integer): char;
-
-{ Copy the whole buffer into a string. `errFull` when it does not fit, and `s`
-  is then untouched. }
-function JsonCharsInto(var b: JsonChars; var s: string): ErrorCode;
-
 { --- parsing -------------------------------------------------------------- }
 
 { Parse a whole document. `at` receives the 1-based byte position parsing
   stopped at, which is where a caller reports from; it is the position *after*
-  the value on success. A successful result owns a tree the caller must free. }
+  the value on success. A successful result owns a tree the caller must free
+  with `Free`. }
 function JsonParseChars(var b: JsonChars; var at: integer) = r: JsonResult;
 
 { The same, for a document that fits in one string -- of whatever capacity
   the caller declared. }
 function JsonParse(s: string; var at: integer) = r: JsonResult;
 
-{ Dispose a value and everything under it, and leave `v` nil. }
-procedure JsonFree(var v: JsonPtr);
-
-{ --- reading -------------------------------------------------------------- }
-
-{ The kind of a value. `jsNull` for nil, which is what makes every reader below
-  safe to call on a member that was not there. }
-function JsonKindOf(v: JsonPtr): JsonKind;
-
-{ How many elements an array has, or members an object; 0 for anything else. }
-function JsonCount(v: JsonPtr): integer;
-
-{ The i'th element or member, 1-based, or nil. }
-function JsonAt(v: JsonPtr; i: integer): JsonPtr;
-
-{ The member of an object with this name, or nil. }
-function JsonMember(v: JsonPtr; name: JsonName): JsonPtr;
-
-{ The name of the i'th member of an object, or the empty string. }
-function JsonNameAt(v: JsonPtr; i: integer): JsonName;
-
-function JsonNumberOr(v: JsonPtr; whenBad: real): real;
-
-{ The value as an integer, when it was written as one and fits. `whenBad`
-  otherwise -- including for a number that has a fraction, since 1.5 is not an
-  integer and answering 1 would be a different message. }
-function JsonIntegerOr(v: JsonPtr; whenBad: integer): integer;
-
-function JsonBooleanOr(v: JsonPtr; whenBad: boolean): boolean;
-
-function JsonIsNull(v: JsonPtr): boolean;
-
-{ The length of a string value in bytes; 0 for anything else. }
-function JsonTextLen(v: JsonPtr): integer;
-
-{ The i'th byte of a string value, 1-based. }
-function JsonTextAt(v: JsonPtr; i: integer): char;
-
-{ A string value copied into `s`. `errAbsent` when the value is not a string,
-  `errFull` when it does not fit. }
-function JsonTextInto(v: JsonPtr; var s: string): ErrorCode;
-
 { --- building ------------------------------------------------------------- }
 
+{ The seven constructors, which stay exported because a constructor has no
+  receiver for AP 6.7.10.2 to select from: `JsonNewNull` takes nothing at all,
+  and the rest take the value rather than the document. They keep the prefix
+  for §6.11.2's reason -- these are names in one scope with every other
+  module's. }
 function JsonNewNull: JsonPtr;
 function JsonNewBoolean(b: boolean): JsonPtr;
 function JsonNewNumber(x: real): JsonPtr;
@@ -214,26 +149,8 @@ function JsonNewText(s: string): JsonPtr;
 function JsonNewArray: JsonPtr;
 function JsonNewObject: JsonPtr;
 
-{ Append `item` to an array. The array takes ownership: freeing it frees the
-  item, and a caller must not free the item itself. }
-procedure JsonAppend(arr: JsonPtr; item: JsonPtr);
-
-{ Put `item` in an object under `name`, replacing a member of that name. Takes
-  ownership, as `JsonAppend` does. }
-procedure JsonPut(obj: JsonPtr; name: JsonName; item: JsonPtr);
-
-{ Append to a string value, which is how a caller builds one longer than any
-  capacity it can declare. }
-procedure JsonTextAdd(v: JsonPtr; s: string);
-
-{ --- writing -------------------------------------------------------------- }
-
-{ Append the document's text to `out`. No spaces and no newlines: what this
-  writes is what a protocol wants, and a caller wanting it readable is writing
-  it for a person rather than for a peer. }
-procedure JsonRender(v: JsonPtr; var out: JsonChars);
-
 end;
+
 
 { --- reading a number ------------------------------------------------------ }
 
@@ -255,68 +172,87 @@ type
     than a wrong answer. }
   JsonNumText = string(SigMax + 16);
 
-{ --- the buffer ----------------------------------------------------------- }
+{ --- the byte buffer ------------------------------------------------------ }
 
-procedure JsonCharsNew;
-begin
-  VecInit(JsonChars, b, 32)
-end;
 
-procedure JsonCharsFree;
-begin
-  VecFree(JsonChars, b)
-end;
+impl JsonChars;
 
-procedure JsonCharsAdd;
-begin
-  VecPush(JsonChars, b, c)
-end;
+  { An empty buffer. Every `JsonChars` a caller holds comes from here or from
+    a routine that says it answers one. }
+  procedure Init(var b: JsonChars);
+  begin
+    VecInit(JsonChars, b, 32)
+  end;
 
-procedure JsonCharsAddLine;
-var i: integer;
-begin
-  for i := 1 to length(s) do
-    VecPush(JsonChars, b, s[i])
-end;
+  { Release it and leave `b` nil. A nil `b` is harmless. }
+  procedure Free(var b: JsonChars);
+  begin
+    VecFree(JsonChars, b)
+  end;
 
-function JsonCharsFull;
-begin
-  JsonCharsFull := VecFull(JsonChars, b)
-end;
+  { Append one byte. }
+  procedure Add(var b: JsonChars; c: char);
+  begin
+    VecPush(JsonChars, b, c)
+  end;
 
-function JsonCharsLen;
-begin
-  JsonCharsLen := VecLen(JsonChars, b)
-end;
+  { Append a whole string, which is how a caller assembles a document to
+    parse. Schematic, so a caller holding a longer capacity than `JsonLine`
+    is not refused at this boundary (ADR-0291). }
+  procedure AddText(var b: JsonChars; s: string);
+  var i: integer;
+  begin
+    for i := 1 to length(s) do
+      VecPush(JsonChars, b, s[i])
+  end;
 
-function JsonCharsAt;
-begin
-  JsonCharsAt := VecGet(char, b, i)
-end;
+  function Len(var b: JsonChars): integer;
+  begin
+    Len := VecLen(JsonChars, b)
+  end;
 
-function JsonCharsInto;
-var i, n: integer;
-begin
-  n := VecLen(JsonChars, b);
-  if n > s.capacity then
-    JsonCharsInto := errFull
-  else begin
-    { Built into `s` and not through a local accumulator. It was built through
-      `acc: string(JsonLineMax)`, which made the capacity check a lie: the guard
-      asks the *caller's* capacity and the accumulator imposed 255 whatever
-      the caller passed, so a document between 256 and the caller's capacity
-      passed the check and then stopped the program at
-      `a string of length 256 does not fit a capacity of 255`. A
-      `publishDiagnostics` notification carrying two diagnostics is 300-odd
-      characters, which is how it was found: the first realistic client
-      exceeded it. `s` is 6.4.3.3.3's canonical string-type through a `var`
-      parameter, so its own capacity is what the appends are checked against,
-      which is the capacity the guard already asked about. }
-    s := '';
-    for i := 1 to n do
-      s := s + VecGet(char, b, i);
-    JsonCharsInto := errNone
-  end
+  { Has this buffer reached the largest extent it can have, so that the next
+    character would be dropped? A caller assembling someone else's bytes -- a
+    message body, a document -- asks this and reports `errFull`, which is this
+    module's rule everywhere else a bound is met (ADR-0276). }
+  function Full(var b: JsonChars): boolean;
+  begin
+    Full := VecFull(JsonChars, b)
+  end;
+
+  { The i'th byte, 1-based. Out of range is the caller's error and traps, as
+    an array subscript does. }
+  function At(var b: JsonChars; i: integer): char;
+  begin
+    At := VecGet(char, b, i)
+  end;
+
+  { Copy the whole buffer into a string. `errFull` when it does not fit, and
+    `s` is then untouched. }
+  function Into(var b: JsonChars; var s: string): ErrorCode;
+  var i, n: integer;
+  begin
+    n := VecLen(JsonChars, b);
+    if n > s.capacity then
+      Into := errFull
+    else begin
+      { Built into `s` and not through a local accumulator. It was built through
+        `acc: string(JsonLineMax)`, which made the capacity check a lie: the guard
+        asks the *caller's* capacity and the accumulator imposed 255 whatever
+        the caller passed, so a document between 256 and the caller's capacity
+        passed the check and then stopped the program at
+        `a string of length 256 does not fit a capacity of 255`. A
+        `publishDiagnostics` notification carrying two diagnostics is 300-odd
+        characters, which is how it was found: the first realistic client
+        exceeded it. `s` is 6.4.3.3.3's canonical string-type through a `var`
+        parameter, so its own capacity is what the appends are checked against,
+        which is the capacity the guard already asked about. }
+      s := '';
+      for i := 1 to n do
+        s := s + VecGet(char, b, i);
+      Into := errNone
+    end
+  end;
 end;
 
 { --- nodes ---------------------------------------------------------------- }
@@ -335,7 +271,7 @@ begin
   case k of
     jsNull, jsFalse, jsTrue: ;
     jsNumber: begin p^.num := 0.0; p^.whole := true; p^.inum := 0 end;
-    jsString: JsonCharsNew(p^.text);
+    jsString: p^.text.Init;
     jsArray, jsObject: begin
       p^.first := nil;
       p^.last := nil;
@@ -345,138 +281,312 @@ begin
   FreshNode := p
 end;
 
-procedure JsonFree;
-var kid, nxt: JsonPtr;
+{ The one place a node joins a container, so the sibling list and the count are
+  maintained together and nowhere else. }
+procedure Attach(owner, item: JsonPtr);
 begin
-  if v <> nil then begin
-    case v^.kind of
-      jsNull, jsFalse, jsTrue, jsNumber: ;
-      jsString: JsonCharsFree(v^.text);
-      jsArray, jsObject: begin
-        kid := v^.first;
-        while kid <> nil do begin
-          nxt := kid^.next;
-          JsonFree(kid);
-          kid := nxt
+  if owner^.first = nil then owner^.first := item
+  else owner^.last^.next := item;
+  owner^.last := item;
+  owner^.count := owner^.count + 1
+end;
+
+{ --- writing a value ------------------------------------------------------ }
+
+function HexDigit(n: integer): char;
+begin
+  if n < 10 then HexDigit := chr(ord('0') + n)
+  else HexDigit := chr(ord('a') + n - 10)
+end;
+
+{ RFC 8259 §7. The quotation mark and the reverse solidus must be escaped and
+  every control character must be; the solidus may be and is not, because
+  escaping it makes a URL unreadable for no gain. }
+procedure RenderText(var t: JsonChars; var out: JsonChars);
+var k, n, c: integer; ch: char;
+begin
+  out.Add('"');
+  n := t.Len;
+  for k := 1 to n do begin
+    ch := t.At(k);
+    c := ord(ch);
+    if ch = '"' then out.AddText('\"')
+    else if ch = '\' then out.AddText('\\')
+    else if c = 8 then out.AddText('\b')
+    else if c = 9 then out.AddText('\t')
+    else if c = 10 then out.AddText('\n')
+    else if c = 12 then out.AddText('\f')
+    else if c = 13 then out.AddText('\r')
+    else if c < 32 then begin
+      out.AddText('\u00');
+      out.Add(HexDigit(c div 16));
+      out.Add(HexDigit(c mod 16))
+    end
+    else
+      out.Add(ch)
+  end;
+  out.Add('"')
+end;
+
+procedure RenderNumber(v: JsonPtr; var out: JsonChars);
+var s: TextLine; k: integer;
+begin
+  { A number the document wrote without a fraction and without an exponent is
+    written back the same way (`whole`, ADR-0120): JSON has one number type,
+    and an LSP request id re-emitted as `3.0` is a different message.
+
+    The shortest spelling that reads back is `PasText.RealToStr`, which is
+    where ADR-0309's search moved when this stopped being its only caller.
+    What it answers for a value with no decimal representation -- an infinity,
+    a NaN -- is what `writestr` writes, which is not a JSON number; JSON has
+    neither value and no answer here is one. }
+  if v^.whole then s := IntToStr(v^.inum) else s := RealToStr(v^.num);
+  for k := 1 to length(s) do out.Add(s[k])
+end;
+
+{ --- the document --------------------------------------------------------- }
+
+
+impl JsonPtr;
+
+  { Dispose a value and everything under it, and leave `v` nil. }
+  procedure Free(var v: JsonPtr);
+  var kid, nxt: JsonPtr;
+  begin
+    if v <> nil then begin
+      case v^.kind of
+        jsNull, jsFalse, jsTrue, jsNumber: ;
+        jsString: v^.text.Free;
+        jsArray, jsObject: begin
+          kid := v^.first;
+          while kid <> nil do begin
+            nxt := kid^.next;
+            kid.Free;
+            kid := nxt
+          end
+        end
+      end;
+      dispose(v);
+      v := nil
+    end
+  end;
+
+  { The kind of a value. `jsNull` for nil, which is what makes every reader
+    below safe to call on a member that was not there. }
+  function Kind(v: JsonPtr): JsonKind;
+  begin
+    if v = nil then Kind := jsNull else Kind := v^.kind
+  end;
+
+  { How many elements an array has, or members an object; 0 for anything
+    else. }
+  function Count(v: JsonPtr): integer;
+  begin
+    if v = nil then Count := 0
+    else
+      case v^.kind of
+        jsNull, jsFalse, jsTrue, jsNumber, jsString: Count := 0;
+        jsArray, jsObject: Count := v^.count
+      end
+  end;
+
+  { The i'th element or member, 1-based, or nil. }
+  function At(v: JsonPtr; i: integer): JsonPtr;
+  var p: JsonPtr; n: integer;
+  begin
+    At := nil;
+    if v <> nil then
+      case v^.kind of
+        jsNull, jsFalse, jsTrue, jsNumber, jsString: ;
+        jsArray, jsObject:
+          if (i >= 1) and (i <= v^.count) then begin
+            p := v^.first;
+            n := 1;
+            while n < i do begin
+              p := p^.next;
+              n := n + 1
+            end;
+            At := p
+          end
+      end
+  end;
+
+  { The member of an object with this name, or nil. }
+  function Member(v: JsonPtr; name: JsonName): JsonPtr;
+  var p: JsonPtr; found: JsonPtr;
+  begin
+    found := nil;
+    if v <> nil then
+      if v^.kind = jsObject then begin
+        p := v^.first;
+        while (p <> nil) and (found = nil) do begin
+          if p^.name = name then found := p;
+          p := p^.next
+        end
+      end;
+    Member := found
+  end;
+
+  { The name of the i'th member of an object, or the empty string. }
+  function NameAt(v: JsonPtr; i: integer): JsonName;
+  var p: JsonPtr;
+  begin
+    NameAt := '';
+    if v <> nil then
+      if v^.kind = jsObject then begin
+        p := v.At(i);
+        if p <> nil then NameAt := p^.name
+      end
+  end;
+
+  function NumberOr(v: JsonPtr; whenBad: real): real;
+  begin
+    NumberOr := whenBad;
+    if v <> nil then
+      if v^.kind = jsNumber then NumberOr := v^.num
+  end;
+
+  { The value as an integer, when it was written as one and fits. `whenBad`
+    otherwise -- including for a number that has a fraction, since 1.5 is not
+    an integer and answering 1 would be a different message. }
+  function IntegerOr(v: JsonPtr; whenBad: integer): integer;
+  begin
+    IntegerOr := whenBad;
+    if v <> nil then
+      if v^.kind = jsNumber then
+        if v^.whole then IntegerOr := v^.inum
+  end;
+
+  function BooleanOr(v: JsonPtr; whenBad: boolean): boolean;
+  begin
+    BooleanOr := whenBad;
+    if v <> nil then
+      case v^.kind of
+        jsTrue: BooleanOr := true;
+        jsFalse: BooleanOr := false;
+        jsNull, jsNumber, jsString, jsArray, jsObject: ;
+      end
+  end;
+
+  function IsNull(v: JsonPtr): boolean;
+  begin
+    IsNull := (v = nil) or (v^.kind = jsNull)
+  end;
+
+  { The length of a string value in bytes; 0 for anything else. }
+  function TextLen(v: JsonPtr): integer;
+  begin
+    TextLen := 0;
+    if v <> nil then
+      if v^.kind = jsString then TextLen := v^.text.Len
+  end;
+
+  { The i'th byte of a string value, 1-based. }
+  function TextAt(v: JsonPtr; i: integer): char;
+  begin
+    TextAt := v^.text.At(i)
+  end;
+
+  { A string value copied into `s`. `errAbsent` when the value is not a
+    string, `errFull` when it does not fit. }
+  function TextInto(v: JsonPtr; var s: string): ErrorCode;
+  begin
+    if v = nil then TextInto := errAbsent
+    else if v^.kind <> jsString then TextInto := errAbsent
+    else TextInto := v^.text.Into(s)
+  end;
+
+  { Append `item` to an array. The array takes ownership: freeing it frees
+    the item, and a caller must not free the item itself. }
+  procedure Append(arr: JsonPtr; item: JsonPtr);
+  begin
+    if (arr <> nil) and (item <> nil) then
+      if arr^.kind = jsArray then Attach(arr, item)
+  end;
+
+  { Put `item` in an object under `name`, replacing a member of that name.
+    Takes ownership, as `Append` does. }
+  procedure Put(obj: JsonPtr; name: JsonName; item: JsonPtr);
+  var p, prev: JsonPtr;
+  begin
+    if (obj <> nil) and (item <> nil) then
+      if obj^.kind = jsObject then begin
+        item^.name := name;
+        { Replacing in place keeps the written order, which is what a reader of
+          the output expects and what a round-trip through this module should
+          not disturb. }
+        p := obj^.first;
+        prev := nil;
+        while (p <> nil) and (p^.name <> name) do begin
+          prev := p;
+          p := p^.next
+        end;
+        if p = nil then Attach(obj, item)
+        else begin
+          item^.next := p^.next;
+          if prev = nil then obj^.first := item
+          else prev^.next := item;
+          if obj^.last = p then obj^.last := item;
+          p^.next := nil;
+          p.Free
         end
       end
-    end;
-    dispose(v);
-    v := nil
-  end
-end;
+  end;
 
-{ --- reading -------------------------------------------------------------- }
+  { Append to a string value, which is how a caller builds one longer than
+    any capacity it can declare. }
+  procedure TextAdd(v: JsonPtr; s: string);
+  begin
+    if v <> nil then
+      if v^.kind = jsString then v^.text.AddText(s)
+  end;
 
-function JsonKindOf;
-begin
-  if v = nil then JsonKindOf := jsNull else JsonKindOf := v^.kind
-end;
-
-function JsonCount;
-begin
-  if v = nil then JsonCount := 0
-  else
-    case v^.kind of
-      jsNull, jsFalse, jsTrue, jsNumber, jsString: JsonCount := 0;
-      jsArray, jsObject: JsonCount := v^.count
-    end
-end;
-
-function JsonAt;
-var p: JsonPtr; n: integer;
-begin
-  JsonAt := nil;
-  if v <> nil then
-    case v^.kind of
-      jsNull, jsFalse, jsTrue, jsNumber, jsString: ;
-      jsArray, jsObject:
-        if (i >= 1) and (i <= v^.count) then begin
-          p := v^.first;
-          n := 1;
-          while n < i do begin
-            p := p^.next;
-            n := n + 1
+  { Append the document's text to `out`. No spaces and no newlines: what this
+    writes is what a protocol wants, and a caller wanting it readable is
+    writing it for a person rather than for a peer. }
+  procedure Render(v: JsonPtr; var out: JsonChars);
+  var kid: JsonPtr; nm: JsonChars; k: integer;
+  begin
+    if v = nil then
+      out.AddText('null')
+    else
+      case v^.kind of
+        jsNull:  out.AddText('null');
+        jsTrue:  out.AddText('true');
+        jsFalse: out.AddText('false');
+        jsNumber: RenderNumber(v, out);
+        jsString: RenderText(v^.text, out);
+        jsArray: begin
+          out.Add('[');
+          kid := v^.first;
+          while kid <> nil do begin
+            kid.Render(out);
+            kid := kid^.next;
+            if kid <> nil then out.Add(',')
           end;
-          JsonAt := p
+          out.Add(']')
+        end;
+        jsObject: begin
+          out.Add('{');
+          kid := v^.first;
+          while kid <> nil do begin
+            { A name is a string value like any other and is escaped by the same
+              routine, which is why it is put into a buffer first rather than
+              written out with quotes around it. }
+            nm.Init;
+            for k := 1 to length(kid^.name) do
+              nm.Add(kid^.name[k]);
+            RenderText(nm, out);
+            nm.Free;
+            out.Add(':');
+            kid.Render(out);
+            kid := kid^.next;
+            if kid <> nil then out.Add(',')
+          end;
+          out.Add('}')
         end
-    end
-end;
-
-function JsonMember;
-var p: JsonPtr; found: JsonPtr;
-begin
-  found := nil;
-  if v <> nil then
-    if v^.kind = jsObject then begin
-      p := v^.first;
-      while (p <> nil) and (found = nil) do begin
-        if p^.name = name then found := p;
-        p := p^.next
       end
-    end;
-  JsonMember := found
-end;
-
-function JsonNameAt;
-var p: JsonPtr;
-begin
-  JsonNameAt := '';
-  if v <> nil then
-    if v^.kind = jsObject then begin
-      p := JsonAt(v, i);
-      if p <> nil then JsonNameAt := p^.name
-    end
-end;
-
-function JsonNumberOr;
-begin
-  JsonNumberOr := whenBad;
-  if v <> nil then
-    if v^.kind = jsNumber then JsonNumberOr := v^.num
-end;
-
-function JsonIntegerOr;
-begin
-  JsonIntegerOr := whenBad;
-  if v <> nil then
-    if v^.kind = jsNumber then
-      if v^.whole then JsonIntegerOr := v^.inum
-end;
-
-function JsonBooleanOr;
-begin
-  JsonBooleanOr := whenBad;
-  if v <> nil then
-    case v^.kind of
-      jsTrue: JsonBooleanOr := true;
-      jsFalse: JsonBooleanOr := false;
-      jsNull, jsNumber, jsString, jsArray, jsObject: ;
-    end
-end;
-
-function JsonIsNull;
-begin
-  JsonIsNull := (v = nil) or (v^.kind = jsNull)
-end;
-
-function JsonTextLen;
-begin
-  JsonTextLen := 0;
-  if v <> nil then
-    if v^.kind = jsString then JsonTextLen := JsonCharsLen(v^.text)
-end;
-
-function JsonTextAt;
-begin
-  JsonTextAt := JsonCharsAt(v^.text, i)
-end;
-
-function JsonTextInto;
-begin
-  if v = nil then JsonTextInto := errAbsent
-  else if v^.kind <> jsString then JsonTextInto := errAbsent
-  else JsonTextInto := JsonCharsInto(v^.text, s)
+  end;
 end;
 
 { --- building ------------------------------------------------------------- }
@@ -514,7 +624,7 @@ function JsonNewText;
 var p: JsonPtr;
 begin
   p := FreshNode(jsString);
-  JsonCharsAddLine(p^.text, s);
+  p^.text.AddText(s);
   JsonNewText := p
 end;
 
@@ -524,55 +634,6 @@ begin JsonNewArray := FreshNode(jsArray) end;
 function JsonNewObject;
 begin JsonNewObject := FreshNode(jsObject) end;
 
-{ The one place a node joins a container, so the sibling list and the count are
-  maintained together and nowhere else. }
-procedure Attach(owner, item: JsonPtr);
-begin
-  if owner^.first = nil then owner^.first := item
-  else owner^.last^.next := item;
-  owner^.last := item;
-  owner^.count := owner^.count + 1
-end;
-
-procedure JsonAppend;
-begin
-  if (arr <> nil) and (item <> nil) then
-    if arr^.kind = jsArray then Attach(arr, item)
-end;
-
-procedure JsonPut;
-var p, prev: JsonPtr;
-begin
-  if (obj <> nil) and (item <> nil) then
-    if obj^.kind = jsObject then begin
-      item^.name := name;
-      { Replacing in place keeps the written order, which is what a reader of
-        the output expects and what a round-trip through this module should
-        not disturb. }
-      p := obj^.first;
-      prev := nil;
-      while (p <> nil) and (p^.name <> name) do begin
-        prev := p;
-        p := p^.next
-      end;
-      if p = nil then Attach(obj, item)
-      else begin
-        item^.next := p^.next;
-        if prev = nil then obj^.first := item
-        else prev^.next := item;
-        if obj^.last = p then obj^.last := item;
-        p^.next := nil;
-        JsonFree(p)
-      end
-    end
-end;
-
-procedure JsonTextAdd;
-begin
-  if v <> nil then
-    if v^.kind = jsString then JsonCharsAddLine(v^.text, s)
-end;
-
 { --- parsing -------------------------------------------------------------- }
 
 { The cursor travels as a `var` parameter rather than living in the module.
@@ -581,7 +642,7 @@ end;
 
 function AtEnd(var b: JsonChars; i: integer): boolean;
 begin
-  AtEnd := i > JsonCharsLen(b)
+  AtEnd := i > b.Len
 end;
 
 { RFC 8259 §2: space, horizontal tab, line feed, carriage return, and nothing
@@ -593,7 +654,7 @@ begin
   while going do
     if AtEnd(b, i) then going := false
     else begin
-      c := JsonCharsAt(b, i);
+      c := b.At(i);
       if (c = ' ') or (c = chr(9)) or (c = chr(10)) or (c = chr(13)) then
         i := i + 1
       else
@@ -603,7 +664,7 @@ end;
 
 function Peek(var b: JsonChars; i: integer): char;
 begin
-  if AtEnd(b, i) then Peek := chr(0) else Peek := JsonCharsAt(b, i)
+  if AtEnd(b, i) then Peek := chr(0) else Peek := b.At(i)
 end;
 
 { One of the three literals, matched whole: `truex` is not `true` followed by
@@ -632,33 +693,27 @@ begin
   else ok := false
 end;
 
-function HexDigit(n: integer): char;
-begin
-  if n < 10 then HexDigit := chr(ord('0') + n)
-  else HexDigit := chr(ord('a') + n - 10)
-end;
-
 { A code point as UTF-8. This is the one place this module writes bytes it was
   not given, `\uXXXX` being the only thing in JSON that names a character
   rather than carrying one. }
 procedure PushUtf8(var t: JsonChars; cp: integer);
 begin
   if cp < 128 then
-    JsonCharsAdd(t, chr(cp))
+    t.Add(chr(cp))
   else if cp < 2048 then begin
-    JsonCharsAdd(t, chr(192 + cp div 64));
-    JsonCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(192 + cp div 64));
+    t.Add(chr(128 + cp mod 64))
   end
   else if cp < 65536 then begin
-    JsonCharsAdd(t, chr(224 + cp div 4096));
-    JsonCharsAdd(t, chr(128 + (cp div 64) mod 64));
-    JsonCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(224 + cp div 4096));
+    t.Add(chr(128 + (cp div 64) mod 64));
+    t.Add(chr(128 + cp mod 64))
   end
   else begin
-    JsonCharsAdd(t, chr(240 + cp div 262144));
-    JsonCharsAdd(t, chr(128 + (cp div 4096) mod 64));
-    JsonCharsAdd(t, chr(128 + (cp div 64) mod 64));
-    JsonCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(240 + cp div 262144));
+    t.Add(chr(128 + (cp div 4096) mod 64));
+    t.Add(chr(128 + (cp div 64) mod 64));
+    t.Add(chr(128 + cp mod 64))
   end
 end;
 
@@ -695,7 +750,7 @@ begin
         going := false
       end
       else begin
-        c := JsonCharsAt(b, i);
+        c := b.At(i);
         if c = '"' then begin
           i := i + 1;
           going := false
@@ -705,21 +760,21 @@ begin
           going := false
         end
         else if c <> '\' then begin
-          JsonCharsAdd(t, c);
+          t.Add(c);
           i := i + 1
         end
         else begin
           i := i + 1;
           c := Peek(b, i);
           i := i + 1;
-          if c = '"' then JsonCharsAdd(t, '"')
-          else if c = '\' then JsonCharsAdd(t, '\')
-          else if c = '/' then JsonCharsAdd(t, '/')
-          else if c = 'b' then JsonCharsAdd(t, chr(8))
-          else if c = 'f' then JsonCharsAdd(t, chr(12))
-          else if c = 'n' then JsonCharsAdd(t, chr(10))
-          else if c = 'r' then JsonCharsAdd(t, chr(13))
-          else if c = 't' then JsonCharsAdd(t, chr(9))
+          if c = '"' then t.Add('"')
+          else if c = '\' then t.Add('\')
+          else if c = '/' then t.Add('/')
+          else if c = 'b' then t.Add(chr(8))
+          else if c = 'f' then t.Add(chr(12))
+          else if c = 'n' then t.Add(chr(10))
+          else if c = 'r' then t.Add(chr(13))
+          else if c = 't' then t.Add(chr(9))
           else if c = 'u' then begin
             cp := Hex4(b, i, ok);
             { A surrogate pair is two escapes and one character. A high
@@ -750,24 +805,6 @@ begin
   ParseStringInto := ok
 end;
 
-{ RFC 8259 §6: a minus, then either `0` or a nonzero digit and more digits,
-  then an optional fraction and an optional exponent. (The grammar is not
-  quoted: a `star-paren` closes a comment opened with a brace, §6.1.8 making
-  the four delimiters two pairs in any combination, so a regular expression
-  cannot be written in one.) The
-  leading-zero rule is enforced, and **no document is refused by it that would
-  not be refused anyway**: a digit cannot follow a value in any context this
-  parser has, so `01`, `[01]` and a leading zero in an object member all fail
-  one token later, at the same position and with the same code. It is kept because a parser should
-  implement the grammar it claims rather than lean on what encloses it -- and
-  the redundancy is written down here because it means no case can fail without
-  the check, which is the kind of claim this repository otherwise treats as
-  unchecked. Removing it is a decision about the grammar, not a simplification.
-
-  The mantissa is accumulated as a real and the integer form is taken from it,
-  so a value above maxint is a number and not an overflow -- ADR-0014 makes
-  integer arithmetic trap, and this is input a program did not write. `whole`
-  is what says the integer form is there to be had. }
 { RFC 8259 §6's number, read correctly rounded (ADR-0314).
 
   **What this used to do and why it was wrong.** It accumulated the digits into
@@ -841,7 +878,7 @@ begin
   end
   else if Digit(Peek(b, i)) then
     while Digit(Peek(b, i)) do begin
-      Keep(JsonCharsAt(b, i), false);
+      Keep(b.At(i), false);
       i := i + 1
     end
   else
@@ -851,7 +888,7 @@ begin
     i := i + 1;
     if not Digit(Peek(b, i)) then ok := false;
     while ok and Digit(Peek(b, i)) do begin
-      Keep(JsonCharsAt(b, i), true);
+      Keep(b.At(i), true);
       i := i + 1
     end
   end;
@@ -869,7 +906,7 @@ begin
         the range of a double either way -- what is outside it is `inf` or
         zero, which is what it was before. }
       if ex > 10000 then ok := false
-      else ex := ex * 10 + (ord(JsonCharsAt(b, i)) - ord('0'));
+      else ex := ex * 10 + (ord(b.At(i)) - ord('0'));
       i := i + 1
     end;
     if ok then
@@ -942,11 +979,11 @@ begin
       if e = errNone then begin
         s := '';
         if named then begin
-          JsonCharsNew(nm);
+          nm.Init;
           if not ParseStringInto(b, i, nm) then e := errSyntax
-          else if JsonCharsLen(nm) > JsonNameMax then e := errFull
-          else e := JsonCharsInto(nm, s);
-          JsonCharsFree(nm);
+          else if nm.Len > JsonNameMax then e := errFull
+          else e := nm.Into(s);
+          nm.Free;
           if e = errNone then begin
             SkipWhite(b, i);
             if Peek(b, i) = ':' then i := i + 1 else e := errSyntax;
@@ -965,7 +1002,7 @@ begin
     end
   end;
   if e <> errNone then begin
-    JsonFree(owner);
+    owner.Free;
     ParseGroup := nil
   end
   else
@@ -982,14 +1019,14 @@ begin
   else if AtEnd(b, i) then
     e := errSyntax
   else begin
-    c := JsonCharsAt(b, i);
+    c := b.At(i);
     if c = '{' then ParseValue := ParseGroup(b, i, depth, true, e)
     else if c = '[' then ParseValue := ParseGroup(b, i, depth, false, e)
     else if c = '"' then begin
       p := FreshNode(jsString);
       if ParseStringInto(b, i, p^.text) then ParseValue := p
       else begin
-        JsonFree(p);
+        p.Free;
         e := errSyntax
       end
     end
@@ -1021,7 +1058,7 @@ begin
       hide that from the caller who has to frame them. }
     SkipWhite(b, at);
     if not AtEnd(b, at) then begin
-      JsonFree(v);
+      v.Free;
       e := errSyntax
     end
   end;
@@ -1031,101 +1068,10 @@ end;
 function JsonParse;
 var b: JsonChars;
 begin
-  JsonCharsNew(b);
-  JsonCharsAddLine(b, s);
+  b.Init;
+  b.AddText(s);
   r := JsonParseChars(b, at);
-  JsonCharsFree(b)
-end;
-
-{ --- writing -------------------------------------------------------------- }
-
-{ RFC 8259 §7. The quotation mark and the reverse solidus must be escaped and
-  every control character must be; the solidus may be and is not, because
-  escaping it makes a URL unreadable for no gain. }
-procedure RenderText(var t: JsonChars; var out: JsonChars);
-var k, n, c: integer; ch: char;
-begin
-  JsonCharsAdd(out, '"');
-  n := JsonCharsLen(t);
-  for k := 1 to n do begin
-    ch := JsonCharsAt(t, k);
-    c := ord(ch);
-    if ch = '"' then JsonCharsAddLine(out, '\"')
-    else if ch = '\' then JsonCharsAddLine(out, '\\')
-    else if c = 8 then JsonCharsAddLine(out, '\b')
-    else if c = 9 then JsonCharsAddLine(out, '\t')
-    else if c = 10 then JsonCharsAddLine(out, '\n')
-    else if c = 12 then JsonCharsAddLine(out, '\f')
-    else if c = 13 then JsonCharsAddLine(out, '\r')
-    else if c < 32 then begin
-      JsonCharsAddLine(out, '\u00');
-      JsonCharsAdd(out, HexDigit(c div 16));
-      JsonCharsAdd(out, HexDigit(c mod 16))
-    end
-    else
-      JsonCharsAdd(out, ch)
-  end;
-  JsonCharsAdd(out, '"')
-end;
-
-procedure RenderNumber(v: JsonPtr; var out: JsonChars);
-var s: TextLine; k: integer;
-begin
-  { A number the document wrote without a fraction and without an exponent is
-    written back the same way (`whole`, ADR-0120): JSON has one number type,
-    and an LSP request id re-emitted as `3.0` is a different message.
-
-    The shortest spelling that reads back is `PasText.RealToStr`, which is
-    where ADR-0309's search moved when this stopped being its only caller.
-    What it answers for a value with no decimal representation -- an infinity,
-    a NaN -- is what `writestr` writes, which is not a JSON number; JSON has
-    neither value and no answer here is one. }
-  if v^.whole then s := IntToStr(v^.inum) else s := RealToStr(v^.num);
-  for k := 1 to length(s) do JsonCharsAdd(out, s[k])
-end;
-
-procedure JsonRender;
-var kid: JsonPtr; nm: JsonChars; k: integer;
-begin
-  if v = nil then
-    JsonCharsAddLine(out, 'null')
-  else
-    case v^.kind of
-      jsNull:  JsonCharsAddLine(out, 'null');
-      jsTrue:  JsonCharsAddLine(out, 'true');
-      jsFalse: JsonCharsAddLine(out, 'false');
-      jsNumber: RenderNumber(v, out);
-      jsString: RenderText(v^.text, out);
-      jsArray: begin
-        JsonCharsAdd(out, '[');
-        kid := v^.first;
-        while kid <> nil do begin
-          JsonRender(kid, out);
-          kid := kid^.next;
-          if kid <> nil then JsonCharsAdd(out, ',')
-        end;
-        JsonCharsAdd(out, ']')
-      end;
-      jsObject: begin
-        JsonCharsAdd(out, '{');
-        kid := v^.first;
-        while kid <> nil do begin
-          { A name is a string value like any other and is escaped by the same
-            routine, which is why it is put into a buffer first rather than
-            written out with quotes around it. }
-          JsonCharsNew(nm);
-          for k := 1 to length(kid^.name) do
-            JsonCharsAdd(nm, kid^.name[k]);
-          RenderText(nm, out);
-          JsonCharsFree(nm);
-          JsonCharsAdd(out, ':');
-          JsonRender(kid, out);
-          kid := kid^.next;
-          if kid <> nil then JsonCharsAdd(out, ',')
-        end;
-        JsonCharsAdd(out, '}')
-      end
-    end
+  b.Free
 end;
 
 end.

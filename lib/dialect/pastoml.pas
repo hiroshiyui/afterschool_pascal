@@ -456,7 +456,7 @@ begin
     TomlCharsInto := errFull
   else begin
     { Built into `s` and not through a local accumulator, for the reason
-      `PasJson.JsonCharsInto` records: an accumulator of this module's own
+      `PasJson`'s `JsonChars.Into` records: an accumulator of this module's own
       capacity would make the guard above a lie about the caller's. }
     s := '';
     for i := 1 to n do

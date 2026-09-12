@@ -48,23 +48,23 @@ begin
 
   { Rendering one. Before the fix this reached
     `array index out of bounds (1..21)` inside pasjson.pas. }
-  JsonCharsNew(out);
+  out.Init;
   v := JsonNewNumber(y);
-  JsonRender(v, out);
-  e := JsonCharsInto(out, s);
-  writeln('nan rendered: returned=', JsonCharsLen(out) > 0, ' code=', ord(e):1);
-  JsonFree(v);
-  JsonCharsFree(out);
+  v.Render(out);
+  e := out.Into(s);
+  writeln('nan rendered: returned=', out.Len > 0, ' code=', ord(e):1);
+  v.Free;
+  out.Free;
 
   { An infinity took the guard all along, and is here so that a change to the
     guard has to keep both halves. }
-  JsonCharsNew(out);
+  out.Init;
   v := JsonNewNumber(x);
-  JsonRender(v, out);
-  e := JsonCharsInto(out, s);
-  writeln('inf rendered: returned=', JsonCharsLen(out) > 0, ' code=', ord(e):1);
-  JsonFree(v);
-  JsonCharsFree(out);
+  v.Render(out);
+  e := out.Into(s);
+  writeln('inf rendered: returned=', out.Len > 0, ' code=', ord(e):1);
+  v.Free;
+  out.Free;
 
   { And the finite path, which is what moved to PasText and must still answer
     the shortest spelling rather than 6.10.3.4.1's default width. }

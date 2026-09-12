@@ -983,7 +983,7 @@ begin
     RegexGroupInto := errFull
   else begin
     { Built into `out` itself rather than through a local, which is
-      `JsonCharsInto`'s lesson: an accumulator of some other capacity makes
+      `JsonChars.Into`'s lesson: an accumulator of some other capacity makes
       the guard above a claim about the wrong string. }
     out := '';
     for k := a to b - 1 do

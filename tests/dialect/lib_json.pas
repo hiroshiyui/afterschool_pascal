@@ -14,7 +14,7 @@ var r: JsonResult; at: integer;
     buf, out: JsonChars;
     s: string(255); e: ErrorCode; i: integer;
     { wider than a line, and narrower than one: the two sides of the
-      capacity JsonCharsInto promises to honour. }
+      capacity `JsonChars.Into` promises to honour. }
     wide: string(1024); narrow: string(16);
 
 begin
@@ -23,67 +23,67 @@ begin
                  '"list":[1,2,3],"s":"a\"b\\c\tdé"}', at);
   writeln('parse ok=', r.ok);
   doc := r.val;
-  writeln('kind=', ord(JsonKindOf(doc)):1, ' members=', JsonCount(doc):1);
-  writeln('id=', JsonIntegerOr(JsonMember(doc, 'id'), -1):1,
-          ' ok=', JsonBooleanOr(JsonMember(doc, 'ok'), false),
-          ' none=', JsonIsNull(JsonMember(doc, 'none')));
-  writeln('pi=', JsonNumberOr(JsonMember(doc, 'pi'), 0.0):5:2,
-          ' pi as int=', JsonIntegerOr(JsonMember(doc, 'pi'), -1):1);
+  writeln('kind=', ord(doc.Kind):1, ' members=', doc.Count:1);
+  writeln('id=', doc.Member('id').IntegerOr(-1):1,
+          ' ok=', doc.Member('ok').BooleanOr(false),
+          ' none=', doc.Member('none').IsNull);
+  writeln('pi=', doc.Member('pi').NumberOr(0.0):5:2,
+          ' pi as int=', doc.Member('pi').IntegerOr(-1):1);
 
-  m := JsonMember(doc, 'list');
+  m := doc.Member('list');
   write('list=');
-  for i := 1 to JsonCount(m) do write(JsonIntegerOr(JsonAt(m, i), 0):1, ' ');
+  for i := 1 to m.Count do write(m.At(i).IntegerOr(0):1, ' ');
   writeln;
 
   { Every escape RFC 8259 §7 has, and the one that is two escapes and one
     character. `é` is é, two bytes of UTF-8, so the byte length is one
     more than the number of characters. }
-  m := JsonMember(doc, 's');
-  e := JsonTextInto(m, s);
-  writeln('s bytes=', JsonTextLen(m):1, ' code=', ord(e):1,
-          ' [2]=', JsonTextAt(m, 2));
+  m := doc.Member('s');
+  e := m.TextInto(s);
+  writeln('s bytes=', m.TextLen:1, ' code=', ord(e):1,
+          ' [2]=', m.TextAt(2));
 
   { A member that is not there is nil, and every reader answers for nil rather
     than trapping — which is what lets a client read an optional field without
     asking first. }
-  writeln('absent kind=', ord(JsonKindOf(JsonMember(doc, 'nope'))):1,
-          ' int=', JsonIntegerOr(JsonMember(doc, 'nope'), -1):1);
+  writeln('absent kind=', ord(doc.Member('nope').Kind):1,
+          ' int=', doc.Member('nope').IntegerOr(-1):1);
 
   { --- writing it back --------------------------------------------------- }
-  JsonCharsNew(out);
-  JsonRender(doc, out);
-  e := JsonCharsInto(out, s);
+  out.Init;
+  doc.Render(out);
+  e := out.Into(s);
   writeln('render=', s);
-  JsonCharsFree(out);
-  JsonFree(doc);
+  out.Free;
+  doc.Free;
 
   { --- building ---------------------------------------------------------- }
   obj := JsonNewObject;
-  JsonPut(obj, 'jsonrpc', JsonNewText('2.0'));
-  JsonPut(obj, 'id', JsonNewInteger(1));
+  obj.Put('jsonrpc', JsonNewText('2.0'));
+  obj.Put('id', JsonNewInteger(1));
   arr := JsonNewArray;
-  JsonAppend(arr, JsonNewInteger(10));
-  JsonAppend(arr, JsonNewBoolean(false));
-  JsonAppend(arr, JsonNewNull);
-  JsonPut(obj, 'params', arr);
+  arr.Append(JsonNewInteger(10));
+  arr.Append(JsonNewBoolean(false));
+  arr.Append(JsonNewNull);
+  obj.Put('params', arr);
   { Replacing a member keeps its position, so a round trip does not reorder. }
-  JsonPut(obj, 'id', JsonNewInteger(2));
-  JsonCharsNew(out);
-  JsonRender(obj, out);
-  e := JsonCharsInto(out, s);
+  obj.Put('id', JsonNewInteger(2));
+  out.Init;
+  obj.Render(out);
+  e := out.Into(s);
   writeln('built=', s);
-  JsonCharsFree(out);
-  JsonFree(obj);
+  out.Free;
+  obj.Free;
 
   { --- a document that does not fit in one string ------------------------- }
-  JsonCharsNew(buf);
-  JsonCharsAddLine(buf, '["');
-  for i := 1 to 300 do JsonCharsAddLine(buf, 'x');
-  JsonCharsAddLine(buf, '"]');
+  buf.Init;
+  buf.AddText('["');
+  for i := 1 to 300 do buf.AddText('x');
+  buf.AddText('"]');
   r := JsonParseChars(buf, at);
-  writeln('long ok=', r.ok, ' len=', JsonTextLen(JsonAt(r.val, 1)):1);
-  JsonFree(r.val);
-  JsonCharsFree(buf);
+  writeln('long ok=', r.ok, ' len=', r.val.At(1).TextLen:1);
+  r.val.Free;
+  buf.Free;
 
   { --- what is refused ---------------------------------------------------- }
   r := JsonParse('{"a":1,}', at);
@@ -104,7 +104,7 @@ begin
   writeln('unclosed      ok=', r.ok);
 
   { --- a document longer than a line -------------------------------------- }
-  { `JsonCharsInto` asks whether the document fits the *caller's* capacity,
+  { `JsonChars.Into` asks whether the document fits the *caller's* capacity,
     and used to build the answer through a `string(LineMax)` accumulator --
     so a document between 256 characters and the caller's capacity passed the
     guard and then stopped the program at `a string of length 256 does not fit
@@ -113,16 +113,16 @@ begin
     and prints its length, which is the number the guard promised. }
   obj := JsonNewArray;
   for at := 1 to 40 do
-    JsonAppend(obj, JsonNewText('12345'));
-  JsonCharsNew(buf);
-  JsonRender(obj, buf);
-  e := JsonCharsInto(buf, wide);
+    obj.Append(JsonNewText('12345'));
+  buf.Init;
+  obj.Render(buf);
+  e := buf.Into(wide);
   writeln('long render   code=', ErrorText(e), ' len=', length(wide):1);
   { And the guard itself still fires, into a target that genuinely cannot
     hold it -- both directions, since answering errFull always would satisfy
     one of them. }
-  e := JsonCharsInto(buf, narrow);
+  e := buf.Into(narrow);
   writeln('into a small  code=', ErrorText(e));
-  JsonCharsFree(buf);
-  JsonFree(obj)
+  buf.Free;
+  obj.Free
 end.

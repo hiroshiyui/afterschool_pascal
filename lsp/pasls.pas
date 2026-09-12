@@ -326,8 +326,8 @@ procedure Send(msg: JsonPtr);
 var out: JsonChars;
     e: ErrorCode;
 begin
-  JsonCharsNew(out);
-  JsonRender(msg, out);
+  out.Init;
+  msg.Render(out);
   { The one place the two transports differ on the way out. MCP's stdio
     transport is one message to a line and forbids an embedded newline;
     `JsonlWrite` refuses a body holding one rather than writing a frame that
@@ -335,7 +335,7 @@ begin
   if transport = tpMcp then e := JsonlWrite(StdOut, out)
   else e := LspWrite(StdOut, out);
   if e <> errNone then Note('could not write a message: ' + ErrorText(e));
-  JsonCharsFree(out)
+  out.Free
 end;
 
 { A copy of a request's id, which a response must echo *unchanged in kind*:
@@ -344,12 +344,12 @@ end;
 function CopyId(id: JsonPtr): JsonPtr;
 var s: JsonLine;
 begin
-  case JsonKindOf(id) of
+  case id.Kind of
     jsNumber:
-      CopyId := JsonNewInteger(JsonIntegerOr(id, 0));
+      CopyId := JsonNewInteger(id.IntegerOr(0));
     jsString:
       begin
-        if JsonTextInto(id, s) <> errNone then s := '';
+        if id.TextInto(s) <> errNone then s := '';
         CopyId := JsonNewText(s)
       end;
     { A request with no id is a notification and gets no response at all, so
@@ -365,8 +365,8 @@ function NewResponse(id: JsonPtr): JsonPtr;
 var r: JsonPtr;
 begin
   r := JsonNewObject;
-  JsonPut(r, 'jsonrpc', JsonNewText('2.0'));
-  JsonPut(r, 'id', CopyId(id));
+  r.Put('jsonrpc', JsonNewText('2.0'));
+  r.Put('id', CopyId(id));
   NewResponse := r
 end;
 
@@ -399,14 +399,14 @@ begin
 end;
 
 { A JSON string value copied out into a buffer of its own, which is how a
-  document's text arrives: `JsonTextInto` wants a capacity and a source file
+  document's text arrives: `TextInto` wants a capacity and a source file
   has none worth naming. }
 procedure CharsOf(v: JsonPtr; var b: JsonChars);
 var i, n: integer;
 begin
-  JsonCharsNew(b);
-  n := JsonTextLen(v);
-  for i := 1 to n do JsonCharsAdd(b, JsonTextAt(v, i))
+  b.Init;
+  n := v.TextLen;
+  for i := 1 to n do b.Add(v.TextAt(i))
 end;
 
 { The n'th line of a document, 1-based and without its terminator, as far as
@@ -422,17 +422,17 @@ var i, at, len: integer;
 begin
   line := '';
   if n < 1 then exit;
-  len := JsonCharsLen(b);
+  len := b.Len;
   at := 1;
   i := 1;
   while (i <= len) and (at < n) do begin
-    if JsonCharsAt(b, i) = chr(10) then at := at + 1;
+    if b.At(i) = chr(10) then at := at + 1;
     i := i + 1
   end;
   { The document ended before that line began. }
   if at <> n then exit;
   while i <= len do begin
-    c := JsonCharsAt(b, i);
+    c := b.At(i);
     if c = chr(10) then exit;
     if (c <> chr(13)) and (length(line) < DiagLineMax) then line := line + c;
     i := i + 1
@@ -447,7 +447,7 @@ begin
   { The text is being replaced, so what the compiler last said about it is
     about a document that no longer exists (ADR-0252). }
   if DocOf(uri, d) then begin
-    JsonCharsFree(d.text);
+    d.text.Free;
     if d.uses_ <> nil then SVecFree(d.uses_);
     if d.files <> nil then VecFree(PathVec, d.files)
   end;
@@ -463,7 +463,7 @@ procedure Forget(uri: DocUri);
 var d: Document;
 begin
   if not DocOf(uri, d) then exit;
-  JsonCharsFree(d.text);
+  d.text.Free;
   if d.uses_ <> nil then SVecFree(d.uses_);
   if d.files <> nil then VecFree(PathVec, d.files);
   if not MapDelete(docs, uri) then
@@ -860,9 +860,9 @@ begin
     exit(false)
   end;
   rewrite(scratchFile);
-  n := JsonCharsLen(b);
+  n := b.Len;
   for i := 1 to n do begin
-    c := JsonCharsAt(b, i);
+    c := b.At(i);
     if c = chr(10) then writeln(scratchFile)
     else if c <> chr(13) then write(scratchFile, c)
   end;
@@ -1012,7 +1012,7 @@ begin
       d := DiagParse(line);
       if d.ok then begin
         LineOf(doc, d.val.line, source);
-        JsonAppend(arr, DiagJson(d.val, source, encoding))
+        arr.Append(DiagJson(d.val, source, encoding))
       end;
       line := ''
     end else if (c <> chr(13)) and (length(line) < DiagMax) then
@@ -1040,7 +1040,7 @@ begin
   if not Compile(UriToPath(uri), out) then exit;
   note := DiagPublish(uri, DiagnosticsIn(out, d.text));
   Send(note);
-  JsonFree(note)
+  note.Free
 end;
 
 { --- the methods ---------------------------------------------------------- }
@@ -1056,11 +1056,10 @@ var offered, one: JsonPtr;
     name: JsonLine;
 begin
   encoding := peUtf16;
-  offered := JsonMember(JsonMember(JsonMember(params, 'capabilities'),
-                                   'general'), 'positionEncodings');
-  for i := 1 to JsonCount(offered) do begin
-    one := JsonAt(offered, i);
-    if JsonTextInto(one, name) <> errNone then name := '';
+  offered := params.Member('capabilities').Member('general').Member('positionEncodings');
+  for i := 1 to offered.Count do begin
+    one := offered.At(i);
+    if one.TextInto(name) <> errNone then name := '';
     if name = 'utf-8' then encoding := peUtf8
   end
 end;
@@ -1074,15 +1073,15 @@ var folders, one: JsonPtr;
 begin
   rootPath := '';
   uri := '';
-  folders := JsonMember(params, 'workspaceFolders');
-  if JsonCount(folders) > 0 then begin
-    one := JsonAt(folders, 1);
-    if JsonTextInto(JsonMember(one, 'uri'), uri) = errNone then
+  folders := params.Member('workspaceFolders');
+  if folders.Count > 0 then begin
+    one := folders.At(1);
+    if one.Member('uri').TextInto(uri) = errNone then
       rootPath := UriToPath(uri)
   end;
   if rootPath = '' then begin
     uri := '';
-    if JsonTextInto(JsonMember(params, 'rootUri'), uri) = errNone then
+    if params.Member('rootUri').TextInto(uri) = errNone then
       rootPath := UriToPath(uri)
   end
 end;
@@ -1101,54 +1100,54 @@ begin
   reply := NewResponse(id);
   result := JsonNewObject;
   caps := JsonNewObject;
-  JsonPut(caps, 'textDocumentSync', JsonNewInteger(SyncFull));
+  caps.Put('textDocumentSync', JsonNewInteger(SyncFull));
   { ADR-0239. Answered from --dump-symbols, which is the compiler's own
     account of what a source declares. }
-  JsonPut(caps, 'documentSymbolProvider', JsonNewBoolean(true));
+  caps.Put('documentSymbolProvider', JsonNewBoolean(true));
   { Both are answered from one compilation and one dump (ADR-0246): what a
     name denotes and where it was declared are the same question. }
-  JsonPut(caps, 'definitionProvider', JsonNewBoolean(true));
-  JsonPut(caps, 'hoverProvider', JsonNewBoolean(true));
+  caps.Put('definitionProvider', JsonNewBoolean(true));
+  caps.Put('hoverProvider', JsonNewBoolean(true));
   { ADR-0258: both come from `--dump-stmts`, which stops after the parse -- so
     an editor folds and expands a selection in a file that does not compile,
     which is when it is being typed into and when both gestures are used. }
-  JsonPut(caps, 'foldingRangeProvider', JsonNewBoolean(true));
-  JsonPut(caps, 'selectionRangeProvider', JsonNewBoolean(true));
+  caps.Put('foldingRangeProvider', JsonNewBoolean(true));
+  caps.Put('selectionRangeProvider', JsonNewBoolean(true));
   { ADR-0279: `pascalc --format` writes the whole file, so what comes back is
     one edit over the whole document and never a diff. }
-  JsonPut(caps, 'documentFormattingProvider', JsonNewBoolean(true));
-  JsonPut(caps, 'documentRangeFormattingProvider', JsonNewBoolean(true));
+  caps.Put('documentFormattingProvider', JsonNewBoolean(true));
+  caps.Put('documentRangeFormattingProvider', JsonNewBoolean(true));
   { ADR-0294: the `use` rows read backwards -- every occurrence of one
     defining-point -- and a rename is that list with an edit per row.
     `prepareProvider` says the range and spelling of the name are answered
     before the client asks for a new one. }
-  JsonPut(caps, 'referencesProvider', JsonNewBoolean(true));
+  caps.Put('referencesProvider', JsonNewBoolean(true));
   info := JsonNewObject;
-  JsonPut(info, 'prepareProvider', JsonNewBoolean(true));
-  JsonPut(caps, 'renameProvider', info);
+  info.Put('prepareProvider', JsonNewBoolean(true));
+  caps.Put('renameProvider', info);
   { ADR-0301: the names in scope at a position, filtered from --dump-symbols,
     and the compiler's own vocabulary. No `triggerCharacters`: this server
     offers no member completion, because what follows a `.` is a question
     about the *type* at the position and this answer deliberately stops
     before Sema. }
   info := JsonNewObject;
-  JsonPut(info, 'resolveProvider', JsonNewBoolean(false));
-  JsonPut(caps, 'completionProvider', info);
+  info.Put('resolveProvider', JsonNewBoolean(false));
+  caps.Put('completionProvider', info);
   { ADR-0300: the two of the compiler's four warnings that know an edit which
     cannot change what the program does. }
   info := JsonNewObject;
-  JsonPut(info, 'codeActionKinds', JsonNewArray);
-  JsonAppend(JsonMember(info, 'codeActionKinds'), JsonNewText('quickfix'));
-  JsonPut(caps, 'codeActionProvider', info);
+  info.Put('codeActionKinds', JsonNewArray);
+  info.Member('codeActionKinds').Append(JsonNewText('quickfix'));
+  caps.Put('codeActionProvider', info);
   { Echoed whichever way it went, so the client is never guessing. }
-  JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
-  JsonPut(result, 'capabilities', caps);
+  caps.Put('positionEncoding', JsonNewText(EncodingName));
+  result.Put('capabilities', caps);
   info := JsonNewObject;
-  JsonPut(info, 'name', JsonNewText('pasls'));
-  JsonPut(result, 'serverInfo', info);
-  JsonPut(reply, 'result', result);
+  info.Put('name', JsonNewText('pasls'));
+  result.Put('serverInfo', info);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { 3.17's shutdown: answer null, and keep running until `exit` arrives. }
@@ -1156,9 +1155,9 @@ procedure Shutdown(id: JsonPtr);
 var reply: JsonPtr;
 begin
   reply := NewResponse(id);
-  JsonPut(reply, 'result', JsonNewNull);
+  reply.Put('result', JsonNewNull);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 procedure Unsupported(id: JsonPtr; method: JsonLine);
@@ -1166,11 +1165,11 @@ var reply, err: JsonPtr;
 begin
   reply := NewResponse(id);
   err := JsonNewObject;
-  JsonPut(err, 'code', JsonNewInteger(MethodNotFound));
-  JsonPut(err, 'message', JsonNewText('pasls does not implement ' + method));
-  JsonPut(reply, 'error', err);
+  err.Put('code', JsonNewInteger(MethodNotFound));
+  err.Put('message', JsonNewText('pasls does not implement ' + method));
+  reply.Put('error', err);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { The URI of a `textDocument` member, or the empty string where there is none
@@ -1179,8 +1178,8 @@ function UriOf(params: JsonPtr): DocUri;
 var doc: JsonPtr;
     s: DocUri;
 begin
-  doc := JsonMember(params, 'textDocument');
-  if JsonTextInto(JsonMember(doc, 'uri'), s) <> errNone then begin
+  doc := params.Member('textDocument');
+  if doc.Member('uri').TextInto(s) <> errNone then begin
     Note('a document URI this server cannot hold was ignored');
     s := ''
   end;
@@ -1193,8 +1192,8 @@ var uri: DocUri;
 begin
   uri := UriOf(params);
   if uri = '' then exit;
-  doc := JsonMember(params, 'textDocument');
-  Store(uri, JsonMember(doc, 'text'));
+  doc := params.Member('textDocument');
+  Store(uri, doc.Member('text'));
   Analyse(uri)
 end;
 
@@ -1211,13 +1210,13 @@ var uri: DocUri;
 begin
   uri := UriOf(params);
   if uri = '' then exit;
-  changes := JsonMember(params, 'contentChanges');
-  last := JsonAt(changes, JsonCount(changes));
+  changes := params.Member('contentChanges');
+  last := changes.At(changes.Count);
   if last = nil then begin
     Note('a didChange with no content was ignored');
     exit
   end;
-  Store(uri, JsonMember(last, 'text'));
+  Store(uri, last.Member('text'));
   Analyse(uri)
 end;
 
@@ -1232,7 +1231,7 @@ begin
   Forget(uri);
   note := DiagPublish(uri, JsonNewArray);
   Send(note);
-  JsonFree(note)
+  note.Free
 end;
 
 { --- the outline ---------------------------------------------------------- }
@@ -1368,14 +1367,14 @@ function SpanRange(fromLine: DiagLine; line, col: integer;
 var r, a, b: JsonPtr;
 begin
   a := JsonNewObject;
-  JsonPut(a, 'line', JsonNewInteger(line - 1));
-  JsonPut(a, 'character', JsonNewInteger(CharacterAt(fromLine, col)));
+  a.Put('line', JsonNewInteger(line - 1));
+  a.Put('character', JsonNewInteger(CharacterAt(fromLine, col)));
   b := JsonNewObject;
-  JsonPut(b, 'line', JsonNewInteger(endLine - 1));
-  JsonPut(b, 'character', JsonNewInteger(CharacterAt(toLine, endCol)));
+  b.Put('line', JsonNewInteger(endLine - 1));
+  b.Put('character', JsonNewInteger(CharacterAt(toLine, endCol)));
   r := JsonNewObject;
-  JsonPut(r, 'start', a);
-  JsonPut(r, 'end', b);
+  r.Put('start', a);
+  r.Put('end', b);
   SpanRange := r
 end;
 
@@ -1384,14 +1383,14 @@ function NameRange(source: DiagLine; line, col, len: integer): JsonPtr;
 var r, a, b: JsonPtr;
 begin
   a := JsonNewObject;
-  JsonPut(a, 'line', JsonNewInteger(line - 1));
-  JsonPut(a, 'character', JsonNewInteger(CharacterAt(source, col)));
+  a.Put('line', JsonNewInteger(line - 1));
+  a.Put('character', JsonNewInteger(CharacterAt(source, col)));
   b := JsonNewObject;
-  JsonPut(b, 'line', JsonNewInteger(line - 1));
-  JsonPut(b, 'character', JsonNewInteger(CharacterAt(source, col + len)));
+  b.Put('line', JsonNewInteger(line - 1));
+  b.Put('character', JsonNewInteger(CharacterAt(source, col + len)));
   r := JsonNewObject;
-  JsonPut(r, 'start', a);
-  JsonPut(r, 'end', b);
+  r.Put('start', a);
+  r.Put('end', b);
   NameRange := r
 end;
 
@@ -1483,8 +1482,8 @@ begin
                and (symCol + symLen - 1 <= length(source)) then
               name := source[symCol..symCol + symLen - 1];
             obj := JsonNewObject;
-            JsonPut(obj, 'name', JsonNewText(name));
-            JsonPut(obj, 'kind', JsonNewInteger(SymbolKindOf(kind)));
+            obj.Put('name', JsonNewText(name));
+            obj.Put('kind', JsonNewInteger(SymbolKindOf(kind)));
             { 3.17: `range` is the whole symbol and `selectionRange` is the
               name inside it. They were the same until the parse tree learned
               where a block ends (ADR-0253); now a procedure's range reaches
@@ -1492,19 +1491,17 @@ begin
               declaration" needs. The end is converted against *its own* line,
               which is why it is looked up separately. }
             LineOf(d.text, endLine, endSource);
-            JsonPut(obj, 'range',
-                    SpanRange(source, symLine, symCol,
+            obj.Put('range', SpanRange(source, symLine, symCol,
                               endSource, endLine, endCol));
-            JsonPut(obj, 'selectionRange',
-                    NameRange(source, symLine, symCol, symLen));
+            obj.Put('selectionRange', NameRange(source, symLine, symCol, symLen));
             { The array this depth's symbols go in, made when the first of
               them arrives so that a childless symbol carries no `children`
               member at all. }
             if kids[depth] = nil then begin
               kids[depth] := JsonNewArray;
-              JsonPut(owner[depth - 1], 'children', kids[depth])
+              owner[depth - 1].Put('children', kids[depth])
             end;
-            JsonAppend(kids[depth], obj);
+            kids[depth].Append(obj);
             owner[depth] := obj;
             { A later sibling starts a children array of its own. Depth grows
               one level at a time, so clearing the next one is enough. }
@@ -1519,9 +1516,9 @@ begin
       SVecFree(lines)
     end
   end;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { --- where a name was declared, and what it is ----------------------------- }
@@ -1776,12 +1773,12 @@ var p: JsonPtr;
     d: Document;
     source: DiagLine;
 begin
-  p := JsonMember(params, 'position');
-  line := JsonIntegerOr(JsonMember(p, 'line'), -1) + 1;
+  p := params.Member('position');
+  line := p.Member('line').IntegerOr(-1) + 1;
   col := 0;
   if DocOf(uri, d) and (line >= 1) then begin
     LineOf(d.text, line, source);
-    col := ByteColumn(source, JsonIntegerOr(JsonMember(p, 'character'), 0))
+    col := ByteColumn(source, p.Member('character').IntegerOr(0))
   end
 end;
 
@@ -1827,15 +1824,14 @@ begin
           end
         end;
         result := JsonNewObject;
-        if hit.declFile = 0 then JsonPut(result, 'uri', JsonNewText(uri))
-        else JsonPut(result, 'uri', JsonNewText(PathToUri(path)));
-        JsonPut(result, 'range',
-                NameRange(source, hit.declLine, hit.declCol, hit.declLen))
+        if hit.declFile = 0 then result.Put('uri', JsonNewText(uri))
+        else result.Put('uri', JsonNewText(PathToUri(path)));
+        result.Put('range', NameRange(source, hit.declLine, hit.declCol, hit.declLen))
       end;
   if result = nil then result := JsonNewNull;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { `textDocument/hover`, as `MarkupContent` of kind `plaintext` with the range
@@ -1875,16 +1871,16 @@ begin
       if (hit.denotes <> '') and (hit.denotes <> '?') then
         body := body + ': ' + hit.denotes;
       content := JsonNewObject;
-      JsonPut(content, 'kind', JsonNewText('plaintext'));
-      JsonPut(content, 'value', JsonNewText(body));
+      content.Put('kind', JsonNewText('plaintext'));
+      content.Put('value', JsonNewText(body));
       result := JsonNewObject;
-      JsonPut(result, 'contents', content);
-      JsonPut(result, 'range', NameRange(source, hit.line, hit.col, hit.len))
+      result.Put('contents', content);
+      result.Put('range', NameRange(source, hit.line, hit.col, hit.len))
     end;
   if result = nil then result := JsonNewNull;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { A whole file, so that a line of it can be found without reopening it.
@@ -1898,7 +1894,7 @@ end;
 function ReadWhole(path: PathName; var b: JsonChars): boolean;
 var f: bindable text; bt: BindingType; c: char;
 begin
-  JsonCharsNew(b);
+  b.Init;
   bt := binding(f);
   bt.name := path;
   bind(f, bt);
@@ -1909,12 +1905,12 @@ begin
   reset(f);
   while not eof(f) do
     if eoln(f) then begin
-      JsonCharsAdd(b, chr(10));
+      b.Add(chr(10));
       readln(f)
     end
     else begin
       read(f, c);
-      JsonCharsAdd(b, c)
+      b.Add(c)
     end;
   unbind(f);
   ReadWhole := true
@@ -2223,11 +2219,11 @@ var reply, err: JsonPtr;
 begin
   reply := NewResponse(id);
   err := JsonNewObject;
-  JsonPut(err, 'code', JsonNewInteger(RequestFailed));
-  JsonPut(err, 'message', JsonNewText(why));
-  JsonPut(reply, 'error', err);
+  err.Put('code', JsonNewInteger(RequestFailed));
+  err.Put('message', JsonNewText(why));
+  reply.Put('error', err);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { `textDocument/references`, as `Location[]` or `null`.
@@ -2257,8 +2253,7 @@ begin
     if FindUse(uri, line, col, hit, path) then
       if (hit.declLine > 0) and DocOf(uri, d) then begin
         Gather(d, hit,
-               JsonBooleanOr(JsonMember(JsonMember(params, 'context'),
-                                        'includeDeclaration'), false),
+               params.Member('context').Member('includeDeclaration').BooleanOr(false),
                s);
         if s.over then
           Note('a name with more occurrences than this server holds was '
@@ -2269,7 +2264,7 @@ begin
         own := false;
         for i := 1 to s.n do begin
           if s.rows[i].inFile <> cur then begin
-            if own then JsonCharsFree(chars);
+            if own then chars.Free;
             cur := s.rows[i].inFile;
             TextOfFile(d, cur, chars, own)
           end;
@@ -2285,16 +2280,16 @@ begin
             len := s.rows[i].len
           end;
           loc := JsonNewObject;
-          JsonPut(loc, 'uri', JsonNewText(UriOfFile(d, cur)));
-          JsonPut(loc, 'range', NameRange(source, s.rows[i].line, at, len));
-          JsonAppend(result, loc)
+          loc.Put('uri', JsonNewText(UriOfFile(d, cur)));
+          loc.Put('range', NameRange(source, s.rows[i].line, at, len));
+          result.Append(loc)
         end;
-        if own then JsonCharsFree(chars)
+        if own then chars.Free
       end;
   if result = nil then result := JsonNewNull;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { Is `name` one identifier, as the compiler's own lexer reads it? Asked of
@@ -2389,25 +2384,24 @@ begin
   if not RenameTarget(uri, params, hit, source, at, nothing, why) then begin
     if nothing then begin
       reply := NewResponse(id);
-      JsonPut(reply, 'result', JsonNewNull);
+      reply.Put('result', JsonNewNull);
       Send(reply);
-      JsonFree(reply)
+      reply.Free
     end
     else Refuse(id, why)
   end
   else begin
     reply := NewResponse(id);
     result := JsonNewObject;
-    JsonPut(result, 'range', NameRange(source, hit.line, at, hit.declLen));
+    result.Put('range', NameRange(source, hit.line, at, hit.declLen));
     if (at >= 1) and (hit.declLen > 0)
        and (at + hit.declLen - 1 <= length(source)) then
-      JsonPut(result, 'placeholder',
-              JsonNewText(source[at..at + hit.declLen - 1]))
+      result.Put('placeholder', JsonNewText(source[at..at + hit.declLen - 1]))
     else
-      JsonPut(result, 'placeholder', JsonNewText(''));
-    JsonPut(reply, 'result', result);
+      result.Put('placeholder', JsonNewText(''));
+    reply.Put('result', result);
     Send(reply);
-    JsonFree(reply)
+    reply.Free
   end
 end;
 
@@ -2436,7 +2430,7 @@ var uri: DocUri;
     reply, result, changes, change, tdoc, edits, edit: JsonPtr;
 begin
   uri := UriOf(params);
-  if JsonTextInto(JsonMember(params, 'newName'), newName) <> errNone then begin
+  if params.Member('newName').TextInto(newName) <> errNone then begin
     Refuse(id, 'the new name is missing, or longer than this server holds');
     exit
   end;
@@ -2466,7 +2460,7 @@ begin
   end;
   result := JsonNewObject;
   changes := JsonNewArray;
-  JsonPut(result, 'documentChanges', changes);
+  result.Put('documentChanges', changes);
   edits := nil;
   cur := -1;
   chars := nil;
@@ -2475,41 +2469,41 @@ begin
   for i := 1 to s.n do
     if placed then begin
       if s.rows[i].inFile <> cur then begin
-        if own then JsonCharsFree(chars);
+        if own then chars.Free;
         cur := s.rows[i].inFile;
         TextOfFile(d, cur, chars, own);
         tdoc := JsonNewObject;
-        JsonPut(tdoc, 'uri', JsonNewText(UriOfFile(d, cur)));
-        JsonPut(tdoc, 'version', JsonNewNull);
+        tdoc.Put('uri', JsonNewText(UriOfFile(d, cur)));
+        tdoc.Put('version', JsonNewNull);
         edits := JsonNewArray;
         change := JsonNewObject;
-        JsonPut(change, 'textDocument', tdoc);
-        JsonPut(change, 'edits', edits);
-        JsonAppend(changes, change)
+        change.Put('textDocument', tdoc);
+        change.Put('edits', edits);
+        changes.Append(change)
       end;
       source := '';
       if chars <> nil then LineOf(chars, s.rows[i].line, source);
       if IdentIn(source, s.rows[i].col, s.rows[i].len, s.declLen, at) then
       begin
         edit := JsonNewObject;
-        JsonPut(edit, 'range', NameRange(source, s.rows[i].line, at, s.declLen));
-        JsonPut(edit, 'newText', JsonNewText(newName));
-        JsonAppend(edits, edit)
+        edit.Put('range', NameRange(source, s.rows[i].line, at, s.declLen));
+        edit.Put('newText', JsonNewText(newName));
+        edits.Append(edit)
       end
       else
         placed := false
     end;
-  if own then JsonCharsFree(chars);
+  if own then chars.Free;
   if not placed then begin
-    JsonFree(result);
+    result.Free;
     Refuse(id, 'an occurrence is a qualified name with spaces around its '
                + 'point, which cannot be placed; the rename was not made')
   end
   else begin
     reply := NewResponse(id);
-    JsonPut(reply, 'result', result);
+    reply.Put('result', result);
     Send(reply);
-    JsonFree(reply)
+    reply.Free
   end
 end;
 
@@ -2537,16 +2531,16 @@ function TextContent(body: JsonPtr; failed: boolean): JsonPtr;
 var res, arr, item: JsonPtr;
 begin
   item := JsonNewObject;
-  JsonPut(item, 'type', JsonNewText('text'));
-  JsonPut(item, 'text', body);
+  item.Put('type', JsonNewText('text'));
+  item.Put('text', body);
   arr := JsonNewArray;
-  JsonAppend(arr, item);
+  arr.Append(item);
   res := JsonNewObject;
-  JsonPut(res, 'content', arr);
+  res.Put('content', arr);
   { "Tool Execution Errors: reported in tool results with isError: true" --
     a tool that ran and could not do the job, as against a protocol error,
     which is a request that should not have been made. }
-  JsonPut(res, 'isError', JsonNewBoolean(failed));
+  res.Put('isError', JsonNewBoolean(failed));
   TextContent := res
 end;
 
@@ -2558,21 +2552,21 @@ function PathTool(name: JsonName; title: JsonLine; what: JsonLine;
 var t, schema, props, path, req: JsonPtr;
 begin
   path := JsonNewObject;
-  JsonPut(path, 'type', JsonNewText('string'));
-  JsonPut(path, 'description', JsonNewText(arg));
+  path.Put('type', JsonNewText('string'));
+  path.Put('description', JsonNewText(arg));
   props := JsonNewObject;
-  JsonPut(props, 'path', path);
+  props.Put('path', path);
   req := JsonNewArray;
-  JsonAppend(req, JsonNewText('path'));
+  req.Append(JsonNewText('path'));
   schema := JsonNewObject;
-  JsonPut(schema, 'type', JsonNewText('object'));
-  JsonPut(schema, 'properties', props);
-  JsonPut(schema, 'required', req);
+  schema.Put('type', JsonNewText('object'));
+  schema.Put('properties', props);
+  schema.Put('required', req);
   t := JsonNewObject;
-  JsonPut(t, 'name', JsonNewText(name));
-  JsonPut(t, 'title', JsonNewText(title));
-  JsonPut(t, 'description', JsonNewText(what));
-  JsonPut(t, 'inputSchema', schema);
+  t.Put('name', JsonNewText(name));
+  t.Put('title', JsonNewText(title));
+  t.Put('description', JsonNewText(what));
+  t.Put('inputSchema', schema);
   PathTool := t
 end;
 
@@ -2585,13 +2579,13 @@ function ToolList: JsonPtr;
 var arr: JsonPtr;
 begin
   arr := JsonNewArray;
-  JsonAppend(arr, PathTool('outline', 'Outline a Pascal source',
+  arr.Append(PathTool('outline', 'Outline a Pascal source',
     'Every name a source file declares -- constants, types, fields, '
     + 'variables, procedures and functions -- with the line and column it '
     + 'was written at and how deeply it nests. Answers for a file that does '
     + 'not compile, because it stops after the parse.',
     'Path to a .pas file'));
-  JsonAppend(arr, PathTool('diagnostics', 'Compile a Pascal source',
+  arr.Append(PathTool('diagnostics', 'Compile a Pascal source',
     'What the compiler says about a source file, one diagnostic to a line as '
     + 'file:line:col: error: message. Imports are resolved from the '
     + '.components sidecar beside the file or under the workspace, so a '
@@ -2614,8 +2608,8 @@ end;
 function PathArg(params: JsonPtr): PathName;
 var args: JsonPtr; p: PathName; k: integer;
 begin
-  args := JsonMember(params, 'arguments');
-  if JsonTextInto(JsonMember(args, 'path'), p) <> errNone then p := ''
+  args := params.Member('arguments');
+  if args.Member('path').TextInto(p) <> errNone then p := ''
   else if p <> '' then p := Resolve(rootPath, p);
   { JSON spells chr(0) as \u0000 and a path cannot hold one: the first
     routine to hand it across the boundary would stop this program (ADR-0122),
@@ -2638,8 +2632,8 @@ begin
     { `skip` drops what is not a diagnostic, which is most of what a
       compilation writes and none of what a caller asked for. }
     if (not skip) or DiagParse(text).ok then begin
-      JsonTextAdd(v, text);
-      JsonTextAdd(v, chr(10))
+      v.TextAdd(text);
+      v.TextAdd(chr(10))
     end
   end;
   LinesAsText := v
@@ -2688,8 +2682,8 @@ begin
       while (length(pad) < 2 * depth) and (length(pad) < ItemMax - 40) do
         pad := pad + ' ';
       writestr(text, pad, kind, ' ', name, '  ', symLine:1, ':', symCol:1);
-      JsonTextAdd(v, text);
-      JsonTextAdd(v, chr(10))
+      v.TextAdd(text);
+      v.TextAdd(chr(10))
     end
   end;
   OutlineText := v
@@ -2707,29 +2701,27 @@ var reply, err, result: JsonPtr;
     found, junk: boolean;
 begin
   reply := NewResponse(id);
-  if JsonTextInto(JsonMember(params, 'name'), name) <> errNone then name := '';
+  if params.Member('name').TextInto(name) <> errNone then name := '';
   path := PathArg(params);
   { A request that should not have been made is a *protocol* error, which the
     specification separates from a tool that ran and could not do the job. }
   if (name <> 'outline') and (name <> 'diagnostics') then begin
     err := JsonNewObject;
-    JsonPut(err, 'code', JsonNewInteger(MethodNotFound));
-    JsonPut(err, 'message', JsonNewText('Unknown tool: ' + name));
-    JsonPut(reply, 'error', err)
+    err.Put('code', JsonNewInteger(MethodNotFound));
+    err.Put('message', JsonNewText('Unknown tool: ' + name));
+    reply.Put('error', err)
   end
   else if path = '' then begin
     err := JsonNewObject;
-    JsonPut(err, 'code', JsonNewInteger(InvalidParams));
-    JsonPut(err, 'message',
-            JsonNewText('the tool ' + name + ' needs a string argument '
+    err.Put('code', JsonNewInteger(InvalidParams));
+    err.Put('message', JsonNewText('the tool ' + name + ' needs a string argument '
                         + '`path`, and a path this program can hold'));
-    JsonPut(reply, 'error', err)
+    reply.Put('error', err)
   end
   { And a file that is not there is the other kind: the request was
     well-formed and the job could not be done. }
   else if not Exists(path) then
-    JsonPut(reply, 'result',
-            TextContent(JsonNewText('no such file: ' + path), true))
+    reply.Put('result', TextContent(JsonNewText('no such file: ' + path), true))
   else begin
     { The path here comes from the caller driving the model, which is the
       sharpest form of ADR-0362's problem: it was wrapped in apostrophes and
@@ -2741,16 +2733,14 @@ begin
     end;
     if found then found := EndArgs(v, path);
     if not found then
-      JsonPut(reply, 'result',
-              TextContent(JsonNewText('the compiler command line could not '
+      reply.Put('result', TextContent(JsonNewText('the compiler command line could not '
                                       + 'be assembled'),
                           true))
     else begin
       SVecNew(lines, 64);
       r := ExecuteLines(v, lines);
       if not r.ok then
-        JsonPut(reply, 'result',
-                TextContent(JsonNewText('could not run the compiler: '
+        reply.Put('result', TextContent(JsonNewText('could not run the compiler: '
                                         + ErrorText(r.cause)), true))
       else begin
         if name = 'outline' then begin
@@ -2759,17 +2749,17 @@ begin
             worth refusing over: the outline is then the folded spellings,
             which is what the compiler knows. }
           result := OutlineText(lines, doc);
-          JsonCharsFree(doc)
+          doc.Free
         end
         else
           result := LinesAsText(lines, true);
-        JsonPut(reply, 'result', TextContent(result, false))
+        reply.Put('result', TextContent(result, false))
       end;
       SVecFree(lines)
     end
   end;
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { MCP's initialize. §Lifecycle: "If the server supports the requested protocol
@@ -2781,30 +2771,29 @@ procedure McpInitialize(id: JsonPtr; params: JsonPtr);
 var reply, result, caps, tools, info: JsonPtr;
     asked: JsonLine;
 begin
-  if JsonTextInto(JsonMember(params, 'protocolVersion'), asked) <> errNone then
+  if params.Member('protocolVersion').TextInto(asked) <> errNone then
     asked := '';
   if (asked <> '') and (asked <> McpVersion) then
     Note('the client asked for MCP ' + asked + ' and this server speaks '
          + McpVersion);
   tools := JsonNewObject;
   caps := JsonNewObject;
-  JsonPut(caps, 'tools', tools);
+  caps.Put('tools', tools);
   info := JsonNewObject;
-  JsonPut(info, 'name', JsonNewText('pasls'));
-  JsonPut(info, 'version', JsonNewText(PaslsVersion));
+  info.Put('name', JsonNewText('pasls'));
+  info.Put('version', JsonNewText(PaslsVersion));
   result := JsonNewObject;
-  JsonPut(result, 'protocolVersion', JsonNewText(McpVersion));
-  JsonPut(result, 'capabilities', caps);
-  JsonPut(result, 'serverInfo', info);
-  JsonPut(result, 'instructions',
-          JsonNewText('Ask `outline` where something is declared in a Pascal '
+  result.Put('protocolVersion', JsonNewText(McpVersion));
+  result.Put('capabilities', caps);
+  result.Put('serverInfo', info);
+  result.Put('instructions', JsonNewText('Ask `outline` where something is declared in a Pascal '
                       + 'source and `diagnostics` what the compiler makes of '
                       + 'one. Both take a path to a .pas file. `outline` '
                       + 'answers for a file that does not compile.'));
   reply := NewResponse(id);
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { One MCP message. Notifications carry no id and are answered with nothing,
@@ -2815,29 +2804,29 @@ procedure McpDispatch(msg: JsonPtr);
 var method: JsonLine;
     id, params, reply: JsonPtr;
 begin
-  if JsonTextInto(JsonMember(msg, 'method'), method) <> errNone then begin
+  if msg.Member('method').TextInto(method) <> errNone then begin
     Note('a message with no method was ignored');
     exit
   end;
-  id := JsonMember(msg, 'id');
-  params := JsonMember(msg, 'params');
+  id := msg.Member('id');
+  params := msg.Member('params');
   if method = 'initialize' then McpInitialize(id, params)
   else if method = 'notifications/initialized' then { nothing to do }
   else if method = 'ping' then begin
     { §Utilities/Ping: an empty result. Answered because a client may send one
       before anything else and a server that ignored it would look dead. }
     reply := NewResponse(id);
-    JsonPut(reply, 'result', JsonNewObject);
+    reply.Put('result', JsonNewObject);
     Send(reply);
-    JsonFree(reply)
+    reply.Free
   end
   else if method = 'tools/list' then begin
     reply := NewResponse(id);
     params := JsonNewObject;
-    JsonPut(params, 'tools', ToolList);
-    JsonPut(reply, 'result', params);
+    params.Put('tools', ToolList);
+    reply.Put('result', params);
     Send(reply);
-    JsonFree(reply)
+    reply.Free
   end
   else if method = 'tools/call' then CallTool(id, params)
   else if id <> nil then Unsupported(id, method)
@@ -2954,20 +2943,20 @@ begin
             fromLine[have] := q.line;
             toLine[have] := q.endLine;
             obj := JsonNewObject;
-            JsonPut(obj, 'startLine', JsonNewInteger(q.line - 1));
+            obj.Put('startLine', JsonNewInteger(q.line - 1));
             { 3.17 collapses the lines *after* startLine through endLine, so
               endLine is the construct's own last line -- the one holding its
               `end` or its final statement. One less would leave that line
               showing on its own, which reads as a fold that did not finish. }
-            JsonPut(obj, 'endLine', JsonNewInteger(q.endLine - 1));
-            JsonAppend(result, obj)
+            obj.Put('endLine', JsonNewInteger(q.endLine - 1));
+            result.Append(obj)
           end
         end;
     SVecFree(lines)
   end;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { 3.17's selectionRange: for each position asked about, the chain of ranges a
@@ -2997,7 +2986,7 @@ begin
   reply := NewResponse(id);
   result := JsonNewArray;
   uri := UriOf(params);
-  positions := JsonMember(params, 'positions');
+  positions := params.Member('positions');
   have := 0;
   if DocOf(uri, d) and StatementsOf(uri, lines) then begin
     for i := 1 to SVecLen(lines) do
@@ -3007,12 +2996,12 @@ begin
           rows[have] := q
         end;
     SVecFree(lines);
-    for k := 1 to JsonCount(positions) do begin
-      pos_ := JsonAt(positions, k);
-      pl := JsonIntegerOr(JsonMember(pos_, 'line'), -1) + 1;
+    for k := 1 to positions.Count do begin
+      pos_ := positions.At(k);
+      pl := pos_.Member('line').IntegerOr(-1) + 1;
       LineOf(d.text, pl, source);
       pc := ByteColumn(source,
-                       JsonIntegerOr(JsonMember(pos_, 'character'), 0));
+                       pos_.Member('character').IntegerOr(0));
       for i := 1 to have do used[i] := false;
       chain := nil;
       links := 0;
@@ -3033,17 +3022,16 @@ begin
           LineOf(d.text, rows[best].line, source);
           LineOf(d.text, rows[best].endLine, endSource);
           obj := JsonNewObject;
-          JsonPut(obj, 'range',
-                  SpanRange(source, rows[best].line, rows[best].col,
+          obj.Put('range', SpanRange(source, rows[best].line, rows[best].col,
                             endSource, rows[best].endLine,
                             rows[best].endCol));
-          if chain <> nil then JsonPut(obj, 'parent', chain);
+          if chain <> nil then obj.Put('parent', chain);
           chain := obj;
           links := links + 1
         end
       until (best = 0) or (links >= StmtMax);
-      if chain = nil then JsonAppend(result, JsonNewNull)
-      else JsonAppend(result, chain)
+      if chain = nil then result.Append(JsonNewNull)
+      else result.Append(chain)
     end
   end
   else
@@ -3051,11 +3039,11 @@ begin
       3.17 asks for one answer per position, so `null` per position rather
       than an empty array -- a client indexes the reply by the position it
       asked about. }
-    for k := 1 to JsonCount(positions) do
-      JsonAppend(result, JsonNewNull);
-  JsonPut(reply, 'result', result);
+    for k := 1 to positions.Count do
+      result.Append(JsonNewNull);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { Which document a `textDocument/didChange` is about, or the empty string for
@@ -3065,9 +3053,9 @@ function ChangedUri(msg: JsonPtr): DocUri;
 var method: JsonLine;
 begin
   ChangedUri := '';
-  if JsonTextInto(JsonMember(msg, 'method'), method) = errNone then
+  if msg.Member('method').TextInto(method) = errNone then
     if method = 'textDocument/didChange' then
-      ChangedUri := UriOf(JsonMember(msg, 'params'))
+      ChangedUri := UriOf(msg.Member('params'))
 end;
 
 { LSP's `textDocument/formatting`, answered by `pascalc --format` (ADR-0279).
@@ -3120,7 +3108,7 @@ var bt: BindingType; c: char; chunk: JsonLine; name: EnvText;
   procedure Flush;
   begin
     if length(chunk) > 0 then begin
-      JsonTextAdd(v, chunk);
+      v.TextAdd(chunk);
       chunk := ''
     end
   end;
@@ -3191,33 +3179,33 @@ begin
         text := JsonNewText('');
         if ReadFormatted(text) then begin
           lines := 1;
-          n := JsonCharsLen(d.text);
+          n := d.text.Len;
           for i := 1 to n do
-            if JsonCharsAt(d.text, i) = chr(10) then lines := lines + 1;
+            if d.text.At(i) = chr(10) then lines := lines + 1;
           a := JsonNewObject;
-          if lo = 0 then JsonPut(a, 'line', JsonNewInteger(0))
-                    else JsonPut(a, 'line', JsonNewInteger(lo - 1));
-          JsonPut(a, 'character', JsonNewInteger(0));
+          if lo = 0 then a.Put('line', JsonNewInteger(0))
+                    else a.Put('line', JsonNewInteger(lo - 1));
+          a.Put('character', JsonNewInteger(0));
           b := JsonNewObject;
-          if lo = 0 then JsonPut(b, 'line', JsonNewInteger(lines))
-                    else JsonPut(b, 'line', JsonNewInteger(hi));
-          JsonPut(b, 'character', JsonNewInteger(0));
+          if lo = 0 then b.Put('line', JsonNewInteger(lines))
+                    else b.Put('line', JsonNewInteger(hi));
+          b.Put('character', JsonNewInteger(0));
           rng := JsonNewObject;
-          JsonPut(rng, 'start', a);
-          JsonPut(rng, 'end', b);
+          rng.Put('start', a);
+          rng.Put('end', b);
           edit := JsonNewObject;
-          JsonPut(edit, 'range', rng);
-          JsonPut(edit, 'newText', text);
-          JsonAppend(result, edit)
+          edit.Put('range', rng);
+          edit.Put('newText', text);
+          result.Append(edit)
         end
         else
-          JsonFree(text)
+          text.Free
       end
     end
   end;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { 6.11's other formatting request. The range a client sends is a *position*
@@ -3232,12 +3220,12 @@ end;
 procedure RangeFormatting(id: JsonPtr; params: JsonPtr);
 var rng, s, e: JsonPtr; lo, hi: integer;
 begin
-  rng := JsonMember(params, 'range');
-  s := JsonMember(rng, 'start');
-  e := JsonMember(rng, 'end');
-  lo := JsonIntegerOr(JsonMember(s, 'line'), 0) + 1;
-  hi := JsonIntegerOr(JsonMember(e, 'line'), 0) + 1;
-  if JsonIntegerOr(JsonMember(e, 'character'), 0) = 0 then
+  rng := params.Member('range');
+  s := rng.Member('start');
+  e := rng.Member('end');
+  lo := s.Member('line').IntegerOr(0) + 1;
+  hi := e.Member('line').IntegerOr(0) + 1;
+  if e.Member('character').IntegerOr(0) = 0 then
     if hi > lo then hi := hi - 1;
   if lo < 1 then lo := 1;
   if hi < lo then hi := lo;
@@ -3327,9 +3315,9 @@ var probe: JsonChars; r: RunResult; lines: StrVecPtr;
 begin
   if vocab <> nil then exit(true);
   Vocabulary := false;
-  JsonCharsNew(probe);
-  JsonCharsAddLine(probe, 'program w;');
-  JsonCharsAddLine(probe, 'begin end.');
+  probe.Init;
+  probe.AddText('program w;');
+  probe.AddText('begin end.');
   if WriteScratch(probe) then
     if AskLines('--dump-words', scratchPath, 128, lines, r) then begin
       if r.ok then begin
@@ -3341,7 +3329,7 @@ begin
         SVecFree(lines)
       end
     end;
-  JsonCharsFree(probe)
+  probe.Free
 end;
 
 { One item, appended. }
@@ -3350,10 +3338,10 @@ procedure OfferItem(items: JsonPtr; label_: DiagLine; kind: integer;
 var obj: JsonPtr;
 begin
   obj := JsonNewObject;
-  JsonPut(obj, 'label', JsonNewText(label_));
-  JsonPut(obj, 'kind', JsonNewInteger(kind));
-  JsonPut(obj, 'detail', JsonNewText(detail));
-  JsonAppend(items, obj)
+  obj.Put('label', JsonNewText(label_));
+  obj.Put('kind', JsonNewInteger(kind));
+  obj.Put('detail', JsonNewText(detail));
+  items.Append(obj)
 end;
 
 { The vocabulary's rows, which are `word <spelling>` and
@@ -3396,8 +3384,8 @@ begin
   items := JsonNewArray;
   { `isIncomplete: false`: this is the whole list for the position, and a
     client that filters it as the reader types is filtering a complete set. }
-  JsonPut(result, 'isIncomplete', JsonNewBoolean(false));
-  JsonPut(result, 'items', items);
+  result.Put('isIncomplete', JsonNewBoolean(false));
+  result.Put('items', items);
   uri := UriOf(params);
   AskedAt(params, uri, line, col);
   if DocOf(uri, d) and (line >= 1) then begin
@@ -3458,9 +3446,9 @@ begin
       SVecFree(lines)
     end
   end;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 { --- the edit a warning asks for ------------------------------------------- }
@@ -3524,11 +3512,10 @@ var out, r, a, b, src: JsonPtr;
   function Corner(which: JsonName): JsonPtr;
   var c, e: JsonPtr;
   begin
-    e := JsonMember(JsonMember(diag, 'range'), which);
+    e := diag.Member('range').Member(which);
     c := JsonNewObject;
-    JsonPut(c, 'line', JsonNewInteger(JsonIntegerOr(JsonMember(e, 'line'), 0)));
-    JsonPut(c, 'character',
-            JsonNewInteger(JsonIntegerOr(JsonMember(e, 'character'), 0)));
+    c.Put('line', JsonNewInteger(e.Member('line').IntegerOr(0)));
+    c.Put('character', JsonNewInteger(e.Member('character').IntegerOr(0)));
     Corner := c
   end;
 
@@ -3536,21 +3523,20 @@ begin
   a := Corner('start');
   b := Corner('end');
   r := JsonNewObject;
-  JsonPut(r, 'start', a);
-  JsonPut(r, 'end', b);
+  r.Put('start', a);
+  r.Put('end', b);
   out := JsonNewObject;
-  JsonPut(out, 'range', r);
-  JsonPut(out, 'severity',
-          JsonNewInteger(JsonIntegerOr(JsonMember(diag, 'severity'), 1)));
+  out.Put('range', r);
+  out.Put('severity', JsonNewInteger(diag.Member('severity').IntegerOr(1)));
   where := '';
-  if JsonTextInto(JsonMember(diag, 'source'), where) <> errNone then
+  if diag.Member('source').TextInto(where) <> errNone then
     where := '';
   src := JsonNewText(where);
-  JsonPut(out, 'source', src);
+  out.Put('source', src);
   message := '';
-  if JsonTextInto(JsonMember(diag, 'message'), message) <> errNone then
+  if diag.Member('message').TextInto(message) <> errNone then
     message := '';
-  JsonPut(out, 'message', JsonNewText(message));
+  out.Put('message', JsonNewText(message));
   DiagCopy := out
 end;
 
@@ -3559,27 +3545,27 @@ function QuickFix(title: JsonLine; uri: DocUri; diag: JsonPtr;
 var act, edits, edit, tdoc, change, changes, wedit, diags: JsonPtr;
 begin
   edit := JsonNewObject;
-  JsonPut(edit, 'range', range);
-  JsonPut(edit, 'newText', JsonNewText(newText));
+  edit.Put('range', range);
+  edit.Put('newText', JsonNewText(newText));
   edits := JsonNewArray;
-  JsonAppend(edits, edit);
+  edits.Append(edit);
   tdoc := JsonNewObject;
-  JsonPut(tdoc, 'uri', JsonNewText(uri));
-  JsonPut(tdoc, 'version', JsonNewNull);
+  tdoc.Put('uri', JsonNewText(uri));
+  tdoc.Put('version', JsonNewNull);
   change := JsonNewObject;
-  JsonPut(change, 'textDocument', tdoc);
-  JsonPut(change, 'edits', edits);
+  change.Put('textDocument', tdoc);
+  change.Put('edits', edits);
   changes := JsonNewArray;
-  JsonAppend(changes, change);
+  changes.Append(change);
   wedit := JsonNewObject;
-  JsonPut(wedit, 'documentChanges', changes);
+  wedit.Put('documentChanges', changes);
   act := JsonNewObject;
-  JsonPut(act, 'title', JsonNewText(title));
-  JsonPut(act, 'kind', JsonNewText('quickfix'));
+  act.Put('title', JsonNewText(title));
+  act.Put('kind', JsonNewText('quickfix'));
   diags := JsonNewArray;
-  JsonAppend(diags, DiagCopy(diag));
-  JsonPut(act, 'diagnostics', diags);
-  JsonPut(act, 'edit', wedit);
+  diags.Append(DiagCopy(diag));
+  act.Put('diagnostics', diags);
+  act.Put('edit', wedit);
   QuickFix := act
 end;
 
@@ -3615,32 +3601,29 @@ begin
   reply := NewResponse(id);
   result := JsonNewArray;
   uri := UriOf(params);
-  diags := JsonMember(JsonMember(params, 'context'), 'diagnostics');
+  diags := params.Member('context').Member('diagnostics');
   if DocOf(uri, d) then
-    for i := 1 to JsonCount(diags) do begin
-      diag := JsonAt(diags, i);
+    for i := 1 to diags.Count do begin
+      diag := diags.At(i);
       message := '';
-      if JsonTextInto(JsonMember(diag, 'message'), message) = errNone then
+      if diag.Member('message').TextInto(message) = errNone then
       begin
         { The diagnostic's own start, back in the compiler's units: this
           server published it and converts it back the way it converted it
           out. }
-        range := JsonMember(diag, 'range');
-        line := JsonIntegerOr(
-                  JsonMember(JsonMember(range, 'start'), 'line'), -1) + 1;
+        range := diag.Member('range');
+        line := range.Member('start').Member('line').IntegerOr(-1) + 1;
         col := 0;
         if line >= 1 then begin
           LineOf(d.text, line, source);
           col := ByteColumn(source,
-                   JsonIntegerOr(
-                     JsonMember(JsonMember(range, 'start'), 'character'), 0))
+                   range.Member('start').Member('character').IntegerOr(0))
         end;
         if line >= 1 then
           if message = 'this statement cannot be reached' then begin
             if StatementAt(uri, line, col, endLine, endCol) then begin
               LineOf(d.text, endLine, endSource);
-              JsonAppend(result,
-                QuickFix('Delete the unreachable statement', uri, diag,
+              result.Append(QuickFix('Delete the unreachable statement', uri, diag,
                          SpanRange(source, line, col,
                                    endSource, endLine, endCol), ''))
             end
@@ -3653,26 +3636,25 @@ begin
                          + 'protected')) then
             { An insertion, which is an empty range at the position the
               warning stands at -- the section's own first token. }
-            JsonAppend(result,
-              QuickFix('Add `protected` to the parameter section', uri, diag,
+            result.Append(QuickFix('Add `protected` to the parameter section', uri, diag,
                        NameRange(source, line, col, 0), 'protected '))
       end
     end;
-  JsonPut(reply, 'result', result);
+  reply.Put('result', result);
   Send(reply);
-  JsonFree(reply)
+  reply.Free
 end;
 
 procedure Dispatch(msg: JsonPtr);
 var method: JsonLine;
     id, params: JsonPtr;
 begin
-  if JsonTextInto(JsonMember(msg, 'method'), method) <> errNone then begin
+  if msg.Member('method').TextInto(method) <> errNone then begin
     Note('a message with no method was ignored');
     exit
   end;
-  id := JsonMember(msg, 'id');
-  params := JsonMember(msg, 'params');
+  id := msg.Member('id');
+  params := msg.Member('params');
   if method = 'initialize' then Initialize(id, params)
   else if method = 'initialized' then { nothing to do }
   else if method = 'shutdown' then Shutdown(id)
@@ -3792,7 +3774,7 @@ begin
   MapInit(DocMap, docs, 4);
   running := true;
   while running do begin
-    JsonCharsNew(body);
+    body.Init;
     { The one place the two transports differ on the way in. }
     if transport = tpMcp then e := JsonlRead(reader, body)
     else e := LspRead(reader, body);
@@ -3837,7 +3819,7 @@ begin
         if transport <> tpMcp then
           while (ChangedUri(parsed.val) <> '') and (held = nil) and
                 LspPending(reader) do begin
-            JsonCharsNew(nextBody);
+            nextBody.Init;
             if LspRead(reader, nextBody) <> errNone then
               { The input ended or was refused mid-drain. Nothing is lost:
                 this message is still dispatched below and the next turn of
@@ -3855,20 +3837,20 @@ begin
                 { The earlier change is superseded outright: a didChange
                   carries the whole document, so there is nothing in it the
                   later one does not also say. }
-                JsonFree(parsed.val);
+                parsed.val.Free;
                 parsed.val := nextMsg.val
               end
               else
                 held := nextMsg.val
             end;
-            JsonCharsFree(nextBody)
+            nextBody.Free
           end;
         if transport = tpMcp then McpDispatch(parsed.val)
         else Dispatch(parsed.val);
-        JsonFree(parsed.val);
+        parsed.val.Free;
         if held <> nil then begin
           Dispatch(held);
-          JsonFree(held);
+          held.Free;
           held := nil
         end
       end else begin
@@ -3877,7 +3859,7 @@ begin
         Note(complaint)
       end
     end;
-    JsonCharsFree(body)
+    body.Free
   end;
   { Everything this program allocated, given back -- so a run of it balances
     under PASHEAP_BALANCE the way a corpus case does (ADR-0183). }
@@ -3888,7 +3870,7 @@ begin
   for i := 1 to MapSlots(DocMap, docs) do
     if MapLiveAt(DocMap, docs, i) then
       if DocOf(MapKeyAt(DocUri, docs, i), d) then begin
-        JsonCharsFree(d.text);
+        d.text.Free;
         { And what the compiler last said about it (ADR-0252). A document the
           client never closed still holds one, and `heap-balance` is what said
           so: the sessions open documents and end without a didClose, which is

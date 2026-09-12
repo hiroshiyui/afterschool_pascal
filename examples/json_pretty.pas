@@ -6,7 +6,7 @@
   is not there, so a missing member is `nil` and never a trap. The
   document is gathered into a `JsonChars`, a growable byte vector, because
   a whole file rarely fits one `string(n)`. Scalars are printed by handing
-  them back to `JsonRender`, which knows the escapes. Run it as
+  them back to `Render`, which knows the escapes. Run it as
 
       pascalcc json_pretty.pas -o pretty && ./pretty < some.json }
 program json_pretty(input, output);
@@ -28,25 +28,25 @@ end;
 procedure Scalar(v: JsonPtr);
 var out: JsonChars; s: string(4096); e: ErrorCode;
 begin
-  JsonCharsNew(out);
-  JsonRender(v, out);
-  e := JsonCharsInto(out, s);
+  out.Init;
+  v.Render(out);
+  e := out.Into(s);
   if Failed(e) then write('"..."') else write(s);
-  JsonCharsFree(out)
+  out.Free
 end;
 
 procedure Pretty(v: JsonPtr; depth: integer);
 var k, n: integer;
 begin
-  n := JsonCount(v);
-  case JsonKindOf(v) of
+  n := v.Count;
+  case v.Kind of
     jsArray:
       if n = 0 then write('[]')
       else begin
         writeln('[');
         for k := 1 to n do begin
           Indent(depth + 2);
-          Pretty(JsonAt(v, k), depth + 2);
+          Pretty(v.At(k), depth + 2);
           if k < n then writeln(',') else writeln
         end;
         Indent(depth); write(']')
@@ -57,8 +57,8 @@ begin
         writeln('{');
         for k := 1 to n do begin
           Indent(depth + 2);
-          write('"', JsonNameAt(v, k), '": ');
-          Pretty(JsonAt(v, k), depth + 2);
+          write('"', v.NameAt(k), '": ');
+          Pretty(v.At(k), depth + 2);
           if k < n then writeln(',') else writeln
         end;
         Indent(depth); write('}')
@@ -68,22 +68,22 @@ begin
 end;
 
 begin
-  JsonCharsNew(buf);
+  buf.Init;
   while not eof do begin
     readln(line);
-    JsonCharsAddLine(buf, line)
+    buf.AddText(line)
   end;
   at := 1;
   r := JsonParseChars(buf, at);
   if r.ok then begin
     Pretty(r.val, 0);
     writeln;
-    writeln('-- ', JsonCount(r.val):1, ' top-level members, "name" is ',
-            JsonIntegerOr(JsonMember(JsonMember(r.val, 'name'), 'length'), -1):1,
+    writeln('-- ', r.val.Count:1, ' top-level members, "name" is ',
+            r.val.Member('name').Member('length').IntegerOr(-1):1,
             ' (absent members read as the default)');
-    JsonFree(r.val)
+    r.val.Free
   end
   else
     writeln('not JSON: ', ErrorText(r.cause), ' at byte ', at:1);
-  JsonCharsFree(buf)
+  buf.Free
 end.
