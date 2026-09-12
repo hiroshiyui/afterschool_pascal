@@ -1,5 +1,21 @@
 # Implementation-defined and implementation-dependent behaviour
 
+**This is a normative part of `doc/afterschool-pascal-spec.md`**, incorporated
+by reference there (AP 5.7). That document is the statement of the language;
+this one answers, entry by entry, what is left open. Read the two as one
+specification — the split is a file boundary and not a boundary of authority,
+and it exists because dozens of accepted records cite this file by name and
+ADR-0001 makes them immutable.
+
+Two rules follow from being part of that document and neither is new. **An
+entry is answered by compiling a probe, never by reading the compiler's
+source** — AP 5.5 a)'s rule, and the one that found two defects when this
+document was first written (ADR-0073). And **an entry that states a rule of
+the *language* rather than a choice left to a processor belongs in a clause
+over there**: AP 5.7 NOTE 1 records the two that did not have one, `halt`'s
+exit status and the underscore in an identifier, each carried in §5 below for
+as long as it had existed with no clause to find it from.
+
 This document says what this processor decides where a clause of ISO 7185 or
 ISO/IEC 10206:1991 leaves the decision to it. It defines every
 implementation-defined feature, describes the treatment of every
@@ -403,7 +419,9 @@ so there was no spelling to take from either — and without one a Pascal progra
 cannot tell whatever invoked it that it failed, which a compiler written in
 Pascal has to be able to do. No conforming program's meaning changes: `halt(1)`
 was a compile-time error until this landed, so no valid program contains it, and
-every path that reached `halt` before still exits 0. ADR-0084;
+every path that reached `halt` before still exits 0. **AP 6.7.5.7** states the
+rule and `tests/spec/features/dialect_lexis_and_halt.feature` cites it; this
+entry had no clause until 2026-09-12 (AP 5.7 NOTE 1). ADR-0084;
 `tests/extended/halt_status.pas`.
 
 **`BindingType` has a third field, `writable`**, which ISO/IEC 10206:1991
@@ -461,7 +479,11 @@ could have refused it. AP 6.7.3.1.1 and AP 6.7.2.1, ADR-0324;
 otherwise collide with a word-symbol — `label_`, `set_`, `packed_` — and how a
 test program takes the name of its file. No program's meaning depends on it:
 an underscore can begin no other token, so a program without one compiles
-identically. ADR-0072.
+identically — which is also why it may *begin* an identifier and may be one on
+its own, both of which this entry never said and the processor has always
+admitted. **AP 6.1.3** states the rule and carries the grammar; this entry had
+no clause until 2026-09-12 (AP 5.7 NOTE 1), and writing that clause is what
+found the two forms. ADR-0072.
 
 ## 6. Restrictions
 

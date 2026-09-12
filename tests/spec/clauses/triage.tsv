@@ -206,6 +206,7 @@ afterschool	5.3	testable
 afterschool	5.4	structural	a policy about versioning, not a property of a translation
 afterschool	5.5	structural	a rule about how this document is maintained
 afterschool	5.6	structural	a rule about how this document may run ahead of the processor, not about a program
+afterschool	5.7	structural	a rule about which document says what, and about no program -- a scenario asserts what a program printed and this clause is about prose
 afterschool	6	structural	introduces the requirements
 afterschool	6.0	structural	introduces the relationship clauses
 afterschool	6.0.1	testable	
@@ -215,6 +216,7 @@ afterschool	6.1	structural	introduces the lexical additions
 extended	6.1.1	testable	Lexical tokens / General
 extended	6.1.2	testable	not a title: it carries the special-symbol production, which is where `**`, `><` and `=>` are given as tokens and appear in no other clause
 afterschool	6.1.2	testable	
+afterschool	6.1.3	testable	an identifier may contain, and may begin with, '_'
 extended	6.1.3	testable	Identifiers
 extended	6.1.4	testable	Remote-directives
 afterschool	6.1.4	testable	
@@ -422,6 +424,7 @@ extended	6.7.5.7	testable	Control procedures
 extended	6.7.5.8	testable	Time procedures
 extended	6.7.6	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.7.5	structural	introduces 6.7.5.9, 6.7.5.10 and 6.7.5.11
+afterschool	6.7.5.7	testable	halt takes the exit status
 afterschool	6.7.5.9	testable	
 afterschool	6.7.5.10	testable	
 afterschool	6.7.5.11	testable	

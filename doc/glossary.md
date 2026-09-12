@@ -536,9 +536,14 @@ there is no such type (ADR-0338, ADR-0340).
 **Implementation-declaration (`impl … for`).** The statement that one type
 implements one trait, and where the routine bodies go. Each writes its **name
 alone** — the trait gave the heading — and every routine the trait declares is
-defined exactly once. It belongs to one translation: a program-block or a
-module-block, never inside a procedure and never in a module-heading, because
-its routines read frames only that translation has (AP 6.7.10, ADR-0341).
+defined exactly once. It is **written** in one translation -- a program-block or
+a module-block, never inside a procedure and never in a module-heading,
+because its routines read frames only that translation has (AP 6.7.10,
+ADR-0341) -- and since ADR-0411 it is **selected** in every component that can
+name its type (AP 6.7.10.5). Those are two different questions and the entry
+ran them together until they came apart: what a module writes in its block is
+what its clients get, which is the one place in this language where something
+outside a module-heading crosses a boundary.
 
 **Method.** A routine belonging to a type, declared by an
 implementation-declaration and called with a dot (AP 6.7.10, AP 6.7.10.4,
@@ -554,6 +559,16 @@ trait: the routines a type has of its own, which no trait declared. It differs
 from `impl Tr for T;` in three places and no others -- each routine writes its
 own heading, no trait's headings are read, and there is nothing to be missing
 -- and `for` is the whole of what tells the two forms apart.
+
+**Linkage name.** The name two separate translations compose the same way
+without exchanging anything, and the only kind of name a call can cross a
+program-component on (§6.13). For an exported routine or variable it is the
+interface's name and the constituent's; for a **method** it is the module's
+name, the type as the implementation-declaration spells it, the trait where
+there is one, and the routine (ADR-0411). Everything else the emitter names is
+named by a counter -- a fact about the order one translation walked the tree
+in, which agrees with another translation's only while both were handed the
+same components in the same order, and that is a coincidence and not a rule.
 
 **Receiver.** The first parameter of a method, and what a method-designator
 puts in front of the dot. Its three forms are the language's own and nothing

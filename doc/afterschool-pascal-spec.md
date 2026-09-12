@@ -294,6 +294,50 @@ implemented — was rejected because the design is the expensive half and the
 place a reader looks for what a type means is the clause about that type
 (ADR-0189).
 
+### 5.7 This document and the others
+
+This document is **the** statement of the language (1). Every other document in
+this repository is a summary of it, a record of how a part of it was decided, a
+procedure for changing the processor, or a history — and none of them may state
+a language rule this document does not. Where one appears to, it is a defect in
+that document, and the remedy is a clause here.
+
+`doc/implementation-defined.md` is a **normative part of this document**,
+incorporated by reference. It answers, entry by entry, what this processor
+decides where a clause of ISO/IEC 10206:1991 or of this document leaves the
+choice open, which errors it does not report, which features are
+implementation-dependent, and the extensions and restrictions relative to
+ISO 7185. It is a separate file for one reason and it is not a good one: dozens
+of accepted records cite it by name, and ADR-0001 makes those records
+immutable, so folding it in would leave permanent prose pointing at a file that
+had gone. Read the two as one specification.
+
+Of the rest:
+
+| Document | What it is | What it may not do |
+| --- | --- | --- |
+| `README.md` | a **summary** of the accepted language for somebody who wants to use the processor | state a rule not derivable from here |
+| `doc/tour.md` | the same language explained to a reader who knows Turbo Pascal, to be read straight through | the same |
+| `doc/adr/` | the **records**: what was decided, the alternatives, the cost. Immutable (ADR-0001) | be corrected when the language moves — 5.5 c) resolves a disagreement in favour of this document |
+| `doc/design-digest.md` | a paragraph per **mechanism** of the processor, which is not the language | describe a rule rather than a mechanism |
+| `doc/roadmap.md`, `doc/history.md` | what is open, and how it got here | say what the language is today |
+| `doc/sop.md` | the **procedure** for changing the processor, and §7 the register of what is not checked | be where a soundness gap is *specified*; Annex C is |
+| `doc/glossary.md` | the words this repository uses in a particular sense | define a language term differently from clause 3 |
+
+NOTE 1 — This clause was written on 2026-09-12 and it found two of its own
+requirements missing. `halt`'s exit status (6.7.5.7) and the underscore in an
+identifier (6.1.3) were both extensions of the language carried only in
+`doc/implementation-defined.md` §5, with no clause here, for as long as each
+has existed. A reader holding this document alone did not know either was
+legal. Both now have clauses, and 5.5 d)'s scenarios cite them.
+
+NOTE 2 — Nothing enforces the table. `spec-clause-traceability` holds that
+every testable clause *here* is cited by a scenario, which is the other
+direction; whether a rule stated in `README.md` has a clause is a question no
+gate asks, and `doc/sop.md` §7 carries it. What the two findings above cost was
+found by reading the register's extension list against this document's headings
+and by nothing else.
+
 ---
 
 ## 6 Requirements
@@ -385,6 +429,41 @@ lexer knew whether a program might use it as a variable name, and requiring the
 Extended Pascal mode and the dialect to give the same answer. With one language
 there is nothing to compare against, and the requirement stands on this clause
 alone.
+
+#### 6.1.3 Identifiers [extended]
+
+    identifier = ( letter | '_' ) { letter | digit | '_' } .
+
+An identifier may contain the character `_`, which ISO/IEC 10206:1991 §6.1.3
+admits nowhere, and may begin with one. `_` alone is an identifier.
+
+NOTE 1 — No conforming program's meaning changes, by 6.1.2 NOTE 3's own test:
+`_` can begin no token of either standard, so a program without one is
+tokenised identically, and no conforming program contains one anywhere to be
+read differently. That is why the character may lead as well as follow — the
+position rule 6.1.2 NOTE 3 asks for is satisfied by every position at once,
+there being no position in which a conforming program can write the character.
+
+NOTE 2 — What it is for is a name a word-symbol has taken. §6.1.2 reserves 45
+spellings and a program that wants one of them as an identifier has, in the two
+standards, no recourse at all; here it writes `label_`, `set_` or `packed_`.
+This processor's own sources use it for exactly that, and a test program whose
+name must match its file uses it where the file name has one. Nothing this
+project writes begins a name with the character or writes `_` alone; those
+forms are admitted rather than provided, and no rule here rests on them.
+
+NOTE 3 — It is the oldest addition in this document and the one with no record
+of its own: it was in the lexer before ADR-0072 noticed, and was carried in
+`doc/implementation-defined.md` §5 as an extension with no clause until this
+one was written. A dialect feature lands with a clause as well as a record
+(5.5), and this is the debt that rule was incurred by.
+
+NOTE 4 — The first draft of this clause said the character *shall not* begin an
+identifier and *shall not* be one on its own, which is what the register's
+sentence implied and what the writer expected; probing found the processor
+admits both, and 5.5 b) makes that a disagreement in which neither side is
+presumed right. The processor's reading was taken because refusing the two
+forms would narrow what compiles today for no reason a program could name.
 
 #### 6.1.4 Remote-directives [extended]
 
@@ -2877,6 +2956,29 @@ type-denoter the program wrote.
 
 #### 6.7.5 Required procedures [extended]
 
+**6.7.5.7 The halt procedure [extended].** The required procedure `halt` shall
+be written in either of two forms:
+
+    halt
+    halt ( expression )
+
+The expression shall be of integer-type, and its value shall be the status the
+program terminates with. `halt` alone shall terminate with the status a program
+reaching the end of its statement-part terminates with, which is 0.
+
+Termination is termination of the program, so 6.4.14.3's release of an owned
+pointer does not happen; what a program relies on being done is in Annex C.
+
+NOTE 1 — Neither standard models a process exit status, so §6.7.5.7 gives
+`halt` no parameters and there was no spelling to take from either. Without one
+a program cannot tell whatever invoked it that it failed, which a compiler
+written in this language has to be able to do (ADR-0084).
+
+NOTE 2 — No conforming program's meaning changes: `halt(n)` is a
+procedure-statement with an actual-parameter-list where the required procedure
+takes none, which no conforming program contains, and every path that reached
+`halt` before still terminates with 0.
+
 **6.7.5.9 The exit procedure [added].** The required procedure-identifier
 `exit` shall be a control procedure. It shall terminate the activation of the
 block in which the procedure-statement occurs, and shall be written in either
@@ -4997,6 +5099,11 @@ where a program asks for the facility.
 | 5.6, 6.4.15 | ADR-0189 |
 | 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |
 | 6.7.11, Annex E.13, Annex E.14 | ADR-0409 |
+| 6.7.10, 6.7.10.1 – 6.7.10.4 | ADR-0410 |
+| 6.7.10.5, 6.13.2 (amended) | ADR-0411 |
+| 6.7.5.7 | ADR-0084 |
+| 6.1.3 | ADR-0072 |
+| 5.7 | — (this document, 2026-09-12) |
 | 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |
 | 6.5.1 | ADR-0299 |
 | 6.4.17, 6.9.3.12 (the second form), 6.9.3.14 | ADR-0312 |

@@ -729,6 +729,14 @@ amendment to ISO/IEC 10206:1991, in that standard's own clause numbering, so
 each addition sits at the address of the clause it changes. The listing below
 is the tour; the specification is the statement, and it is where a requirement
 is written precisely enough to be argued with (ADR-0135).
+[`doc/implementation-defined.md`](doc/implementation-defined.md) is a normative
+part of it — what this processor decides where a clause leaves the choice open
+— and the two are read as one document (AP 5.7).
+
+**Everything below is a summary of that document**, and where the two
+disagree it is right and this is wrong: it is the only place a rule of this
+language is stated, and every other document here is a summary, a record of
+how something was decided, a procedure, or a history.
 
 ### What it adds so far
 
@@ -2931,8 +2939,8 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 935 cases under `ctest`, the compiler compiled with itself to a
-fixed point and built a second way through `llc`, 442 scenarios written against
+Beside that: 936 cases under `ctest`, the compiler compiled with itself to a
+fixed point and built a second way through `llc`, 446 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,
 and each of the eleven programs the two answer differently is recorded with the

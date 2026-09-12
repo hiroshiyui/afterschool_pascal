@@ -657,11 +657,23 @@ the one kind of false claim this project has been most careful about.
 **`doc/afterschool-pascal-spec.md` is the specification of this language, clause
 by clause** (ADR-0135, ADR-0232) — an amendment to ISO/IEC 10206:1991 in that
 standard's own numbering, so AP §6.4.11 is the optional type because clause 6.4
-ends at 6.4.10. Two rules govern it: it is derived from the decision records and
-verified by probe and **never from `selfhost/compiler.pas`**, a specification
-describing an implementation agreeing with it by construction and contradicting
-nothing; and where it and an ADR disagree, it wins and the divergence goes in
-its Annex E. A dialect feature lands with a clause as well as a record.
+ends at 6.4.10. **`doc/implementation-defined.md` is a normative part of it**
+(AP 5.7), incorporated by reference and separate only because dozens of
+immutable records cite it by name; read the two as one document.
+
+Three rules govern it: it is derived from the decision records and verified by
+probe and **never from `selfhost/compiler.pas`**, a specification describing an
+implementation agreeing with it by construction and contradicting nothing;
+where it and an ADR disagree, it wins and the divergence goes in its Annex E;
+and **it is the only place a rule of this language is stated** — README, the
+tour, this file and the digest are summaries, records or mechanism, and where
+one of them appears to state a rule the specification does not, that is a
+defect in it and the remedy is a clause (AP 5.7). A dialect feature lands with
+a clause as well as a record. **Nothing enforces the last rule**: the
+traceability gate holds that every clause has a scenario and not that every
+rule has a clause, and two extensions — `halt`'s exit status and the
+underscore in an identifier — went years with no clause because of it
+(`doc/sop.md` §7).
 
 Five things about the dialect are worth knowing before adding anything:
 

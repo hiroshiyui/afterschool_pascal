@@ -10,7 +10,8 @@ language section is a feature list. None of them tells you what an owned
 pointer is *for*.
 
 It is a tour and not a reference. Everything below is true, nothing below is
-complete, and where a section stops the specification carries on. The programs
+complete, where a section stops the specification carries on, and where this
+document and that one disagree that one is right (AP 5.7). The programs
 in `examples/` are the other half of this document: twelve complete programs of
 a page each, every one of them a test case with a golden, so an example that
 stops working fails the build. This text points at them constantly.

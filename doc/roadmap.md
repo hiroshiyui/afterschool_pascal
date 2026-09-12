@@ -24,7 +24,7 @@ the compiler alone). v3.10.0 before it was display width as a *language*
 question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
 v3.9.0 was the editor arriving and WebAssembly running the corpus. The
 compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 935 cases green at `-O2` and at `-O0`.
+and the suite is 936 cases green at `-O2` and at `-O0`.
 
 **The three releases before those are in [history](history.md)** — the
 platforms measured rather than assumed (v3.8.0: `--target=` admits seven
