@@ -319,6 +319,53 @@ begin
   Show(p)
 end;
 
+{ ------------------------------- a method that names itself by receiver -- }
+
+{ **A method-designator may name the method being declared** (ADR-0415). All
+  three of ADR-0410's spellings must reach it and one did not: `l^.next.Nudge`
+  as a statement and `l^.next.Deep(n)` with arguments both resolved through
+  the enclosing routine's own name, which §6.2.2.9 puts in scope in its body,
+  while the parameterless expression `l^.next.Len` -- the husk -- had no such
+  fallback and was refused. All three are written here, over the shape that
+  wants them: a list walked to its end. }
+type
+  Chain = ^Knot;
+  Knot = record v: integer; next: Chain end;
+
+impl Chain;
+  { the husk: a parameterless method-designator naming itself }
+  function Count(l: Chain): integer;
+  begin
+    if l = nil then Count := 0 else Count := 1 + l^.next.Count
+  end;
+  { the with-arguments form, naming itself }
+  function Total(l: Chain; sofar: integer): integer;
+  begin
+    if l = nil then Total := sofar else Total := l^.next.Total(sofar + l^.v)
+  end;
+  { the statement form, naming itself }
+  procedure Nudge(l: Chain);
+  begin
+    if l <> nil then begin l^.v := l^.v + 1; l^.next.Nudge end
+  end;
+  { and a method naming an *earlier* one through a receiver, which always
+    worked and is here so that the fix cannot be mistaken for admitting
+    everything }
+  function Doubled(l: Chain): integer;
+  begin Doubled := 2 * l.Count end;
+end;
+
+procedure SelfByReceiver;
+var a, b, c: Chain;
+begin
+  new(a); new(b); new(c);
+  a^.v := 1; b^.v := 2; c^.v := 3;
+  a^.next := b; b^.next := c; c^.next := nil;
+  a.Nudge;
+  writeln(a.Count:1, ' ', a.Total(0):1, ' ', a.Doubled:1);
+  dispose(a); dispose(b); dispose(c)
+end;
+
 begin
   small := 3;
   h.impl := 4;
@@ -328,5 +375,6 @@ begin
   Foreign_;
   TraitsToo;
   DeepReceivers;
-  Receivers2
+  Receivers2;
+  SelfByReceiver
 end.

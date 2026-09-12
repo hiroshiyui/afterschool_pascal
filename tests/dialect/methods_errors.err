@@ -7,10 +7,12 @@
 <source>:73:6: error: a subrange takes its host's implementation, so it cannot carry one of its own
 <source>:83:6: error: a type produced from schema 'string' is the same type wherever it is written, so it cannot carry an implementation of its own
 <source>:93:6: error: 'day' renames integer rather than defining a type, so an implementation here would be one for every use of integer; write it for that name if that is what is meant
-<source>:103:9: error: 'missing' is neither a field of point nor a routine implemented for it
-<source>:104:3: error: unknown procedure 'missing'
-<source>:109:15: error: unknown function 'missing'
-<source>:110:3: error: unknown procedure 'missing'
-<source>:112:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
-<source>:114:9: error: 'doubled' is neither a field of named nor a routine implemented for it
-<source>:120:4: error: argument 1 of 'move' is a var parameter and needs a variable
+<source>:106:23: error: cannot select a field of a value of type rung, and no routine of that name is implemented for it
+<source>:108:24: error: unknown function 'latetoo'
+<source>:120:9: error: 'missing' is neither a field of point nor a routine implemented for it
+<source>:121:3: error: unknown procedure 'missing'
+<source>:126:15: error: unknown function 'missing'
+<source>:127:3: error: unknown procedure 'missing'
+<source>:129:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
+<source>:131:9: error: 'doubled' is neither a field of named nor a routine implemented for it
+<source>:137:4: error: argument 1 of 'move' is a var parameter and needs a variable

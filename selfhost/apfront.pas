@@ -24771,9 +24771,22 @@ begin
         r^.pdSym^.linkItemAt := r^.pdAt;
         r^.pdSym^.linkItemLen := r^.pdLen
       end;
-      if r^.pdBody <> nil then CheckProcBody(r);
+      { Appended **before** the body is checked, so that a method may name
+        itself through a receiver. `MethodSym` is what all three of
+        ADR-0410's spellings ask, and with the append after the body only two
+        of them could recurse: `l^.next.Bump` as a statement and
+        `l^.next.Deep(n)` with arguments both resolved through `LookupUser`,
+        the enclosing routine's own name being in scope in its body, while
+        `l^.next.Len` -- the husk, which has no such fallback -- was refused
+        with *no routine of that name is implemented for it*. One spelling of
+        three disagreeing is ADR-0412's lesson reaching a fifth place.
+
+        Order is unaffected: the loop appends one routine at a time, so a
+        *later* method is still not in the list while an earlier body is
+        checked, and §6.2.2.9's written order goes on being what decides. }
       if r^.pdSym <> nil then
         AppendSym(im^.routines, im^.routineTail, r^.pdSym);
+      if r^.pdBody <> nil then CheckProcBody(r);
       r := r^.next
     end;
 

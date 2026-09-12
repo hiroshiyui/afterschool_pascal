@@ -102,6 +102,15 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **A method may name itself through a receiver** (ADR-0415, AP 6.7.10.4).
+  Inside an implementation, `l^.next.Len` — a parameterless method-designator
+  naming the routine whose declaration contains it — was refused with *no
+  routine of that name is implemented for it*, while the same recursion
+  written as a statement or as a call with arguments compiled. A routine now
+  joins its implementation before its body is checked, so all three spellings
+  reach it. Written order still decides: a method declared *later* is not in
+  scope, in any spelling.
+
 - **A method-designator selects from its receiver and not from the scope**
   (ADR-0412, AP 6.7.10.2). Inside an implementation that had a routine of
   the name, `x.M(a)` bound to that routine rather than to `x`'s — so two

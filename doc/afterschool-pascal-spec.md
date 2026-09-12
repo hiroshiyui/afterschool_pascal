@@ -3911,6 +3911,17 @@ where it denotes a variable. What separates them is what the identifier
 denotes, which is the recurring answer of §6.4.3.3, §6.7.1 and §6.8.7.4 met
 once more.
 
+NOTE 17a — A method-designator may name the routine whose declaration
+contains it. Each implementation-routine's defining-point is in force from the
+beginning of its own declaration, as 6.2.2.9 puts a routine's identifier in
+scope within its own block, so a routine of an implementation may name itself
+through a receiver and may name any routine the implementation declared before
+it; one declared after it is not in force and shall not be found. That is the
+same order the identifier alone obeys, and it is stated here because a
+method-designator reaches a routine by the receiver's type rather than by the
+scope (6.7.10.2), which could otherwise be read as making the whole
+implementation available at once.
+
 **6.7.10.5 An implementation reaches the clients of its module [added].**
 Where an implementation-declaration occurs in a module-block, 6.7.10.2 shall
 select its routines in every program-component that imports an interface of
@@ -5199,6 +5210,7 @@ is what holds the behaviour in either case.
 | 6.7.10.2 (amended), 6.7.10.4 (amended) | ADR-0412 |
 | 6.7.10 (amended) | ADR-0413 |
 | 6.7.10 (amended a second time) | ADR-0414 |
+| 6.7.10.4 (amended) | ADR-0415 |
 | 6.7.5.7 | ADR-0084 |
 | 6.1.3 | ADR-0072 |
 | 5.7 | — (this document, 2026-09-12) |

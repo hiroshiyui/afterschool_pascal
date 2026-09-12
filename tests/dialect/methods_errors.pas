@@ -95,6 +95,23 @@ impl Day;
   begin Weekday := d mod 7 end;
 end;
 
+{ **written order still decides** (§6.2.2.9, ADR-0415). A method may name
+  itself through a receiver and may name one declared before it; a method
+  declared *later* is not in scope, and the fix that admitted the first two
+  must not admit this. Both spellings are written, because they are refused by
+  two different paths and so carry two different messages. }
+type Rung = ^Step; Step = record up: Rung end;
+impl Rung;
+  function Early(r: Rung): integer;
+  begin Early := r^.up.Late end;
+  function Arged(r: Rung): integer;
+  begin Arged := r^.up.LateToo(1) end;
+  function Late(r: Rung): integer;
+  begin Late := 1 end;
+  function LateToo(r: Rung; n: integer): integer;
+  begin LateToo := n end;
+end;
+
 var p: Point; n: Named; k: integer; arr: array [1..2] of Point;
 
 

@@ -10979,3 +10979,26 @@ the parser's with-arguments form -- and ADR-0412's lesson, that every one of
 them has to be taught the same fact, reaching a fifth place. `PasList` is
 written around it: inside an implementation a method's own name is in scope, so
 `Len(l^.next)` compiles and is what the module uses. **Open, not decided.**
+
+**And the defect the previous section left open was fixed the same day.** A
+routine joined its implementation's list **after** its body had been checked,
+so `MethodSym` could not answer for the routine being declared. The two
+spellings that nevertheless worked did so by accident: `CheckCall` and
+`CheckStmt` look the identifier up in the scope first, and §6.2.2.9 puts a
+routine's own name in scope in its body, so the recursion resolved through the
+scope while `MethodSym` answered nil. The husk asks `MethodSym` and nothing
+else, so it was the one spelling reporting what was actually true.
+
+Swapping the two lines is the whole fix, and the loop is the right place for it
+rather than a pass that registers everything first: it appends one routine at a
+time, so a *later* method is still not in the list while an earlier body is
+checked, and §6.2.2.9's order goes on deciding. AP 6.7.10.4 gained NOTE 17a
+saying so, because a method-designator reaches a routine by the receiver's
+**type** rather than by the scope and could otherwise be read as making a whole
+implementation available at once.
+
+What is worth carrying is that the fix also removed the accident. The three
+spellings now agree because they are told the same thing, not because two of
+them had a second way to find out -- which is the difference between ADR-0412's
+lesson being applied and being got away with. The register's row lasted one
+commit.

@@ -423,3 +423,4 @@ the alternatives that were rejected and why.
 | [0412](0412-the-receiver-decides.md) | The receiver decides | Accepted |
 | [0413](0413-one-implementation-per-program.md) | One implementation per program, and a translation is what enforces it | Accepted; 6.7.10's restriction generalised by [0414](0414-an-implementation-is-for-a-name-the-type-was-given.md) |
 | [0414](0414-an-implementation-is-for-a-name-the-type-was-given.md) | An implementation is for a name the type was given, not one it was lent | Accepted |
+| [0415](0415-a-method-may-name-itself.md) | A method may name itself through a receiver | Accepted |
