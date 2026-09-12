@@ -38,7 +38,7 @@ in every program-component, and the suite is 938 cases green at `-O2` and at
 | | |
 | --- | --- |
 | **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383) and 571 of the 606 corpus programs run there (ADR-0385) — the runtime is two translation units short of five, and ADR-0405 is what made that a smaller number than it was: the file model was never what the target lacked |
-| **Open and awaiting a decision** | the **version number** of the release the library rewrite has earned ([above](#where-development-stands--2026-09-13)), and a record's `Drop`, with exactly one asker. The object model is closed: all three of ADR-0315's increments are built, that record is superseded, and the rewrite that was to judge them is done |
+| **Open and awaiting a decision** | the **version number** of the release the library rewrite has earned ([above](#where-development-stands--2026-09-13)), and a record's `Drop`, with exactly one asker |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. A feature lands with its clause, its record and its case, or it does not land |
@@ -94,31 +94,23 @@ it cannot, a factory's answer outliving the call.
 
 ### Memory model and memory safety
 
-Reviewed against *a Rust-flavoured Pascal* on 2026-09-04, **probed rather than
-read** — and the pieces missing were not the ones the records said were
-missing. Three of the review's four rows closed within two days
-([history](history.md#the-memory-model-read-against-the-goal)), and the map of
-what answers what — `owned ^T` for `Box<T>`, `take` for a move, a `var`
-parameter for `&mut T`, `protected var` for `&T`, `?T` and `T ! E` for
-`Option` and `Result`, `array of T` for a slice, `trait` for a trait —
-is [in history](history.md#the-rust-flavoured-map-as-it-stood) row by row.
-What is **absent** is lifetimes, `Rc`, `RefCell` and `unsafe`, and what each
-of those left open is a sentence:
+The review of 2026-09-04 is closed — three of its four rows within two days,
+and the map of what answers what row by row
+([history](history.md#the-memory-model-read-against-the-goal),
+[the map](history.md#the-rust-flavoured-map-as-it-stood)). What is **absent**
+is lifetimes, `Rc`, `RefCell` and `unsafe`, and two things are left open by
+that:
 
-- **The escape half of the borrow rule is held by construction and watched by
-  nothing.** Invalidation is refused where a borrow is formed (ADR-0319); escape
-  rests on there being no way to form the value, so a feature that adds one
-  takes the property silently. `doc/sop.md` §7 carries it.
-- **A fifth warning — `new` of an ordinary `^T` where `owned` would compile —
-  is not built**, because taking the word is sometimes wrong and a warning
-  cannot know which (ADR-0337). The ordinary pointer is kept as the unchecked
-  form (ADR-0336, [below](#known-limitations)).
-- **A chain of a million owned nodes no longer ends in a signal; a shape that
-  is neither a chain nor a tree still can** (ADR-0322, ADR-0333). A self-owned
-  pointer held inside an array or sub-record has no link to thread, and a
-  cycle of two domains is two routines calling each other. Reference counting
-  is the unbuilt way out and nothing has asked; `examples/arena_graph.pas` is
-  the shape that needs no language change.
+- **A shape that is neither a chain nor a tree can still end in a signal**
+  (ADR-0322, ADR-0333). A self-owned pointer inside an array or a sub-record
+  has no link to thread, and a cycle of two domains is two routines calling
+  each other. Reference counting is the unbuilt way out and **nothing has
+  asked**; `examples/arena_graph.pas` is the shape that needs no language
+  change.
+- **The escape half of the borrow rule is watched by nothing** — held by
+  construction, so a feature that adds a way to form such a value takes the
+  property silently. It is `doc/sop.md` §7's row and is stated there, not
+  here.
 
 #### A record has no `Drop`
 
@@ -131,15 +123,6 @@ wants `SSL_shutdown` before its handles go. One is below ADR-0116's threshold;
 should a second appear, the cheapest shape is ADR-0290's — no spelling at all,
 a procedure in the record's own scope taking it as sole `var` parameter, run
 before the field loop.
-
-### The object model — closed
-
-All three of ADR-0315's increments are built, in six records rather than
-three, and the rewrite that was to judge them is done: **sixteen modules read
-as methods of their types, exporting 203 names where they exported 354**, and
-every module that is *not* converted has a probed reason. The chapter as it
-stood is [in history](history.md#the-object-model-chapter-as-it-stood).
-
 
 ### Known limitations
 
