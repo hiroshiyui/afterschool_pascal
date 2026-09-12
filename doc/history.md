@@ -10882,3 +10882,100 @@ are two objects and ADR-0017's name equivalence keeps them apart. That is also
 what lets each module carry an implementation for its own buffer without
 meeting ADR-0413's one-implementation rule: one type, one implementation, and
 these are two types.
+
+**The library's method conversion is closed, and two of the three answers are
+refusals.** Discussing what was left found that the 23 unconverted modules fall
+into four groups, and that measuring them was worth more than converting them.
+
+**The text and path modules keep their prefixes, by decision.** `PasStrings`
+(10 of 10 receiver-shaped), `PasFile` (10), `PasFS` (9), `PasText` (8),
+`PasEnv` (5), `PasParse` (2) and `PasIO` (2) are the most method-shaped surface
+left in the library, and every one of them is refused by ADR-0413 because its
+receiver is a `string(N)` or a `Fallible` production. That is not a limitation
+to route around: **`string(255)` is a capacity and not an abstraction**.
+`PasFile.FilePath`, `PasStrVec.StrItem` and `PasJson.JsonName` are all
+`string(255)` and 6.4.7 makes them one type, so `impl FilePath` would put path
+routines on a string-vector item and on every 255-character string a client
+declares -- and would refuse that client an implementation for a
+`Name = string(255)` of its own, from a library it merely imported. What would
+change the answer is a **nominal type over a production**, which this language
+has not got and which needs a reason of its own under ADR-0109. Recorded in
+`lib/dialect/README.md` as settled rather than left open, so that the next
+person to notice `s.TrimAll` is missing finds the argument instead of the gap.
+
+**An alias was the hole nobody had looked for**, and ADR-0414 is what closed
+it. The probes that found it are in that record; what is worth carrying is that
+the **first rule written for it was wrong and the corpus said so in one run**.
+Refusing every identifier whose definition does not *create* a type also
+refuses `impl integer`, which ADR-0315 admitted on purpose and
+`tests/dialect/methods.pas` has pinned ever since. The real distinction is
+narrower than ownership: `impl Day` conceals what it claims, where
+`impl integer` states it.
+
+**Four modules were converted and the other nineteen have reasons.** `PasList`
+(10 of 13, an owned pointer), `PasStream` (8 of 11, a handle), `PasLsp` (4 of
+10, a record) and `PasDir` (3 of 7, a handle). Of the rest: seven are the
+string group above; `PasTerm` and `PasUnicode` have subrange receivers
+(`Colour = clBlack..clDefault`, `Scalar = 0..ScalarMax`) and a subrange takes
+its host's implementation; `PasTime`'s `DayNumber = integer` is ADR-0414's own
+case; `PasContainer` and `PasSortX` are generic and `PasContainer` is the
+substrate the converted containers call into; and `PasMath`, `PasMathX`,
+`PasOS`, `PasSort` and `PasHttps` have no receiver of their own making at all.
+Every one of the nineteen now has a probed reason rather than a measurement,
+which is the difference between a list and an argument.
+
+**The four convertible modules, and what converting them found.** `PasList`
+went 13 exported names to 3, `PasStream` 11 to 6, `PasLsp` 10 to 7 and `PasDir`
+7 to 5; with the ten before them, fourteen modules export **177 names where
+they exported 325**. `PasList` keeps no constructor at all -- a fresh variable
+of an `owned ^` is an empty list already, which is the point of the form -- and
+a `Stream`, a `Socket` and a TLS `Connection` now answer `WriteText`,
+`WriteLine`, `ReadLine` and `Close` to the same four spellings.
+
+Three of the measurements that chose them were wrong in the same direction, and
+reading the sources is what caught it: *receiver-shaped* counted routines whose
+first parameter is a type the module exports, and a routine that takes its
+`Stream` or `Dir` as somewhere to **put** an answer is not a method.
+`PasStream`'s three `StreamOpen`s, `PasDir`'s `OpenDir` and `PasLsp`'s
+`LspOpen` are producers; `PasDir.ListDir` takes a `PathName` and was never a
+candidate at all. The count that matters is not how many routines mention the
+type but how many ask one about itself.
+
+**A hazard in the rewriting script, for whoever reuses it.** Applying the
+call-site rewriter to a fixed point double-rewrites a name that maps to itself:
+`NextEntry(walk, nm)` became `walk.NextEntry(nm)` and then `walk.nm.NextEntry`.
+It was caught reading the diff, not by a compile -- both spellings parse. A
+mapping whose old and new spelling are the same needs one pass, not a fixed
+point.
+
+**`lib-coverage` moved again, and the measurement that settles it is better
+than the one used before.** `paslsp.pas` reported 147 instrumented statements
+and now reports 149. Counting the emitted counters rather than the distinct
+lines answers it outright: **181 `pas_cov_hit` calls before and 181 after**, so
+the module emits exactly the statements it did. What moved is the *distinct
+line* count, because the file grew nineteen lines and two line numbers
+belonging to generic bodies emitted in this translation (AP 6.7.3.5) stopped
+falling beyond the end of the file. The gate's denominator is a set of line
+numbers and a generic's lines are another file's; counting counters is immune
+to it, and is what a future comparison should use.
+
+**And a defect in the construct itself, found by writing a linked list.**
+Inside an implementation, a method may be reached through a receiver in three
+spellings, and one of the three cannot name the method currently being
+declared:
+
+| spelling | itself | an earlier method | a later method |
+| --- | --- | --- | --- |
+| statement, parameterless -- `l^.next.Bump` | works | works | refused |
+| expression, with arguments -- `l^.next.Deep(n)` | works | works | refused |
+| expression, parameterless -- `l^.next.Len` | **refused** | works | refused |
+
+The ordering column is §6.2.2.9 and is right everywhere. The first column is
+not: the same recursion is admitted as a statement and as a call with
+arguments, and refused as a parameterless expression with `cannot select a
+field of a value of type link, and no routine of that name is implemented for
+it`. That is ADR-0410's three shapes again -- the husk, the qualified name and
+the parser's with-arguments form -- and ADR-0412's lesson, that every one of
+them has to be taught the same fact, reaching a fifth place. `PasList` is
+written around it: inside an implementation a method's own name is in scope, so
+`Len(l^.next)` compiles and is what the module uses. **Open, not decided.**

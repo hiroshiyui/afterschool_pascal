@@ -67,6 +67,15 @@ appears below in the release where it still existed.
   is a type produced from a schema, or a schema, and neither may carry an
   inherent implementation.
 
+- **Four more library modules read as methods of their types** (AP 6.7.10).
+  `PasList` exports 3 names where it exported 13, `PasStream` 6 of 11, `PasLsp`
+  7 of 10 and `PasDir` 5 of 7 — with the ten before them, **177 exported names
+  where there were 325**. A list is `l.Push(x)`, `l.Len`, `l.Reverse`; a stream
+  and a socket and a TLS connection now share `WriteText`, `WriteLine`,
+  `ReadLine` and `Close`. `PasList` keeps no constructor, a fresh variable of
+  an `owned ^` being an empty list already. **Every caller must change**, for
+  the reason given above.
+
 - **`PasNet.NetService` is `Socket.Service`** (AP 6.7.10), the one judgement
   call the previous batch left open. It takes a socket that already exists and
   asks it about itself, which is the receiver test exactly; that its answer is

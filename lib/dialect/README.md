@@ -52,14 +52,16 @@ function Remove(path: PathName): ErrorCode;
 shape -- some of them methods since the conversion described below, the shape of
 an answer being no different for one: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
 `RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `StreamOpenRead`,
-`StreamOpenWrite`, `StreamOpenAppend`, `StreamWriteText`, `StreamWriteLine` and `StreamFlush`, `PasDir`'s
-`OpenDir`, `NextEntry` and `ListDir`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
-`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept`, `NetService` and `NetWait`,
-and `Socket`'s `WriteText`, `WriteLine` and `ReadLine` — the four `Open`s included, because the stream or
+`StreamOpenWrite`, `StreamOpenAppend`, `StreamWriteText`, `StreamWriteLine` and `StreamFlush`, `PasUnicode`'s `ToText`, `Fold`, `Upper` and
+`Lower`, and `PasNet`'s `NetConnect`, `NetListen`, `NetAccept` and `NetWait`, `PasDir`'s
+`OpenDir` and `ListDir`, `PasStream`'s three `StreamOpen`s, and the methods
+`Socket.WriteText`, `Socket.WriteLine`, `Socket.ReadLine`, `Socket.Service`,
+`Stream.WriteText`, `Stream.WriteLine`, `Stream.Flush`, `Stream.Close`,
+`Dir.NextEntry` and `Dir.Close` — the four `Open`s included, because the stream or
 directory they answer goes into the `var` parameter and what is left to return
 is whether the world refused.
 
-`PasDir.NextEntry` is the one that uses more than two of the six codes, and it is
+`Dir.NextEntry` is the one that uses more than two of the six codes, and it is
 worth reading as the shape rather than as an exception: `errNone` with a name,
 `errAbsent` at the end of the directory, `errFull` for a name too long for the
 string it was going into, `errIO` for a refusal. Each is that code's own gloss
@@ -114,10 +116,10 @@ function Exists(path: PathName): boolean;
 ```
 
 **A question about the world** answers `boolean`. `Exists`, `Defined`, `Failed`,
-`AtEnd` and `StreamReadLine` are questions, not operations: there is no failure
+`AtEnd` and `Stream.ReadLine` are questions, not operations: there is no failure
 distinct from the answer, and giving one an `ErrorCode` would invent a third
-state the caller would have to handle for nothing. `StreamReadLine` is the one that
-looks like an operation, and its `false` means *nothing more*, which is the
+state the caller would have to handle for nothing. `Stream.ReadLine` is the one
+that looks like an operation, and its `false` means *nothing more*, which is the
 answer and not a refusal.
 
 The same reasoning admits a bare number where the call it wraps cannot fail.
@@ -136,11 +138,11 @@ prefix. **An implementation is outside that scope** (AP 6.7.10.5, ADR-0411),
 so a routine reached as `v.Free` is named by nothing a client imports and
 carries no prefix at all.
 
-Ten modules read that way today, and between them they export **157 names
-where they exported 284**: `PasJson` 25 of 50, `PasToml` 31 of 59, `PasVector`
+Fourteen modules read that way today, and between them they export **177 names
+where they exported 325**: `PasJson` 25 of 50, `PasToml` 31 of 59, `PasVector`
 4 of 15, `PasMap` 6 of 16, `PasStrVec` 6 of 19, `PasRegex` 20 of 31,
-`PasProcess` 12 of 22, `PasNet` 10 of 14, `PasTls` 16 of 20 and `PasHttp` 27 of
-38. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are now spelled the same way
+`PasProcess` 12 of 22, `PasNet` 9 of 14, `PasTls` 16 of 20, `PasHttp` 27 of 38,
+`PasList` 3 of 13, `PasStream` 6 of 11, `PasLsp` 7 of 10 and `PasDir` 5 of 7. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are now spelled the same way
 in every container here, and `Close`, `WriteText`, `WriteLine` and `ReadLine`
 the same way on a socket and on a TLS connection — every one of them a
 collision `export-unique` would have refused to two exported names, which is
@@ -171,6 +173,12 @@ convention, so a converter finds them at the first compile:
   `PasProcess`'s `Run`, `Capture` and `CaptureLines`, which take a
   `CommandLine`, stay exported. The *trait* form is unaffected and is how a
   string-type of one's own becomes sortable or a map key.
+- **A name that renames another type cannot either** (ADR-0414): `T = integer`
+  makes `T` a second name for the type `integer` denotes, so `impl T` would be
+  an implementation for every integer in the program, held by a name that does
+  not say so. `impl integer` written out stays legal — what is refused is the
+  claim being invisible, and the diagnostic names the identifier to write
+  instead.
 - **A schema itself cannot carry one either**, there being nothing to select
   from until a discriminant is chosen: `PasNet.NetWait` takes a `SocketList`
   and stays exported.
@@ -196,6 +204,29 @@ convention, so a converter finds them at the first compile:
   takes the element type from the receiver's own domain, so
   `procedure Push(var b: BoxPtr; x: type of b^.a[1])` is reached as
   `p.Push('z')` with no type argument written at all.
+
+### The text and path modules keep their prefixes, and that is settled
+
+`PasStrings`, `PasText`, `PasFS`, `PasFile`, `PasEnv`, `PasParse` and `PasIO`
+are between them about fifty routines whose first parameter is a `string(N)` or
+a `Fallible` production — `UpperAscii(line)`, `Exists(path)`, `TrimAll(s)`.
+They are the most method-shaped surface left in the library and none of them
+will be converted. That is a decision and not a deferral.
+
+The reason is that **`string(255)` is a capacity and not an abstraction**.
+`PasFile.FilePath`, `PasStrVec.StrItem` and `PasJson.JsonName` are all
+`string(255)` and 6.4.7 makes them one type, so `impl FilePath` would put path
+routines on a string-vector item and on every 255-character string a client
+ever declares — and would refuse that client an implementation for a
+`Name = string(255)` of its own, from a library it merely imported. A method
+whose receiver is a capacity is a method on everybody's data.
+
+What would change the answer is a **nominal** type over a production — a way
+for a module to own `PathName` rather than share `string(255)` — and this
+language has none. That is a feature with its own reason still to find, not a
+gap in this convention. Until it exists the prefix is what says which module a
+routine belongs to: `PasStrings.UpperAscii` says where it comes from, and
+`s.UpperAscii` on a type nobody owns would not.
 
 What this does **not** license is dropping a prefix from an exported routine.
 The test is whether the name is reached through a receiver: `TomlParse` and the

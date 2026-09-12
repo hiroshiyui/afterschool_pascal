@@ -4400,8 +4400,8 @@ without a reason.
 
 **`PasLsp` turned out to be a buffered descriptor reader with a framing over
 it**, which is what the roadmap predicted the second transport would say.
-`LspReader`, `Ready` and `NextByte` are shared unchanged; `LspRead` is 40 lines
-and `JsonlRead`/`JsonlWrite` are 58. The module's name is now narrower than its
+`LspReader`, `Ready` and `NextByte` are shared unchanged; the reader's own
+`Read` is 40 lines and its `ReadJsonl` with `JsonlWrite` are 58. The module's name is now narrower than its
 contents and is kept — a third caller wanting the reader and *neither* framing
 would be the reason to rename it.
 
@@ -4895,7 +4895,7 @@ nothing else. What it would lose, mechanism by mechanism:
   keystroke carries the whole document, so the server drains what has
   *arrived* — never waits, which would be a policy about typing speed — and
   keeps the last change per file: four queued edits of a 22 900-line source,
-  780 ms to 340. `pasx_fd_ready`, `PasIO.FdReady` and `PasLsp.LspPending` are
+  780 ms to 340. `pasx_fd_ready`, `PasIO.FdReady` and `PasLsp`'s `LspReader.Pending` are
   the whole of it, the last asking the reader's buffer *and* the descriptor
   for ADR-0205's reason. What it does not do is abandon a compile in flight,
   and the reason is measured rather than argued: the cheapest route to that
