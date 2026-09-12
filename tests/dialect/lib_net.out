@@ -1,5 +1,6 @@
 listen:      no error
 service:     no error, and a port was given: TRUE
+no room:     no room left []
 connect:     no error
 accept:      no error
   server got: no error [first line]

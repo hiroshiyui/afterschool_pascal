@@ -31,6 +31,8 @@ var
   port: ServiceName;
   line: NetLine;
   short: string(4);
+  { two characters, which no ephemeral port fits }
+  tiny: string(2);
   e: ErrorCode;
   i, tries: integer;
 
@@ -42,6 +44,15 @@ begin
   e := srv.Service(port);
   writeln('service:     ', ErrorText(e), ', and a port was given: ',
           port <> '');
+
+  { The same question asked with nowhere to put the answer. `Service` checks
+    the *caller's* capacity and not `ServiceMax`, §6.4.3.3.3 making that
+    readable, so this is `errFull` and not a truncated port -- and the
+    ephemeral range is five digits, which two cannot hold. Until this was
+    written the arm had no case: a mutation turning its `errFull` into
+    `errIO` left the whole suite green. }
+  e := srv.Service(tiny);
+  writeln('no room:     ', ErrorText(e), ' [', tiny, ']');
 
   { The other end, to the port just reported. Both ends are strings the whole
     way: nothing here knows whether this is IPv4 or IPv6. }
