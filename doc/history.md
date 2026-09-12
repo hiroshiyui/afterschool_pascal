@@ -10838,3 +10838,47 @@ rather than a measurement. `PasNet.NetService` is the one judgement call left
 open: its first parameter is a `Socket` and by the receiver test it is a method,
 and it keeps its name because it answers for the socket's identity in the system
 beside `NetAccept`.
+
+**`NetService` and `PasContainer`, which are the two the batch left open.**
+The first was a judgement call and went the way the rule says: `s.Service(port)`
+takes a socket that already exists and asks it about itself, so it is a method,
+and that its answer is about the socket's identity in the system rather than
+about the stream of bytes through it is a fact about the *answer* and not about
+how the routine is reached. `PasNet` exports 9 names where it exported 14, and
+the receiver took `protected var` on the first compile — ADR-0283's fixed point
+for the eleventh time in three days.
+
+**`PasContainer` cannot be converted, and that is the facility rather than an
+omission.** Two probes settle it. `impl Vec` is refused — *'vec' is not a type,
+so it can have no routines of its own* — because `Vec` and `Map` are schemata
+and there is nothing for AP 6.7.10.2 to select from until a discriminant is
+chosen. And every routine is generic over the **pointer** type, declared
+`VecPush(Ptr: type; var v: Ptr; …)`, so AP 6.7.10.4 would bind the receiver to
+a parameter that wants a type: writing such a method and calling it through a
+receiver gives *this argument of 'count' must name a type, because the parameter
+it matches is declared 'type'*.
+
+What it is instead is the **substrate** the converted containers call into.
+`PasJson` declares `JsonChars = ^Vec(char)` and gives *that* an implementation
+whose nine methods call `VecPush`, `VecLen` and the rest; `PasToml`,
+`PasStrVec`, `PasVector` and `PasMap` do the same over their own pointer types.
+Two probes found the rest of the shape: a **type-parameter may follow the
+receiver**, so `function Count(var b: BoxPtr; Elem: type)` is reached as
+`p.Count(char)`; and `type of b^.a[1]` takes the element type from the
+receiver's own domain, so `procedure Push(var b: BoxPtr; x: type of b^.a[1])`
+is reached as `p.Push('z')` with no type argument written at all. A module that
+has a concrete type can therefore have methods that are generic in everything
+but the receiver.
+
+**And a claim in a source comment turned out to be false**, which is
+`doc/sop.md` §4b caught by its own rule. `lib/dialect/pastoml.pas` said
+`TomlChars` *is* the type `PasJson` calls `JsonChars`, 6.4.7 interning a schema
+production per tuple, so a program holding both might pass one where the other
+is asked for. A program importing both modules compiles and runs — each
+buffer's methods dispatch to its own module — and the assignment is refused:
+`cannot assign jsonchars to a variable of type tomlchars`. 6.4.7 interns the
+*production* `Vec(char)`, so the two pointers share a domain; the pointer types
+are two objects and ADR-0017's name equivalence keeps them apart. That is also
+what lets each module carry an implementation for its own buffer without
+meeting ADR-0413's one-implementation rule: one type, one implementation, and
+these are two types.

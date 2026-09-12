@@ -174,6 +174,28 @@ convention, so a converter finds them at the first compile:
 - **A schema itself cannot carry one either**, there being nothing to select
   from until a discriminant is chosen: `PasNet.NetWait` takes a `SocketList`
   and stays exported.
+- **A type-parameter cannot be a receiver.** AP 6.7.10.4 binds the receiver to
+  the *first* parameter, so a routine declared `VecPush(Ptr: type; var v: Ptr;
+  …)` has a type where the receiver would be, and `v.Push(x)` cannot reach it:
+  `this argument of 'count' must name a type, because the parameter it matches
+  is declared 'type'`. This is the whole of why **`PasContainer` is not a
+  candidate** and never will be — `Vec` and `Map` are schemata, refused by the
+  line above, and its routines are generic over the *pointer* type, which is
+  the facility rather than an accident of the interface.
+
+  `PasContainer` is instead the **substrate** the converted modules call into.
+  `PasJson` declares `JsonChars = ^Vec(char)` and writes `impl JsonChars`,
+  whose nine methods call `VecPush`, `VecLen` and the rest; `PasToml`,
+  `PasStrVec`, `PasVector` and `PasMap` do the same over their own pointer
+  types. Two such pointers have one interned domain and are still two types
+  (ADR-0017), which is what lets each carry an implementation of its own.
+
+  Two things a converter can still do inside an implementation, both probed:
+  a **type-parameter may follow the receiver** — `function Count(var b: BoxPtr;
+  Elem: type)` is reached as `p.Count(char)` — and better, `type of b^.a[1]`
+  takes the element type from the receiver's own domain, so
+  `procedure Push(var b: BoxPtr; x: type of b^.a[1])` is reached as
+  `p.Push('z')` with no type argument written at all.
 
 What this does **not** license is dropping a prefix from an exported routine.
 The test is whether the name is reached through a receiver: `TomlParse` and the

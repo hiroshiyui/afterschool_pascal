@@ -67,6 +67,14 @@ appears below in the release where it still existed.
   is a type produced from a schema, or a schema, and neither may carry an
   inherent implementation.
 
+- **`PasNet.NetService` is `Socket.Service`** (AP 6.7.10), the one judgement
+  call the previous batch left open. It takes a socket that already exists and
+  asks it about itself, which is the receiver test exactly; that its answer is
+  about the socket's identity in the system rather than the stream of bytes
+  through it is a fact about the answer, not about how the routine is reached.
+  `PasNet` exports 9 names where it exported 14. Its receiver took `protected
+  var` for the reason the others did.
+
 - **At most one implementation of a type per *program*** (ADR-0413,
   AP 6.7.10). The rule said *in a program-component*, which every component
   satisfies separately — so the language permitted two modules each giving one
