@@ -13,10 +13,21 @@ question this page has closed and what closing it found — including
 [the page as it stood on 2026-09-07](history.md#the-roadmap-as-it-stood-on-2026-09-07),
 verbatim, the moment before it was cut to this.
 
-## Where development stands — 2026-09-11
+## Where development stands — 2026-09-13
 
-**Released: v3.11.0**, and `CHANGELOG.md`'s `Unreleased` is empty. Its
-headline is the editor: it replaces, and two defects v3.10.0 had shipped a
+**Released: v3.11.0, and `CHANGELOG.md`'s `Unreleased` is not empty.** What
+stands on top of the tag is all of one subject: the library reads as **methods
+of its types**. Fourteen modules export
+177 names where they exported 325, `export-unique` counts 432 where it counted
+527, and three rules were added to AP 6.7.10 on the way — one implementation of
+a type per *program* (ADR-0413), an implementation only for a name the type was
+given (ADR-0414), and a method may name itself through a receiver (ADR-0415).
+**The version number is undecided** and is the next thing to settle: the
+library rename breaks every existing client, which is what a major number is
+for, while `release-engineering` defines the public interface as the accepted
+language, the diagnostics and the command line and does not name the library.
+
+v3.11.0's headline is the editor: it replaces, and two defects v3.10.0 had shipped a
 day earlier do not happen any more — a Ctrl-Q that discarded another
 document's work in silence (ADR-0401) and a menu that stopped the program on
 F3 (ADR-0404 is the gate that could have caught it and had been pointed at
@@ -35,7 +46,7 @@ twice over (v3.7.0, ADR-0360 – ADR-0364).
 | | |
 | --- | --- |
 | **Open and ready to do** | the platforms, and only the platforms: **macOS** runs green on arm64 and its job can now fail ([below](#cross-platform-support)), with nine skips left — every one a tool the runner has not got — and a release leg that ships an `arm64-darwin` archive since ADR-0375; **s390x** aligns `tySet` where nothing else does. **Windows is dropped** ([below](#cross-platform-support), ADR-0380) and what was measured about it is in history rather than deleted; **`wasm32-wasi` is admitted** (ADR-0383) and 571 of the 606 corpus programs run there (ADR-0385) — the runtime is two translation units short of five, and ADR-0405 is what made that a smaller number than it was: the file model was never what the target lacked |
-| **Open and awaiting a decision** | the object model's increments A and C (ADR-0315 is `Proposed`; B is built and has a client that is not a test), and a record's `Drop`, with exactly one asker |
+| **Open and awaiting a decision** | the **version number** of the release the library rewrite has earned ([above](#where-development-stands--2026-09-13)), and a record's `Drop`, with exactly one asker. The object model is closed: all three of ADR-0315's increments are built, that record is superseded, and the rewrite that was to judge them is done |
 | **Open and awaiting a program** | [the standard library](#the-standard-library), whose inventory is **empty**: a row there is evidence from somebody writing a program, not an item from a list |
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. A feature lands with its clause, its record and its case, or it does not land |
@@ -129,56 +140,16 @@ should a second appear, the cheapest shape is ADR-0290's — no spelling at all,
 a procedure in the record's own scope taking it as sole `var` parameter, run
 before the field loop.
 
-### The object model (proposed)
+### The object model
 
-[ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) proposes
-Rust's decomposition — methods and traits without inheritance, no base class,
-no `is`/`as` — in three increments. **B is built** (traits, `impl … for`, the
-bound on a schema's discriminant: ADR-0338 – ADR-0341, ADR-0344, AP 6.7.9)
-and since ADR-0355 has a client that is not a test. **A is built**
-(ADR-0410, AP 6.7.10, AP 6.7.10.4): `impl T;` is the trait form with the trait
-left out, and `x.M(a)` is the call `M(x, a)` already made, the routine having
-been selected from its first actual's type since B landed. **C is built** as well
-(ADR-0408, ADR-0409, AP 6.7.11), in two increments rather than the three that
-were planned — the release slot turned out to be inseparable from the value,
-because behind a `dyn` there is no type to resolve a release from, so an
-increment that left it out would have leaked every element of the collection
-the feature exists for. **A is not built**, and is judged separately: it is
-not a prerequisite for B, the record's staging sentence notwithstanding.
+**Closed.** All three of ADR-0315's increments are built, in six records
+rather than three, and the library rewrite that was to judge them is done:
+fourteen modules read as methods of their types, exporting 177 names where
+they exported 325, and every module that is *not* converted has a probed
+reason rather than a measurement. The chapter as it stood, with what each
+increment cost and what the first client found, is
+[in history](history.md#the-object-model-chapter-as-it-stood).
 
-**All three increments are built**, in six records rather than three, and
-ADR-0315 is superseded by them. What it proposed for A survived almost
-unchanged and what it did not have is the *receiver*: a method call arrives at
-the compiler three ways — a simple name is §6.11.3's qualified form, a complex
-one is a variable-access the parser can finish, and a parameterless one is a
-field selection — and the first and third are Sema's to tell apart.
-
-**The object model reaches a client since ADR-0411**, which is where the
-library work began rather than where it was expected to. An implementation
-written in a module-block is selected in every component that can name its
-type (AP 6.7.10.5); before it, a client's call to a module's method compiled
-and died at the assembler or the linker, and AP 6.7.10.1 NOTE 9 had recorded
-the restriction (ADR-0341). **The first thing a rewrite has to ask of a
-feature is whether it crosses §6.13**, and neither the record proposing
-methods nor the one building them had.
-
-**What is not settled is which modules are rewritten.** ADR-0315's judgement
-stands: one module is rewritten as proof and the rest judged after reading it.
-Nothing is forced — `export-unique` reads the export-part and a method is not
-in one, so the prefixed names may coexist with methods indefinitely. The count
-it would retire has moved twice and is worth **running** rather than quoting:
-`tests/checks/export_unique.py` answers the denominator and a sweep of the
-export-parts for names beginning with their own module's noun answers the
-numerator, and no number in this sentence does. B's payoff was a program's own
-text — thirty call sites and fourteen routine parameters — and A's is
-call-site spellings that block no program; A's best argument arrived from B
-(ADR-0339): two modules exporting `Compare` collide under §6.11.2, and
-`x.Compare(y)` in the receiver's scope is the collision-free form. Its one
-cost no gate will see is that `Put` declared in a dozen impls cannot be found
-by grepping its name; `--dump-uses` and the language server already answer
-it, a person with `grep` does not. Whether any of it is built is not a promise
-either way — an area announced and abandoned would be the first thing on this
-page that was neither finished nor left.
 
 ### Known limitations
 

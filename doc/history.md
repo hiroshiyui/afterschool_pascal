@@ -11003,3 +11003,96 @@ spellings now agree because they are told the same thing, not because two of
 them had a second way to find out -- which is the difference between ADR-0412's
 lesson being applied and being got away with. The register's row lasted one
 commit.
+
+The roadmap carried this while the three increments were being built. It is
+moved here whole, by the page's own rule, on the day the last open question in
+it -- which modules are rewritten -- was answered. Two things in it had gone
+wrong and are left as they were written, because that is what a record is for:
+it said both **A is built** and **A is not built**, the second a sentence left
+behind when A landed; and its closing question assumed one module would be
+rewritten as proof and the rest judged after reading it, where fourteen were
+rewritten and the judgement turned on three refusals rather than on taste.
+
+## The object model chapter as it stood
+
+[ADR-0315](adr/0315-methods-and-traits-without-inheritance.md) proposes
+Rust's decomposition — methods and traits without inheritance, no base class,
+no `is`/`as` — in three increments. **B is built** (traits, `impl … for`, the
+bound on a schema's discriminant: ADR-0338 – ADR-0341, ADR-0344, AP 6.7.9)
+and since ADR-0355 has a client that is not a test. **A is built**
+(ADR-0410, AP 6.7.10, AP 6.7.10.4): `impl T;` is the trait form with the trait
+left out, and `x.M(a)` is the call `M(x, a)` already made, the routine having
+been selected from its first actual's type since B landed. **C is built** as well
+(ADR-0408, ADR-0409, AP 6.7.11), in two increments rather than the three that
+were planned — the release slot turned out to be inseparable from the value,
+because behind a `dyn` there is no type to resolve a release from, so an
+increment that left it out would have leaked every element of the collection
+the feature exists for. **A is not built**, and is judged separately: it is
+not a prerequisite for B, the record's staging sentence notwithstanding.
+
+**All three increments are built**, in six records rather than three, and
+ADR-0315 is superseded by them. What it proposed for A survived almost
+unchanged and what it did not have is the *receiver*: a method call arrives at
+the compiler three ways — a simple name is §6.11.3's qualified form, a complex
+one is a variable-access the parser can finish, and a parameterless one is a
+field selection — and the first and third are Sema's to tell apart.
+
+**The object model reaches a client since ADR-0411**, which is where the
+library work began rather than where it was expected to. An implementation
+written in a module-block is selected in every component that can name its
+type (AP 6.7.10.5); before it, a client's call to a module's method compiled
+and died at the assembler or the linker, and AP 6.7.10.1 NOTE 9 had recorded
+the restriction (ADR-0341). **The first thing a rewrite has to ask of a
+feature is whether it crosses §6.13**, and neither the record proposing
+methods nor the one building them had.
+
+**What is not settled is which modules are rewritten.** ADR-0315's judgement
+stands: one module is rewritten as proof and the rest judged after reading it.
+Nothing is forced — `export-unique` reads the export-part and a method is not
+in one, so the prefixed names may coexist with methods indefinitely. The count
+it would retire has moved twice and is worth **running** rather than quoting:
+`tests/checks/export_unique.py` answers the denominator and a sweep of the
+export-parts for names beginning with their own module's noun answers the
+numerator, and no number in this sentence does. B's payoff was a program's own
+text — thirty call sites and fourteen routine parameters — and A's is
+call-site spellings that block no program; A's best argument arrived from B
+(ADR-0339): two modules exporting `Compare` collide under §6.11.2, and
+`x.Compare(y)` in the receiver's scope is the collision-free form. Its one
+cost no gate will see is that `Put` declared in a dozen impls cannot be found
+by grepping its name; `--dump-uses` and the language server already answer
+it, a person with `grep` does not. Whether any of it is built is not a promise
+either way — an area announced and abandoned would be the first thing on this
+page that was neither finished nor left.
+
+**A gate that had been moving for comments.** `lib-coverage`'s denominator was
+every `pas_cov_hit` line number in a module's instrumented IR, and a generic's
+body is emitted in the translation that *activates* it (AP 6.7.3.5) — so four
+modules were carrying `PasContainer`'s seven `Vec` routines with
+`PasContainer`'s line numbers, which index into the client's source and land on
+whatever is at that line. 50 statements of the 3560, 18 of them in
+`paslspdiag.pas`, where they were reported *uncovered* because nothing in the
+corpus runs them through that module.
+
+The inflation was the smaller half. Another file's numbering collides with this
+file's wherever the two coincide, so the denominator moved whenever a module's
+**length** changed: three times in one day, twice for a comment, each needing a
+commit message to establish that nothing had happened. ADR-0416 attributes each
+hit to the routine whose marker opened it and keeps only the module's own; the
+ratchet is corrected once, 3560 to 3510 and 386 uncovered to 364, and
+`paslspdiag.pas` goes from 20 uncovered to 2.
+
+Two separators were tried against the corpus first and both fail: the LLVM name
+cannot tell an instantiation from a module's own **private** routine, both
+being `internal` and counter-named, and a ratio of dropped to kept cannot
+either, `paslspdiag.pas` having six routines of its own and seven
+instantiations. What works is the marker, and what checks it is that a dropped
+name is declared in this source nowhere — exact, no threshold, and it fails
+with the name it found. **The evidence is the stability**: three lines of
+comment added to `pastoml.pas` moved the denominator before and do not after.
+
+**And one uncovered arm closed.** `Socket.Service`'s `errFull` had no case —
+a mutation turning it into `errIO` had left the whole suite green, which was
+reported when it happened rather than quietly left. `lib_net` now asks a
+listening socket for its port with two characters to put it in; the ephemeral
+range is five digits, the answer is `errFull`, and the mutation now fails that
+case.

@@ -99,3 +99,4 @@ tui/README.md   | tui-palette        | every pairing clears at (\d+\.\d+):1 or b
 # `session.pas` is a reason a script stops being drivable.
 CLAUDE.md       | tui-terminal       | (\d+) of the (\d+) sessions can be driven
 tui/README.md   | tui-terminal       | Both tables, (\d+) of the (\d+) scripts
+doc/roadmap.md | export-unique      | `export-unique` counts (\d+) where it counted
