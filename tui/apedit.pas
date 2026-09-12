@@ -439,7 +439,7 @@ const
 procedure BlankDoc(var d: Document);
 begin
   SVecNew(d.lines, 64);
-  SVecPush(d.lines, '');
+  d.lines.Push('');
   d.row := 1;
   d.col := 1;
   d.top := 1;
@@ -490,12 +490,12 @@ begin
     leak one heap per file the person opened -- which `heap-balance` counts
     and which nothing else here would have noticed. `bank[cur]` is stale
     while `doc` is live, so it is skipped. }
-  SVecFree(ed.doc.lines);
+  ed.doc.lines.Free;
   Drop(ed.doc.undos);
   Drop(ed.doc.redos);
   for i := 1 to ed.docs do
     if i <> ed.cur then begin
-      SVecFree(ed.bank[i].lines);
+      ed.bank[i].lines.Free;
       Drop(ed.bank[i].undos);
       Drop(ed.bank[i].redos)
     end;
@@ -621,10 +621,10 @@ begin
   { The line an empty editor starts with is not a line of the document: the
     first push replaces it rather than sitting under it, or every loaded file
     would gain a blank first line. }
-  if (SVecLen(ed.doc.lines) = 1) and (SVecGet(ed.doc.lines, 1) = '') then
-    SVecSet(ed.doc.lines, 1, s)
+  if (ed.doc.lines.Len = 1) and (ed.doc.lines.At(1) = '') then
+    ed.doc.lines.Put(1, s)
   else
-    SVecPush(ed.doc.lines, s)
+    ed.doc.lines.Push(s)
 end;
 
 function EditDirty;
@@ -634,7 +634,7 @@ end;
 
 function EditLines;
 begin
-  EditLines := SVecLen(ed.doc.lines)
+  EditLines := ed.doc.lines.Len
 end;
 
 function EditRow;
@@ -654,8 +654,8 @@ end;
 
 function EditLine_;
 begin
-  if (n < 1) or (n > SVecLen(ed.doc.lines)) then EditLine_ := ''
-  else EditLine_ := SVecGet(ed.doc.lines, n)
+  if (n < 1) or (n > ed.doc.lines.Len) then EditLine_ := ''
+  else EditLine_ := ed.doc.lines.At(n)
 end;
 
 procedure EditSetName;
@@ -753,8 +753,8 @@ procedure Clamp(var ed: Editor);
 var n: integer; cur: EditLine;
 begin
   if ed.doc.row < 1 then ed.doc.row := 1;
-  if ed.doc.row > SVecLen(ed.doc.lines) then ed.doc.row := SVecLen(ed.doc.lines);
-  cur := SVecGet(ed.doc.lines, ed.doc.row);
+  if ed.doc.row > ed.doc.lines.Len then ed.doc.row := ed.doc.lines.Len;
+  cur := ed.doc.lines.At(ed.doc.row);
   n := length(cur);
   if ed.doc.col < 1 then ed.doc.col := 1;
   if ed.doc.col > n + 1 then ed.doc.col := n + 1;
@@ -782,41 +782,41 @@ procedure MoveTo(var ed: Editor; ln, cl: integer); forward;
 procedure DoInsert(var ed: Editor; row, col: integer; s: EditLine);
 var cur: EditLine;
 begin
-  cur := SVecGet(ed.doc.lines, row);
-  SVecSet(ed.doc.lines, row, Left(cur, col - 1) + s + From(cur, col))
+  cur := ed.doc.lines.At(row);
+  ed.doc.lines.Put(row, Left(cur, col - 1) + s + From(cur, col))
 end;
 
 procedure DoRemove(var ed: Editor; row, col, n: integer);
 var cur: EditLine;
 begin
-  cur := SVecGet(ed.doc.lines, row);
-  SVecSet(ed.doc.lines, row, Left(cur, col - 1) + From(cur, col + n))
+  cur := ed.doc.lines.At(row);
+  ed.doc.lines.Put(row, Left(cur, col - 1) + From(cur, col + n))
 end;
 
 procedure DoSplit(var ed: Editor; row, col: integer);
 var cur, rest: EditLine; i: integer;
 begin
-  cur := SVecGet(ed.doc.lines, row);
+  cur := ed.doc.lines.At(row);
   rest := From(cur, col);
-  SVecSet(ed.doc.lines, row, Left(cur, col - 1));
+  ed.doc.lines.Put(row, Left(cur, col - 1));
   { `PasStrVec` has no insert, so the lines below move down by one and the
     hole is written into -- what a vector costs, and invisible at the sizes a
     person edits at. }
-  SVecPush(ed.doc.lines, '');
-  for i := SVecLen(ed.doc.lines) - 1 downto row + 1 do
-    SVecSet(ed.doc.lines, i + 1, SVecGet(ed.doc.lines, i));
-  SVecSet(ed.doc.lines, row + 1, rest)
+  ed.doc.lines.Push('');
+  for i := ed.doc.lines.Len - 1 downto row + 1 do
+    ed.doc.lines.Put(i + 1, ed.doc.lines.At(i));
+  ed.doc.lines.Put(row + 1, rest)
 end;
 
 procedure DoJoin(var ed: Editor; row: integer);
 var i: integer; gone: EditLine;
 begin
-  SVecSet(ed.doc.lines, row, SVecGet(ed.doc.lines, row) + SVecGet(ed.doc.lines, row + 1));
-  for i := row + 1 to SVecLen(ed.doc.lines) - 1 do
-    SVecSet(ed.doc.lines, i, SVecGet(ed.doc.lines, i + 1));
+  ed.doc.lines.Put(row, ed.doc.lines.At(row) + ed.doc.lines.At(row + 1));
+  for i := row + 1 to ed.doc.lines.Len - 1 do
+    ed.doc.lines.Put(i, ed.doc.lines.At(i + 1));
   { The vector is one shorter, and what came off it is already in the line
     above. `PasStrVec` has no drop, so the value is taken and let go. }
-  gone := SVecPop(ed.doc.lines)
+  gone := ed.doc.lines.Pop
 end;
 
 { Put an edit in the journal, joining it to the newest entry where it
@@ -1023,7 +1023,7 @@ begin
   fc := col;
   if pat = '' then exit;
   needle := Fold(pat);
-  n := SVecLen(ed.doc.lines);
+  n := ed.doc.lines.Len;
   for i := 0 to n do begin
     r := row + i;
     if r > n then begin
@@ -1031,7 +1031,7 @@ begin
       wrapped := true
     end;
     if i = 0 then start := col else start := 1;
-    at := IndexFrom(Fold(SVecGet(ed.doc.lines, r)), needle, start);
+    at := IndexFrom(Fold(ed.doc.lines.At(r)), needle, start);
     if at > 0 then begin
       fr := r;
       fc := at;
@@ -1109,11 +1109,11 @@ begin
   first := true;
   lastr := ed.doc.row;
   lastc := ed.doc.col;
-  n := SVecLen(ed.doc.lines);
+  n := ed.doc.lines.Len;
   for r := 1 to n do begin
     from := 1;
     repeat
-      line := SVecGet(ed.doc.lines, r);
+      line := ed.doc.lines.At(r);
       at := IndexFrom(Fold(line), needle, from);
       if at > 0 then begin
         Step(ekDelete, r, at, substr(line, at, length(ed.seek)));
@@ -1600,7 +1600,7 @@ begin
   keep := ed.doc.open;
   ed.doc.open := false;
 
-  cur := SVecGet(ed.doc.lines, ed.doc.row);
+  cur := ed.doc.lines.At(ed.doc.row);
   case k.kind of
     kkChar: begin
       { A line that is full swallows the key rather than losing its tail:
@@ -1647,7 +1647,7 @@ begin
           rather than at either end -- which is where the person was
           looking. That column is also what undoes it: a join is reversed by
           splitting at the point the two lines met. }
-        rest := SVecGet(ed.doc.lines, ed.doc.row - 1);
+        rest := ed.doc.lines.At(ed.doc.row - 1);
         k2 := length(rest) + 1;
         Note(ed, ekJoin, ed.doc.row - 1, k2, '');
         DoJoin(ed, ed.doc.row - 1);
@@ -1666,7 +1666,7 @@ begin
         DoRemove(ed, ed.doc.row, ed.doc.col, e2 - ed.doc.col);
         ed.doc.dirty := true
       end
-      else if ed.doc.row < SVecLen(ed.doc.lines) then begin
+      else if ed.doc.row < ed.doc.lines.Len then begin
         { At the end of a line, Delete is the same join Backspace makes from
           the other side -- and `Clamp` has already made `ed.doc.col` exactly
           `length(cur) + 1`, which is where the two lines meet. }
@@ -1683,7 +1683,7 @@ begin
       if ed.doc.col > 1 then ed.doc.col := ElementBack(cur, ed.doc.col)
       else if ed.doc.row > 1 then begin
         ed.doc.row := ed.doc.row - 1;
-        ed.doc.col := length(SVecGet(ed.doc.lines, ed.doc.row)) + 1
+        ed.doc.col := length(ed.doc.lines.At(ed.doc.row)) + 1
       end
     end;
     kkRight: begin
@@ -1692,7 +1692,7 @@ begin
         if (e2 <= ed.doc.col) or (e2 > length(cur) + 1) then e2 := ed.doc.col + 1;
         ed.doc.col := e2
       end
-      else if ed.doc.row < SVecLen(ed.doc.lines) then begin
+      else if ed.doc.row < ed.doc.lines.Len then begin
         ed.doc.row := ed.doc.row + 1;
         ed.doc.col := 1
       end
@@ -1703,7 +1703,7 @@ begin
     kkEnd: ed.doc.col := length(cur) + 1;
     { **The shell acts on these and the model does not**, which is what keeps
       the model free of files and processes: saving is a write and building
-      is a `PasProcess.Execute`, and neither is a decision about a document.
+      is an `ArgV.Execute`, and neither is a decision about a document.
       They are still `Key` values because they arrive as bytes among the
       others and the decoder is the one place that knows which. }
     kkUndo: Undo(ed);
@@ -1815,8 +1815,8 @@ begin
     for the same reason: `left` is where the window sits and that is a
     property of the drawing. The cursor's *column* is what it follows, not its
     byte -- a line of Japanese scrolls by what a person sees. }
-  if ed.doc.row <= SVecLen(ed.doc.lines) then
-    n := ColumnOf(SVecGet(ed.doc.lines, ed.doc.row), ed.doc.col)
+  if ed.doc.row <= ed.doc.lines.Len then
+    n := ColumnOf(ed.doc.lines.At(ed.doc.row), ed.doc.col)
   else n := 1;
   if n < ed.doc.left then ed.doc.left := n;
   if n > ed.doc.left + cols - 1 then ed.doc.left := n - cols + 1;
@@ -1824,8 +1824,8 @@ begin
 
   for r := 1 to h do begin
     n := ed.doc.top + r - 1;
-    if n > SVecLen(ed.doc.lines) then s := '~'
-    else s := SVecGet(ed.doc.lines, n);
+    if n > ed.doc.lines.Len then s := '~'
+    else s := ed.doc.lines.At(n);
     { **A line wider than the window scrolls now** (ADR-0397), where milestone
       one cut it and let the cursor stop at the edge. `PutLine` walks the line
       an element at a time and places each at `c - left + 1`, so what moved is
@@ -1835,7 +1835,7 @@ begin
       to: it says *past the end of the document* and is not text at a column,
       so scrolling it away would make a scrolled window look like a longer
       document. }
-    if n > SVecLen(ed.doc.lines) then PutLine(scr, r + 1, s, cols, 1)
+    if n > ed.doc.lines.Len then PutLine(scr, r + 1, s, cols, 1)
     else PutLine(scr, r + 1, s, cols, ed.doc.left)
   end;
 
@@ -1977,8 +1977,8 @@ begin
       every edit does and because `pascalc` reports a diagnostic's column in
       bytes -- so landing on an error means landing on a byte. What a terminal
       is told is where that byte *appears*. }
-    if ed.doc.row <= SVecLen(ed.doc.lines) then
-      scr.atCol := ColumnOf(SVecGet(ed.doc.lines, ed.doc.row), ed.doc.col)
+    if ed.doc.row <= ed.doc.lines.Len then
+      scr.atCol := ColumnOf(ed.doc.lines.At(ed.doc.row), ed.doc.col)
                    - ed.doc.left + 1
     else scr.atCol := ed.doc.col
   end;
@@ -1998,11 +1998,11 @@ begin
   k.kind := kkUp;
   while ed.doc.row > ln do EditKey(ed, k);
   k.kind := kkDown;
-  while (ed.doc.row < ln) and (ed.doc.row < SVecLen(ed.doc.lines)) do EditKey(ed, k);
+  while (ed.doc.row < ln) and (ed.doc.row < ed.doc.lines.Len) do EditKey(ed, k);
   k.kind := kkHome;
   EditKey(ed, k);
   k.kind := kkRight;
-  while (ed.doc.col < cl) and (ed.doc.col <= length(SVecGet(ed.doc.lines, ed.doc.row))) do
+  while (ed.doc.col < cl) and (ed.doc.col <= length(ed.doc.lines.At(ed.doc.row))) do
     EditKey(ed, k)
 end;
 

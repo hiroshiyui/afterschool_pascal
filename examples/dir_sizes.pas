@@ -26,23 +26,23 @@ begin
   if Failed(e) then
     writeln(' ':depth, '(cannot list: ', ErrorText(e), ')')
   else begin
-    SVecSort(names);
-    for k := 1 to SVecLen(names) do begin
-      child := path + '/' + SVecGet(names, k);
+    names.Sort;
+    for k := 1 to names.Len do begin
+      child := path + '/' + names.At(k);
       fi := Info(child);
       if not fi.ok then
-        writeln(' ':depth, SVecGet(names, k), ' ?')
+        writeln(' ':depth, names.At(k), ' ?')
       else if fi.val.kind = fkDirectory then begin
-        writeln(' ':depth, SVecGet(names, k), '/');
+        writeln(' ':depth, names.At(k), '/');
         Walk(child, depth + 2)
       end
       else begin
-        writeln(' ':depth, SVecGet(names, k), ' ', fi.val.size:1);
+        writeln(' ':depth, names.At(k), ' ', fi.val.size:1);
         total := total + fi.val.size
       end
     end
   end;
-  SVecFree(names)
+  names.Free
 end;
 
 { rm -r, by the same walk. }
@@ -52,14 +52,14 @@ var names: StrVecPtr; k: integer; e: ErrorCode; child: PathName;
 begin
   SVecNew(names, 16);
   e := ListDir(path, names);
-  for k := 1 to SVecLen(names) do begin
-    child := path + '/' + SVecGet(names, k);
+  for k := 1 to names.Len do begin
+    child := path + '/' + names.At(k);
     fi := Info(child);
     if fi.ok and (fi.val.kind = fkDirectory) then Scrub(child)
     else e := Remove(child)
   end;
   e := RemoveDirectory(path);
-  SVecFree(names)
+  names.Free
 end;
 
 procedure Make(dir: PathName);

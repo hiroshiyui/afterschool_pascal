@@ -79,11 +79,31 @@
 
 module PasProcess;
 
+{ **The argument vector carries its routines** (AP 6.7.10.5, ADR-0411).
+  Twelve names are exported where twenty-two were: `ArgV` has an
+  implementation in the block below, and an implementation is selected from
+  the *type* of the receiver rather than from a name in scope (AP 6.7.10.2),
+  so none of its ten routines is an exported name and none can collide with
+  another module's. `NewArgs` is `Init`, `AddArg` is `Add`, `ArgsLen` is
+  `Len` and `DropArgs` is `Drop` -- the `Args` in each was the receiver said
+  twice, and `Init`, `Add` and `Len` are what `PasJson` and `PasToml` call
+  the same three things.
+
+  **The five `Execute`s keep their names**, which is the one place the
+  shortening stops. `v.Execute` and `Run` are the two interfaces of this
+  module and the choice between them is a security decision (ADR-0362); a
+  method called `Run` beside an exported routine called `Run` would be two
+  names one letter apart doing opposite things about a shell, and a reader
+  checking a call site would have to know which was which. `ExecuteInto` and
+  its three companions follow it rather than the receiver.
+
+  What stays exported is what has no `ArgV` to be selected from: the bound,
+  the three types, the three routines that hand a *line* to a shell,
+  `ExitCode` -- which takes a wait status and not a vector -- and the four
+  that ask about this process rather than about another. }
+
 export PasProcess = (CommandMax, CommandLine, RunResult,
-                     Run, Capture, CaptureLines,
-                     ArgV, NewArgs, AddArg, ArgsLen, DropArgs, Deadline,
-                     Execute, ExecuteInto, ExecuteBoth,
-                     ExecuteLines, ExecuteToFile,
+                     Run, Capture, CaptureLines, ArgV,
                      ExitCode, Sleep, Seconds, CpuSeconds, ProcessId);
 
 import PasError;
@@ -138,94 +158,19 @@ function CaptureLines(command: CommandLine; var lines: StrVecPtr): RunResult;
   hypothetical -- `lsp/pasls.pas` quoted a path from its client exactly that
   way and ADR-0362 has the probe that ran a command through it.
 
-  These four are the other interface. The words are carried as words, no shell
-  is started, and nothing in an argument means anything. Prefer them wherever
-  any part of the command came from outside the program; `Run` stays the right
-  answer for a pipeline, a redirection, or a line a person wrote.
+  The ten routines of `impl ArgV` in the block below are the other interface.
+  The words are carried as words, no shell is started, and nothing in an
+  argument means anything. Prefer them wherever any part of the command came
+  from outside the program; `Run` stays the right answer for a pipeline, a
+  redirection, or a line a person wrote.
 
   An `ArgV` is a handle (AP 6.4.12): it owns its words, it cannot be copied,
   and it is released when the variable holding it ceases to exist. The words
   are built on the far side because argv is an array of pointers, which
-  AP 6.7.7.6.2's boundary cannot spell -- so a caller pushes one string at a
+  AP 6.7.7.6.2's boundary cannot spell -- so a caller adds one string at a
   time and no pointer ever crosses. }
 type
   ArgV = handle external 'pasx_argv_free';
-
-{ An empty vector, releasing whatever `v` held -- PasDir.OpenDir's rule, so
-  the same variable can be used for a second command without a release
-  written out. `errFull` where there was no memory, and `v` is then empty. }
-function NewArgs(var v: ArgV): ErrorCode;
-
-{ One word onto the end, copied. `arg` is a string of any capacity, which is
-  the point: a path longer than a name (ADR-0291) is a word like any other,
-  where a vector of `StrItem` would have cut it at 255.
-
-  The **first** word is the program to run, as it is in argv: it is looked for
-  on `PATH` when it holds no `/`, exactly as a shell would look for it, and
-  everything after it is an argument and is never looked at again by anyone.
-
-  `errAbsent` when `v` is empty -- there is nothing to add to -- and `errFull`
-  at 4096 words or where there was no memory. }
-function AddArg(var v: ArgV; arg: string): ErrorCode;
-
-{ How many words are in it. 0 for an empty vector, which is also what
-  `Execute` refuses. }
-function ArgsLen(protected var v: ArgV): integer;
-
-{ Put the vector back to `keep` words, dropping everything pushed after that.
-  `ArgsLen` before is the mark and this is the reset, which is what a caller
-  that *speculates* needs: one that pushed a candidate's words and then found
-  it was the wrong candidate has no other way back. Answers how many are
-  left. }
-function DropArgs(var v: ArgV; keep: integer): integer;
-
-{ How long any run of these words may take, in seconds; 0 -- the state a new
-  vector is in -- is for ever, which is what a shell allows. When the time is
-  up the child is killed and the run answers `errIO`, a child that did not
-  exit normally; what was captured before that is kept. A grandchild that
-  stays behind holding the pipe is covered too: the audit timed one stalling
-  a caller for its whole life (ADR-0363). `errAbsent` for an empty vector. }
-function Deadline(var v: ArgV; seconds: integer): ErrorCode;
-
-{ Run the words and wait. The child's streams are this program's, so it
-  writes where this one writes; `ok` with its exit code, as `Run` answers.
-
-  `errAbsent` for a vector with no words in it -- there is nothing to run.
-  `errIO` where the command could not be started at all, which unlike `Run`
-  covers a command that is not there: no shell ran, so there is no shell to
-  exit 127. A child killed by a signal is `errIO` as well, having no exit code
-  of its own; doc/implementation-defined.md has both. }
-function Execute(protected var v: ArgV): RunResult;
-
-{ The same, collecting what the child writes to its standard output into
-  `into`, a string of any capacity -- `Capture`'s contract word for word,
-  including that what does not fit is read and dropped so the command still
-  runs to its end. Its standard error goes where this program's does. }
-function ExecuteInto(protected var v: ArgV; var into: string): RunResult;
-
-{ And the same again with the child's standard error joined to its standard
-  output, which is what `2>&1` was written for and what no caller can write
-  here: there is no shell to read a redirection. A program asking a compiler
-  what it makes of a file wants both streams and cannot ask for them any
-  other way. }
-function ExecuteBoth(protected var v: ArgV; var into: string): RunResult;
-
-{ Both streams a line at a time onto `lines`, each without its newline and cut
-  at `ItemMax`; the vector is not cleared first. `CaptureLines`' contract, and
-  both streams for the reason `ExecuteBoth` gives -- what a caller reads this
-  way is what a command *reported*, and half of that goes to standard error. }
-function ExecuteLines(protected var v: ArgV; var lines: StrVecPtr): RunResult;
-
-{ Both streams straight into the file `path` names, created or truncated, and
-  nothing captured here. It is for an answer larger than a string a program
-  would size for it: a caller asking a compiler for a table reads the file
-  afterwards. `errIO` where the child could not be started, which includes a
-  path it could not open -- the file is opened by the child, so a refusal is
-  a command that never ran rather than one that ran and wrote nowhere. A
-  symbolic link at `path` is refused the same way: the name is one this
-  program composed, and a link planted there is not what it composed
-  (ADR-0363). `errSyntax` for a path holding chr(0). }
-function ExecuteToFile(protected var v: ArgV; path: string): RunResult;
 
 { The exit code inside a wait status, as `system` returns one: the second
   byte. A status that is not an exit -- a signal -- decodes to the low byte
@@ -369,7 +314,7 @@ var r: RunResult; piece: StrItem; n: integer;
   procedure keep(ch: char);
   begin
     if ch = chr(NewLine) then begin
-      SVecPush(lines, piece);
+      lines.Push(piece);
       piece := '';
       n := 0
     end
@@ -383,7 +328,7 @@ begin
   piece := '';
   n := 0;
   Collect(command, r, keep);
-  if n > 0 then SVecPush(lines, piece);
+  if n > 0 then lines.Push(piece);
   CaptureLines := r
 end;
 
@@ -410,58 +355,6 @@ function ExtExecStart(v: ArgV; capture: integer; path: string;
                       var status: integer): Proc;
   external 'pasx_exec_start';
 function ExtExecGetc(p: Proc): integer; external 'pasx_exec_getc';
-
-function NewArgs;
-begin
-  v := ExtArgvNew;
-  if v = nil then NewArgs := errFull else NewArgs := errNone
-end;
-
-{ **The empty vector is tested for here and the far side tests for it too**,
-  and the second copy is not the duplication it looks like: AP 6.4.12.3 makes
-  lending an empty handle to a foreign routine a run-time error, so these
-  guards are what stands between a released vector and a stopped program.
-  `pasx_argv_push` answers 2 for a null of its own because it is C and cannot
-  assume otherwise; that arm is reached through a vector this side let
-  through, which is why `AddArg` still has somewhere to put it. }
-function AddArg;
-var status: integer;
-begin
-  if v = nil then
-    AddArg := errAbsent
-  else if HoldsNul(arg) then
-    AddArg := errSyntax
-  else begin
-    status := ExtArgvPush(v, arg);
-    if status = 0 then AddArg := errNone
-    else if status = 1 then AddArg := errFull
-    else AddArg := errAbsent
-  end
-end;
-
-function ArgsLen;
-begin
-  if v = nil then ArgsLen := 0 else ArgsLen := ExtArgvCount(v)
-end;
-
-function DropArgs;
-begin
-  if v = nil then DropArgs := 0 else DropArgs := ExtArgvDrop(v, keep)
-end;
-
-function Deadline;
-begin
-  if v = nil then
-    Deadline := errAbsent
-  else if seconds < 0 then
-    Deadline := errRange
-  else begin
-    { Milliseconds over there; a second here is the grain `Sleep` uses, and a
-      run shorter than one is not what a deadline is for. }
-    ExtArgvDeadline(v, seconds * 1000);
-    Deadline := errNone
-  end
-end;
 
 { Every one of the three is this: start the child, read what it writes if
   anything was asked for, and take the status from the release. `Collect` above
@@ -499,13 +392,6 @@ procedure Discard(ch: char);
 begin
 end;
 
-function Execute;
-var r: RunResult;
-begin
-  Spawn(v, 0, '', r, Discard);
-  Execute := r
-end;
-
 { Both readers keep `Capture`'s contract: `n` counts what the command wrote
   and the copy stops at the capacity, so an over-long answer is a prefix and
   never the trap an over-long assignment would be. }
@@ -525,50 +411,173 @@ begin
   Spawn(v, capture, '', r, keep)
 end;
 
-function ExecuteInto;
-var r: RunResult;
-begin
-  IntoString(v, 1, into, r);
-  ExecuteInto := r
-end;
+impl ArgV;
 
-function ExecuteBoth;
-var r: RunResult;
-begin
-  IntoString(v, 2, into, r);
-  ExecuteBoth := r
-end;
-
-function ExecuteLines;
-var r: RunResult; piece: StrItem; n: integer;
-
-  procedure keep(ch: char);
+  { An empty vector, releasing whatever `v` held -- PasDir.OpenDir's rule, so
+    the same variable can be used for a second command without a release
+    written out. `errFull` where there was no memory, and `v` is then empty. }
+  function Init(var v: ArgV): ErrorCode;
   begin
-    if ch = chr(NewLine) then begin
-      SVecPush(lines, piece);
-      piece := '';
-      n := 0
-    end
+    v := ExtArgvNew;
+    if v = nil then Init := errFull else Init := errNone
+  end;
+
+  { One word onto the end, copied. `arg` is a string of any capacity, which is
+    the point: a path longer than a name (ADR-0291) is a word like any other,
+    where a vector of `StrItem` would have cut it at 255.
+
+    The **first** word is the program to run, as it is in argv: it is looked
+    for on `PATH` when it holds no `/`, exactly as a shell would look for it,
+    and everything after it is an argument and is never looked at again by
+    anyone.
+
+    `errAbsent` when `v` is empty -- there is nothing to add to -- and
+    `errFull` at 4096 words or where there was no memory.
+
+    **The empty vector is tested for here and the far side tests for it too**,
+    and the second copy is not the duplication it looks like: AP 6.4.12.3 makes
+    lending an empty handle to a foreign routine a run-time error, so these
+    guards are what stands between a released vector and a stopped program.
+    `pasx_argv_push` answers 2 for a null of its own because it is C and cannot
+    assume otherwise; that arm is reached through a vector this side let
+    through, which is why `Add` still has somewhere to put it. }
+  function Add(protected var v: ArgV; arg: string): ErrorCode;
+  var status: integer;
+  begin
+    if v = nil then
+      Add := errAbsent
+    else if HoldsNul(arg) then
+      Add := errSyntax
     else begin
-      n := n + 1;
-      if n <= ItemMax then piece := piece + ch
+      status := ExtArgvPush(v, arg);
+      if status = 0 then Add := errNone
+      else if status = 1 then Add := errFull
+      else Add := errAbsent
     end
   end;
 
-begin
-  piece := '';
-  n := 0;
-  Spawn(v, 2, '', r, keep);
-  if n > 0 then SVecPush(lines, piece);
-  ExecuteLines := r
-end;
+  { How many words are in it. 0 for an empty vector, which is also what
+    `Execute` refuses. }
+  function Len(protected var v: ArgV): integer;
+  begin
+    if v = nil then Len := 0 else Len := ExtArgvCount(v)
+  end;
 
-function ExecuteToFile;
-var r: RunResult;
-begin
-  if HoldsNul(path) then r := errSyntax
-  else Spawn(v, 3, path, r, Discard);
-  ExecuteToFile := r
+  { Put the vector back to `keep` words, dropping everything pushed after that.
+    `Len` before is the mark and this is the reset, which is what a caller
+    that *speculates* needs: one that pushed a candidate's words and then found
+    it was the wrong candidate has no other way back. Answers how many are
+    left. }
+  function Drop(protected var v: ArgV; keep: integer): integer;
+  begin
+    if v = nil then Drop := 0 else Drop := ExtArgvDrop(v, keep)
+  end;
+
+  { How long any run of these words may take, in seconds; 0 -- the state a new
+    vector is in -- is for ever, which is what a shell allows. When the time is
+    up the child is killed and the run answers `errIO`, a child that did not
+    exit normally; what was captured before that is kept. A grandchild that
+    stays behind holding the pipe is covered too: the audit timed one stalling
+    a caller for its whole life (ADR-0363). `errAbsent` for an empty vector. }
+  function Deadline(protected var v: ArgV; seconds: integer): ErrorCode;
+  begin
+    if v = nil then
+      Deadline := errAbsent
+    else if seconds < 0 then
+      Deadline := errRange
+    else begin
+      { Milliseconds over there; a second here is the grain `Sleep` uses, and a
+        run shorter than one is not what a deadline is for. }
+      ExtArgvDeadline(v, seconds * 1000);
+      Deadline := errNone
+    end
+  end;
+
+  { Run the words and wait. The child's streams are this program's, so it
+    writes where this one writes; `ok` with its exit code, as `Run` answers.
+
+    `errAbsent` for a vector with no words in it -- there is nothing to run.
+    `errIO` where the command could not be started at all, which unlike `Run`
+    covers a command that is not there: no shell ran, so there is no shell to
+    exit 127. A child killed by a signal is `errIO` as well, having no exit
+    code of its own; doc/implementation-defined.md has both. }
+  function Execute(protected var v: ArgV): RunResult;
+  var r: RunResult;
+  begin
+    Spawn(v, 0, '', r, Discard);
+    Execute := r
+  end;
+
+  { The same, collecting what the child writes to its standard output into
+    `into`, a string of any capacity -- `Capture`'s contract word for word,
+    including that what does not fit is read and dropped so the command still
+    runs to its end. Its standard error goes where this program's does. }
+  function ExecuteInto(protected var v: ArgV; var into: string): RunResult;
+  var r: RunResult;
+  begin
+    IntoString(v, 1, into, r);
+    ExecuteInto := r
+  end;
+
+  { And the same again with the child's standard error joined to its standard
+    output, which is what `2>&1` was written for and what no caller can write
+    here: there is no shell to read a redirection. A program asking a compiler
+    what it makes of a file wants both streams and cannot ask for them any
+    other way. }
+  function ExecuteBoth(protected var v: ArgV; var into: string): RunResult;
+  var r: RunResult;
+  begin
+    IntoString(v, 2, into, r);
+    ExecuteBoth := r
+  end;
+
+  { Both streams a line at a time onto `lines`, each without its newline and
+    cut at `ItemMax`; the vector is not cleared first. `CaptureLines`'
+    contract, and both streams for the reason `ExecuteBoth` gives -- what a
+    caller reads this way is what a command *reported*, and half of that goes
+    to standard error. }
+  function ExecuteLines(protected var v: ArgV;
+                        var lines: StrVecPtr): RunResult;
+  var r: RunResult; piece: StrItem; n: integer;
+
+    procedure keep(ch: char);
+    begin
+      if ch = chr(NewLine) then begin
+        lines.Push(piece);
+        piece := '';
+        n := 0
+      end
+      else begin
+        n := n + 1;
+        if n <= ItemMax then piece := piece + ch
+      end
+    end;
+
+  begin
+    piece := '';
+    n := 0;
+    Spawn(v, 2, '', r, keep);
+    if n > 0 then lines.Push(piece);
+    ExecuteLines := r
+  end;
+
+  { Both streams straight into the file `path` names, created or truncated,
+    and nothing captured here. It is for an answer larger than a string a
+    program would size for it: a caller asking a compiler for a table reads
+    the file afterwards. `errIO` where the child could not be started, which
+    includes a path it could not open -- the file is opened by the child, so a
+    refusal is a command that never ran rather than one that ran and wrote
+    nowhere. A symbolic link at `path` is refused the same way: the name is
+    one this program composed, and a link planted there is not what it
+    composed (ADR-0363). `errSyntax` for a path holding chr(0). }
+  function ExecuteToFile(protected var v: ArgV; path: string): RunResult;
+  var r: RunResult;
+  begin
+    if HoldsNul(path) then r := errSyntax
+    else Spawn(v, 3, path, r, Discard);
+    ExecuteToFile := r
+  end;
+
 end;
 
 function Sleep;

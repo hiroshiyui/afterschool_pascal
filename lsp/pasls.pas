@@ -448,7 +448,7 @@ begin
     about a document that no longer exists (ADR-0252). }
   if DocOf(uri, d) then begin
     d.text.Free;
-    if d.uses_ <> nil then SVecFree(d.uses_);
+    if d.uses_ <> nil then d.uses_.Free;
     if d.files <> nil then VecFree(PathVec, d.files)
   end;
   d.uri := uri;
@@ -464,7 +464,7 @@ var d: Document;
 begin
   if not DocOf(uri, d) then exit;
   d.text.Free;
-  if d.uses_ <> nil then SVecFree(d.uses_);
+  if d.uses_ <> nil then d.uses_.Free;
   if d.files <> nil then VecFree(PathVec, d.files);
   if not MapDelete(docs, uri) then
     Note('a document vanished from the store while it was being removed')
@@ -654,7 +654,8 @@ end;
   `run_test.sh` reads the same file: a second field used to name a standard
   and ADR-0232 removed the modes. }
 function ReadSidecar(sidecar: PathName; target: PathName;
-                     whenAbsent: boolean; var words: ArgV): boolean;
+                     whenAbsent: boolean;
+                     protected var words: ArgV): boolean;
 var f: bindable text;
     b: BindingType;
     line, full: PathName;
@@ -665,7 +666,7 @@ begin
   { The words go straight onto the vector and `mark` is how they come off
     again: this is called once per candidate sidecar and all but one of them
     is the wrong one (ADR-0362). }
-  mark := ArgsLen(words);
+  mark := words.Len;
   b := binding(f);
   b.name := sidecar;
   bind(f, b);
@@ -688,17 +689,17 @@ begin
       end;
       { ADR-0235's bound is the compiler's and is now the compiler's to
         report: a word is a word here, so there is no line for a path to
-        overflow and nothing to silently drop the tail of. `AddArg` answers
+        overflow and nothing to silently drop the tail of. `ArgV.Add` answers
         errFull at 4096 words, which is more than any build description. }
-      junk := ord(AddArg(words, '--import'));
-      junk := ord(AddArg(words, full))
+      junk := ord(words.Add('--import'));
+      junk := ord(words.Add(full))
     end
   end;
   unbind(f);
   if whenAbsent then
     ReadSidecar := true
   else
-    junk := DropArgs(words, mark)
+    junk := words.Drop(mark)
 end;
 
 { The `--import-path` words from a `name.importpath` sidecar: one directory a
@@ -717,7 +718,8 @@ end;
   so a sidecar found anywhere can say whether it is about this file; a list of
   directories names nobody, and a walk would hand one document another's search
   path. }
-function ReadImportPaths(sidecar: PathName; var words: ArgV): boolean;
+function ReadImportPaths(sidecar: PathName;
+                         protected var words: ArgV): boolean;
 var f: text;
     b: BindingType;
     line, full: PathName;
@@ -736,8 +738,8 @@ begin
     readln(f, line);
     if line <> '' then begin
       full := Resolve(DirOf(sidecar), line);
-      junk := ord(AddArg(words, '--import-path'));
-      junk := ord(AddArg(words, full));
+      junk := ord(words.Add('--import-path'));
+      junk := ord(words.Add(full));
       ReadImportPaths := true
     end
   end;
@@ -760,9 +762,9 @@ begin
   if depth > WalkDepthMax then exit(false);
   SVecNew(names, 32);
   if ListDir(dir, names) = errNone then begin
-    SVecSort(names);
-    for i := 1 to SVecLen(names) do begin
-      nm := SVecGet(names, i);
+    names.Sort;
+    for i := 1 to names.Len do begin
+      nm := names.At(i);
       if EndsWith(nm, '.components') then
         if ReadSidecar(Resolve(dir, nm), target, false, words) then begin
           found := true;
@@ -770,8 +772,8 @@ begin
         end
     end;
     if not found then
-      for i := 1 to SVecLen(names) do begin
-        nm := SVecGet(names, i);
+      for i := 1 to names.Len do begin
+        nm := names.At(i);
         { A hidden directory holds no source anyone is editing, and a build
           tree holds a second copy of everything -- including sidecars, which
           would then answer with paths into it. }
@@ -788,7 +790,7 @@ begin
             end
       end
   end;
-  SVecFree(names);
+  names.Free;
   WalkFor := found
 end;
 
@@ -910,7 +912,7 @@ var e: ErrorCode;
     i, j: integer;
 begin
   StartArgs := false;
-  e := NewArgs(v);
+  e := v.Init;
   if Failed(e) then begin
     Note('no memory for a compiler command line');
     exit(false)
@@ -925,23 +927,23 @@ begin
     while (i <= length(compilerCmd)) and (compilerCmd[i] = ' ') do i := i + 1;
     j := i;
     while (j <= length(compilerCmd)) and (compilerCmd[j] <> ' ') do j := j + 1;
-    if j > i then e := AddArg(v, compilerCmd[i..j - 1]);
+    if j > i then e := v.Add(compilerCmd[i..j - 1]);
     i := j
   end;
-  if ArgsLen(v) = 0 then begin
+  if v.Len = 0 then begin
     Note('PASLS_COMPILER names no program');
     exit(false)
   end;
-  if flag <> '' then e := AddArg(v, flag);
+  if flag <> '' then e := v.Add(flag);
   StartArgs := true
 end;
 
-function EndArgs(var v: ArgV; source: PathName): boolean;
+function EndArgs(protected var v: ArgV; source: PathName): boolean;
 var e: ErrorCode;
 begin
-  e := AddArg(v, source);
-  e := AddArg(v, '-o');
-  e := AddArg(v, scratchPath + '.ll');
+  e := v.Add(source);
+  e := v.Add('-o');
+  e := v.Add(scratchPath + '.ll');
   EndArgs := not Failed(e)
 end;
 
@@ -962,7 +964,7 @@ begin
   AskLines := false;
   if not (StartArgs(v, flag) and EndArgs(v, source)) then exit(false);
   SVecNew(lines, cap);
-  r := ExecuteLines(v, lines);
+  r := v.ExecuteLines(lines);
   AskLines := true
 end;
 
@@ -980,7 +982,7 @@ begin
   { Both streams, which `2>&1` used to buy and no caller can write where no
     shell reads one. This compiler writes its diagnostics to `output` and a
     driver in front of it writes to the other stream. }
-  r := ExecuteBoth(v, out);
+  r := v.ExecuteBoth(out);
   if not r.ok then begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
     Compile := false
@@ -1446,8 +1448,8 @@ begin
         kids[0] := result;
         lastDepth := -1;
         tooDeep := false;
-        for i := 1 to SVecLen(lines) do begin
-          text := SVecGet(lines, i);
+        for i := 1 to lines.Len do begin
+          text := lines.At(i);
           { A line that is not a symbol is skipped and is not an error: a
             source with a syntax error in it says so on this same stream, and
             an outline of what parsed is still the best answer available. }
@@ -1513,7 +1515,7 @@ begin
           Note('declarations nested deeper than this server follows were '
                + 'reported at its limit')
       end;
-      SVecFree(lines)
+      lines.Free
     end
   end;
   reply.Put('result', result);
@@ -1671,9 +1673,9 @@ begin
         VecPush(PathVec, files, substr(line, k + 1, length(line) - k))
     end
     else if length(line) > ItemMax then
-      SVecPush(lines, substr(line, 1, ItemMax))
+      lines.Push(substr(line, 1, ItemMax))
     else
-      SVecPush(lines, line)
+      lines.Push(line)
   end;
   unbind(f);
   if not ok then Note('the compiler''s file table was not the run this reads');
@@ -1715,15 +1717,15 @@ begin
   else begin
     SVecNew(lines, 64);
     VecInit(PathVec, files, 4);
-    r := ExecuteToFile(v, dump);
+    r := v.ExecuteToFile(dump);
     if not r.ok then begin
       Note('could not run the compiler: ' + ErrorText(r.cause));
-      SVecFree(lines);
+      lines.Free;
       VecFree(PathVec, files);
       exit(false)
     end;
     if not ReadUses(dump, lines, files) then begin
-      SVecFree(lines);
+      lines.Free;
       VecFree(PathVec, files);
       exit(false)
     end;
@@ -1731,8 +1733,8 @@ begin
     d.files := files;
     MapPut(docs, uri, d)
   end;
-  for i := 1 to SVecLen(lines) do begin
-    text := SVecGet(lines, i);
+  for i := 1 to lines.Len do begin
+    text := lines.At(i);
     if SymField(text, 1) = 'use' then begin
       ul := ValueOr(ParseInt(SymField(text, 2)), 0);
       uc := ValueOr(ParseInt(SymField(text, 3)), 0);
@@ -2022,8 +2024,8 @@ procedure CollectRefs(lines: StrVecPtr; keyFile, inFile: integer;
 var i: integer;
     text: StrItem;
 begin
-  for i := 1 to SVecLen(lines) do begin
-    text := SVecGet(lines, i);
+  for i := 1 to lines.Len do begin
+    text := lines.At(i);
     if SymField(text, 1) = 'use' then
       if (ValueOr(ParseInt(SymField(text, 5)), -1) = keyFile)
          and (ValueOr(ParseInt(SymField(text, 6)), 0) = s.declLine)
@@ -2102,8 +2104,8 @@ begin
   if not StartArgs(v, '--dump-uses') then exit(false);
   for j := 1 to k - 1 do begin
     one := VecGet(PathName, docFiles, j + 1);
-    e := AddArg(v, '--import');
-    e := AddArg(v, one);
+    e := v.Add('--import');
+    e := v.Add(one);
     if Failed(e) then begin
       Note('a component''s imports would not fit on a command line');
       exit(false)
@@ -2114,10 +2116,10 @@ begin
   dump := scratchPath + '.uses';
   SVecNew(lines, 64);
   VecInit(PathVec, files, 4);
-  r := ExecuteToFile(v, dump);
+  r := v.ExecuteToFile(dump);
   if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
   else if ReadUses(dump, lines, files) then exit(true);
-  SVecFree(lines);
+  lines.Free;
   VecFree(PathVec, files)
 end;
 
@@ -2147,7 +2149,7 @@ begin
       if UsesOfComponent(d.files, k, lines, files) then begin
         kf := FileIndexOf(files, keyPath);
         if kf >= 0 then CollectRefs(lines, kf, k, s);
-        SVecFree(lines);
+        lines.Free;
         VecFree(PathVec, files)
       end
       else
@@ -2324,11 +2326,11 @@ begin
   if not AskLines('--dump-tokens', path, 4, lines, r) then exit(false);
   ok := false;
   if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
-  else if SVecLen(lines) = 2 then
-    ok := (SymField(SVecGet(lines, 1), 3) = 'ident')
-          and (length(SymField(SVecGet(lines, 1), 4)) = length(name))
-          and (SymField(SVecGet(lines, 2), 3) = 'eof');
-  SVecFree(lines);
+  else if lines.Len = 2 then
+    ok := (SymField(lines.At(1), 3) = 'ident')
+          and (length(SymField(lines.At(1), 4)) = length(name))
+          and (SymField(lines.At(2), 3) = 'eof');
+  lines.Free;
   IsIdentifier := ok
 end;
 
@@ -2627,8 +2629,8 @@ function LinesAsText(lines: StrVecPtr; skip: boolean): JsonPtr;
 var v: JsonPtr; i: integer; text: StrItem;
 begin
   v := JsonNewText('');
-  for i := 1 to SVecLen(lines) do begin
-    text := SVecGet(lines, i);
+  for i := 1 to lines.Len do begin
+    text := lines.At(i);
     { `skip` drops what is not a diagnostic, which is most of what a
       compilation writes and none of what a caller asked for. }
     if (not skip) or DiagParse(text).ok then begin
@@ -2660,8 +2662,8 @@ var v: JsonPtr; i, depth, symLine, symCol, symLen: integer;
     pad: StrItem;
 begin
   v := JsonNewText('');
-  for i := 1 to SVecLen(lines) do begin
-    text := SVecGet(lines, i);
+  for i := 1 to lines.Len do begin
+    text := lines.At(i);
     { A parameter is dropped here for the reason the LSP outline drops one
       (ADR-0301): both are outlines and neither is where a reader looks for a
       signature. }
@@ -2738,7 +2740,7 @@ begin
                           true))
     else begin
       SVecNew(lines, 64);
-      r := ExecuteLines(v, lines);
+      r := v.ExecuteLines(lines);
       if not r.ok then
         reply.Put('result', TextContent(JsonNewText('could not run the compiler: '
                                         + ErrorText(r.cause)), true))
@@ -2755,7 +2757,7 @@ begin
           result := LinesAsText(lines, true);
         reply.Put('result', TextContent(result, false))
       end;
-      SVecFree(lines)
+      lines.Free
     end
   end;
   Send(reply);
@@ -2906,7 +2908,7 @@ begin
   if r.ok then StatementsOf := true
   else begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
-    SVecFree(lines)
+    lines.Free
   end
 end;
 
@@ -2924,8 +2926,8 @@ begin
   uri := UriOf(params);
   have := 0;
   if StatementsOf(uri, lines) then begin
-    for i := 1 to SVecLen(lines) do
-      if StmtParse(SVecGet(lines, i), q) then
+    for i := 1 to lines.Len do
+      if StmtParse(lines.At(i), q) then
         if Foldable(q.word) and (q.endLine > q.line) then begin
           { **Deduplicated by the lines it covers**, which is not tidiness: a
             `while c do begin ... end` is two foldable statements over exactly
@@ -2952,7 +2954,7 @@ begin
             result.Append(obj)
           end
         end;
-    SVecFree(lines)
+    lines.Free
   end;
   reply.Put('result', result);
   Send(reply);
@@ -2989,13 +2991,13 @@ begin
   positions := params.Member('positions');
   have := 0;
   if DocOf(uri, d) and StatementsOf(uri, lines) then begin
-    for i := 1 to SVecLen(lines) do
-      if StmtParse(SVecGet(lines, i), q) then
+    for i := 1 to lines.Len do
+      if StmtParse(lines.At(i), q) then
         if have < StmtMax then begin
           have := have + 1;
           rows[have] := q
         end;
-    SVecFree(lines);
+    lines.Free;
     for k := 1 to positions.Count do begin
       pos_ := positions.At(k);
       pl := pos_.Member('line').IntegerOr(-1) + 1;
@@ -3093,7 +3095,7 @@ begin
     (ADR-0284). lo = 0 asks for the whole document. }
   if lo > 0 then begin
     writestr(span, lo:1, ':', hi:1);
-    e := AddArg(v, '--range=' + span)
+    e := v.Add('--range=' + span)
   end;
   FormatArgs := EndArgs(v, source)
 end;
@@ -3168,7 +3170,7 @@ begin
     if WriteScratch(d.text) and FormatArgs(v, scratchPath, lo, hi) then begin
       { The formatted text goes to a file, which is what `> '...fmt'` was; it
         can be larger than any string sized for it. }
-      r := ExecuteToFile(v, scratchPath + '.fmt');
+      r := v.ExecuteToFile(scratchPath + '.fmt');
       if not r.ok then
         Note('could not run the compiler: ' + ErrorText(r.cause))
       else if r.val <> 0 then
@@ -3326,7 +3328,7 @@ begin
       end
       else begin
         Note('could not run the compiler: ' + ErrorText(r.cause));
-        SVecFree(lines)
+        lines.Free
       end
     end;
   probe.Free
@@ -3349,8 +3351,8 @@ end;
 procedure OfferVocabulary(items: JsonPtr);
 var i: integer; text: StrItem; head, kind, spelling: ParseLine;
 begin
-  for i := 1 to SVecLen(vocab) do begin
-    text := SVecGet(vocab, i);
+  for i := 1 to vocab.Len do begin
+    text := vocab.At(i);
     head := SymField(text, 1);
     if head = 'word' then begin
       spelling := SymField(text, 2);
@@ -3404,8 +3406,8 @@ begin
           contEndCol[i] := 0
         end;
         lastDepth := -1;
-        for i := 1 to SVecLen(lines) do begin
-          text := SVecGet(lines, i);
+        for i := 1 to lines.Len do begin
+          text := lines.At(i);
           if SymParse(text, sym) then begin
             depth := sym.depth;
             if depth > SymDepthMax then depth := SymDepthMax;
@@ -3443,7 +3445,7 @@ begin
           end
         end
       end;
-      SVecFree(lines)
+      lines.Free
     end
   end;
   reply.Put('result', result);
@@ -3578,14 +3580,14 @@ var lines: StrVecPtr; i: integer; q: StmtRow; found: boolean;
 begin
   found := false;
   if StatementsOf(uri, lines) then begin
-    for i := 1 to SVecLen(lines) do
-      if StmtParse(SVecGet(lines, i), q) then
+    for i := 1 to lines.Len do
+      if StmtParse(lines.At(i), q) then
         if (not found) and (q.line = line) and (q.col = col) then begin
           endLine := q.endLine;
           endCol := q.endCol;
           found := true
         end;
-    SVecFree(lines)
+    lines.Free
   end;
   StatementAt := found
 end;
@@ -3875,14 +3877,14 @@ begin
           client never closed still holds one, and `heap-balance` is what said
           so: the sessions open documents and end without a didClose, which is
           what an editor does when it is killed. }
-        if d.uses_ <> nil then SVecFree(d.uses_);
+        if d.uses_ <> nil then d.uses_.Free;
         if d.files <> nil then VecFree(PathVec, d.files)
       end;
   MapFree(DocMap, docs);
   { And the compiler's vocabulary, which belongs to the session rather than to
     any document (ADR-0301). `heap-balance` is what would otherwise say so: it
     counts one vector never given back, exactly as it did for the cache above. }
-  if vocab <> nil then SVecFree(vocab);
+  if vocab <> nil then vocab.Free;
   { And the scratch directory, with what this server put in it: nothing else
     will, and a directory per session that stayed would be `/tmp` filling
     with them. Each name is one this program composed above. }
