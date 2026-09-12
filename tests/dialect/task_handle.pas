@@ -31,9 +31,9 @@ type Reply = channel [4] of NetLine;
 task Serve(conn: Socket; back: Reply);
 var line: NetLine; e: ErrorCode; k: integer;
 begin
-  e := NetReadLine(conn, line);
+  e := conn.ReadLine(line);
   if e = errNone then send(back, 'the task read: ' + line);
-  e := NetWriteLine(conn, 'answered by the task');
+  e := conn.WriteLine('answered by the task');
   if e = errNone then send(back, 'the task wrote back');
   k := release(back)
 end;
@@ -50,7 +50,7 @@ begin
   e := NetService(srv, port);
   e := NetConnect(cli, 'localhost', port);
   writeln('connected     : ', e = errNone);
-  e := NetWriteLine(cli, 'hello from the program');
+  e := cli.WriteLine('hello from the program');
   e := NetAccept(srv, conn);
   writeln('accepted      : ', (e = errNone) and (conn <> nil));
 
@@ -61,8 +61,8 @@ begin
 
   while receive(back, got) do writeln(got);
 
-  e := NetReadLine(cli, line);
+  e := cli.ReadLine(line);
   writeln('client read   : ', line);
-  NetClose(cli);
-  NetClose(srv)
+  cli.Close;
+  srv.Close
 end.

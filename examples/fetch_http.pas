@@ -33,18 +33,18 @@ begin
 
   { --- the client sends --- }
   e := NewRequest(q, 'GET', '/hello');
-  e := AddHeader(q, 'Host', 'localhost');
-  e := AddHeader(q, 'Accept', 'text/plain');
+  e := q.AddHeader('Host', 'localhost');
+  e := q.AddHeader('Accept', 'text/plain');
   e := Send(client, q);
   writeln('send: ', ErrorText(e));
 
   { --- the server reads the request head and answers --- }
-  e := NetReadLine(conn, line);
+  e := conn.ReadLine(line);
   while (e = errNone) and (line <> '') do begin
     writeln('  > ', line);
-    e := NetReadLine(conn, line)
+    e := conn.ReadLine(line)
   end;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Type: text/plain' + CRLF +
        'Content-Length: 12' + CRLF + CRLF +
@@ -55,7 +55,7 @@ begin
   e := Receive(client, 'GET', r);
   writeln('receive: ', ErrorText(e));
   writeln('status ', r.status:1, ' ', r.reason);
-  writeln('content-type: ', HeaderOr(r, 'content-type', '(none)'));
-  e := BodyInto(r, body);
+  writeln('content-type: ', r.HeaderOr('content-type', '(none)'));
+  e := r.BodyInto(body);
   writeln('body: [', body, ']')
 end.

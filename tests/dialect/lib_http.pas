@@ -5,7 +5,7 @@
   would be a test of that site, of the network, and of whatever proxy sat
   between -- and it would fail on a machine with no route out. So the program
   listens on whatever port is free, connects to itself, and writes the canned
-  responses by hand with `NetWriteText`. Every response below is therefore
+  responses by hand with `WriteText`. Every response below is therefore
   a **literal**, byte for byte what the client is asked to read, which is the
   only way a golden can say what was parsed.
 
@@ -82,7 +82,7 @@ var l: NetLine; more: boolean;
 begin
   more := true;
   while more do begin
-    e := NetReadLine(conn, l);
+    e := conn.ReadLine(l);
     if Failed(e) then begin
       writeln('  request: ', ErrorText(e));
       more := false
@@ -122,17 +122,17 @@ begin
   writeln('target with a space:  ', ErrorText(e));
   e := NewRequest(q, 'GET', '/ok');
   writeln('a GET of /ok:         ', ErrorText(e));
-  e := AddHeader(q, 'Bad Name', 'v');
+  e := q.AddHeader('Bad Name', 'v');
   writeln('field name with a space: ', ErrorText(e));
   { The one that is a security property and not a tidiness one: a value
     carrying CRLF would end the field and begin another. }
-  e := AddHeader(q, 'X-Note', 'ok' + CRLF + 'Injected: yes');
+  e := q.AddHeader('X-Note', 'ok' + CRLF + 'Injected: yes');
   writeln('value carrying CRLF:  ', ErrorText(e));
-  e := SetBody(q, 'a' + chr(0) + 'b');
+  e := q.SetBody('a' + chr(0) + 'b');
   writeln('body carrying a null: ', ErrorText(e));
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   for i := 1 to MaxHeaders do
-    e := AddHeader(q, 'X-Pad', 'v');
+    e := q.AddHeader('X-Pad', 'v');
   writeln('past MaxHeaders:      ', ErrorText(e));
   { RFC 9112 §3.2 requires a Host field, so a request without one is refused
     before a byte of it is written. }
@@ -152,12 +152,12 @@ begin
   writeln('--- GET, 200, Content-Length');
   Pair;
   e := NewRequest(q, 'GET', '/hello');
-  e := AddHeader(q, 'Host', 'localhost');
-  e := AddHeader(q, 'Accept', 'text/plain');
+  e := q.AddHeader('Host', 'localhost');
+  e := q.AddHeader('Accept', 'text/plain');
   e := Send(cli, q);
   writeln('send:    ', ErrorText(e));
   ShowRequest;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Type: text/plain' + CRLF +
        'Content-Length: 12' + CRLF + CRLF +
@@ -175,15 +175,15 @@ begin
   writeln('--- POST with a body, 404, and the field lookup');
   Pair;
   e := NewRequest(q, 'POST', '/submit');
-  e := AddHeader(q, 'Host', 'localhost');
-  e := AddHeader(q, 'Content-Type', 'application/x-www-form-urlencoded');
-  e := SetBody(q, 'a=1&b=2' + chr(10));
+  e := q.AddHeader('Host', 'localhost');
+  e := q.AddHeader('Content-Type', 'application/x-www-form-urlencoded');
+  e := q.SetBody('a=1&b=2' + chr(10));
   e := Send(cli, q);
   writeln('send:    ', ErrorText(e));
   ShowRequest;
-  e := NetReadLine(conn, line);
+  e := conn.ReadLine(line);
   writeln('  > (body) ', line);
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 404 Not Found' + CRLF +
        'X-Empty:' + CRLF +
        'Set-Cookie: a=1' + CRLF +
@@ -195,13 +195,13 @@ begin
     a 404 arrived intact and nothing failed. }
   writeln('  a 404 is not a failure: ', not Failed(e));
   { RFC 9110 §5.1: a field name is case-insensitive. }
-  writeln('  set-COOKIE = [', HeaderOr(r, 'set-COOKIE', '?'), '] (the first)');
-  v := Header(r, 'x-empty');
+  writeln('  set-COOKIE = [', r.HeaderOr('set-COOKIE', '?'), '] (the first)');
+  v := r.Header('x-empty');
   if v <> nil then
     writeln('  x-empty was sent, and its value is [', v^, ']');
-  v := Header(r, 'X-Missing');
+  v := r.Header('X-Missing');
   writeln('  x-missing absent: ', v = nil, ', or [',
-          HeaderOr(r, 'X-Missing', 'a default'), ']');
+          r.HeaderOr('X-Missing', 'a default'), ']');
   Drop;
   writeln;
 
@@ -212,7 +212,7 @@ begin
   { The answer goes out before the question, which is what lets one thread run
     both halves of `Exchange`. The middle chunk carries an extension RFC 9112
     §7.1.1 lets a recipient ignore, and data that is two lines. }
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
        'Transfer-Encoding: chunked' + CRLF + CRLF +
        '6' + CRLF + 'hello ' + CRLF +
@@ -220,15 +220,15 @@ begin
        '5' + CRLF + 'world' + CRLF +
        '0' + CRLF + 'X-Trailer: ignored' + CRLF + CRLF);
   e := NewRequest(q, 'GET', '/chunked');
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   e := Exchange(cli, q, r);
   Report;
-  e2 := BodyInto(r, joined);
+  e2 := r.BodyInto(joined);
   writeln('  joined: ', ErrorText(e2), ' [', joined, ']');
   { The destination is left as it was, so a caller that got `errFull` cannot
     mistake half a body for the whole of one. }
   small := 'keep';
-  e2 := BodyInto(r, small);
+  e2 := r.BodyInto(small);
   writeln('  into four characters: ', ErrorText(e2), ', still [', small, ']');
   Drop;
   writeln;
@@ -237,16 +237,16 @@ begin
 
   writeln('--- 302, not followed');
   Pair;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 302 Found' + CRLF +
        'Location: /elsewhere' + CRLF +
        'Content-Length: 0' + CRLF + CRLF);
   e := NewRequest(q, 'GET', '/old');
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   e := Exchange(cli, q, r);
   writeln('receive: ', ErrorText(e));
   writeln('  status ', r.status:1, ', Location [',
-          HeaderOr(r, 'location', ''), '] -- the caller decides');
+          r.HeaderOr('location', ''), '] -- the caller decides');
   Drop;
   writeln;
 
@@ -254,11 +254,11 @@ begin
 
   writeln('--- HEAD, whose response states a length it does not send');
   Pair;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Length: 42' + CRLF + CRLF);
   e := NewRequest(q, 'HEAD', '/thing');
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   e := Exchange(cli, q, r);
   Report;
   Drop;
@@ -268,7 +268,7 @@ begin
 
   writeln('--- no Content-Length and no Transfer-Encoding');
   Pair;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF + CRLF +
        'read until the far end closes' + chr(10));
   conn := nil;
@@ -282,15 +282,14 @@ begin
   writeln('--- what is reported rather than guessed at');
 
   Pair;
-  e := NetWriteText(conn, 'HTTP/1.1 twohundred OK' + CRLF + CRLF);
+  e := conn.WriteText('HTTP/1.1 twohundred OK' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
   writeln('status-line with no code:   ', ErrorText(e));
   cli := nil;
 
   Pair;
-  e := NetWriteText(conn,
-       'HTTP/1.1 200 OK' + CRLF + 'no-colon-here' + CRLF + CRLF);
+  e := conn.WriteText('HTTP/1.1 200 OK' + CRLF + 'no-colon-here' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
   writeln('field-line with no colon:   ', ErrorText(e));
@@ -299,7 +298,7 @@ begin
   { RFC 9112 §6.1: a sender must not send both, and a recipient that picks one
     is half of a request-smuggling pair. }
   Pair;
-  e := NetWriteText(conn,
+  e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
        'Content-Length: 5' + CRLF +
        'Transfer-Encoding: chunked' + CRLF + CRLF);
@@ -320,9 +319,8 @@ begin
   for i := 1 to BodyLineMax + 10 do
     long := long + 'x';
   Pair;
-  e := NetWriteText(conn,
-       'HTTP/1.1 200 OK' + CRLF + 'Content-Length: 1034' + CRLF + CRLF);
-  e := NetWriteText(conn, long + chr(10));
+  e := conn.WriteText('HTTP/1.1 200 OK' + CRLF + 'Content-Length: 1034' + CRLF + CRLF);
+  e := conn.WriteText(long + chr(10));
   conn := nil;
   e := Receive(cli, 'GET', r);
   writeln('a body line too long:       ', ErrorText(e));

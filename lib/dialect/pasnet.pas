@@ -20,7 +20,7 @@
   Pascal program wants a line. The buffering is in the runtime, and it is
   there rather than in `FILE *` because a stream opened for update over a
   descriptor that cannot seek may not switch between reading and writing
-  without a file-positioning call -- which a socket has not got. `NetReadLine`
+  without a file-positioning call -- which a socket has not got. `ReadLine`
   strips a newline and a carriage return before it, so a line written by a
   program on either side of the network reads the same.
 
@@ -33,7 +33,7 @@
   **Several connections at once, in one thread of control.** `NetWait` answers
   which of a list of sockets can be served without blocking, and a listening
   socket in that list is ready when a connection is waiting -- so a server is
-  an ordinary loop over `NetWait`, `NetAccept` and `NetReadLine`, and needs no
+  an ordinary loop over `NetWait`, `NetAccept` and `ReadLine`, and needs no
   concurrency construct (ADR-0205). That closes what this comment used to say
   was the module's honest limit; ADR-0201's construct is still not here and is
   still not what this needed.
@@ -46,9 +46,34 @@
 
 module PasNet;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Ten names are exported where fourteen were:
+  `Socket` has an implementation in the block below, and an implementation is
+  selected from the *type* of the receiver rather than from a name in scope
+  (AP 6.7.10.2), so none of its routines is an exported name and none can
+  collide with another module's -- which is what `PasJson` and `PasToml` did
+  over a document (ADR-0412). That is what retired the `Net` prefix from four
+  of them: `NetWriteText` is `WriteText`, `NetWriteLine` is `WriteLine`,
+  `NetReadLine` is `ReadLine` and `NetClose` is `Close`.
+
+  What stays exported is what a caller has to name before there is a receiver
+  to select from: the types, and the four routines that answer for a socket's
+  *identity in the system* rather than for the stream of bytes through it.
+  `NetConnect` and `NetListen` fill a variable the caller declared, `NetAccept`
+  answers a second socket from a listening one, and `NetService` reports which
+  port the system gave it -- the question a program that asked for `'0'` has to
+  ask before it has a connection at all. They keep the prefix for §6.11.2's
+  reason: these are names in one scope with every other module's.
+
+  **`NetWait` is a fifth, and it is the construct rather than the rule that
+  keeps it there.** Its receiver would be a `SocketList`, which is a schema
+  (§6.4.8) and not a type -- `impl SocketList` is refused with *'socketlist'
+  is not a type, so it can have no routines of its own* -- so there is nothing
+  for AP 6.7.10.2 to select from until a discriminant has been chosen, and a
+  caller chooses a different one every time. }
+
 export PasNet = (HostName, ServiceName, NetLine, Socket, SocketList,
-                 NetConnect, NetListen, NetAccept, NetService,
-                 NetWriteText, NetWriteLine, NetReadLine, NetClose, NetWait);
+                 NetConnect, NetListen, NetAccept, NetService, NetWait);
 
 import PasError;
 
@@ -115,40 +140,14 @@ function NetAccept(var srv: Socket; var conn: Socket): ErrorCode;
   the caller's string is shorter than the answer. }
 function NetService(var s: Socket; var name: string): ErrorCode;
 
-{ The characters of `text`, nothing appended. `errIO` on a refusal -- which
-  includes the far end having closed, that being a refusal a caller can act
-  on rather than the signal it would otherwise be. }
-function NetWriteText(var s: Socket; text: NetLine): ErrorCode;
-
-{ The characters and then a newline. }
-function NetWriteLine(var s: Socket; text: NetLine): ErrorCode;
-
-{ The next line into `line`, without its terminator.
-
-  `errNone` and `line` holds it; `errAbsent` when the far end has closed and
-  nothing was left, which is the ordinary end of a loop; `errFull` for a line
-  longer than `line` can hold or longer than the runtime buffers, whose
-  characters are discarded, there being nowhere to keep them; `errIO` for a
-  refusal.
-
-  A final line the far end sent without a newline **is** a line: a socket has
-  no obligation to end with one.
-
-  `line` is set to the null-string on every answer but `errNone`. }
-function NetReadLine(var s: Socket; var line: string): ErrorCode;
-
-{ Close now rather than at the block's end, and leave `s` empty. Harmless on
-  an empty one, and the socket may be opened again through the same variable. }
-procedure NetClose(var s: Socket);
-
 { Which of `socks` can be read, or accepted from, without blocking: `ready[k]`
   is set for each one that can, and cleared for every other -- including the
   empty slots, which are never ready.
 
   This is what lets one thread of control serve several connections, and it is
   the *whole* of what that needs: a listening socket in the list becomes ready
-  when a connection is waiting, so `NetAccept` and `NetReadLine` are both answered by
-  the same call. A server is then a loop -- wait, accept what arrived, read
+  when a connection is waiting, so `NetAccept` and `ReadLine` are both answered
+  by the same call. A server is then a loop -- wait, accept what arrived, read
   from whoever spoke, close whoever left.
 
   `timeoutMs` is a limit and not a promise: negative waits until something is
@@ -158,7 +157,7 @@ procedure NetClose(var s: Socket);
 
   **A socket holding a line the runtime has already read is ready**, which the
   operating system cannot tell you: those bytes are off the socket, so the
-  descriptor is quiet while `NetReadLine` would answer at once. Waiting on the
+  descriptor is quiet while `ReadLine` would answer at once. Waiting on the
   descriptor alone is how a server comes to sit still holding a line it was
   handed, and it is why this is a call of this module rather than a binding to
   `poll`.
@@ -264,45 +263,72 @@ begin
   end
 end;
 
-function NetWriteText;
-begin
-  if ExtWrite(s, text) = 0 then NetWriteText := errNone else NetWriteText := errIO
+{ --- the connection ------------------------------------------------------- }
+
+impl Socket;
+
+  { The characters of `text`, nothing appended. `errIO` on a refusal -- which
+    includes the far end having closed, that being a refusal a caller can act
+    on rather than the signal it would otherwise be. }
+  function WriteText(protected var s: Socket; text: NetLine): ErrorCode;
+  begin
+    if ExtWrite(s, text) = 0 then WriteText := errNone else WriteText := errIO
+  end;
+
+  { The characters and then a newline. }
+  function WriteLine(protected var s: Socket; text: NetLine): ErrorCode;
+  var e: ErrorCode;
+  begin
+    { one call and not two: a newline written separately is a second packet on
+      the wire for no reason, and a reader that got the first would block }
+    e := s.WriteText(text + chr(10));
+    WriteLine := e
+  end;
+
+  { The next line into `line`, without its terminator.
+
+    `errNone` and `line` holds it; `errAbsent` when the far end has closed and
+    nothing was left, which is the ordinary end of a loop; `errFull` for a line
+    longer than `line` can hold or longer than the runtime buffers, whose
+    characters are discarded, there being nowhere to keep them; `errIO` for a
+    refusal.
+
+    A final line the far end sent without a newline **is** a line: a socket has
+    no obligation to end with one.
+
+    `line` is set to the null-string on every answer but `errNone`. }
+  function ReadLine(protected var s: Socket; var line: string): ErrorCode;
+  var got: OptLine; status: integer;
+  begin
+    status := 0;
+    got := ExtReadLine(s, line.capacity, status);
+    line := '';
+    { The value decides the successful case and the code decides the rest,
+      which is PasDir.NextEntry's shape: a routine answering 0 with no line
+      would be a defect over there, and reading `got^` for it is the trap that
+      says so. }
+    if got = nil then begin
+      if status = 1 then ReadLine := errAbsent
+      else if status = 3 then ReadLine := errFull
+      else ReadLine := errIO
+    end
+    else begin
+      line := got^;
+      ReadLine := errNone
+    end
+  end;
+
+  { Close now rather than at the block's end, and leave `s` empty. Harmless on
+    an empty one, and the socket may be opened again through the same
+    variable. }
+  procedure Close(var s: Socket);
+  begin
+    { AP 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
+    s := nil
+  end;
 end;
 
-function NetWriteLine;
-var e: ErrorCode;
-begin
-  { one call and not two: a newline written separately is a second packet on
-    the wire for no reason, and a reader that got the first would block }
-  e := NetWriteText(s, text + chr(10));
-  NetWriteLine := e
-end;
-
-function NetReadLine;
-var got: OptLine; status: integer;
-begin
-  status := 0;
-  got := ExtReadLine(s, line.capacity, status);
-  line := '';
-  { The value decides the successful case and the code decides the rest, which
-    is PasDir.NextEntry's shape: a routine answering 0 with no line would be a
-    defect over there, and reading `got^` for it is the trap that says so. }
-  if got = nil then begin
-    if status = 1 then NetReadLine := errAbsent
-    else if status = 3 then NetReadLine := errFull
-    else NetReadLine := errIO
-  end
-  else begin
-    line := got^;
-    NetReadLine := errNone
-  end
-end;
-
-procedure NetClose;
-begin
-  { AP 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
-  s := nil
-end;
+{ --- several of them ------------------------------------------------------ }
 
 function NetWait;
 var

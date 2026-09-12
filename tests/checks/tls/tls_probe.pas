@@ -69,11 +69,11 @@ begin
   { 3. And it carries data. `s_server -WWW` answers a small file the harness
        wrote, so the body is this repository's and not OpenSSL's -- which is
        what lets the two cases below name what they expect. }
-  e := TlsWriteLine(c, 'GET /hello HTTP/1.0');
+  e := c.WriteLine('GET /hello HTTP/1.0');
   Say('  request written    ', e, false);
-  e := TlsWriteLine(c, '');
+  e := c.WriteLine('');
   Say('  request ended      ', e, false);
-  e := TlsReadLine(c, line);
+  e := c.ReadLine(line);
   Say('  response read      ', e, false);
   writeln('  status line        : ', line[1..12]);
 
@@ -81,22 +81,22 @@ begin
        truncation. The next line is `Content-type: text/plain`, longer than
        eight characters, and its characters are gone rather than
        half-delivered. }
-  e := TlsReadLine(c, short);
+  e := c.ReadLine(short);
   Say('  a line that is long', e, true);
 
   { 5. The far end closes when the page ends, which is the ordinary end of a
        loop and not a failure. }
   n := 0;
   repeat
-    e := TlsReadLine(c, line);
+    e := c.ReadLine(line);
     if e = errNone then n := n + 1
   until e <> errNone;
   writeln('  loop ended on      : ', ErrorText(e));
   writeln('  more lines followed: ', n > 0);
 
   { 6. Closing twice is harmless, and the variable may be connected again. }
-  TlsClose(c);
-  TlsClose(c);
+  c.Close;
+  c.Close;
   writeln('closed twice         : ok');
 
   { 7. The chain is perfect and the name is wrong: this is the case a client
@@ -120,9 +120,9 @@ begin
 
   { 11. Reading or writing a connection that is not open is refused rather
         than being undefined. }
-  e := TlsWriteText(c, 'x');
+  e := c.WriteText('x');
   Say('write when closed    ', e, true);
-  e := TlsReadLine(c, line);
+  e := c.ReadLine(line);
   Say('read when closed     ', e, true);
   writeln('  line left empty    : ', line = '')
 end.

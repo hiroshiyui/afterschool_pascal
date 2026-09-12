@@ -53,27 +53,27 @@ begin
 
   { Two lines out and two in. `srv` is still listening -- accepting a
     connection does not consume the socket that accepted it. }
-  e := NetWriteLine(cli, 'first line');
-  e := NetWriteLine(cli, 'second line');
+  e := cli.WriteLine('first line');
+  e := cli.WriteLine('second line');
   for i := 1 to 2 do begin
-    e := NetReadLine(conn, line);
+    e := conn.ReadLine(line);
     writeln('  server got: ', ErrorText(e), ' [', line, ']')
   end;
 
   { And back the other way, so the connection is shown to be two-directional
     through one handle at each end. }
-  e := NetWriteLine(conn, 'and a reply');
-  e := NetReadLine(cli, line);
+  e := conn.WriteLine('and a reply');
+  e := cli.ReadLine(line);
   writeln('  client got: ', ErrorText(e), ' [', line, ']');
 
   { A line the far end sent without a newline is still a line. }
-  e := NetWriteText(cli, 'no newline at the end');
+  e := cli.WriteText('no newline at the end');
   cli := nil;                     { AP 6.4.12.2's second form, ADR-0202 }
-  e := NetReadLine(conn, line);
+  e := conn.ReadLine(line);
   writeln('unterminated:', ErrorText(e), ' [', line, ']');
 
   { ...and then the far end has closed and there is nothing left. }
-  e := NetReadLine(conn, line);
+  e := conn.ReadLine(line);
   writeln('after close: ', ErrorText(e));
 
   conn := nil;
@@ -105,7 +105,7 @@ begin
   conn := nil;
   tries := 0;
   repeat
-    e := NetWriteLine(cli, 'into a closed connection');
+    e := cli.WriteLine('into a closed connection');
     tries := tries + 1
   until Failed(e) or (tries >= 100);
   writeln('write to closed: a code came back and the program is still here');
@@ -116,8 +116,8 @@ begin
     rather than half-delivered. }
   e := NetConnect(cli, 'localhost', port);
   e := NetAccept(srv, conn);
-  e := NetWriteLine(cli, 'far too long for four characters');
-  e := NetReadLine(conn, short);
+  e := cli.WriteLine('far too long for four characters');
+  e := conn.ReadLine(short);
   writeln('too long:    ', ErrorText(e), ' [', short, ']');
   cli := nil;
   conn := nil;

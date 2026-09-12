@@ -50,14 +50,14 @@ end;
 procedure Render;
 var pieces: integer;
 begin
-  e := BeginRequest(q, w);
+  e := q.BeginWrite(w);
   if Failed(e) then begin
     writeln('  refused: ', ErrorText(e));
     exit
   end;
   pieces := 0;
   while not w.done do begin
-    NextPiece(q, w, small);
+    q.NextPiece(w, small);
     if length(small) > 0 then begin
       pieces := pieces + 1;
       writeln('  ', pieces:2, ' |', Shown(small), '|')
@@ -72,15 +72,15 @@ end;
 procedure Feed(protected var lines: array of BodyLine; closes: boolean);
 var i: integer;
 begin
-  BeginResponse(r, q.method);
+  r.BeginRead(q.method);
   i := 0;
   e := errNone;
-  while WantsLine(r) and (not Failed(e)) do
+  while r.WantsLine and (not Failed(e)) do
     if i < length(lines) then begin
       i := i + 1;
-      e := FeedLine(r, lines[i])
+      e := r.FeedLine(lines[i])
     end
-    else if closes then e := FeedEnd(r)
+    else if closes then e := r.FeedEnd
     else begin
       writeln('  the reader wanted a line nobody sent');
       e := errIO
@@ -90,7 +90,7 @@ begin
     write(': ', r.status:1, ' stated=', r.stated:1,
           ' chunked=', r.chunked, ' byClose=', r.byClose,
           ' lines=', r.bodyLines:1);
-    if BodyInto(r, body) = errNone then write(' body=|', Shown(body), '|')
+    if r.BodyInto(body) = errNone then write(' body=|', Shown(body), '|')
   end;
   writeln
 end;
@@ -101,18 +101,18 @@ begin
   { --- the request side ------------------------------------------------- }
   writeln('a GET with one field:');
   e := NewRequest(q, 'GET', '/things?id=7');
-  e := AddHeader(q, 'Host', 'example.test');
+  e := q.AddHeader('Host', 'example.test');
   Render;
 
   writeln('a POST with a body, and a Connection the caller chose:');
   e := NewRequest(q, 'POST', '/things');
-  e := AddHeader(q, 'Host', 'example.test');
-  e := AddHeader(q, 'Connection', 'keep-alive');
-  e := SetBody(q, 'x=1');
+  e := q.AddHeader('Host', 'example.test');
+  e := q.AddHeader('Connection', 'keep-alive');
+  e := q.SetBody('x=1');
   Render;
 
   { A request with no Host is refused before an octet is produced, which is
-    the property `BeginRequest` moved out of `Send`: nothing is written, so
+    the property `BeginWrite` moved out of `Send`: nothing is written, so
     nothing has to be taken back. }
   writeln('no Host field:');
   e := NewRequest(q, 'GET', '/');
@@ -120,7 +120,7 @@ begin
 
   { --- the response side ------------------------------------------------ }
   e := NewRequest(q, 'GET', '/');
-  e := AddHeader(q, 'Host', 'example.test');
+  e := q.AddHeader('Host', 'example.test');
 
   writeln('framed by Content-Length:');
   counted[1] := 'HTTP/1.1 200 OK';
@@ -171,13 +171,13 @@ begin
     second response even though this module does not use one. }
   writeln('a complete message with more behind it:');
   n := 0;
-  BeginResponse(r, 'GET');
+  r.BeginRead('GET');
   counted[1] := 'HTTP/1.1 204 No Content';
   counted[2] := '';
   counted[3] := 'HTTP/1.1 200 OK';
-  while WantsLine(r) and (n < 3) do begin
+  while r.WantsLine and (n < 3) do begin
     n := n + 1;
-    e := FeedLine(r, counted[n])
+    e := r.FeedLine(counted[n])
   end;
   writeln('  ', ErrorText(e), ': ', r.status:1, ' after ', n:1,
           ' of 3 lines')
