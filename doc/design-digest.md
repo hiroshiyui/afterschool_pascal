@@ -2629,9 +2629,15 @@ able to make.
     which is what makes `record f: integer; integer: real end` refuse its own
     first field. Resolving first and testing afterwards would make the answer
     depend on whether a type of that name happened to exist.
-  - Not caught: a **constant** occurrence — `array [1..fred]`, a field's
-    initial-state expression — which goes through the expression checker and is
-    not asked. `doc/implementation-defined.md` §6.1 carries it.
+  - **The constant occurrence was the last one**, and ADR-0134 asks there too:
+    `array [1..fred]` goes through the expression checker rather than through
+    type-denoter resolution, so it needed a fourth call site of its own, and
+    `ErrorFieldNotA` takes a flag for the one word that differs — a field is
+    neither a type nor a constant. `doc/implementation-defined.md` §6.1 records
+    it as the entry that closed the list. This bullet said the opposite until
+    2026-09-12, while another entry in this same file described the fix — one
+    fact written twice and disagreeing with itself, which is the thing a
+    register is for and the thing a register cannot do for prose.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

@@ -1188,8 +1188,9 @@ beside a field `fred` names no type — and neither does `a: fred`,
 field does not exist on the type yet; of the **whole** denoter, because the
 region is the record and not the text before the point; and **before** the
 lookup, because a field's defining-point is nearer than the region enclosing the
-program. One function, three call sites; a *constant* occurrence is still not
-asked (`doc/sop.md` §7). **Declarations interleave by source position** —
+program. One function, **four** call sites since ADR-0134 — three asking for a
+type-name and the fourth for a constant, so `array [1..fred]` beside a field
+`fred` is refused too. **Declarations interleave by source position** —
 constants, types, variables *and procedures* (ADR-0100) — which is what lets
 §6.2.2.9 see a body using a variable declared after it.
 

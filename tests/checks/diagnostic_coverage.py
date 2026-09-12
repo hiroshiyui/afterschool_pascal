@@ -205,9 +205,22 @@ def main():
     for m in missing:
         print(f"no golden names this diagnostic ({msgs[m]}):")
         print(f"    {m!r}")
+    # Two different things land in `revived` and they want different words.
+    # A message that still exists and is now named by a golden is an argument
+    # that has stopped being true; one that no longer exists at all is an
+    # entry a deleted diagnostic left behind. doc/sop.md carried the second as
+    # a blind spot until 2026-09-12, when a probe showed the gate had been
+    # catching it all along -- `listed - uncovered` holds it either way -- and
+    # saying "a golden now names it" about a message nobody can write is what
+    # made it read as uncaught.
     for m in revived:
-        print("listed as unreachable, but a golden now names it -- either the "
-              "compiler changed or the argument was wrong:")
+        if m in msgs:
+            print("listed as unreachable, but a golden now names it -- either "
+                  "the compiler changed or the argument was wrong:")
+        else:
+            print("listed as unreachable, and no diagnostic of this text is "
+                  "in the compiler any more -- the entry outlived its "
+                  "message:")
         print(f"    {m!r}")
 
     if missing or revived:
