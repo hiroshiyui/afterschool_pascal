@@ -17,31 +17,23 @@ verbatim, the moment before it was cut to this.
 
 **Released: v3.11.0, and `CHANGELOG.md`'s `Unreleased` is not empty.** What
 stands on top of the tag is all of one subject: the library reads as **methods
-of its types**. Sixteen modules export
-203 names where they exported 354, `export-unique` counts 429 where it counted
-527, and three rules were added to AP 6.7.10 on the way — one implementation of
-a type per *program* (ADR-0413), an implementation only for a name the type was
-given (ADR-0414), and a method may name itself through a receiver (ADR-0415).
-**The version number is undecided** and is the next thing to settle: the
-library rename breaks every existing client, which is what a major number is
-for, while `release-engineering` defines the public interface as the accepted
-language, the diagnostics and the command line and does not name the library.
+of its types**. Sixteen modules export 203 names where they exported 354,
+`export-unique` counts 429 where it counted 527, and three rules were added to
+AP 6.7.10 on the way — one implementation of a type per *program* (ADR-0413),
+an implementation only for a name the type was given (ADR-0414), and a method
+may name itself through a receiver (ADR-0415). **The version number is
+undecided** and is the next thing to settle: the library rename breaks every
+existing client, which is what a major number is for, while
+`release-engineering` defines the public interface as the accepted language,
+the diagnostics and the command line and does not name the library.
 
-v3.11.0's headline is the editor: it replaces, and two defects v3.10.0 had shipped a
-day earlier do not happen any more — a Ctrl-Q that discarded another
-document's work in silence (ADR-0401) and a menu that stopped the program on
-F3 (ADR-0404 is the gate that could have caught it and had been pointed at
-the compiler alone). v3.10.0 before it was display width as a *language*
-question (AP 6.4.15.13, ADR-0395) with eight documents and a palette over it;
-v3.9.0 was the editor arriving and WebAssembly running the corpus. The
-compiler builds itself, stage 2 equals stage 3 in every program-component,
-and the suite is 938 cases green at `-O2` and at `-O0`.
-
-**The three releases before those are in [history](history.md)** — the
-platforms measured rather than assumed (v3.8.0: `--target=` admits seven
-machines where it admitted three, and Windows got as far as a program that
-runs and was then dropped, ADR-0374 and ADR-0380), and the boundary audited
-twice over (v3.7.0, ADR-0360 – ADR-0364).
+v3.11.0's headline was the editor's *replace*, and two defects v3.10.0 had
+shipped a day earlier; v3.10.0 was display width as a *language* question
+(AP 6.4.15.13, ADR-0395); v3.9.0 was the editor arriving and WebAssembly
+running the corpus. Those and the three before them are
+[in history](history.md). The compiler builds itself, stage 2 equals stage 3
+in every program-component, and the suite is 938 cases green at `-O2` and at
+`-O0`.
 
 | | |
 | --- | --- |
@@ -51,14 +43,14 @@ twice over (v3.7.0, ADR-0360 – ADR-0364).
 | **Open and unavailable** | the two rows under [Deferred](#deferred-insufficient-resources): no second front end, and no third-party corpus |
 | **In progress** | nothing is half-built. A feature lands with its clause, its record and its case, or it does not land |
 
-**What moved most recently is the boundary**
-([history](history.md#after-v360-a-configuration-file-and-the-boundary-audited));
-before that the oracles
-([history](history.md#the-oracles-that-were-not-looking)); before that the
+**What moved most recently is the library**, which now reads as methods of its
+types; before that the boundary
+([history](history.md#after-v360-a-configuration-file-and-the-boundary-audited)),
+the oracles ([history](history.md#the-oracles-that-were-not-looking)) and the
 memory model, struck as closed and corrected three times the next day
 ([history](history.md#the-memory-model-read-against-the-goal)). The lesson
-that outlived the last of those governs every cost cell on this page: **a
-cost cell is a report and not an estimate.**
+that outlived that one governs every cost cell on this page: **a cost cell is
+a report and not an estimate.**
 
 ---
 
@@ -140,15 +132,13 @@ should a second appear, the cheapest shape is ADR-0290's — no spelling at all,
 a procedure in the record's own scope taking it as sole `var` parameter, run
 before the field loop.
 
-### The object model
+### The object model — closed
 
-**Closed.** All three of ADR-0315's increments are built, in six records
-rather than three, and the library rewrite that was to judge them is done:
-fourteen modules read as methods of their types, exporting 177 names where
-they exported 325, and every module that is *not* converted has a probed
-reason rather than a measurement. The chapter as it stood, with what each
-increment cost and what the first client found, is
-[in history](history.md#the-object-model-chapter-as-it-stood).
+All three of ADR-0315's increments are built, in six records rather than
+three, and the rewrite that was to judge them is done: **sixteen modules read
+as methods of their types, exporting 203 names where they exported 354**, and
+every module that is *not* converted has a probed reason. The chapter as it
+stood is [in history](history.md#the-object-model-chapter-as-it-stood).
 
 
 ### Known limitations
@@ -193,22 +183,17 @@ ADR-0264, ADR-0265), and **internationalisation is a clause of the language
 with a library under it** (AP 6.4.15, ADR-0189 – ADR-0199), listed here
 because that is where a program meets it.
 
-### What a daily program still cannot reach for
-
-**Nothing this page has thought of.** The chapter that listed six library gaps
-and two absences closed at v3.2.0
-([history](history.md#what-a-daily-program-could-not-reach-for-and-now-can)),
-and the lesson is worth more than the list was: two of its eight rows said why
-they were blocked and both reasons were wrong. **A row here is a report from
-somebody writing a program, not an estimate from a list.** The newest module,
-`PasToml` (ADR-0360), arrived that way, and so did the library's first request
-of the language — a trait on a map's key (ADR-0355).
-
-### Writing a daily program
-
-Every row closed ([history](history.md#the-last-of-the-daily-program-rows)).
-What the chapter predicted about its own order was right; every *reason* it
-wrote beside a row was wrong, and each was found by compiling four lines.
+**The inventory of what a daily program cannot reach for is empty**, and what
+stands in its place is the rule for refilling it: **a row here is a report from
+somebody writing a program, not an estimate from a list.** The chapter that
+listed six gaps and two absences closed at v3.2.0, with two of its eight rows
+stating why they were blocked and both reasons wrong
+([history](history.md#what-a-daily-program-could-not-reach-for-and-now-can));
+the *writing a daily program* chapter closed the same way, its order right and
+every reason beside a row wrong
+([history](history.md#the-last-of-the-daily-program-rows)). The newest module,
+`PasToml` (ADR-0360), arrived as a report, and so did the library's first
+request of the language — a trait on a map's key (ADR-0355).
 
 ---
 
@@ -238,28 +223,11 @@ go-to-line ([ADR-0387](adr/0387-an-undo-is-a-journal-and-a-prompt-is-a-mode.md))
 and each of those three turned out to be a design question rather than a
 feature, which is the argument for using the thing you are building.
 
-**Display width was on this list and is closed** (ADR-0395), and it went the
-way the list said it would — a *language* question first. AP 6.4.15 NOTE 14
-had put the number of columns a value occupies outside this language, and that
-was half right: no property of a character can say how wide it is in a
-proportional font, but UAX #11 assigns East_Asian_Width precisely so a
-fixed-pitch device can lay text out, and declining to provide it only moved
-the problem into the editor. AP 6.4.15.13 defines it, `PasUnicode.Columns`
-answers it, and a column in the editor is a cell.
-
-**More than one file at once is closed** (ADR-0396), and it closed a *defect*
-as well as a gap: `EditFault` was throwing the filename away, so a diagnostic
-about another program-component jumped to that line number in whatever
-document was open. Eight documents, F3 to open and F6 to cycle, and a
-diagnostic naming an open one is landed on.
-
-**Replace is closed** (ADR-0403), and it needed the model to grow rather than
-the editor: an *action* a person takes may be more than one of ADR-0387's four
-operations, and an undo that reverses one of six is an undo of nothing anybody
-did. A journal entry may now say the undo continues through it, which is a
-property of an entry and not a fifth operation, so replacing every occurrence
-in a document is one Ctrl-Z. Confirm-each was **rejected rather than
-deferred**: what a person wants after a replace that went wrong is to undo it.
+**Four rows closed and are [in history](history.md#the-editors-closed-rows-as-they-stood)**:
+display width as a *language* question (ADR-0395), more than one file at once
+(ADR-0396), replace (ADR-0403), and what the shell emits, which `tui-terminal`
+now checks under a pseudo-terminal (ADR-0402) and which was `doc/sop.md` §7's
+oldest row.
 
 **What is open**, in no order and none of it decided: a shaping model, which
 is what East_Asian_Width is *not* — Arabic and Devanagari are laid out by
@@ -269,17 +237,6 @@ largest of them and is missing from four features at once — cut, copy, paste
 and replace-in-a-region are one design and not four, this editor having no
 notion of a region at all. The milestone-one and milestone-two exclusions are
 listed in `tui/README.md` with the reason for each.
-
-**What the shell emits is checked now** (ADR-0402), and the row that said
-otherwise was `doc/sop.md` §7's oldest. `tui-terminal` drives the real editor
-under a pseudo-terminal and requires every coloured run it writes to be one
-the model decided, at the same columns, in the colour that role's table gives,
-over both the twenty-four-bit and the eight-colour table. **It is not the
-binding ADR-0262 declined twice** — the pseudo-terminal is the harness's, in
-Python, as `lsp/run.py`'s pipe is, so nothing in this language knows about it
-and no case tests a binding. The expectation is *derived* from the session
-golden's own run decomposition rather than recorded, a golden of escape bytes
-being one that agrees with whoever wrote it.
 
 **What nothing checks** is narrower and is still real: that a terminal renders
 those sequences as they are meant, and that an emulator setting `COLORTERM` is
@@ -298,18 +255,11 @@ twenty-five-target measurement said
 ([history](history.md#cross-platform-support-measured)) are settled; run
 `python3 tests/checks/target_layout.py` rather than quoting a target count.
 
-**The tiers, since 2026-09-09.** **GNU/Linux is first**: the seed is generated
-for x86-64, every gate has a job that installs its tools, and i386 is built and
-run at two optimisation levels. **macOS (arm64) is second**: the whole suite
-runs natively on every push and the job can fail (ADR-0368), with nine gates
-skipping for want of a tool, and a release ships an `arm64-darwin` archive
-since ADR-0375. **Everything else is unsupported and open to contributors** —
-FreeBSD, OpenBSD, NetBSD, Haiku and Windows — with `README.md`'s *Platform
-tiers* saying what a port starts from.
-
-**Windows is dropped, since 2026-09-10** (ADR-0380), and what was measured
-about it is [in history](history.md#windows-measured-and-then-dropped) rather
-than deleted, so a contributor who wants it starts from a page of findings.
+**The tiers, since 2026-09-09**, are in `README.md`'s *Platform tiers*: Linux
+first, macOS (arm64) second, everything else unsupported and open to a
+contributor. **Windows is dropped** (ADR-0380) and what was measured about it
+is [in history](history.md#windows-measured-and-then-dropped), so a
+contributor who wants it starts from a page of findings rather than nothing.
 
 **Seven targets are admitted and two of them are WebAssembly.**
 `wasm64-wasi` (ADR-0386) is closed: it cost nothing and nothing waits on it
@@ -341,24 +291,16 @@ and the layout gate sees frames and nothing else.
 
 ### What a helper is written in
 
-**Decided in [ADR-0366](adr/0366-a-helper-is-not-a-shell-script.md) and
-enforced since [ADR-0367](adr/0367-the-rule-about-helpers-is-enforced.md)**, so
-what is left here is the rule and not the argument for it
-([history](history.md#what-a-helper-is-written-in-and-the-one-it-left)). A
-gate is Python 3 reaching for the standard library rather than a subprocess,
-because the portability boundary is the set of external programs a helper
-invokes and not the language it is written in; a helper that *ships to a user*
-is written in Afterschool Pascal, `bin/apconfig` being the precedent
-(ADR-0361); and a conversion lands with byte-identical output and that gate's
-own mutation re-run, never with a green suite. `helper-portability` holds all
-three, in both directions.
+**Decided** (ADR-0366) and **enforced** (ADR-0367), so what is left here is one
+open thing; the rule and its argument are
+[in history](history.md#what-a-helper-is-written-in-and-the-one-it-left) and
+`helper-portability` holds all three of its claims in both directions.
 
-**One thing is left open and it moved when Windows was dropped.** The
-catalogue is one line of shell — `tools/pascalcc`, which is the product rather
-than a harness — and the standing argument against it was the Windows row,
-where a `#!` line does not run at all. That row is gone (ADR-0380), so nothing
-currently presses on the driver; a target that is not POSIX is where the
-question comes back.
+**The catalogue is one line of shell** — `tools/pascalcc`, which is the product
+rather than a harness — and the standing argument against converting it was the
+Windows row, where a `#!` line does not run at all. That row is gone
+(ADR-0380), so nothing currently presses on the driver; a target that is not
+POSIX is where the question comes back.
 
 ---
 
@@ -461,7 +403,9 @@ withdrawn as posed, containment fixing what `^T` means (ADR-0201).
 
 ### The open questions
 
-Twelve stood here and **eleven are answered**
+Twelve stood here and **eleven are answered** — a third-party differential
+(ADR-0234), mutation testing in the tree (ADR-0207) and *should the dialect
+read a type off a component?* (ADR-0215) among them
 ([history](history.md#what-the-roadmap-answered), and the
 [index](#answered-and-where) below). One remains and is not a task.
 
@@ -490,34 +434,10 @@ never a reason not to make one**: where no authority answers, the dialect
 answers for itself, in the standards' idiom, written in the specification and
 pinned by a case that fails without it.
 
-#### 2, 3 and 4 — answered
-
-A third-party differential (ADR-0234), mutation testing in the tree
-(ADR-0207) and *should the dialect read a type off a component?* (ADR-0215);
-rows below.
-
 ### Answered, and where
 
-Every question this page has carried and closed; the narrative of each is in
-[`doc/history.md`](history.md#what-the-roadmap-answered).
-
-| Question | Answer | Record |
-| --- | --- | --- |
-| Does the dialect spend reserved words? | No: a feature is spelled where a conforming program could not have written it | ADR-0140, ADR-0232 |
-| Does containment survive the link, and is it witnessed by more than one program? | It did, and it was, until the modes went; `inherits_extended.pas` remains | ADR-0137, ADR-0138, ADR-0232 |
-| Are the dialect's pieces coherent? | Four result shapes, one rule in two questions | ADR-0141, ADR-0149 |
-| Memory safety: deferral or discovery? | Discovery, twice; what is left of the fork is two threads of control | ADR-0151, ADR-0201 |
-| A third-party differential | Free Pascal under `-Miso`, six disagreements, all decided here | ADR-0234 |
-| An oracle nobody here wrote | Retired with the modes; `unicode-conformance` is what is left | ADR-0086, ADR-0108, ADR-0232 |
-| Diverse double-compiling | Run once; the window is closed | `seed/README.md`, ADR-0233 |
-| Should the compiler be one source file? | No: three program-components | ADR-0233 |
-| Conformant array parameters, and level 1 | Done; nine defects found | ADR-0153 |
-| Can anything measure what the corpus reaches, and is that what the project is made of? | Three coverage gates and a clause-cited suite; then `lib/`, the runtime and the server measured, and the sanitizers seeing compiled Pascal | ADR-0103 – ADR-0106, ADR-0342, ADR-0349 – ADR-0358 |
-| Is the memory model the one its records describe? | No, three of four rows closed in two days; a record's `Drop` stands | ADR-0317 – ADR-0337 |
-| What separates this from a language a person picks up on a Tuesday? | Eight rows, every one struck within four days | ADR-0293 – ADR-0308, ADR-0348 |
-| Mutation testing, committed to the tree | One file per mutation, a register and not a measurement | ADR-0207 |
-| Is the platform lock scoped, and is a foreign scalar the width of its C type? | Three things, all done; and not by inspection — `foreign-width` holds the width as a catalogue | ADR-0155 – ADR-0159, ADR-0325, ADR-0328, ADR-0364 |
-| A missing file, an argument list, an owned foreign address, a character | `binding(f).bound`; `argcount`/`argument`; a handle-type; a grapheme cluster | ADR-0172, ADR-0173, ADR-0174, ADR-0189 |
-| Should the dialect read a type off a component? | Yes, `type of` over a whole variable-access | ADR-0215 |
-| What did version 3 take, and what did the language server demand? | Four proposals, three records; twenty-seven findings, all closed | ADR-0229 – ADR-0233, ADR-0236 – ADR-0249 |
-| Is this a conforming processor or a dialect? | A dialect, and version 3 is named for it | ADR-0232 |
+Nineteen questions this page carried and closed, with the record that
+answered each, are [in history](history.md#the-roadmaps-answered-index-as-it-stood)
+— from *does the dialect spend reserved words* to *is this a conforming
+processor or a dialect*. The narrative of each is a chapter of the same
+file.

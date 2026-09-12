@@ -1332,7 +1332,7 @@ and this entry contradicted it for a day; nothing here could see that, which is
 the point. What *did* come of it: the three refusals now say which rule they
 are, instead of stopping at the declaration's own semicolon and reporting a
 missing separator, and the wish itself became a dialect feature the same day
-([question 4](roadmap.md#2-3-and-4--answered),
+([question 4](roadmap.md#the-open-questions),
 ADR-0215) — which is the useful ending: the clause is unchanged and the thing
 that was wanted exists where it belongs.
 
@@ -4972,7 +4972,7 @@ finding against them, which after 3 280 lines of server is itself the
 answer for now.
 
 **What the examples then found** (ADR-0295) is the next register, and it is
-in [*Writing a daily program*](roadmap.md#writing-a-daily-program) rather than here:
+in [*The last of the daily-program rows*](#the-last-of-the-daily-program-rows) rather than here:
 twelve one-page programs written to be read produced seven findings in an
 afternoon, which is the sentence this chapter kept making — the next finding
 comes from somebody writing a program.
@@ -11129,3 +11129,80 @@ length -- and `lib-coverage` passed unchanged. Before ADR-0416 that is exactly
 the edit that moved it: another file's line numbers colliding differently with
 this file's. The gate now attributes a statement to the routine that wrote it,
 so a module's denominator is a fact about its own text.
+
+
+## The editor's closed rows, as they stood
+
+The roadmap carried these while `tui/` was being built, and they are moved here
+whole on the day the page was compacted -- four features that closed and one
+gate that closed a §7 row. What is left on the roadmap is the four things that
+are open and the two that nothing checks.
+
+**Display width was on this list and is closed** (ADR-0395), and it went the
+way the list said it would — a *language* question first. AP 6.4.15 NOTE 14
+had put the number of columns a value occupies outside this language, and that
+was half right: no property of a character can say how wide it is in a
+proportional font, but UAX #11 assigns East_Asian_Width precisely so a
+fixed-pitch device can lay text out, and declining to provide it only moved
+the problem into the editor. AP 6.4.15.13 defines it, `PasUnicode.Columns`
+answers it, and a column in the editor is a cell.
+
+**More than one file at once is closed** (ADR-0396), and it closed a *defect*
+as well as a gap: `EditFault` was throwing the filename away, so a diagnostic
+about another program-component jumped to that line number in whatever
+document was open. Eight documents, F3 to open and F6 to cycle, and a
+diagnostic naming an open one is landed on.
+
+**Replace is closed** (ADR-0403), and it needed the model to grow rather than
+the editor: an *action* a person takes may be more than one of ADR-0387's four
+operations, and an undo that reverses one of six is an undo of nothing anybody
+did. A journal entry may now say the undo continues through it, which is a
+property of an entry and not a fifth operation, so replacing every occurrence
+in a document is one Ctrl-Z. Confirm-each was **rejected rather than
+deferred**: what a person wants after a replace that went wrong is to undo it.
+
+**What the shell emits is checked now** (ADR-0402), and the row that said
+otherwise was `doc/sop.md` §7's oldest. `tui-terminal` drives the real editor
+under a pseudo-terminal and requires every coloured run it writes to be one
+the model decided, at the same columns, in the colour that role's table gives,
+over both the twenty-four-bit and the eight-colour table. **It is not the
+binding ADR-0262 declined twice** — the pseudo-terminal is the harness's, in
+Python, as `lsp/run.py`'s pipe is, so nothing in this language knows about it
+and no case tests a binding. The expectation is *derived* from the session
+golden's own run decomposition rather than recorded, a golden of escape bytes
+being one that agrees with whoever wrote it.
+
+
+## The roadmap's answered index, as it stood
+
+Every question the roadmap carried and closed, with the record that answered
+it, moved here on the day the page was compacted. It is an index and not a
+narrative: each row's story is a chapter of this file, and the roadmap keeps a
+pointer to this table rather than the table, a page kept to what is open having
+no room for nineteen rows of what is not.
+
+### The rows
+
+Every question this page has carried and closed; the narrative of each is in
+[`doc/history.md`](history.md#what-the-roadmap-answered).
+
+| Question | Answer | Record |
+| --- | --- | --- |
+| Does the dialect spend reserved words? | No: a feature is spelled where a conforming program could not have written it | ADR-0140, ADR-0232 |
+| Does containment survive the link, and is it witnessed by more than one program? | It did, and it was, until the modes went; `inherits_extended.pas` remains | ADR-0137, ADR-0138, ADR-0232 |
+| Are the dialect's pieces coherent? | Four result shapes, one rule in two questions | ADR-0141, ADR-0149 |
+| Memory safety: deferral or discovery? | Discovery, twice; what is left of the fork is two threads of control | ADR-0151, ADR-0201 |
+| A third-party differential | Free Pascal under `-Miso`, six disagreements, all decided here | ADR-0234 |
+| An oracle nobody here wrote | Retired with the modes; `unicode-conformance` is what is left | ADR-0086, ADR-0108, ADR-0232 |
+| Diverse double-compiling | Run once; the window is closed | `seed/README.md`, ADR-0233 |
+| Should the compiler be one source file? | No: three program-components | ADR-0233 |
+| Conformant array parameters, and level 1 | Done; nine defects found | ADR-0153 |
+| Can anything measure what the corpus reaches, and is that what the project is made of? | Three coverage gates and a clause-cited suite; then `lib/`, the runtime and the server measured, and the sanitizers seeing compiled Pascal | ADR-0103 – ADR-0106, ADR-0342, ADR-0349 – ADR-0358 |
+| Is the memory model the one its records describe? | No, three of four rows closed in two days; a record's `Drop` stands | ADR-0317 – ADR-0337 |
+| What separates this from a language a person picks up on a Tuesday? | Eight rows, every one struck within four days | ADR-0293 – ADR-0308, ADR-0348 |
+| Mutation testing, committed to the tree | One file per mutation, a register and not a measurement | ADR-0207 |
+| Is the platform lock scoped, and is a foreign scalar the width of its C type? | Three things, all done; and not by inspection — `foreign-width` holds the width as a catalogue | ADR-0155 – ADR-0159, ADR-0325, ADR-0328, ADR-0364 |
+| A missing file, an argument list, an owned foreign address, a character | `binding(f).bound`; `argcount`/`argument`; a handle-type; a grapheme cluster | ADR-0172, ADR-0173, ADR-0174, ADR-0189 |
+| Should the dialect read a type off a component? | Yes, `type of` over a whole variable-access | ADR-0215 |
+| What did version 3 take, and what did the language server demand? | Four proposals, three records; twenty-seven findings, all closed | ADR-0229 – ADR-0233, ADR-0236 – ADR-0249 |
+| Is this a conforming processor or a dialect? | A dialect, and version 3 is named for it | ADR-0232 |
