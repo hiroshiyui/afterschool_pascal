@@ -23,8 +23,8 @@ var names: StrVecPtr; k: integer; e: ErrorCode;
 begin
   SVecNew(names, 16);
   e := ListDir(path, names);
-  if Failed(e) then
-    writeln(' ':depth, '(cannot list: ', ErrorText(e), ')')
+  if e.Failed then
+    writeln(' ':depth, '(cannot list: ', e.Text, ')')
   else begin
     names.Sort;
     for k := 1 to names.Len do begin

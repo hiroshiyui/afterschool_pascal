@@ -43,7 +43,7 @@ begin
       res := JsonParseChars(body, at);
       if not res.ok then begin
         writestr(line, 'message ', seen:1, ' bytes=', body.Len:1,
-                 ' not JSON: ', ErrorText(res.cause));
+                 ' not JSON: ', res.cause.Text);
         Say(line)
       end
       else begin
@@ -61,7 +61,7 @@ begin
 
   { `errAbsent` is how a server's loop ends and is not a failure -- the client
     closed the pipe. Every other code is. }
-  writestr(line, 'ended after ', seen:1, ' with ', ErrorText(e));
+  writestr(line, 'ended after ', seen:1, ' with ', e.Text);
   Say(line);
 
   { And one message written back, which is the half of the module a reader of
@@ -78,6 +78,6 @@ begin
   out.Free;
   reply.Free;
   Say('');
-  writestr(line, 'write code=', ErrorText(e));
+  writestr(line, 'write code=', e.Text);
   Say(line)
 end.

@@ -51,8 +51,8 @@ procedure Render;
 var pieces: integer;
 begin
   e := q.BeginWrite(w);
-  if Failed(e) then begin
-    writeln('  refused: ', ErrorText(e));
+  if e.Failed then begin
+    writeln('  refused: ', e.Text);
     exit
   end;
   pieces := 0;
@@ -75,7 +75,7 @@ begin
   r.BeginRead(q.method);
   i := 0;
   e := errNone;
-  while r.WantsLine and (not Failed(e)) do
+  while r.WantsLine and (not e.Failed) do
     if i < length(lines) then begin
       i := i + 1;
       e := r.FeedLine(lines[i])
@@ -85,8 +85,8 @@ begin
       writeln('  the reader wanted a line nobody sent');
       e := errIO
     end;
-  write('  ', ErrorText(e));
-  if not Failed(e) then begin
+  write('  ', e.Text);
+  if not e.Failed then begin
     write(': ', r.status:1, ' stated=', r.stated:1,
           ' chunked=', r.chunked, ' byClose=', r.byClose,
           ' lines=', r.bodyLines:1);
@@ -179,6 +179,6 @@ begin
     n := n + 1;
     e := r.FeedLine(counted[n])
   end;
-  writeln('  ', ErrorText(e), ': ', r.status:1, ' after ', n:1,
+  writeln('  ', e.Text, ': ', r.status:1, ' after ', n:1,
           ' of 3 lines')
 end.

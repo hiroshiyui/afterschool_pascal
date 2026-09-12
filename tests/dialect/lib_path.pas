@@ -32,7 +32,7 @@ end;
 procedure showed(what: string(16); r: PathResult);
 begin
   write(what);
-  if r.ok then writeln('[', r.val, ']') else writeln(ErrorText(r.cause))
+  if r.ok then writeln('[', r.val, ']') else writeln(r.cause.Text)
 end;
 
 begin

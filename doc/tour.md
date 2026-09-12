@@ -278,7 +278,7 @@ type Width = integer ! ErrorCode;
 reason. `ErrorCode` comes from `PasError` and is deliberately tiny — six
 categories, `errNone`, `errSyntax`, `errRange`, `errAbsent`, `errFull`,
 `errIO` — because a code is a thing you branch on and a sentence is a thing
-you print. `ErrorText(e)` gives the sentence.
+you print. `e.Text` gives the sentence.
 
 There are three shapes for reading one, and choosing between them is the whole
 of the skill.

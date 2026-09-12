@@ -38,7 +38,7 @@ begin
   { The failing open, and the two halves of the answer. }
   o := OpenRead(gone);
   yes('open failed   = ', not o.ok);
-  writeln('code          = ', ErrorText(o.cause));
+  writeln('code          = ', o.cause.Text);
   writeln('why           = ', LastErrorText);
   yes('number set    = ', LastErrorNumber <> 0);
 
@@ -50,8 +50,8 @@ begin
   writeln(scratch, 'not a directory');
   reset(scratch);
   e := RemoveDirectory(here);
-  yes('rmdir failed  = ', Failed(e));
-  writeln('code          = ', ErrorText(e));
+  yes('rmdir failed  = ', e.Failed);
+  writeln('code          = ', e.Text);
   writeln('why           = ', LastErrorText);
 
   { And the number a caller reports is the one it reads, not one this module

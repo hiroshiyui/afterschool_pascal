@@ -23,7 +23,7 @@ begin
   c := RegexCompile(r, pat, p);
   write(pat, ' ':14 - length(pat), '| ');
   if c <> errNone then
-    writeln('compile ', ErrorText(c))
+    writeln('compile ', c.Text)
   else
     writeln(yes, '=', r.Matches(yes), '  ', no, '=', r.Matches(no),
             '  code=', r.Length:1)
@@ -35,7 +35,7 @@ procedure Bad(pat: string);
 var c: ErrorCode; p: integer; r: Regex;
 begin
   c := RegexCompile(r, pat, p);
-  writeln(pat, ' ':10 - length(pat), '| ', ErrorText(c), ' at ', p:1,
+  writeln(pat, ' ':10 - length(pat), '| ', c.Text, ' at ', p:1,
           ': ', r.FaultOf.Text)
 end;
 
@@ -98,7 +98,7 @@ begin
     { A group that does not fit is reported and nothing is written, which is
       the other direction of the same guard. }
     e := m.GroupInto('set width=1920 now', 1, tiny);
-    writeln('into tiny | ', ErrorText(e))
+    writeln('into tiny | ', e.Text)
   end;
   { A group in an alternative that was not taken took no part, and says so
     with 0 rather than with an empty span at some position it never reached. }
@@ -106,7 +106,7 @@ begin
   if re.Search('y', m) then begin
     e := m.GroupInto('y', 1, s);
     writeln('untaken   | 1 start=', m.GroupStart(1):1,
-            ' code=', ErrorText(e),
+            ' code=', e.Text,
             '  2 start=', m.GroupStart(2):1)
   end;
 
@@ -128,10 +128,10 @@ begin
   big := '';
   for i := 1 to 400 do big := big + 'ab';
   e := RegexCompile(re, big, at);
-  writeln('800 chars | ', ErrorText(e), ' at ', at:1, ': ',
+  writeln('800 chars | ', e.Text, ' at ', at:1, ': ',
           re.FaultOf.Text);
   e := RegexCompile(re, '(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)', at);
-  writeln('10 groups | ', ErrorText(e), ' at ', at:1, ': ',
+  writeln('10 groups | ', e.Text, ' at ', at:1, ': ',
           re.FaultOf.Text);
   { A pattern that was refused matches nothing, so a caller that ignored the
     code above gets no match rather than a wrong one. }

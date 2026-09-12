@@ -24,7 +24,7 @@ begin
   r := Average(a, b);
   write(a, '+', b, ': ');
   if r.ok then writeln('average ', r.val:1)
-  else writeln('failed -- ', ErrorText(r.cause))
+  else writeln('failed -- ', r.cause.Text)
 end;
 
 begin

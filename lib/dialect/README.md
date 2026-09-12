@@ -115,8 +115,8 @@ language type removes and a convention could not.
 function Exists(path: PathName): boolean;
 ```
 
-**A question about the world** answers `boolean`. `Exists`, `Defined`, `Failed`,
-`AtEnd` and `Stream.ReadLine` are questions, not operations: there is no failure
+**A question about the world** answers `boolean`. `Exists`, `Defined`,
+`ErrorCode.Failed`, `AtEnd` and `Stream.ReadLine` are questions, not operations: there is no failure
 distinct from the answer, and giving one an `ErrorCode` would invent a third
 state the caller would have to handle for nothing. `Stream.ReadLine` is the one
 that looks like an operation, and its `false` means *nothing more*, which is the
@@ -138,11 +138,20 @@ prefix. **An implementation is outside that scope** (AP 6.7.10.5, ADR-0411),
 so a routine reached as `v.Free` is named by nothing a client imports and
 carries no prefix at all.
 
-Fourteen modules read that way today, and between them they export **177 names
-where they exported 325**: `PasJson` 25 of 50, `PasToml` 31 of 59, `PasVector`
+Sixteen modules read that way today, and between them they export **203 names
+where they exported 354**: `PasJson` 25 of 50, `PasToml` 31 of 59, `PasVector`
 4 of 15, `PasMap` 6 of 16, `PasStrVec` 6 of 19, `PasRegex` 20 of 31,
 `PasProcess` 12 of 22, `PasNet` 9 of 14, `PasTls` 16 of 20, `PasHttp` 27 of 38,
-`PasList` 3 of 13, `PasStream` 6 of 11, `PasLsp` 7 of 10 and `PasDir` 5 of 7. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are now spelled the same way
+`PasList` 3 of 13, `PasStream` 6 of 11, `PasLsp` 7 of 10, `PasDir` 5 of 7,
+`PasError` 11 of 13 and `PasLspDiag` 15 of 16.
+
+The last two are the smallest and say the most about what a receiver may be.
+`ErrorCode` is an **enumerated** type and carries `Text` and `Failed`, so
+`e.Text` is reached through the code it is about and `errNone.Text` works on a
+constant; `Diagnostic` is a record and carries `Json`. Neither module could
+convert more: `ValueOr`'s first parameter is a type-parameter and `HoldsNul`'s,
+`DiagParse`'s and `Utf16Column`'s are `string` or a production of it, and none
+of those is a receiver anything can select from. `Free`, `Len`, `At`, `Get`, `Put` and `Count` are now spelled the same way
 in every container here, and `Close`, `WriteText`, `WriteLine` and `ReadLine`
 the same way on a socket and on a TLS connection — every one of them a
 collision `export-unique` would have refused to two exported names, which is
@@ -253,7 +262,7 @@ what reads well.
 - **`<Result>Text(r)`** — `IntResultText`, `CountResultText` — renders a result
   as a sentence, for a caller composing a message. Named for the result type
   and not `ResultText` alone, because two modules exporting one spelling is
-  what `export-unique` refuses (ADR-0298). `PasError.ErrorText` does the same for a bare code, and it answers
+  what `export-unique` refuses (ADR-0298). `ErrorCode`'s own `Text` does the same for a bare code, and it answers
   for `errNone` too, so a routine that formats unconditionally needs no special
   case.
 

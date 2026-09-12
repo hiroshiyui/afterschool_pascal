@@ -39,10 +39,10 @@ var
 begin
   { A socket listening on whatever port is free. }
   e := NetListen(srv, 'localhost', '0');
-  writeln('listen:      ', ErrorText(e));
+  writeln('listen:      ', e.Text);
 
   e := srv.Service(port);
-  writeln('service:     ', ErrorText(e), ', and a port was given: ',
+  writeln('service:     ', e.Text, ', and a port was given: ',
           port <> '');
 
   { The same question asked with nowhere to put the answer. `Service` checks
@@ -52,15 +52,15 @@ begin
     written the arm had no case: a mutation turning its `errFull` into
     `errIO` left the whole suite green. }
   e := srv.Service(tiny);
-  writeln('no room:     ', ErrorText(e), ' [', tiny, ']');
+  writeln('no room:     ', e.Text, ' [', tiny, ']');
 
   { The other end, to the port just reported. Both ends are strings the whole
     way: nothing here knows whether this is IPv4 or IPv6. }
   e := NetConnect(cli, 'localhost', port);
-  writeln('connect:     ', ErrorText(e));
+  writeln('connect:     ', e.Text);
 
   e := NetAccept(srv, conn);
-  writeln('accept:      ', ErrorText(e));
+  writeln('accept:      ', e.Text);
 
   { Two lines out and two in. `srv` is still listening -- accepting a
     connection does not consume the socket that accepted it. }
@@ -68,24 +68,24 @@ begin
   e := cli.WriteLine('second line');
   for i := 1 to 2 do begin
     e := conn.ReadLine(line);
-    writeln('  server got: ', ErrorText(e), ' [', line, ']')
+    writeln('  server got: ', e.Text, ' [', line, ']')
   end;
 
   { And back the other way, so the connection is shown to be two-directional
     through one handle at each end. }
   e := conn.WriteLine('and a reply');
   e := cli.ReadLine(line);
-  writeln('  client got: ', ErrorText(e), ' [', line, ']');
+  writeln('  client got: ', e.Text, ' [', line, ']');
 
   { A line the far end sent without a newline is still a line. }
   e := cli.WriteText('no newline at the end');
   cli := nil;                     { AP 6.4.12.2's second form, ADR-0202 }
   e := conn.ReadLine(line);
-  writeln('unterminated:', ErrorText(e), ' [', line, ']');
+  writeln('unterminated:', e.Text, ' [', line, ']');
 
   { ...and then the far end has closed and there is nothing left. }
   e := conn.ReadLine(line);
-  writeln('after close: ', ErrorText(e));
+  writeln('after close: ', e.Text);
 
   conn := nil;
 
@@ -118,7 +118,7 @@ begin
   repeat
     e := cli.WriteLine('into a closed connection');
     tries := tries + 1
-  until Failed(e) or (tries >= 100);
+  until e.Failed or (tries >= 100);
   writeln('write to closed: a code came back and the program is still here');
   cli := nil;
 
@@ -129,7 +129,7 @@ begin
   e := NetAccept(srv, conn);
   e := cli.WriteLine('far too long for four characters');
   e := conn.ReadLine(short);
-  writeln('too long:    ', ErrorText(e), ' [', short, ']');
+  writeln('too long:    ', e.Text, ' [', short, ']');
   cli := nil;
   conn := nil;
   srv := nil;
@@ -138,7 +138,7 @@ begin
     are different codes because a caller reports them differently: one is a
     name that means nothing, the other a machine that would not talk. }
   e := NetConnect(cli, 'localhost', 'not-a-service-name');
-  writeln('bad service: ', ErrorText(e));
+  writeln('bad service: ', e.Text);
   e := NetConnect(cli, 'localhost', '1');
-  writeln('refused:     ', ErrorText(e))
+  writeln('refused:     ', e.Text)
 end.

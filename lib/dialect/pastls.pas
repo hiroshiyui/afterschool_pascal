@@ -539,7 +539,7 @@ begin
   c.tail := 1;
 
   e := NetConnect(c.sock, host, service);
-  if Failed(e) then begin
+  if e.Failed then begin
     c.reason := 'the connection could not be made';
     exit(e)
   end;

@@ -334,7 +334,7 @@ begin
     would be read back as two. }
   if transport = tpMcp then e := JsonlWrite(StdOut, out)
   else e := LspWrite(StdOut, out);
-  if e <> errNone then Note('could not write a message: ' + ErrorText(e));
+  if e <> errNone then Note('could not write a message: ' + e.Text);
   out.Free
 end;
 
@@ -913,7 +913,7 @@ var e: ErrorCode;
 begin
   StartArgs := false;
   e := v.Init;
-  if Failed(e) then begin
+  if e.Failed then begin
     Note('no memory for a compiler command line');
     exit(false)
   end;
@@ -944,7 +944,7 @@ begin
   e := v.Add(source);
   e := v.Add('-o');
   e := v.Add(scratchPath + '.ll');
-  EndArgs := not Failed(e)
+  EndArgs := not e.Failed
 end;
 
 { The whole of a one-flag question: build the words, run them, collect the
@@ -984,7 +984,7 @@ begin
     driver in front of it writes to the other stream. }
   r := v.ExecuteBoth(out);
   if not r.ok then begin
-    Note('could not run the compiler: ' + ErrorText(r.cause));
+    Note('could not run the compiler: ' + r.cause.Text);
     Compile := false
   end else
     { A non-zero exit is the ordinary case here: it is what a file with an
@@ -1014,7 +1014,7 @@ begin
       d := DiagParse(line);
       if d.ok then begin
         LineOf(doc, d.val.line, source);
-        arr.Append(DiagJson(d.val, source, encoding))
+        arr.Append(d.val.Json(source, encoding))
       end;
       line := ''
     end else if (c <> chr(13)) and (length(line) < DiagMax) then
@@ -1439,7 +1439,7 @@ begin
     if WriteScratch(d.text)
        and AskLines('--dump-symbols', scratchPath, 64, lines, r) then begin
       if not r.ok then
-        Note('could not run the compiler: ' + ErrorText(r.cause))
+        Note('could not run the compiler: ' + r.cause.Text)
       else begin
         for i := 0 to SymDepthMax do begin
           kids[i] := nil;
@@ -1719,7 +1719,7 @@ begin
     VecInit(PathVec, files, 4);
     r := v.ExecuteToFile(dump);
     if not r.ok then begin
-      Note('could not run the compiler: ' + ErrorText(r.cause));
+      Note('could not run the compiler: ' + r.cause.Text);
       lines.Free;
       VecFree(PathVec, files);
       exit(false)
@@ -2106,7 +2106,7 @@ begin
     one := VecGet(PathName, docFiles, j + 1);
     e := v.Add('--import');
     e := v.Add(one);
-    if Failed(e) then begin
+    if e.Failed then begin
       Note('a component''s imports would not fit on a command line');
       exit(false)
     end
@@ -2117,7 +2117,7 @@ begin
   SVecNew(lines, 64);
   VecInit(PathVec, files, 4);
   r := v.ExecuteToFile(dump);
-  if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
+  if not r.ok then Note('could not run the compiler: ' + r.cause.Text)
   else if ReadUses(dump, lines, files) then exit(true);
   lines.Free;
   VecFree(PathVec, files)
@@ -2325,7 +2325,7 @@ begin
   unbind(scratchFile);
   if not AskLines('--dump-tokens', path, 4, lines, r) then exit(false);
   ok := false;
-  if not r.ok then Note('could not run the compiler: ' + ErrorText(r.cause))
+  if not r.ok then Note('could not run the compiler: ' + r.cause.Text)
   else if lines.Len = 2 then
     ok := (SymField(lines.At(1), 3) = 'ident')
           and (length(SymField(lines.At(1), 4)) = length(name))
@@ -2743,7 +2743,7 @@ begin
       r := v.ExecuteLines(lines);
       if not r.ok then
         reply.Put('result', TextContent(JsonNewText('could not run the compiler: '
-                                        + ErrorText(r.cause)), true))
+                                        + r.cause.Text), true))
       else begin
         if name = 'outline' then begin
           found := ReadWhole(path, doc);
@@ -2907,7 +2907,7 @@ begin
   if not AskLines('--dump-stmts', scratchPath, 64, lines, r) then exit;
   if r.ok then StatementsOf := true
   else begin
-    Note('could not run the compiler: ' + ErrorText(r.cause));
+    Note('could not run the compiler: ' + r.cause.Text);
     lines.Free
   end
 end;
@@ -3172,7 +3172,7 @@ begin
         can be larger than any string sized for it. }
       r := v.ExecuteToFile(scratchPath + '.fmt');
       if not r.ok then
-        Note('could not run the compiler: ' + ErrorText(r.cause))
+        Note('could not run the compiler: ' + r.cause.Text)
       else if r.val <> 0 then
         { The source does not lex, or holds more comments than the formatter
           can keep in order. Either way it says so on its own stream and the
@@ -3327,7 +3327,7 @@ begin
         Vocabulary := true
       end
       else begin
-        Note('could not run the compiler: ' + ErrorText(r.cause));
+        Note('could not run the compiler: ' + r.cause.Text);
         lines.Free
       end
     end;
@@ -3396,7 +3396,7 @@ begin
        and AskLines('--dump-symbols', scratchPath, 64, lines, r) then
     begin
       if not r.ok then
-        Note('could not run the compiler: ' + ErrorText(r.cause))
+        Note('could not run the compiler: ' + r.cause.Text)
       else begin
         for i := 0 to SymDepthMax do begin
           opens[i] := false;
@@ -3794,7 +3794,7 @@ begin
       { The end of the input is how a client that was killed reaches us, and
         it is not a failure: an editor that goes away without saying `exit` is
         the ordinary way an editing session ends. }
-      if e <> errAbsent then Note('unreadable frame: ' + ErrorText(e));
+      if e <> errAbsent then Note('unreadable frame: ' + e.Text);
       running := false
     end else begin
       parsed := JsonParseChars(body, at);
@@ -3831,7 +3831,7 @@ begin
               if not nextMsg.ok then begin
                 writestr(complaint, 'a message that is not JSON was ignored',
                          ', at byte ', at:1, ': ',
-                         ErrorText(nextMsg.cause));
+                         nextMsg.cause.Text);
                 Note(complaint)
               end
               else if ChangedUri(nextMsg.val) = ChangedUri(parsed.val) then
@@ -3857,7 +3857,7 @@ begin
         end
       end else begin
         writestr(complaint, 'a message that is not JSON was ignored, at byte ',
-                 at:1, ': ', ErrorText(parsed.cause));
+                 at:1, ': ', parsed.cause.Text);
         Note(complaint)
       end
     end;

@@ -27,7 +27,7 @@ begin
       writeln('  [', line, ']')
   end
   else
-    writeln(what, ': ', ErrorText(errIO))
+    writeln(what, ': ', errIO.Text)
 end;
 
 { closed at the block's end, with nothing said }
@@ -49,7 +49,7 @@ begin
 
   { an explicit `s.Close`, then the file is complete while the block goes on }
   e := StreamOpenWrite(s, q);
-  writeln('open for writing: ', ErrorText(e));
+  writeln('open for writing: ', e.Text);
   e := s.WriteLine('one');
   e := s.WriteLine('');
   e := s.WriteLine('three');
@@ -81,9 +81,9 @@ begin
 
   { a missing file, and a directory that cannot be created in }
   e := StreamOpenRead(t, '/nonexistent-apascal/x');
-  writeln('missing: ', ErrorText(e), ', empty: ', t = nil);
+  writeln('missing: ', e.Text, ', empty: ', t = nil);
   e := StreamOpenWrite(t, '/nonexistent-apascal/x');
-  writeln('uncreatable: ', ErrorText(e));
+  writeln('uncreatable: ', e.Text);
   t.Close;
   writeln('close of empty: ', t = nil)
 end.

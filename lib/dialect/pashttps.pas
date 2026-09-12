@@ -83,12 +83,12 @@ var
   e: ErrorCode;
 begin
   e := q.BeginWrite(w);
-  if Failed(e) then exit(e);
+  if e.Failed then exit(e);
   while not w.done do begin
     q.NextPiece(w, buf);
     if length(buf) > 0 then begin
       e := c.WriteText(buf);
-      if Failed(e) then exit(e)
+      if e.Failed then exit(e)
     end
   end;
   HttpsSend := errNone
@@ -104,9 +104,9 @@ begin
       rules was in force decides what it means, and `r.FeedEnd` is what knows
       that. `errFull` and `errIO` are the transport's own and are final. }
     if e = errAbsent then e := r.FeedEnd
-    else if Failed(e) then exit(e)
+    else if e.Failed then exit(e)
     else e := r.FeedLine(raw);
-    if Failed(e) then exit(e)
+    if e.Failed then exit(e)
   end;
   HttpsReceive := errNone
 end;
@@ -115,7 +115,7 @@ function HttpsExchange;
 var e: ErrorCode;
 begin
   e := HttpsSend(c, q);
-  if Failed(e) then exit(e);
+  if e.Failed then exit(e);
   HttpsExchange := HttpsReceive(c, q.method, r)
 end;
 

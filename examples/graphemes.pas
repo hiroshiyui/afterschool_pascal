@@ -54,5 +54,5 @@ begin
   bytes := 'ab';
   bytes[2] := chr(128);
   e := ToText(bytes, t);
-  writeln('bad byte: ', ErrorText(e))
+  writeln('bad byte: ', e.Text)
 end.

@@ -35,20 +35,20 @@ begin
     writeln('child     = ', inner.ok);
     if inner.ok then begin
       e := Remove(inner.val);
-      writeln('rm child  = ', ErrorText(e))
+      writeln('rm child  = ', e.Text)
     end;
     e := RemoveDirectory(tdir.val);
-    writeln('rmdir     = ', ErrorText(e));
+    writeln('rmdir     = ', e.Text);
     writeln('gone      = ', Exists(tdir.val))
   end
   else
-    writeln('failed    = ', ErrorText(tdir.cause));
+    writeln('failed    = ', tdir.cause.Text);
 
   { Where it cannot be made: a directory that is not there, and a name that
     would not fit. }
   writeln('nowhere   = ',
-          ErrorText(TemporaryDirectory('./no-such-dir-here', 'p-').cause));
+          TemporaryDirectory('./no-such-dir-here', 'p-').cause.Text);
   long := '.';
   for i := 1 to 30 do long := long + '/0123456789abcdefghij';
-  writeln('too long  = ', ErrorText(TemporaryDirectory(long, 'p-').cause))
+  writeln('too long  = ', TemporaryDirectory(long, 'p-').cause.Text)
 end.

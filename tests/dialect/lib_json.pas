@@ -87,7 +87,7 @@ begin
 
   { --- what is refused ---------------------------------------------------- }
   r := JsonParse('{"a":1,}', at);
-  writeln('trailing comma ok=', r.ok, ' cause=', ErrorText(r.cause));
+  writeln('trailing comma ok=', r.ok, ' cause=', r.cause.Text);
   r := JsonParse('01', at);
   writeln('leading zero  ok=', r.ok, ' at=', at:1);
   { RFC 8259 §7: a control character below U+0020 may not appear unescaped.
@@ -117,12 +117,12 @@ begin
   buf.Init;
   obj.Render(buf);
   e := buf.Into(wide);
-  writeln('long render   code=', ErrorText(e), ' len=', length(wide):1);
+  writeln('long render   code=', e.Text, ' len=', length(wide):1);
   { And the guard itself still fires, into a target that genuinely cannot
     hold it -- both directions, since answering errFull always would satisfy
     one of them. }
   e := buf.Into(narrow);
-  writeln('into a small  code=', ErrorText(e));
+  writeln('into a small  code=', e.Text);
   buf.Free;
   obj.Free
 end.

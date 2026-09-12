@@ -76,20 +76,20 @@ begin
   rows := 999;
   cols := 999;
   e := TermSize(StdOut, rows, cols);
-  writeln('size:        ', ErrorText(e), ', rows=', rows:1, ' cols=', cols:1);
+  writeln('size:        ', e.Text, ', rows=', rows:1, ' cols=', cols:1);
 
   { Raw mode on something that is not a terminal is refused, and refused
     before anything is saved: `RawActive` is false on both sides of it. }
   writeln('raw before:  ', RawActive);
   e := EnterRaw(StdIn);
-  writeln('enter raw:   ', ErrorText(e));
+  writeln('enter raw:   ', e.Text);
   writeln('raw after:   ', RawActive);
 
   { And leaving one nobody entered is `errAbsent` rather than a restore of
     settings that were never taken. This is the arm a `defer LeaveRaw` on a
     path that never entered raw mode reaches. }
   e := LeaveRaw;
-  writeln('leave raw:   ', ErrorText(e));
+  writeln('leave raw:   ', e.Text);
 
   { The sequences, which need no terminal because they are strings. }
   writeln('home:        ', Shown(CursorTo(1, 1)));
@@ -133,9 +133,9 @@ begin
     PasTerm's own comment says, and the way to say so in a test is to have
     only one of them. }
   e := ReadKey(StdIn, ch);
-  writeln('key 1:       ', ErrorText(e), ' [', ch, ']');
+  writeln('key 1:       ', e.Text, ' [', ch, ']');
   e := ReadKey(StdIn, ch);
-  writeln('key 2:       ', ErrorText(e), ' [', ch, ']');
+  writeln('key 2:       ', e.Text, ' [', ch, ']');
   e := ReadKey(StdIn, ch);
-  writeln('key 3:       ', ErrorText(e), ' [', ord(ch):1, ']')
+  writeln('key 3:       ', e.Text, ' [', ord(ch):1, ']')
 end.

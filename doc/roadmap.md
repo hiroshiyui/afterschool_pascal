@@ -17,8 +17,8 @@ verbatim, the moment before it was cut to this.
 
 **Released: v3.11.0, and `CHANGELOG.md`'s `Unreleased` is not empty.** What
 stands on top of the tag is all of one subject: the library reads as **methods
-of its types**. Fourteen modules export
-177 names where they exported 325, `export-unique` counts 432 where it counted
+of its types**. Sixteen modules export
+203 names where they exported 354, `export-unique` counts 429 where it counted
 527, and three rules were added to AP 6.7.10 on the way — one implementation of
 a type per *program* (ADR-0413), an implementation only for a name the type was
 given (ADR-0414), and a method may name itself through a receiver (ADR-0415).

@@ -54,7 +54,7 @@ begin
   { `errAbsent` and not a failure: the end of the input is how a session ends.
     A *partial* line would be errSyntax, which is the distinction this reports
     rather than merely surviving. }
-  writestr(line, 'ended after ', seen:1, ' with ', ErrorText(e));
+  writestr(line, 'ended after ', seen:1, ' with ', e.Text);
   Say(line);
 
   { One message written back. No header and no count: the line is the frame. }
@@ -67,7 +67,7 @@ begin
   e := JsonlWrite(StdOut, out);
   out.Free;
   reply.Free;
-  writestr(line, 'write code=', ErrorText(e));
+  writestr(line, 'write code=', e.Text);
   Say(line);
 
   { And a body holding a newline, which this framing cannot carry: refused
@@ -79,6 +79,6 @@ begin
   out.Add('}');
   e := JsonlWrite(StdOut, out);
   out.Free;
-  writestr(line, 'newline in a body: ', ErrorText(e));
+  writestr(line, 'newline in a body: ', e.Text);
   Say(line)
 end.

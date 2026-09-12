@@ -24,7 +24,7 @@ begin
   write(label_, ': ok=', got.ok);
   { the read is inside the arm the tag selects, which is what makes it legal }
   if got.ok then write(' val=', got.val:1)
-            else write(' cause=', ErrorText(got.cause));
+            else write(' cause=', got.cause.Text);
   writeln(' [', IntResultText(got), ']')
 end;
 
@@ -49,7 +49,7 @@ begin
 
   { Failed reads the intent rather than the comparison. }
   r := ParseInt('nope');
-  writeln('failed? ', Failed(r.cause));
+  writeln('failed? ', r.cause.Failed);
   r := ParseInt('1');
   writeln('ok, so code is unreadable -- ask the tag instead: ', r.ok)
 end.

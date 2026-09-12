@@ -21,7 +21,7 @@ procedure report(what: string(24); r: RunResult);
 begin
   write(what, ': ');
   if r.ok then writeln('code ', r.val:1)
-  else writeln('failed, ', ErrorText(r.cause))
+  else writeln('failed, ', r.cause.Text)
 end;
 
 begin

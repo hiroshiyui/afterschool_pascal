@@ -67,6 +67,15 @@ appears below in the release where it still existed.
   is a type produced from a schema, or a schema, and neither may carry an
   inherent implementation.
 
+- **`PasError` and `PasLspDiag` too**, which finishes the conversion at
+  **sixteen modules and 203 exported names where there were 354**. `ErrorText(e)`
+  is `e.Text` and `Failed(e)` is `e.Failed` — an *enumerated* receiver, so
+  `errNone.Text` works on a constant — and `DiagJson(d, line, enc)` is
+  `d.Json(line, enc)`. 234 call sites across 48 files. What could not convert in
+  either module says what a receiver may be: `ValueOr` takes a type-parameter
+  first, and `HoldsNul`, `DiagParse` and `Utf16Column` take `string` or a
+  production of it, which no module owns.
+
 - **Four more library modules read as methods of their types** (AP 6.7.10).
   `PasList` exports 3 names where it exported 13, `PasStream` 6 of 11, `PasLsp`
   7 of 10 and `PasDir` 5 of 7 — with the ten before them, **177 exported names

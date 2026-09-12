@@ -138,7 +138,7 @@ begin
   if v.Kind <> tkString then
     Fail(path + ': ' + key + ' is written as a quoted string');
   e := v.TextInto(s);
-  if Failed(e) then
+  if e.Failed then
     Fail(path + ': ' + key + ' is longer than this reader can carry');
   for k := 1 to length(s) do
     if s[k] = chr(10) then
@@ -199,7 +199,7 @@ begin
   buf.Init;
   buf.AddText(text);
   r := TomlParseChars(buf, at);
-  if not r.ok then FailAt(at, ErrorText(r.cause));
+  if not r.ok then FailAt(at, r.cause.Text);
   doc := r.val;
   ReadDocument;
   doc.Free;

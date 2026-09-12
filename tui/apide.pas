@@ -323,7 +323,7 @@ begin
   out := '';
   r := v.ExecuteInto(out);
   if not r.ok then begin
-    EditSay(ed, 'could not run ' + Compiler + ': ' + ErrorText(r.cause));
+    EditSay(ed, 'could not run ' + Compiler + ': ' + r.cause.Text);
     exit
   end;
   { **Where the cursor goes is the model's** and not this file's (ADR-0381):

@@ -4302,8 +4302,9 @@ by the three rules ADR-0244 gave it for finding the compiler.
 chapter had said `PasParse` reads `file:line:col: error:` and it reads an
 integer and nothing else, so this is the module that closes the gap between
 `PasLsp`'s framing and `PasJson`'s documents. `DiagParse` answers a
-`Diagnostic ! ErrorCode`; `DiagJson` and `DiagPublish` build the protocol's
-objects. `tests/dialect/lsp_diag.pas` is the case, and the mechanism it would
+`Diagnostic ! ErrorCode`; a `Diagnostic` builds the protocol's object of
+itself with `d.Json(line, enc)` (AP 6.7.10), and `DiagPublish` the
+notification that carries a list of them. `tests/dialect/lsp_diag.pas` is the case, and the mechanism it would
 lose is the one below.
 
 - **A line that is not a diagnostic is the ordinary case.** Most of what a
@@ -4313,17 +4314,17 @@ lose is the one below.
   column, a non-numeric position — because a parser that accepts those reports
   a position no editor can show.
 - **Two severities, and the second arrived after the first was written off**
-  (ADR-0272). `DiagJson` wrote `severity` as the constant 1 and the comment
+  (ADR-0272). `Diagnostic.Json` wrote `severity` as the constant 1 and the comment
   beside it said why: *the compiler emits no warning and no note, so a second
   severity would be a branch no input reaches.* That was true, and it is the
   shape of comment a new feature has to come back and delete — as is
   `tests/dialect/lsp_diag.pas`'s own `hello.pas:12:7: warning: this compiler
   emits none`, which stood among the lines a sweep must *skip*. `DiagSeverity`
   is now a field of `Diagnostic`, set by the severity word and read in exactly
-  one place, so the protocol's numbers arrive at `DiagJson` and are carried
+  one place, so the protocol's numbers arrive at `Diagnostic.Json` and are carried
   nowhere as 1 and 2. There is still no note and no hint, for the reason the
   old comment gave.
-- **The zero-based conversion is in `DiagJson` and nowhere else** (ADR-0234's
+- **The zero-based conversion is in `Diagnostic.Json` and nowhere else** (ADR-0234's
   neighbour in time, not in subject). LSP counts lines and characters from
   zero; `ErrorAt` counts from one. A `Diagnostic` therefore holds *what the
   compiler said*, and the golden prints both numbers — the parse in the

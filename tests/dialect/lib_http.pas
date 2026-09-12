@@ -61,9 +61,9 @@ var
 procedure Pair;
 begin
   e := NetConnect(cli, 'localhost', port);
-  if Failed(e) then writeln('connect: ', ErrorText(e));
+  if e.Failed then writeln('connect: ', e.Text);
   e := NetAccept(srv, conn);
-  if Failed(e) then writeln('accept: ', ErrorText(e))
+  if e.Failed then writeln('accept: ', e.Text)
 end;
 
 { Both ends closed (AP 6.4.12.2's second form, ADR-0202). }
@@ -83,8 +83,8 @@ begin
   more := true;
   while more do begin
     e := conn.ReadLine(l);
-    if Failed(e) then begin
-      writeln('  request: ', ErrorText(e));
+    if e.Failed then begin
+      writeln('  request: ', e.Text);
       more := false
     end
     else if length(l) = 0 then
@@ -98,8 +98,8 @@ end;
 procedure Report;
 var k: integer;
 begin
-  writeln('receive: ', ErrorText(e));
-  if not Failed(e) then begin
+  writeln('receive: ', e.Text);
+  if not e.Failed then begin
     writeln('  status ', r.status:1, ' [', r.reason, ']');
     writeln('  fields ', r.count:1, ', stated ', r.stated:1,
             ', chunked ', r.chunked, ', byClose ', r.byClose);
@@ -117,34 +117,34 @@ begin
   { RFC 9110 §9.1 makes a method a token: a space in one would put a second
     word on the request line. }
   e := NewRequest(q, 'GET SNEAKY', '/x');
-  writeln('method with a space:  ', ErrorText(e));
+  writeln('method with a space:  ', e.Text);
   e := NewRequest(q, 'GET', '/a b');
-  writeln('target with a space:  ', ErrorText(e));
+  writeln('target with a space:  ', e.Text);
   e := NewRequest(q, 'GET', '/ok');
-  writeln('a GET of /ok:         ', ErrorText(e));
+  writeln('a GET of /ok:         ', e.Text);
   e := q.AddHeader('Bad Name', 'v');
-  writeln('field name with a space: ', ErrorText(e));
+  writeln('field name with a space: ', e.Text);
   { The one that is a security property and not a tidiness one: a value
     carrying CRLF would end the field and begin another. }
   e := q.AddHeader('X-Note', 'ok' + CRLF + 'Injected: yes');
-  writeln('value carrying CRLF:  ', ErrorText(e));
+  writeln('value carrying CRLF:  ', e.Text);
   e := q.SetBody('a' + chr(0) + 'b');
-  writeln('body carrying a null: ', ErrorText(e));
+  writeln('body carrying a null: ', e.Text);
   e := q.AddHeader('Host', 'localhost');
   for i := 1 to MaxHeaders do
     e := q.AddHeader('X-Pad', 'v');
-  writeln('past MaxHeaders:      ', ErrorText(e));
+  writeln('past MaxHeaders:      ', e.Text);
   { RFC 9112 §3.2 requires a Host field, so a request without one is refused
     before a byte of it is written. }
   e := NewRequest(q, 'GET', '/nohost');
   e := Send(cli, q);
-  writeln('sending without Host: ', ErrorText(e));
+  writeln('sending without Host: ', e.Text);
   writeln;
 
   e := NetListen(srv, 'localhost', '0');
-  writeln('listen:  ', ErrorText(e));
+  writeln('listen:  ', e.Text);
   e := srv.Service(port);
-  writeln('service: ', ErrorText(e), ', a port was given: ', port <> '');
+  writeln('service: ', e.Text, ', a port was given: ', port <> '');
   writeln;
 
   { --- a GET, answered 200 with Content-Length -------------------------- }
@@ -155,7 +155,7 @@ begin
   e := q.AddHeader('Host', 'localhost');
   e := q.AddHeader('Accept', 'text/plain');
   e := Send(cli, q);
-  writeln('send:    ', ErrorText(e));
+  writeln('send:    ', e.Text);
   ShowRequest;
   e := conn.WriteText(
        'HTTP/1.1 200 OK' + CRLF +
@@ -179,7 +179,7 @@ begin
   e := q.AddHeader('Content-Type', 'application/x-www-form-urlencoded');
   e := q.SetBody('a=1&b=2' + chr(10));
   e := Send(cli, q);
-  writeln('send:    ', ErrorText(e));
+  writeln('send:    ', e.Text);
   ShowRequest;
   e := conn.ReadLine(line);
   writeln('  > (body) ', line);
@@ -193,7 +193,7 @@ begin
   Report;
   { The status-code is the server's answer and the ErrorCode is the module's:
     a 404 arrived intact and nothing failed. }
-  writeln('  a 404 is not a failure: ', not Failed(e));
+  writeln('  a 404 is not a failure: ', not e.Failed);
   { RFC 9110 §5.1: a field name is case-insensitive. }
   writeln('  set-COOKIE = [', r.HeaderOr('set-COOKIE', '?'), '] (the first)');
   v := r.Header('x-empty');
@@ -224,12 +224,12 @@ begin
   e := Exchange(cli, q, r);
   Report;
   e2 := r.BodyInto(joined);
-  writeln('  joined: ', ErrorText(e2), ' [', joined, ']');
+  writeln('  joined: ', e2.Text, ' [', joined, ']');
   { The destination is left as it was, so a caller that got `errFull` cannot
     mistake half a body for the whole of one. }
   small := 'keep';
   e2 := r.BodyInto(small);
-  writeln('  into four characters: ', ErrorText(e2), ', still [', small, ']');
+  writeln('  into four characters: ', e2.Text, ', still [', small, ']');
   Drop;
   writeln;
 
@@ -244,7 +244,7 @@ begin
   e := NewRequest(q, 'GET', '/old');
   e := q.AddHeader('Host', 'localhost');
   e := Exchange(cli, q, r);
-  writeln('receive: ', ErrorText(e));
+  writeln('receive: ', e.Text);
   writeln('  status ', r.status:1, ', Location [',
           r.HeaderOr('location', ''), '] -- the caller decides');
   Drop;
@@ -285,14 +285,14 @@ begin
   e := conn.WriteText('HTTP/1.1 twohundred OK' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
-  writeln('status-line with no code:   ', ErrorText(e));
+  writeln('status-line with no code:   ', e.Text);
   cli := nil;
 
   Pair;
   e := conn.WriteText('HTTP/1.1 200 OK' + CRLF + 'no-colon-here' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
-  writeln('field-line with no colon:   ', ErrorText(e));
+  writeln('field-line with no colon:   ', e.Text);
   cli := nil;
 
   { RFC 9112 §6.1: a sender must not send both, and a recipient that picks one
@@ -304,13 +304,13 @@ begin
        'Transfer-Encoding: chunked' + CRLF + CRLF);
   conn := nil;
   e := Receive(cli, 'GET', r);
-  writeln('framed both ways at once:   ', ErrorText(e));
+  writeln('framed both ways at once:   ', e.Text);
   cli := nil;
 
   Pair;
   conn := nil;
   e := Receive(cli, 'GET', r);
-  writeln('closed without answering:   ', ErrorText(e));
+  writeln('closed without answering:   ', e.Text);
   cli := nil;
 
   { A body line past the module's own bound. Reported, and the response is not
@@ -323,7 +323,7 @@ begin
   e := conn.WriteText(long + chr(10));
   conn := nil;
   e := Receive(cli, 'GET', r);
-  writeln('a body line too long:       ', ErrorText(e));
+  writeln('a body line too long:       ', e.Text);
   cli := nil;
 
   srv := nil

@@ -31,7 +31,7 @@ begin
   out.Init;
   v.Render(out);
   e := out.Into(s);
-  if Failed(e) then write('"..."') else write(s);
+  if e.Failed then write('"..."') else write(s);
   out.Free
 end;
 
@@ -84,6 +84,6 @@ begin
     r.val.Free
   end
   else
-    writeln('not JSON: ', ErrorText(r.cause), ' at byte ', at:1);
+    writeln('not JSON: ', r.cause.Text, ' at byte ', at:1);
   buf.Free
 end.

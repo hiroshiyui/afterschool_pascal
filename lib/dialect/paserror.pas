@@ -32,8 +32,7 @@ module PasError;
 
 export PasError = (ErrorCode,
                    errNone, errSyntax, errRange, errAbsent, errFull, errIO,
-                   ErrText, ErrorText, Failed, Fallible, ValueOr,
-                   HoldsNul);
+                   ErrText, Fallible, ValueOr, HoldsNul);
 
 type
   { Short enough that a caller can put one in a fixed field without asking how
@@ -58,15 +57,6 @@ type
     the same, which is what lets `ValueOr` below take every one of them. }
   Fallible(T: type) = T ! ErrorCode;
 
-{ A sentence for a code, for a caller assembling a message. `errNone` has one
-  too: a routine that formats a result unconditionally must not have to special-
-  case the successful one. }
-function ErrorText(e: ErrorCode): ErrText;
-
-{ Whether a code reports a failure -- `e <> errNone`, spelled so that a caller
-  reads the intent rather than the comparison. }
-function Failed(e: ErrorCode): boolean;
-
 { The value of a successful result, or `whenBad` for a failed one -- for a
   caller with a sensible default that does not want to branch. `ValueOr(r, 0)`
   is the whole call: T is read off `r` (AP 6.7.3.10.4). Reading `val` here is
@@ -86,21 +76,38 @@ function HoldsNul(s: string): boolean;
 
 end;
 
-function ErrorText;
-begin
-  case e of
-    errNone:   ErrorText := 'no error';
-    errSyntax: ErrorText := 'not of the expected form';
-    errRange:  ErrorText := 'outside the representable range';
-    errAbsent: ErrorText := 'not present';
-    errFull:   ErrorText := 'no room left';
-    errIO:     ErrorText := 'the operation was refused'
-  end
-end;
+{ --- what a code says about itself ------------------------------------- }
 
-function Failed;
-begin
-  Failed := e <> errNone
+{ **An enumerated type carries an implementation** (AP 6.7.10), which was
+  probed rather than assumed: a receiver need not be a record, and `ErrorCode`
+  is the smallest type in this library that has anything to say about itself.
+  Neither routine is an exported name any more, so `e.Text` and `e.Failed` are
+  reached through the code they are about and collide with nothing
+  (ADR-0412). }
+impl ErrorCode;
+
+  { A sentence for a code, for a caller assembling a message. `errNone` has
+    one too: a routine that formats a result unconditionally must not have to
+    special-case the successful one. }
+  function Text(e: ErrorCode): ErrText;
+  begin
+    case e of
+      errNone:   Text := 'no error';
+      errSyntax: Text := 'not of the expected form';
+      errRange:  Text := 'outside the representable range';
+      errAbsent: Text := 'not present';
+      errFull:   Text := 'no room left';
+      errIO:     Text := 'the operation was refused'
+    end
+  end;
+
+  { Whether a code reports a failure -- `e <> errNone`, spelled so that a
+    caller reads the intent rather than the comparison. }
+  function Failed(e: ErrorCode): boolean;
+  begin
+    Failed := e <> errNone
+  end;
+
 end;
 
 function ValueOr;

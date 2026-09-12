@@ -237,7 +237,7 @@ end;
 function CountResultText;
 begin
   if r.ok then t := 'read or wrote what was asked'
-  else t := ErrorText(r.cause)
+  else t := r.cause.Text
 end;
 
 end.

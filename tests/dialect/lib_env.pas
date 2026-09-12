@@ -23,7 +23,7 @@ begin
   writeln('or default   = ''', LookupOr('PASCAL_LIBENV', 'fallback'), '''');
 
   e := Define('PASCAL_LIBENV', 'set to this');
-  writeln('define       = ', Failed(e));
+  writeln('define       = ', e.Failed);
   Show('after      ', Lookup('PASCAL_LIBENV'));
   writeln('or default   = ''', LookupOr('PASCAL_LIBENV', 'fallback'), '''');
 
@@ -33,11 +33,11 @@ begin
   writeln('empty length = ', length(Lookup('PASCAL_LIBENV')^):1);
 
   e := Undefine('PASCAL_LIBENV');
-  writeln('undefine     = ', Failed(e));
+  writeln('undefine     = ', e.Failed);
   writeln('defined      = ', Defined('PASCAL_LIBENV'));
 
   { unsetenv does not fail on a name that was not there, and this module does
     not invent a failure it was not told about. }
   e := Undefine('PASCAL_LIBENV');
-  writeln('again        = ', Failed(e))
+  writeln('again        = ', e.Failed)
 end.

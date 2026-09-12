@@ -109,13 +109,13 @@ begin
   deep := 'a = ';
   for i := 1 to 120 do deep := deep + '[';
   r := TomlParse(deep, at);
-  writeln('nesting past the limit=', ErrorText(r.cause));
+  writeln('nesting past the limit=', r.cause.Text);
 
   deep := '';
   for i := 1 to 300 do deep := deep + 'k';
   r := TomlParse(deep + ' = 1', at);
-  writeln('a key of 300 bytes=', ErrorText(r.cause));
+  writeln('a key of 300 bytes=', r.cause.Text);
 
   r := TomlParse('a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q = 1', at);
-  writeln('seventeen segments=', ErrorText(r.cause))
+  writeln('seventeen segments=', r.cause.Text)
 end.

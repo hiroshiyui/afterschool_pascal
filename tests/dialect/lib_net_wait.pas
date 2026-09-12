@@ -79,19 +79,19 @@ begin
   after := clock.minute * 60 + clock.second;
   elapsed := after - before;
   if elapsed < 0 then elapsed := elapsed + 3600;   { over a minute boundary }
-  writeln('idle wait: ', ErrorText(e), ', nothing ready: ',
+  writeln('idle wait: ', e.Text, ', nothing ready: ',
           not (quiet[1] or quiet[2]));
   writeln('and it did wait: ', elapsed >= 1);
   writeln;
 
   e := NetListen(watch[1], 'localhost', '0');
-  writeln('listen:    ', ErrorText(e));
+  writeln('listen:    ', e.Text);
   e := watch[1].Service(port);
-  writeln('service:   ', ErrorText(e), ', a port was given: ', port <> '');
+  writeln('service:   ', e.Text, ', a port was given: ', port <> '');
 
   for k := 1 to 2 do begin
     e := NetConnect(cli[k], 'localhost', port);
-    writeln('connect ', k:1, ':  ', ErrorText(e))
+    writeln('connect ', k:1, ':  ', e.Text)
   end;
 
   { Only the second client says anything -- and it says two lines in one
@@ -107,8 +107,8 @@ begin
   while (closed < 2) and (round < Rounds) do begin
     round := round + 1;
     e := NetWait(watch, Patience, ready);
-    if Failed(e) then begin
-      writeln('wait: ', ErrorText(e));
+    if e.Failed then begin
+      writeln('wait: ', e.Text);
       closed := 2
     end
     else begin
@@ -120,7 +120,7 @@ begin
         if free = 0 then writeln('arrived, and no room for it')
         else begin
           e := NetAccept(watch[1], watch[free]);
-          writeln('accepted into slot ', free:1, ': ', ErrorText(e))
+          writeln('accepted into slot ', free:1, ': ', e.Text)
         end
       end;
 

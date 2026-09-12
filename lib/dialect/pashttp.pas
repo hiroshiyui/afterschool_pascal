@@ -853,7 +853,7 @@ impl Response;
     case r.phase of
       rpStatus: begin
         e := ParseStatus(line, r);
-        if Failed(e) then begin
+        if e.Failed then begin
           r.phase := rpDone;
           exit(e)
         end;
@@ -863,14 +863,14 @@ impl Response;
         { RFC 9112 §2.1: fields, one to a line, until an empty one. }
         if length(line) = 0 then begin
           e := r.StartBody;
-          if Failed(e) then begin
+          if e.Failed then begin
             r.phase := rpDone;
             exit(e)
           end
         end
         else begin
           e := ParseField(line, r);
-          if Failed(e) then begin
+          if e.Failed then begin
             r.phase := rpDone;
             exit(e)
           end
@@ -879,7 +879,7 @@ impl Response;
         { A line is counted as its characters plus one for the terminator, which
           is the module heading's accounting and its stated limit. }
         e := r.AddBodyLine(line);
-        if Failed(e) then begin
+        if e.Failed then begin
           r.phase := rpDone;
           exit(e)
         end;
@@ -888,14 +888,14 @@ impl Response;
       end;
       rpChunkSize: begin
         e := r.TakeChunkSize(line);
-        if Failed(e) then begin
+        if e.Failed then begin
           r.phase := rpDone;
           exit(e)
         end
       end;
       rpChunkData: begin
         e := r.AddBodyLine(line);
-        if Failed(e) then begin
+        if e.Failed then begin
           r.phase := rpDone;
           exit(e)
         end;
@@ -965,12 +965,12 @@ var
   e: ErrorCode;
 begin
   e := q.BeginWrite(w);
-  if Failed(e) then exit(e);
+  if e.Failed then exit(e);
   while not w.done do begin
     q.NextPiece(w, buf);
     if length(buf) > 0 then begin
       e := s.WriteText(buf);
-      if Failed(e) then exit(e)
+      if e.Failed then exit(e)
     end
   end;
   Send := errNone
@@ -983,9 +983,9 @@ begin
   while r.WantsLine do begin
     e := s.ReadLine(raw);
     if e = errAbsent then e := r.FeedEnd
-    else if Failed(e) then exit(e)
+    else if e.Failed then exit(e)
     else e := r.FeedLine(raw);
-    if Failed(e) then exit(e)
+    if e.Failed then exit(e)
   end;
   Receive := errNone
 end;
@@ -994,7 +994,7 @@ function Exchange;
 var e: ErrorCode;
 begin
   e := Send(s, q);
-  if Failed(e) then exit(e);
+  if e.Failed then exit(e);
   Exchange := Receive(s, q.method, r)
 end;
 

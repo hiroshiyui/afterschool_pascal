@@ -17,8 +17,8 @@ procedure WorkIn(dir: PathName; early: boolean);
 var s: Stream; e: ErrorCode; path: PathName;
 begin
   e := MakeDirectory(dir);
-  if Failed(e) then begin
-    writeln('  cannot make a directory: ', ErrorText(e));
+  if e.Failed then begin
+    writeln('  cannot make a directory: ', e.Text);
     exit
   end;
   defer writeln('  after cleanup, directory exists: ', Exists(dir));
@@ -26,7 +26,7 @@ begin
 
   path := dir + '/notes.txt';
   e := StreamOpenWrite(s, path);
-  if Failed(e) then exit;
+  if e.Failed then exit;
   defer e := Remove(path);
   defer s := nil;                { close the stream before removing the file }
 

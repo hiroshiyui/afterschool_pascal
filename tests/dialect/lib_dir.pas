@@ -75,9 +75,9 @@ begin
 
   { --- an empty directory --- }
   e := MakeDirectory(d);
-  writeln('made          = ', ErrorText(e));
+  writeln('made          = ', e.Text);
   SVecNew(names, 8);
-  writeln('empty list    = ', ErrorText(ListDir(d, names)));
+  writeln('empty list    = ', ListDir(d, names).Text);
   writeln('empty count   = ', names.Len:1);
 
   { ...which is not the same as having no entries at all: `.` and `..` are
@@ -91,7 +91,7 @@ begin
   e := MakeDirectory(d + '/sub');
 
   names.Clear;
-  writeln('list          = ', ErrorText(ListDir(d, names)));
+  writeln('list          = ', ListDir(d, names).Text);
   writeln('count         = ', names.Len:1);
   names.Sort;
   for k := 1 to names.Len do
@@ -102,7 +102,7 @@ begin
   for k := 1 to names.Len do begin
     fi := Info(d + '/' + names.At(k));
     write('  kind ', names.At(k), ' = ');
-    if not fi.ok then writeln(ErrorText(fi.cause))
+    if not fi.ok then writeln(fi.cause.Text)
     else if fi.val.kind = fkDirectory then writeln('directory')
     else if fi.val.kind = fkRegular then writeln('regular')
     else writeln('other')
@@ -112,7 +112,7 @@ begin
   writeln('iterated      = ', CountEntries(d):1);
   seen := 0;
   dots := 0;
-  writeln('opened        = ', ErrorText(OpenDir(walk, d)));
+  writeln('opened        = ', OpenDir(walk, d).Text);
   e := walk.NextEntry(nm);
   while e = errNone do begin
     seen := seen + 1;
@@ -121,7 +121,7 @@ begin
   end;
   { The end of a directory is `errAbsent` -- the ordinary end of a loop, and
     not a failure a caller has to sort out from one. }
-  writeln('ended         = ', ErrorText(e));
+  writeln('ended         = ', e.Text);
   writeln('entries       = ', seen:1, ', of which dots = ', dots:1);
 
   { Released now rather than at the block's end. `walk = nil` is the only
@@ -134,7 +134,7 @@ begin
     is checked by the side that measured it -- so this is a code and not the
     trap an over-long copy would be. The entry is consumed: the four names
     below are what is left of the six. }
-  writeln('short open    = ', ErrorText(OpenDir(walk, d)));
+  writeln('short open    = ', OpenDir(walk, d).Text);
   seen := 0;
   e := walk.NextEntry(tiny);
   while (e = errNone) or (e = errFull) do begin
@@ -145,16 +145,16 @@ begin
   walk.Close;
 
   { --- the failing directions --- }
-  writeln('no such dir   = ', ErrorText(OpenDir(walk, d + '/not-there')));
+  writeln('no such dir   = ', OpenDir(walk, d + '/not-there').Text);
   { A file is not a directory, and this module cannot say which refusal it
     was -- PasFS.Info is where a caller asks. }
-  writeln('a file        = ', ErrorText(OpenDir(walk, d + '/alpha')));
+  writeln('a file        = ', OpenDir(walk, d + '/alpha').Text);
 
   { --- cleared away, so a second run of the harness starts as this one did --- }
   e := Remove(d + '/alpha');
   e := Remove(d + '/beta');
   e := Remove(d + '/gamma');
   e := RemoveDirectory(d + '/sub');
-  writeln('removed       = ', ErrorText(RemoveDirectory(d)));
+  writeln('removed       = ', RemoveDirectory(d).Text);
   names.Free
 end.

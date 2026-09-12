@@ -74,7 +74,7 @@ begin
   e := v.Init;
   e := v.Add('no-such-program-anywhere');
   r := v.Execute;
-  writeln('3 ok=', r.ok, ' cause=', ErrorText(r.cause));
+  writeln('3 ok=', r.ok, ' cause=', r.cause.Text);
 
   { 4. A status of the child's own. }
   e := v.Init;
@@ -87,14 +87,14 @@ begin
   { 5. No words at all -- there is no argv[0] to run. }
   e := v.Init;
   r := v.Execute;
-  writeln('5 ok=', r.ok, ' cause=', ErrorText(r.cause));
+  writeln('5 ok=', r.ok, ' cause=', r.cause.Text);
 
   { 6. An argument longer than a name. ADR-0291 says a path may be, and a
        vector of StrItem would have cut this at 255. }
   big := '/tmp';
   for i := 1 to 40 do big := big + '/0123456789abcde';
   e := v.Add(big);
-  writeln('6 ', ErrorText(e), ' len=', length(big):1);
+  writeln('6 ', e.Text, ' len=', length(big):1);
 
   { 7. Standard output captured and standard error not.
 
@@ -191,24 +191,24 @@ begin
   repeat
     e := v.Add('w');
     i := i + 1
-  until Failed(e) or (i > 5000);
-  writeln('15 ', ErrorText(e), ' at ', i:1, ' words=', v.Len:1);
+  until e.Failed or (i > 5000);
+  writeln('15 ', e.Text, ' at ', i:1, ' words=', v.Len:1);
 
   { 16. Emptied by hand rather than at the end of the block (AP 6.4.12.4).
         A vector that holds nothing has no words, and nothing can be added to
         one -- the far side answers for the empty vector, so there is no
         second opinion here to disagree with it. }
   v := nil;
-  writeln('16 words=', v.Len:1, ' add=', ErrorText(v.Add('x')),
-          ' drop=', v.Drop(0):1, ' deadline=', ErrorText(v.Deadline(1)));
+  writeln('16 words=', v.Len:1, ' add=', v.Add('x').Text,
+          ' drop=', v.Drop(0):1, ' deadline=', v.Deadline(1).Text);
 
   { 17. A word holding chr(0) is a code, not a stopped program (ADR-0363):
         ADR-0122 makes the crossing a run-time error, and a value that came
         from outside must be refused before it gets there. }
   e := v.Init;
   e := v.Add('echo');
-  writeln('17 nul word=', ErrorText(v.Add('a' + chr(0) + 'b')),
-          ' nul path=', ErrorText(v.ExecuteToFile('x' + chr(0)).cause),
+  writeln('17 nul word=', v.Add('a' + chr(0) + 'b').Text,
+          ' nul path=', v.ExecuteToFile('x' + chr(0)).cause.Text,
           ' words=', v.Len:1);
 
   { 18. A symbolic link at the dump path is refused and what it names is left
@@ -223,7 +223,7 @@ begin
   e := v.Add('echo');
   e := v.Add('overwritten');
   r := v.ExecuteToFile('link.txt');
-  writeln('18 through link ok=', r.ok, ' cause=', ErrorText(r.cause));
+  writeln('18 through link ok=', r.ok, ' cause=', r.cause.Text);
   b := binding(f);
   b.name := 'victim.txt';
   bind(f, b);
@@ -246,9 +246,9 @@ begin
   t := Seconds;
   r := v.ExecuteInto(out);
   t := Seconds - t;
-  writeln('19 ok=', r.ok, ' cause=', ErrorText(r.cause),
+  writeln('19 ok=', r.ok, ' cause=', r.cause.Text,
           ' captured=[', out[1..6], '] under 10s=', t < 10,
-          ' bad deadline=', ErrorText(v.Deadline(-1)));
+          ' bad deadline=', v.Deadline(-1).Text);
 
   { 20. What this program holds open, a child does not see: the audit found
         every open file of the parent in the child's /proc/self/fd. `f` is

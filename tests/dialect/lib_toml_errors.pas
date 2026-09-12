@@ -37,7 +37,7 @@ begin
     r.val.Free
   end
   else
-    writeln(ErrorText(r.cause), ' at ', line:1, ':', col:1);
+    writeln(r.cause.Text, ' at ', line:1, ':', col:1);
   b.Free
 end;
 
@@ -55,7 +55,7 @@ begin
   end
   else begin
     b.PositionOf(at, line, col);
-    writeln('REFUSED ', ErrorText(r.cause), ' at ', line:1, ':', col:1)
+    writeln('REFUSED ', r.cause.Text, ' at ', line:1, ':', col:1)
   end;
   b.Free
 end;

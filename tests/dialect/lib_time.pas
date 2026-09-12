@@ -33,20 +33,20 @@ begin
     writeln(date(r.val), ' ', time(r.val), '  DateValid ', r.val.DateValid,
             ' TimeValid ', r.val.TimeValid)
   else
-    writeln('failed, ', ErrorText(r.cause))
+    writeln('failed, ', r.cause.Text)
 end;
 
 procedure showDay(what: string; r: DayResult);
 begin
   write(what, ': ');
-  if r.ok then writeln(r.val:1) else writeln('failed, ', ErrorText(r.cause))
+  if r.ok then writeln(r.val:1) else writeln('failed, ', r.cause.Text)
 end;
 
 procedure showText(what: string; r: TextResult);
 begin
   write(what, ': ');
   if r.ok then writeln('[', r.val, ']')
-  else writeln('failed, ', ErrorText(r.cause))
+  else writeln('failed, ', r.cause.Text)
 end;
 
 { A date's day number in one call, for the rows that are about the count and

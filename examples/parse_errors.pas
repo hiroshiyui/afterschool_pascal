@@ -30,7 +30,7 @@ var r: IntResult;
 begin
   r := SumOf(list);
   if r.ok then writeln('sum of [', list, '] = ', r.val:1)
-  else writeln('sum of [', list, '] failed: ', ErrorText(r.cause))
+  else writeln('sum of [', list, '] failed: ', r.cause.Text)
 end;
 
 begin

@@ -51,7 +51,7 @@ begin
     writeln(' [', got.val.message, ']')
   end
   else
-    writeln('  not a diagnostic: ', ErrorText(got.cause))
+    writeln('  not a diagnostic: ', got.cause.Text)
 end;
 
 { The conversion, printed as the pair it is: what the compiler said, and what
@@ -69,7 +69,7 @@ var v: JsonPtr;
     text: string(1024);
     junk: ErrorCode;
 begin
-  v := DiagJson(d, line, enc);
+  v := d.Json(line, enc);
   b.Init;
   v.Render(b);
   junk := b.Into(text);
@@ -107,7 +107,7 @@ begin
   out.Init;
   { No line to convert with, so the byte column comes back unchanged -- which
     is what every caller that never meets a non-ASCII line sees. }
-  one := DiagJson(r.val, '', peUtf16);
+  one := r.val.Json('', peUtf16);
   one.Render(out);
   e := out.Into(s);
   writeln('  ', s);
@@ -123,7 +123,7 @@ begin
     and `heap-balance` would say so. }
   r := DiagParse('hello.pas:3:5: warning: ''b'' is declared here and never used');
   out.Init;
-  two := DiagJson(r.val, '', peUtf16);
+  two := r.val.Json('', peUtf16);
   two.Render(out);
   e := out.Into(s);
   writeln('  ', s);
@@ -177,7 +177,7 @@ begin
   d.col := 1;
   d.severity := dsWarning;
   d.message := 'a second one';
-  arr.Append(DiagJson(d, '', peUtf16));
+  arr.Append(d.Json('', peUtf16));
   note := DiagPublish('file:///tmp/hello.pas', arr);
   out.Init;
   note.Render(out);

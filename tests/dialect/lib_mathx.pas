@@ -29,13 +29,13 @@ begin
     library may not halt (ADR-0116). The tag went false when `code` was
     written -- no line in PasMathX assigns it. }
   r := Log10(-1.0);
-  writeln('log10 -1     = ', ErrorText(r.cause), '  ok=', r.ok);
+  writeln('log10 -1     = ', r.cause.Text, '  ok=', r.ok);
 
   r := FMod(7.0, 3.0);
   writeln('fmod   7 3   = ', r.val:0:1);
 
   r := FMod(7.0, 0.0);
-  writeln('fmod   7 0   = ', ErrorText(r.cause), '  failed=', Failed(r.cause));
+  writeln('fmod   7 0   = ', r.cause.Text, '  failed=', r.cause.Failed);
 
   { The alternative to branching, for a caller with a default in hand. }
   writeln('or 0 of bad  = ', ValueOr(FMod(1.0, 0.0), 0.0):0:1);

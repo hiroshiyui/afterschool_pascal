@@ -34,7 +34,7 @@ procedure Try(what: string; s: string; var dest: utf8);
 var code: ErrorCode;
 begin
   code := ToText(s, dest);
-  writeln(what, ' -> ', ErrorText(code))
+  writeln(what, ' -> ', code.Text)
 end;
 
 { A range of elements out of the middle, which is what an index would have
@@ -107,7 +107,7 @@ begin
   { ...and neither failure assigned anything. }
   e := ToText('kept', t);
   bytes := t;
-  writeln('after failures t = ', bytes, ' (', ErrorText(e), ')');
+  writeln('after failures t = ', bytes, ' (', e.Text, ')');
 
   writeln;
   { The scalar view. NextScalar walks byte offsets and answers where the next
@@ -164,8 +164,8 @@ begin
 
   { errFull rather than a truncation, and it is the caller's capacity that
     decides -- `tiny` holds four bytes and `straße` folds to seven. }
-  writeln('into 4 bytes  ', ErrorText(Fold('straße', tiny)));
-  writeln('ill-formed    ', ErrorText(Fold(bad, bytes)));
+  writeln('into 4 bytes  ', Fold('straße', tiny).Text);
+  writeln('ill-formed    ', Fold(bad, bytes).Text);
 
   writeln;
   { The element walk. AP 6.4.15.9 refuses an integer index and argues for the
@@ -199,7 +199,7 @@ begin
 
   { And back to a text, which cannot fail for want of normal form: a slice cut
     at element boundaries is already in it. }
-  writeln('back to a text: ', ErrorText(ToText(piece, t)));
+  writeln('back to a text: ', ToText(piece, t).Text);
 
   { Lockstep, the shape a for-statement cannot take. }
   writeln('common prefix with ab👨‍👩‍👧xy = ',

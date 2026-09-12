@@ -36,34 +36,34 @@ var
 begin
   n := 'a' + chr(0) + 'b';
   writeln('PasFS.Exists            ', Exists(n));
-  writeln('PasFS.Remove            ', ErrorText(Remove(n)));
-  writeln('PasFS.Rename            ', ErrorText(Rename(n, 'x')),
-          ' / ', ErrorText(Rename('x', n)));
-  writeln('PasFS.MakeDirectory     ', ErrorText(MakeDirectory(n)));
-  writeln('PasFS.RemoveDirectory   ', ErrorText(RemoveDirectory(n)));
+  writeln('PasFS.Remove            ', Remove(n).Text);
+  writeln('PasFS.Rename            ', Rename(n, 'x').Text,
+          ' / ', Rename('x', n).Text);
+  writeln('PasFS.MakeDirectory     ', MakeDirectory(n).Text);
+  writeln('PasFS.RemoveDirectory   ', RemoveDirectory(n).Text);
   ir := Info(n);
-  writeln('PasFS.Info              ', ir.ok, ' ', ErrorText(ir.cause));
+  writeln('PasFS.Info              ', ir.ok, ' ', ir.cause.Text);
   pr := LinkTarget(n);
-  writeln('PasFS.LinkTarget        ', pr.ok, ' ', ErrorText(pr.cause));
+  writeln('PasFS.LinkTarget        ', pr.ok, ' ', pr.cause.Text);
   pr := TemporaryPath(n, 'p');
-  writeln('PasFS.TemporaryPath     ', pr.ok, ' ', ErrorText(pr.cause));
+  writeln('PasFS.TemporaryPath     ', pr.ok, ' ', pr.cause.Text);
   pr := TemporaryPath('.', n);
-  writeln('PasFS.TemporaryPath     ', pr.ok, ' ', ErrorText(pr.cause), ' (prefix)');
+  writeln('PasFS.TemporaryPath     ', pr.ok, ' ', pr.cause.Text, ' (prefix)');
   pr := TemporaryDirectory(n, 'p');
-  writeln('PasFS.TemporaryDirectory ', pr.ok, ' ', ErrorText(pr.cause));
-  writeln('PasDir.OpenDir          ', ErrorText(OpenDir(d, n)));
+  writeln('PasFS.TemporaryDirectory ', pr.ok, ' ', pr.cause.Text);
+  writeln('PasDir.OpenDir          ', OpenDir(d, n).Text);
   ot := Lookup(n);
   writeln('PasEnv.Lookup           ', ot = nil);
-  writeln('PasEnv.Define           ', ErrorText(Define(n, 'v')),
-          ' / ', ErrorText(Define('k', n)));
-  writeln('PasEnv.Undefine         ', ErrorText(Undefine(n)));
+  writeln('PasEnv.Define           ', Define(n, 'v').Text,
+          ' / ', Define('k', n).Text);
+  writeln('PasEnv.Undefine         ', Undefine(n).Text);
   fr := OpenRead(n);
-  writeln('PasIO.OpenRead          ', fr.ok, ' ', ErrorText(fr.cause));
-  writeln('PasStream.OpenRead      ', ErrorText(StreamOpenRead(st, n)));
-  writeln('PasStream.OpenWrite     ', ErrorText(StreamOpenWrite(st, n)));
-  writeln('PasStream.OpenAppend    ', ErrorText(StreamOpenAppend(st, n)));
-  writeln('PasNet.NetConnect       ', ErrorText(NetConnect(so, n, '80')),
-          ' / ', ErrorText(NetConnect(so, 'localhost', n)));
-  writeln('PasNet.NetListen        ', ErrorText(NetListen(so, n, '0')));
+  writeln('PasIO.OpenRead          ', fr.ok, ' ', fr.cause.Text);
+  writeln('PasStream.OpenRead      ', StreamOpenRead(st, n).Text);
+  writeln('PasStream.OpenWrite     ', StreamOpenWrite(st, n).Text);
+  writeln('PasStream.OpenAppend    ', StreamOpenAppend(st, n).Text);
+  writeln('PasNet.NetConnect       ', NetConnect(so, n, '80').Text,
+          ' / ', NetConnect(so, 'localhost', n).Text);
+  writeln('PasNet.NetListen        ', NetListen(so, n, '0').Text);
   writeln('all nineteen answered')
 end.

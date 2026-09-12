@@ -36,7 +36,7 @@ begin
   e := q.AddHeader('Host', 'localhost');
   e := q.AddHeader('Accept', 'text/plain');
   e := Send(client, q);
-  writeln('send: ', ErrorText(e));
+  writeln('send: ', e.Text);
 
   { --- the server reads the request head and answers --- }
   e := conn.ReadLine(line);
@@ -53,7 +53,7 @@ begin
 
   { --- the client reads the response --- }
   e := Receive(client, 'GET', r);
-  writeln('receive: ', ErrorText(e));
+  writeln('receive: ', e.Text);
   writeln('status ', r.status:1, ' ', r.reason);
   writeln('content-type: ', r.HeaderOr('content-type', '(none)'));
   e := r.BodyInto(body);

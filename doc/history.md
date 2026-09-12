@@ -11096,3 +11096,36 @@ reported when it happened rather than quietly left. `lib_net` now asks a
 listening socket for its port with two characters to put it in; the ephemeral
 range is five digits, the answer is `errFull`, and the mutation now fails that
 case.
+
+**The last two modules, and what they settled.** `PasError` and `PasLspDiag`
+were left unconverted on a judgement -- 2 of 13 and 1 of 16 shaped, and
+`ErrorText` the most-called name in the library -- and converting them was
+asked for anyway. Sixteen modules now export **203 names where they exported
+354**; `export-unique` counts 429 where it counted 527 at the start of this
+work.
+
+They are the smallest and say the most about what a receiver may be.
+`ErrorCode` is an **enumerated** type, so `e.Text` and `e.Failed` are reached
+through the code they are about, and `errNone.Text` works on a *constant*
+receiver. `Diagnostic` is a record and carries `Json`, which is where the
+protocol's zero-based subtraction happens and still the only place. What could
+not convert is the argument's other half: `ValueOr`'s first parameter is a
+**type-parameter**, and `HoldsNul`'s, `DiagParse`'s and `Utf16Column`'s are
+`string` or a production of it -- neither is a receiver anything can select
+from, which is ADR-0413's rule and ADR-0416's reaching the same two shapes from
+opposite directions.
+
+**A client that no sweep over `*.pas` could find.** 234 call sites across 48
+files changed, and one more lived inside a *gate*: `tests/checks/install_layout.py`
+carries a whole Pascal program as a string, compiled against the **installed**
+library, and it called `ErrorText`. Nothing in the tree greps it, `format-check`
+and `warning-free` do not see it, and it failed only when `install-layout` ran.
+A program held as data in a checker is a client like any other, and this is the
+second time this session a gate turned out to hold source nobody was sweeping.
+
+**And the coverage ratchet did not move, which is the point.** Two modules were
+restructured -- routines lifted into implementations, both files changed
+length -- and `lib-coverage` passed unchanged. Before ADR-0416 that is exactly
+the edit that moved it: another file's line numbers colliding differently with
+this file's. The gate now attributes a statement to the routine that wrote it,
+so a module's denominator is a fact about its own text.

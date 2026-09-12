@@ -30,13 +30,13 @@ var scratch, missing: text;
 procedure said(what: string(16); e: ErrorCode);
 begin
   write(what);
-  if Failed(e) then writeln(ErrorText(e)) else writeln('done')
+  if e.Failed then writeln(e.Text) else writeln('done')
 end;
 
 procedure got(what: string(16); r: CountResult);
 begin
   write(what);
-  if r.ok then writeln(r.val:1, ' bytes') else writeln(ErrorText(r.cause))
+  if r.ok then writeln(r.val:1, ' bytes') else writeln(r.cause.Text)
 end;
 
 begin

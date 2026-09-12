@@ -64,7 +64,7 @@ export PasLspDiag = (DiagMax, DiagText, DiagLineMax, DiagLine,
                      PosEncoding, peUtf8, peUtf16,
                      DiagSeverity, dsError, dsWarning,
                      Diagnostic, DiagResult,
-                     DiagParse, Utf16Column, DiagJson, DiagPublish);
+                     DiagParse, Utf16Column, DiagPublish);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError; PasJson; PasUnicode;
@@ -140,18 +140,6 @@ function DiagParse(s: DiagText) = r: DiagResult;
   A line with nothing above U+007F converts to itself, so a caller that never
   meets one cannot tell whether this is called. }
 function Utf16Column(line: DiagLine; col: integer): integer;
-
-{ One `Diagnostic` as the protocol's own object: a zero-width range at the
-  position, the severity the compiler's own word gave, and `pascalc` as the
-  source. The caller owns
-  what comes back and frees it with `Free`, or appends it to something it
-  frees.
-
-  `line` is the source line the diagnostic is on, needed only for the column
-  conversion; the empty string is always safe and means "count bytes". `enc`
-  is the position encoding the client and the server agreed on at
-  `initialize`, and under `peUtf8` the line is not read at all. }
-function DiagJson(d: Diagnostic; line: DiagLine; enc: PosEncoding): JsonPtr;
 
 { A `textDocument/publishDiagnostics` notification for `uri`, over an array
   `diags` the caller built with `JsonNewArray` and `Append`. The array
@@ -277,46 +265,66 @@ begin
   Utf16Column := units
 end;
 
-function DiagJson;
-var pos, range, obj: JsonPtr;
-    character, sev: integer;
+{ --- a diagnostic as the protocol writes it -------------------------- }
 
-  { The protocol's Position, 0-based where the compiler is 1-based. }
-  function At: JsonPtr;
-  var p: JsonPtr;
+{ **The record carries the conversion** (AP 6.7.10). `Json` is reached
+  through the diagnostic it is about, so the `Diag` prefix §6.11.2 needed
+  is gone and the 0-based subtraction still happens in exactly one place
+  (ADR-0412). }
+impl Diagnostic;
+
+  { One `Diagnostic` as the protocol's own object: a zero-width range at the
+    position, the severity the compiler's own word gave, and `pascalc` as the
+    source. The caller owns what comes back and frees it with `Free`, or
+    appends it to something it frees.
+
+    `line` is the source line the diagnostic is on, needed only for the
+    column conversion; the empty string is always safe and means "count
+    bytes". `enc` is the position encoding the client and the server
+    agreed on at `initialize`, and under `peUtf8` the line is not read at
+    all. }
+  function Json(d: Diagnostic; line: DiagLine; enc: PosEncoding): JsonPtr;
+  var pos, range, obj: JsonPtr;
+      character, sev: integer;
+
+    { The protocol's Position, 0-based where the compiler is 1-based. }
+    function At: JsonPtr;
+    var p: JsonPtr;
+    begin
+      p := JsonNewObject;
+      p.Put('line', JsonNewInteger(d.line - 1));
+      p.Put('character', JsonNewInteger(character - 1));
+      At := p
+    end;
+
   begin
-    p := JsonNewObject;
-    p.Put('line', JsonNewInteger(d.line - 1));
-    p.Put('character', JsonNewInteger(character - 1));
-    At := p
+    { Under utf-8 the compiler's column is already the protocol's, and
+      converting it would be the defect rather than the fix. }
+    if enc = peUtf16 then character := Utf16Column(line, d.col)
+    else character := d.col;
+    range := JsonNewObject;
+    range.Put('start', At);
+    { A zero-width range: the compiler reports a point and inventing an end for
+      it would be inventing a claim about the source. An editor shows a caret. }
+    range.Put('end', At);
+
+    { 3.17's DiagnosticSeverity: 1 is Error and 2 is Warning. A case and not an
+      `if`, so that a severity added to the enumeration is a translation error
+      here rather than an arm quietly taking the other's number. }
+    case d.severity of
+      dsError:   sev := 1;
+      dsWarning: sev := 2
+    end;
+
+    obj := JsonNewObject;
+    obj.Put('range', range);
+    obj.Put('severity', JsonNewInteger(sev));
+    obj.Put('source', JsonNewText('pascalc'));
+    obj.Put('message', JsonNewText(d.message));
+    pos := obj;
+    Json := pos
   end;
 
-begin
-  { Under utf-8 the compiler's column is already the protocol's, and
-    converting it would be the defect rather than the fix. }
-  if enc = peUtf16 then character := Utf16Column(line, d.col)
-  else character := d.col;
-  range := JsonNewObject;
-  range.Put('start', At);
-  { A zero-width range: the compiler reports a point and inventing an end for
-    it would be inventing a claim about the source. An editor shows a caret. }
-  range.Put('end', At);
-
-  { 3.17's DiagnosticSeverity: 1 is Error and 2 is Warning. A case and not an
-    `if`, so that a severity added to the enumeration is a translation error
-    here rather than an arm quietly taking the other's number. }
-  case d.severity of
-    dsError:   sev := 1;
-    dsWarning: sev := 2
-  end;
-
-  obj := JsonNewObject;
-  obj.Put('range', range);
-  obj.Put('severity', JsonNewInteger(sev));
-  obj.Put('source', JsonNewText('pascalc'));
-  obj.Put('message', JsonNewText(d.message));
-  pos := obj;
-  DiagJson := pos
 end;
 
 function DiagPublish;

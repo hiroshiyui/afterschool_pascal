@@ -26,7 +26,7 @@ end;
 procedure said(what: string(16); e: ErrorCode);
 begin
   write(what);
-  if Failed(e) then writeln(ErrorText(e)) else writeln('done')
+  if e.Failed then writeln(e.Text) else writeln('done')
 end;
 
 begin
@@ -101,7 +101,7 @@ begin
     if fi.val.kind = fkRegular then writeln('info kind     = regular')
   end
   else
-    writeln('info failed   = ', ErrorText(fi.cause));
+    writeln('info failed   = ', fi.cause.Text);
 
   said('mkdir for dir = ', MakeDirectory(d));
   fi := Info(d);
@@ -113,7 +113,7 @@ begin
     `pasx_file_info` draws for this module -- it costs a second `access` and
     is what lets a caller tell "no such file" from "you may not look". }
   fi := Info(a + '.nothing-here');
-  writeln('absent        = ', ErrorText(fi.cause));
+  writeln('absent        = ', fi.cause.Text);
 
   e := Remove(a + '.sized');
 
@@ -151,10 +151,10 @@ begin
       counter stand still is what puts the *second* here: every one of the
       4 096 tries then finds the name the first call created, which is the
       demonstration that C11's exclusive mode is exclusive. }
-    if not tmp.ok then writeln('temp failed   = ', ErrorText(tmp.cause));
-    if not tmp2.ok then writeln('temp2 failed  = ', ErrorText(tmp2.cause))
+    if not tmp.ok then writeln('temp failed   = ', tmp.cause.Text);
+    if not tmp2.ok then writeln('temp2 failed  = ', tmp2.cause.Text)
   end;
   said('rmdir for temp= ', RemoveDirectory(d2));
   writeln('temp nowhere  = ',
-          ErrorText(TemporaryPath(d2, 'probe-').cause))
+          TemporaryPath(d2, 'probe-').cause.Text)
 end.

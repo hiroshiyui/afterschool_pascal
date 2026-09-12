@@ -66,7 +66,7 @@ GREET = """program greet(output);
 import PasError;
        PasFS;
 begin
-  writeln('installed: ', ErrorText(errNone));
+  writeln('installed: ', errNone.Text);
   writeln('here: ', Exists('greet.pas'))
 end.
 """

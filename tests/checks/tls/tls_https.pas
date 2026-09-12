@@ -35,14 +35,14 @@ begin
   readln(cert);
 
   e := TlsConnectTrusting(c, 'localhost', port, cert);
-  writeln('connected     : ', ErrorText(e));
-  if Failed(e) then exit;
+  writeln('connected     : ', e.Text);
+  if e.Failed then exit;
 
   e := NewRequest(q, 'GET', '/');
   e := q.AddHeader('Host', 'localhost');
   e := HttpsExchange(c, q, r);
-  writeln('exchanged     : ', ErrorText(e));
-  if Failed(e) then exit;
+  writeln('exchanged     : ', e.Text);
+  if e.Failed then exit;
 
   { `s_server -www` answers HTTP/1.0 with no Content-Length, so RFC 9112
     §6.3's rule 6 frames the body: it ends where the connection does. That is
@@ -62,7 +62,7 @@ begin
   e := NewRequest(q, 'GET', '/again');
   e := q.AddHeader('Host', 'localhost');
   e := HttpsExchange(c, q, r);
-  writeln('second exchange: ', ErrorText(e));
+  writeln('second exchange: ', e.Text);
 
   c.Close;
 
@@ -70,5 +70,5 @@ begin
     written, so there is nothing on the wire to take back. }
   e := NewRequest(q, 'GET', '/');
   e := HttpsSend(c, q);
-  writeln('no Host field : ', ErrorText(e))
+  writeln('no Host field : ', e.Text)
 end.

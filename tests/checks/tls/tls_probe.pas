@@ -38,7 +38,7 @@ var
 { `errNone`, or the name of the code -- never the sentence behind it. }
 procedure Say(what: TlsLine; e: ErrorCode; reasonWanted: boolean);
 begin
-  write(what, ': ', ErrorText(e));
+  write(what, ': ', e.Text);
   if reasonWanted then
     if c.reason = '' then write(', with no reason recorded')
     else write(', with a reason')
@@ -91,7 +91,7 @@ begin
     e := c.ReadLine(line);
     if e = errNone then n := n + 1
   until e <> errNone;
-  writeln('  loop ended on      : ', ErrorText(e));
+  writeln('  loop ended on      : ', e.Text);
   writeln('  more lines followed: ', n > 0);
 
   { 6. Closing twice is harmless, and the variable may be connected again. }

@@ -89,7 +89,7 @@ begin
   writeln('parse ok=', r.ok);
   if not r.ok then begin
     buf.PositionOf(at, line, col);
-    writeln('  refused ', ErrorText(r.cause), ' at ', line:1, ':', col:1)
+    writeln('  refused ', r.cause.Text, ' at ', line:1, ':', col:1)
   end
   else begin
     doc := r.val;

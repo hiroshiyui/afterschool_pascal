@@ -119,7 +119,7 @@ end;
 
 function IntResultText;
 begin
-  if r.ok then t := 'parsed' else t := ErrorText(r.cause)
+  if r.ok then t := 'parsed' else t := r.cause.Text
 end;
 
 end.
