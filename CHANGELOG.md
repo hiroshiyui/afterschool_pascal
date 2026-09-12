@@ -13,6 +13,107 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-09-13
+
+**The library reads as methods of its types, and every program that calls it
+must change.** Sixteen modules export 203 names where they exported 354; the
+151 that went are *gone rather than deprecated*, because §6.11.2 puts every
+imported name in one scope and keeping both spellings would keep the collision
+the change exists to remove. There is no migration period. What a caller does:
+
+| was | is |
+| --- | --- |
+| `JsonIntegerOr(JsonMember(p, 'line'), -1)` | `p.Member('line').IntegerOr(-1)` |
+| `TomlPath(doc, 'server.port')` | `doc.Path('server.port')` |
+| `ErrorText(e)` | `e.Text` |
+| `IVecPush(v, 10)` / `SVecGet(v, 1)` | `v.Push(10)` / `v.At(1)` |
+| `NetWriteLine(s, t)` / `TlsWriteLine(c, t)` | `s.WriteLine(t)` / `c.WriteLine(t)` |
+| `StreamReadLine(f, l)` / `NextEntry(d, n)` | `f.ReadLine(l)` / `d.NextEntry(n)` |
+
+A name that is **still exported** is one with no receiver to select from: a
+type, a bound, a constructor (`JsonNewObject`, `TomlNewTable`, `IVecNew`), or
+an entry point that answers a value rather than acting on one (`JsonParse`,
+`RegexCompile`, `NetConnect`). `pascalc --dump-uses` and the language server
+answer where a method is defined; `grep` for a bare `Put` no longer does, which
+is the one cost no gate sees.
+
+This is the major number because of that table, not because of the language:
+every construct that compiled before this release still compiles, with two
+exceptions listed under **Removed**.
+
+### Added
+
+- **A module's implementations reach the components that import it**
+  (ADR-0411, AP 6.7.10.5). `impl Circle;` and `impl Renders for Circle;`
+  written in a module-block are selected in every program-component that can
+  name `Circle` — so a library's types carry their own routines, and
+  `c.Area`, `Area(c)` and a `dyn Renders` built by the client all reach them.
+  Nothing about the spelling changed; what changed is which translations may
+  read it.
+
+  Until now this did not work and was not refused: the call compiled and the
+  program failed at the assembler or the linker, naming a symbol no source
+  spells. AP 6.7.10.1 NOTE 9 had recorded it as not provided (ADR-0341).
+
+  A method's *heading* is now part of what a component is translated against,
+  so changing one without rebuilding the client is refused at the link, the
+  way a changed module-heading already was (AP 6.13.2). Changing a method's
+  **body** still costs no relink.
+
+  A method may be `external`, which had been admitted since methods landed and
+  is now pinned by a case; it is the one method shape whose linkage name is
+  C's rather than this compiler's.
+
+- **A type may have routines of its own: `impl T;` and `x.M(a)`** (ADR-0410,
+  AP 6.7.10, AP 6.7.10.4). `impl Point;` declares routines belonging to
+  `Point`, with the receiver written as an ordinary first parameter, and
+  `p.Shift(1, 1)` calls one. It is not a second mechanism: `x.M(a)` and
+  `M(x, a)` denote the same call, the routine having been selected from its
+  first argument's type since traits landed, so a method may be written either
+  way and any variable may be the receiver — `p.Len`, `q^.Len`, `a[1].Len`,
+  `b.inner.Len`.
+
+  What it buys is that **a method is not an exported name**: a module exports
+  the *type*, and its routines travel with it, so two modules may each have a
+  `Put` where §6.11.2 refuses that to two exported names. 139 of this
+  library's 486 exported names repeat their own module's noun to work around
+  exactly that.
+
+  A type may not have a field and a routine of one name, and is told so where
+  the implementation is written. A method called on what a method returned
+  needs that second method to take its receiver by value, §6.6.3.3 wanting a
+  variable for a `var` parameter. `impl` reserves nothing.
+
+  This completes ADR-0315's three increments, all of them now built.
+
+- **A collection may hold values of different types: `dyn T`, the trait
+  object** (ADR-0408, ADR-0409, AP 6.7.11). `type Shape = dyn Renders;` denotes
+  *something that implements `Renders`*, and `owned ^Shape` owns one; `take`
+  moves a concrete value in and attaches its implementation, and a call
+  through the result selects the implementation where the value is used
+  rather than where the call is translated. This is what a bound
+  (AP 6.7.3.10.5) cannot do — a bound chooses where the type is written, so
+  one collection is one type — and it is the first place this compiler emits a
+  dispatch table.
+
+  A trait object stands in two positions: the domain of an `owned` pointer and
+  a `var` or `protected var` parameter. Everything else is refused with a
+  message saying where one can stand, because every other position would hold
+  a value whose lifetime nothing states. The implementation travels with the
+  value and so does the **release**, so disposing an `owned ^Shape` releases
+  the concrete value and whatever that owns.
+
+  Not every trait has a trait object: each routine must take its receiver as a
+  `var` or `protected var` first parameter and name `Self` nowhere else, and a
+  trait that does not is told so where the `dyn` type is declared, with the
+  heading named. `dyn` reserves nothing — a program may still declare a type,
+  a field and a parameter of that name.
+
+  AP 6.7.11 was published one release early, marked `[not yet implemented]`
+  under AP 5.6 — the first and only clause ever to carry that marker — and the
+  marker is now gone. Building it corrected two things the clause had said
+  (AP Annex E.13, E.14).
+
 ### Changed
 
 - **`PasJson`'s routines are methods of its types** (ADR-0412, AP 6.7.10).
@@ -109,6 +210,22 @@ appears below in the release where it still existed.
   Sortable for Name` over a string-type of one's own is what that facility is
   for, and three cases in the corpus rely on it.
 
+### Removed
+
+- **An inherent implementation for a type produced from a schema is refused**
+  (ADR-0413, AP 6.7.10). 6.4.7 interns a production by its tuple, so
+  `string(255)` is one type in every module; routines of its own would be
+  routines of every `string(255)` in the program. `impl FilePath;` compiled
+  before this release and does not now. The **trait** form is unaffected —
+  `impl Sortable for Name` over a string-type of one's own is what that
+  facility is for.
+
+- **An inherent implementation for a name that renames another type is
+  refused** (ADR-0414). `type Day = integer; impl Day;` gave every integer in
+  the program that method, held by a name that did not say so. `impl integer`
+  written out stays legal: what is refused is the claim being invisible, and
+  the diagnostic names the identifier to write instead.
+
 ### Fixed
 
 - **A method may name itself through a receiver** (ADR-0415, AP 6.7.10.4).
@@ -144,80 +261,6 @@ appears below in the release where it still existed.
   and the advice to add `protected` was given for parameters that could not
   take the word. One missing call, both faces.
 
-### Added
-
-- **A module's implementations reach the components that import it**
-  (ADR-0411, AP 6.7.10.5). `impl Circle;` and `impl Renders for Circle;`
-  written in a module-block are selected in every program-component that can
-  name `Circle` — so a library's types carry their own routines, and
-  `c.Area`, `Area(c)` and a `dyn Renders` built by the client all reach them.
-  Nothing about the spelling changed; what changed is which translations may
-  read it.
-
-  Until now this did not work and was not refused: the call compiled and the
-  program failed at the assembler or the linker, naming a symbol no source
-  spells. AP 6.7.10.1 NOTE 9 had recorded it as not provided (ADR-0341).
-
-  A method's *heading* is now part of what a component is translated against,
-  so changing one without rebuilding the client is refused at the link, the
-  way a changed module-heading already was (AP 6.13.2). Changing a method's
-  **body** still costs no relink.
-
-  A method may be `external`, which had been admitted since methods landed and
-  is now pinned by a case; it is the one method shape whose linkage name is
-  C's rather than this compiler's.
-
-- **A type may have routines of its own: `impl T;` and `x.M(a)`** (ADR-0410,
-  AP 6.7.10, AP 6.7.10.4). `impl Point;` declares routines belonging to
-  `Point`, with the receiver written as an ordinary first parameter, and
-  `p.Shift(1, 1)` calls one. It is not a second mechanism: `x.M(a)` and
-  `M(x, a)` denote the same call, the routine having been selected from its
-  first argument's type since traits landed, so a method may be written either
-  way and any variable may be the receiver — `p.Len`, `q^.Len`, `a[1].Len`,
-  `b.inner.Len`.
-
-  What it buys is that **a method is not an exported name**: a module exports
-  the *type*, and its routines travel with it, so two modules may each have a
-  `Put` where §6.11.2 refuses that to two exported names. 139 of this
-  library's 486 exported names repeat their own module's noun to work around
-  exactly that.
-
-  A type may not have a field and a routine of one name, and is told so where
-  the implementation is written. A method called on what a method returned
-  needs that second method to take its receiver by value, §6.6.3.3 wanting a
-  variable for a `var` parameter. `impl` reserves nothing.
-
-  This completes ADR-0315's three increments, all of them now built.
-
-- **A collection may hold values of different types: `dyn T`, the trait
-  object** (ADR-0408, ADR-0409, AP 6.7.11). `type Shape = dyn Renders;` denotes
-  *something that implements `Renders`*, and `owned ^Shape` owns one; `take`
-  moves a concrete value in and attaches its implementation, and a call
-  through the result selects the implementation where the value is used
-  rather than where the call is translated. This is what a bound
-  (AP 6.7.3.10.5) cannot do — a bound chooses where the type is written, so
-  one collection is one type — and it is the first place this compiler emits a
-  dispatch table.
-
-  A trait object stands in two positions: the domain of an `owned` pointer and
-  a `var` or `protected var` parameter. Everything else is refused with a
-  message saying where one can stand, because every other position would hold
-  a value whose lifetime nothing states. The implementation travels with the
-  value and so does the **release**, so disposing an `owned ^Shape` releases
-  the concrete value and whatever that owns.
-
-  Not every trait has a trait object: each routine must take its receiver as a
-  `var` or `protected var` first parameter and name `Self` nowhere else, and a
-  trait that does not is told so where the `dyn` type is declared, with the
-  heading named. `dyn` reserves nothing — a program may still declare a type,
-  a field and a parameter of that name.
-
-  AP 6.7.11 was published one release early, marked `[not yet implemented]`
-  under AP 5.6 — the first and only clause ever to carry that marker — and the
-  marker is now gone. Building it corrected two things the clause had said
-  (AP Annex E.13, E.14).
-
-### Fixed
 
 - **A trait may declare a procedure, and calling one now selects an
   implementation.** AP 6.7.10.2 has named *a function-designator or a
