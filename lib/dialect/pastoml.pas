@@ -15,10 +15,10 @@
   of tables. What it refuses, it refuses with a position.
 
   **A value is a heap node and a document is a tree**, which is `PasJson`'s
-  shape and taken deliberately rather than by habit: `TomlFree` disposes one
+  shape and taken deliberately rather than by habit: `Free` disposes one
   and a program that forgets it leaks. An owned pointer (AP 6.4.14) would give
   the document a lifetime it could not get wrong, and would take away
-  `TomlMember(doc, 'server')` -- a second name for a subtree, which is the
+  `doc.Member('server')` -- a second name for a subtree, which is the
   whole of what navigating a configuration is.
 
   **A string is bytes**, for `PasJson`'s reason: assignment to AP 6.4.15's
@@ -55,27 +55,32 @@
 
 module PasToml;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Thirty-one names are exported where fifty-nine
+  were: `TomlChars` and `TomlPtr` each have an implementation in the block
+  below, and an implementation is selected from the *type* of the receiver
+  rather than from a name in scope (AP 6.7.10.2), so none of its routines is
+  an exported name and none can collide with another module's -- which is what
+  `PasJson` did one format over (ADR-0412), and why `TomlCharsAddLine` is
+  `AddText` and `TomlIntegerOr` is `IntegerOr` here as they are there. The two
+  modules are read together and now spell the same operation the same way.
+
+  What stays exported is what has no receiver to be selected from: the types,
+  the three bounds, the eight constructors, and the two entry points that
+  build a document out of bytes. A parse is not an operation *of* a buffer --
+  it answers a document -- so it keeps its name where `PositionOf`, which
+  asks a buffer about itself, does not. }
+
 export PasToml = (TomlKind, tkString, tkInteger, tkFloat, tkBoolean,
                   tkDateTime, tkArray, tkTable,
                   TomlDateKind, tdDate, tdTime, tdLocal, tdOffset,
                   TomlKey, TomlChars, TomlPtr, TomlStamp, TomlResult,
                   TomlKeyMax, TomlDepthMax, TomlPathMax,
 
-                  TomlCharsNew, TomlCharsFree, TomlCharsAdd, TomlCharsAddLine,
-                  TomlCharsLen, TomlCharsAt, TomlCharsInto, TomlCharsFull,
-
-                  TomlParse, TomlParseChars, TomlFree, TomlPositionOf,
-
-                  TomlKindOf, TomlCount, TomlAt, TomlKeyAt, TomlMember,
-                  TomlPath, TomlIsTableArray,
-                  TomlIntegerOr, TomlFloatOr, TomlBooleanOr, TomlStampOr,
-                  TomlTextLen, TomlTextAt, TomlTextInto,
+                  TomlParse, TomlParseChars,
 
                   TomlNewText, TomlNewInteger, TomlNewFloat, TomlNewBoolean,
-                  TomlNewStamp, TomlNewArray, TomlNewTableArray, TomlNewTable,
-                  TomlAppend, TomlPut, TomlTextAdd,
-
-                  TomlRender);
+                  TomlNewStamp, TomlNewArray, TomlNewTableArray, TomlNewTable);
 
 import PasError; PasContainer; PasText; PasTime;
 
@@ -102,7 +107,7 @@ type
     document.
 
     There is no null: TOML has none, and a key that is not there is what
-    `TomlMember` answers nil for. That is the one place this differs from
+    `Member` answers nil for. That is the one place this differs from
     `PasJson` in a way a reader porting between them will notice. }
   TomlKind = (tkString, tkInteger, tkFloat, tkBoolean, tkDateTime,
               tkArray, tkTable);
@@ -151,7 +156,7 @@ type
   TomlPtr = ^TomlNode;
   TomlNode = record
     { The next entry of a table or element of an array. A document is a tree
-      of these and nothing here is shared, so `TomlFree` is a walk. }
+      of these and nothing here is shared, so `Free` is a walk. }
     next: TomlPtr;
     { The key, for an entry of a table; empty otherwise, and never read for
       anything else. In the fixed part because it belongs to the *containment*
@@ -181,7 +186,7 @@ type
         against one written as a value.
 
         Nothing but the parser writes the first three. `tabArray` is the one a
-        caller can read, through `TomlIsTableArray`, because it is the one the
+        caller can read, through `IsTableArray`, because it is the one the
         renderer's output depends on. }
       tkArray, tkTable: (first, last: TomlPtr; count: integer;
                          explicit: boolean;
@@ -200,129 +205,20 @@ type
     dotted key deeper than `TomlPathMax`, or nesting past `TomlDepthMax`. }
   TomlResult = Fallible(TomlPtr);
 
-{ --- the byte buffer ------------------------------------------------------ }
-
-{ An empty buffer. Every `TomlChars` a caller holds comes from here or from a
-  routine that says it answers one. }
-procedure TomlCharsNew(var b: TomlChars);
-
-{ Release it and leave `b` nil. A nil `b` is harmless. }
-procedure TomlCharsFree(var b: TomlChars);
-
-procedure TomlCharsAdd(var b: TomlChars; c: char);
-
-{ Append a whole string, which is how a caller assembles a document to parse
-  a line at a time. Schematic, so a caller holding a longer capacity than any
-  this module names is not refused at this boundary (ADR-0291). }
-procedure TomlCharsAddLine(var b: TomlChars; s: string);
-
-function TomlCharsLen(var b: TomlChars): integer;
-
-{ Has this buffer reached the largest extent it can have, so that the next
-  character would be dropped? A caller assembling someone else's bytes asks
-  this and reports `errFull` (ADR-0276). }
-function TomlCharsFull(var b: TomlChars): boolean;
-
-{ The i'th byte, 1-based. Out of range is the caller's error and traps, as an
-  array subscript does. }
-function TomlCharsAt(var b: TomlChars; i: integer): char;
-
-{ Copy the whole buffer into a string. `errFull` when it does not fit, and `s`
-  is then untouched. }
-function TomlCharsInto(var b: TomlChars; var s: string): ErrorCode;
-
 { --- parsing -------------------------------------------------------------- }
 
 { Parse a whole document. The value of a successful result is always a table,
-  possibly empty, and the caller must free it.
+  possibly empty, and the caller must free it with `Free`.
 
   `at` receives the 1-based byte position parsing stopped at, which is where a
   caller reports from; on success it is one past the last byte. A
   configuration file's reader wants a line rather than an offset, and
-  `TomlPositionOf` is that conversion. }
+  `TomlChars.PositionOf` is that conversion. }
 function TomlParseChars(var b: TomlChars; var at: integer) = r: TomlResult;
 
 { The same, for a document that fits in one string -- of whatever capacity the
   caller declared. }
 function TomlParse(s: string; var at: integer) = r: TomlResult;
-
-{ The line and column of a byte position, both 1-based, counting a `<LF>` as
-  the end of a line and treating a `<CR>` as an ordinary byte of the line it
-  sits in. A position past the end answers the position of the end.
-
-  It is a routine rather than a field of the result because a caller that
-  never fails never pays for it, and because a caller reporting a *warning*
-  about a value it read wants the same conversion for a position the parser
-  did not stop at. }
-procedure TomlPositionOf(var b: TomlChars; at: integer;
-                         var line, column: integer);
-
-{ Dispose a value and everything under it, and leave `v` nil. }
-procedure TomlFree(var v: TomlPtr);
-
-{ --- reading -------------------------------------------------------------- }
-
-{ The kind of a value. `tkTable` for nil, so that every reader below is safe
-  to call on a key that was not there -- an absent key reads as an empty
-  table, which is what a configuration reader wants: `TomlPath(doc,
-  'server.tls.verify')` answers nil rather than trapping when there is no
-  `server`. }
-function TomlKindOf(v: TomlPtr): TomlKind;
-
-{ How many entries a table has, or elements an array; 0 for anything else. }
-function TomlCount(v: TomlPtr): integer;
-
-{ The i'th entry or element, 1-based, or nil. }
-function TomlAt(v: TomlPtr; i: integer): TomlPtr;
-
-{ The key of the i'th entry of a table, or the empty string. }
-function TomlKeyAt(v: TomlPtr; i: integer): TomlKey;
-
-{ The entry of a table with this key, or nil. One segment: a key containing a
-  dot is reached with this and not with `TomlPath`. }
-function TomlMember(v: TomlPtr; key: TomlKey): TomlPtr;
-
-{ The value at a dotted path -- `TomlPath(doc, 'server.port')` -- or nil.
-
-  The dots are separators here, so a *key* that contains one cannot be reached
-  this way; that key is reached by `TomlMember` a segment at a time. It is
-  worth knowing which of the two a program needs, because a document written
-  by a person almost never has a dot in a key and a document written by a
-  program sometimes does. An empty path answers `v` itself. }
-function TomlPath(v: TomlPtr; path: string): TomlPtr;
-
-{ Whether this array is one the document wrote as `[[header]]` blocks rather
-  than as a value. Both are arrays and both are read the same way; the
-  difference is only what `TomlRender` writes, and a caller building a
-  document chooses it with `TomlNewTableArray`. }
-function TomlIsTableArray(v: TomlPtr): boolean;
-
-{ The value as an integer, or `whenBad` for anything that is not one --
-  including a float, since 1.5 is not an integer and answering 1 would be a
-  different configuration. }
-function TomlIntegerOr(v: TomlPtr; whenBad: integer): integer;
-
-{ The value as a real. An *integer* answers as one, because a program asking
-  for a float means a number, and a person who writes `timeout = 30` where the
-  documentation said `30.0` has not made a mistake worth reporting. }
-function TomlFloatOr(v: TomlPtr; whenBad: real): real;
-
-function TomlBooleanOr(v: TomlPtr; whenBad: boolean): boolean;
-
-{ The value as a date-time, or `whenBad`. The `form` field of the answer is
-  what says which of the four was written, and a caller that needs an instant
-  must check it -- see `TomlDateKind`. }
-function TomlStampOr(v: TomlPtr; whenBad: TomlStamp): TomlStamp;
-
-{ The length of a string value in bytes; 0 for anything else. }
-function TomlTextLen(v: TomlPtr): integer;
-
-{ The i'th byte of a string value, 1-based. }
-function TomlTextAt(v: TomlPtr; i: integer): char;
-
-{ A string value copied into `s`. `errAbsent` when the value is not a string,
-  `errFull` when it does not fit. }
-function TomlTextInto(v: TomlPtr; var s: string): ErrorCode;
 
 { --- building ------------------------------------------------------------- }
 
@@ -341,43 +237,6 @@ function TomlNewArray: TomlPtr;
 function TomlNewTableArray: TomlPtr;
 
 function TomlNewTable: TomlPtr;
-
-{ Append `item` to an array. The array takes ownership: freeing it frees the
-  item, and a caller must not free the item itself. }
-procedure TomlAppend(arr: TomlPtr; item: TomlPtr);
-
-{ Put `item` in a table under `key`, replacing an entry of that key. Takes
-  ownership, as `TomlAppend` does.
-
-  One segment, and deliberately: a dotted key is ambiguous about which of the
-  tables on the way is being created, and a program building a document knows
-  which it means. `TomlPut(t, 'a', TomlNewTable)` and then putting into that
-  is the unambiguous spelling. }
-procedure TomlPut(tab: TomlPtr; key: TomlKey; item: TomlPtr);
-
-{ Append to a string value, which is how a caller builds one longer than any
-  capacity it can declare. }
-procedure TomlTextAdd(v: TomlPtr; s: string);
-
-{ --- writing -------------------------------------------------------------- }
-
-{ Append the document's text to `out`, as a TOML document a person can read
-  and this module can read back.
-
-  A table's own values come before its sub-tables, which TOML requires: after
-  a `[header]` every bare key belongs to that table. A sub-table becomes a
-  `[header]` of its own, an array made by `TomlNewTableArray` becomes a run of
-  `[[header]]` blocks, and everything else -- an array of values, a table
-  inside an array -- is written inline, because there is no header form for
-  it.
-
-  What it does not do is preserve the document it was given. Comments are not
-  in the tree, key order inside a table is the order the tree holds, and a
-  string comes back as a basic string however it was written. A program that
-  must edit somebody's file in place is editing bytes and not a tree, and this
-  is the wrong tool for it -- the same sentence `PasJson` writes about
-  whitespace. }
-procedure TomlRender(v: TomlPtr; var out: TomlChars);
 
 end;
 
@@ -409,131 +268,103 @@ type
     name are walked. `TomlPathMax` segments, and `errFull` past it. }
   TomlKeyPath = array [1..TomlPathMax] of TomlKey;
 
-{ --- the buffer ----------------------------------------------------------- }
+{ --- the byte buffer ------------------------------------------------------ }
 
-procedure TomlCharsNew;
-begin
-  VecInit(TomlChars, b, 64)
-end;
+impl TomlChars;
 
-procedure TomlCharsFree;
-begin
-  VecFree(TomlChars, b)
-end;
-
-procedure TomlCharsAdd;
-begin
-  VecPush(TomlChars, b, c)
-end;
-
-procedure TomlCharsAddLine;
-var i: integer;
-begin
-  for i := 1 to length(s) do
-    VecPush(TomlChars, b, s[i])
-end;
-
-function TomlCharsLen;
-begin
-  TomlCharsLen := VecLen(TomlChars, b)
-end;
-
-function TomlCharsFull;
-begin
-  TomlCharsFull := VecFull(TomlChars, b)
-end;
-
-function TomlCharsAt;
-begin
-  TomlCharsAt := VecGet(char, b, i)
-end;
-
-function TomlCharsInto;
-var i, n: integer;
-begin
-  n := VecLen(TomlChars, b);
-  if n > s.capacity then
-    TomlCharsInto := errFull
-  else begin
-    { Built into `s` and not through a local accumulator, for the reason
-      `PasJson`'s `JsonChars.Into` records: an accumulator of this module's own
-      capacity would make the guard above a lie about the caller's. }
-    s := '';
-    for i := 1 to n do
-      s := s + VecGet(char, b, i);
-    TomlCharsInto := errNone
-  end
-end;
-
-{ --- nodes ---------------------------------------------------------------- }
-
-{ A fresh node of one kind, with the fields of that kind emptied. The tag is
-  assigned before any field is, which is what AP 6.4.11's authoritative tag
-  asks of a producer: a field written first would activate a variant this did
-  not mean. }
-function FreshNode(k: TomlKind): TomlPtr;
-var p: TomlPtr;
-begin
-  new(p);
-  p^.kind := k;
-  p^.next := nil;
-  p^.key := '';
-  case k of
-    tkString:   TomlCharsNew(p^.text);
-    tkInteger:  p^.inum := 0;
-    tkFloat:    p^.fnum := 0.0;
-    tkBoolean:  p^.bool := false;
-    tkDateTime: begin
-                  p^.when.form := tdDate;
-                  p^.when.clock.DateValid := false;
-                  p^.when.clock.TimeValid := false;
-                  p^.when.clock.year := 1;
-                  p^.when.clock.month := 1;
-                  p^.when.clock.day := 1;
-                  p^.when.clock.hour := 0;
-                  p^.when.clock.minute := 0;
-                  p^.when.clock.second := 0;
-                  p^.when.nanosecond := 0;
-                  p^.when.offset := 0
-                end;
-    tkArray, tkTable: begin
-                  p^.first := nil;
-                  p^.last := nil;
-                  p^.count := 0;
-                  p^.explicit := false;
-                  p^.closed := false;
-                  p^.dotted := false;
-                  p^.tabArray := false
-                end
+  { An empty buffer. Every `TomlChars` a caller holds comes from here or from
+    a routine that says it answers one. }
+  procedure Init(var b: TomlChars);
+  begin
+    VecInit(TomlChars, b, 64)
   end;
-  FreshNode := p
-end;
 
-procedure TomlFree;
-var c, n: TomlPtr;
-begin
-  if v <> nil then begin
-    case v^.kind of
-      tkString: TomlCharsFree(v^.text);
-      tkInteger, tkFloat, tkBoolean, tkDateTime: ;
-      tkArray, tkTable: begin
-        { Iterative over the siblings and recursive into them, so a table of
-          ten thousand entries costs one frame and a document nested a
-          hundred deep costs a hundred -- which `TomlDepthMax` is what bounds.
-          A tree the parser built cannot be deeper than that; one a program
-          built with `TomlPut` can, and that is the program's own recursion to
-          answer for. }
-        c := v^.first;
-        while c <> nil do begin
-          n := c^.next;
-          TomlFree(c);
-          c := n
-        end
-      end
-    end;
-    dispose(v);
-    v := nil
-  end
+  { Release it and leave `b` nil. A nil `b` is harmless. }
+  procedure Free(var b: TomlChars);
+  begin
+    VecFree(TomlChars, b)
+  end;
+
+  { Append one byte. }
+  procedure Add(var b: TomlChars; c: char);
+  begin
+    VecPush(TomlChars, b, c)
+  end;
+
+  { Append a whole string, which is how a caller assembles a document to
+    parse a line at a time. Schematic, so a caller holding a longer capacity
+    than any this module names is not refused at this boundary (ADR-0291). }
+  procedure AddText(var b: TomlChars; s: string);
+  var i: integer;
+  begin
+    for i := 1 to length(s) do
+      VecPush(TomlChars, b, s[i])
+  end;
+
+  function Len(var b: TomlChars): integer;
+  begin
+    Len := VecLen(TomlChars, b)
+  end;
+
+  { Has this buffer reached the largest extent it can have, so that the next
+    character would be dropped? A caller assembling someone else's bytes asks
+    this and reports `errFull` (ADR-0276). }
+  function Full(var b: TomlChars): boolean;
+  begin
+    Full := VecFull(TomlChars, b)
+  end;
+
+  { The i'th byte, 1-based. Out of range is the caller's error and traps, as
+    an array subscript does. }
+  function At(var b: TomlChars; i: integer): char;
+  begin
+    At := VecGet(char, b, i)
+  end;
+
+  { Copy the whole buffer into a string. `errFull` when it does not fit, and
+    `s` is then untouched. }
+  function Into(var b: TomlChars; var s: string): ErrorCode;
+  var i, n: integer;
+  begin
+    n := VecLen(TomlChars, b);
+    if n > s.capacity then
+      Into := errFull
+    else begin
+      { Built into `s` and not through a local accumulator, for the reason
+        `PasJson`'s `JsonChars.Into` records: an accumulator of this module's own
+        capacity would make the guard above a lie about the caller's. }
+      s := '';
+      for i := 1 to n do
+        s := s + VecGet(char, b, i);
+      Into := errNone
+    end
+  end;
+
+  { The line and column of a byte position, both 1-based, counting a `<LF>`
+    as the end of a line and treating a `<CR>` as an ordinary byte of the line
+    it sits in. A position past the end answers the position of the end.
+
+    It is a routine rather than a field of the result because a caller that
+    never fails never pays for it, and because a caller reporting a *warning*
+    about a value it read wants the same conversion for a position the parser
+    did not stop at. }
+  procedure PositionOf(var b: TomlChars; at: integer;
+                       var line, column: integer);
+  var k, n, last: integer;
+  begin
+    n := VecLen(TomlChars, b);
+    if at > n + 1 then at := n + 1;
+    if at < 1 then at := 1;
+    line := 1;
+    last := 0;
+    for k := 1 to at - 1 do
+      if VecGet(char, b, k) = chr(10) then begin
+        line := line + 1;
+        last := k
+      end;
+    column := at - last
+  end;
+
 end;
 
 { --- the scanner ---------------------------------------------------------- }
@@ -655,21 +486,691 @@ begin
   end;
   SkipBlankLines := ok
 end;
+{ --- nodes ---------------------------------------------------------------- }
 
-procedure TomlPositionOf;
-var k, n, last: integer;
+{ A fresh node of one kind, with the fields of that kind emptied. The tag is
+  assigned before any field is, which is what AP 6.4.11's authoritative tag
+  asks of a producer: a field written first would activate a variant this did
+  not mean. }
+function FreshNode(k: TomlKind): TomlPtr;
+var p: TomlPtr;
 begin
-  n := VecLen(TomlChars, b);
-  if at > n + 1 then at := n + 1;
-  if at < 1 then at := 1;
-  line := 1;
-  last := 0;
-  for k := 1 to at - 1 do
-    if VecGet(char, b, k) = chr(10) then begin
-      line := line + 1;
-      last := k
+  new(p);
+  p^.kind := k;
+  p^.next := nil;
+  p^.key := '';
+  case k of
+    tkString:   p^.text.Init;
+    tkInteger:  p^.inum := 0;
+    tkFloat:    p^.fnum := 0.0;
+    tkBoolean:  p^.bool := false;
+    tkDateTime: begin
+                  p^.when.form := tdDate;
+                  p^.when.clock.DateValid := false;
+                  p^.when.clock.TimeValid := false;
+                  p^.when.clock.year := 1;
+                  p^.when.clock.month := 1;
+                  p^.when.clock.day := 1;
+                  p^.when.clock.hour := 0;
+                  p^.when.clock.minute := 0;
+                  p^.when.clock.second := 0;
+                  p^.when.nanosecond := 0;
+                  p^.when.offset := 0
+                end;
+    tkArray, tkTable: begin
+                  p^.first := nil;
+                  p^.last := nil;
+                  p^.count := 0;
+                  p^.explicit := false;
+                  p^.closed := false;
+                  p^.dotted := false;
+                  p^.tabArray := false
+                end
+  end;
+  FreshNode := p
+end;
+
+{ --- tables --------------------------------------------------------------- }
+
+{ The entry of `tab` with this key, or nil. The lookup a table does for
+  itself: linear, because a table in a configuration file has a handful of
+  keys and a map would be a hash of a string per lookup to save nothing. }
+function Lookup(tab: TomlPtr; key: TomlKey): TomlPtr;
+var c: TomlPtr;
+begin
+  Lookup := nil;
+  c := tab^.first;
+  while c <> nil do begin
+    if c^.key = key then begin
+      Lookup := c;
+      c := nil
+    end
+    else
+      c := c^.next
+  end
+end;
+
+{ Append an entry, which is `Put` without the replacement: everything in
+  this module has already established that the key is not there, because
+  TOML's answer to a key that is there is a refusal and not a replacement. }
+procedure Attach(tab: TomlPtr; key: TomlKey; item: TomlPtr);
+begin
+  item^.key := key;
+  item^.next := nil;
+  if tab^.first = nil then tab^.first := item else tab^.last^.next := item;
+  tab^.last := item;
+  tab^.count := tab^.count + 1
+end;
+{ --- writing -------------------------------------------------------------- }
+
+type
+  { A header's path, assembled as the walk descends. Sixteen segments of up to
+    255 bytes would need four thousand; what a document actually writes is a
+    handful of short words, and `errFull` has nowhere to be reported from
+    inside a procedure that answers nothing -- so this is generous rather than
+    exact, and a path past it is truncated by the string assignment's own
+    trap. }
+  TomlPathText = string(1024);
+
+{ `n` in decimal, padded with zeros to `w` digits. TOML's date-time spelling
+  is RFC 3339's, so it is written out here rather than taken from `date(t)`
+  and `time(t)`: those are *this processor's* representations (§6.7.6.9 makes
+  them implementation-defined), and a format's spelling must not move with the
+  processor that writes it. }
+function Pad(n, w: integer): TomlKey;
+var s: TomlKey;
+begin
+  writestr(s, n:1);
+  while length(s) < w do s := '0' + s;
+  Pad := s
+end;
+
+{ A key, bare where the format admits one and a basic string otherwise. An
+  empty key is a quoted empty string, which TOML admits and which nothing but
+  a program building a document will produce. }
+procedure RenderKey(key: TomlKey; var out: TomlChars);
+var k: integer; bare: boolean;
+begin
+  bare := length(key) > 0;
+  for k := 1 to length(key) do
+    if not BareChar(key[k]) then bare := false;
+  if bare then
+    out.AddText(key)
+  else begin
+    out.Add('"');
+    for k := 1 to length(key) do
+      if (key[k] = '"') or (key[k] = '\') then begin
+        out.Add('\');
+        out.Add(key[k])
+      end
+      else
+        out.Add(key[k]);
+    out.Add('"')
+  end
+end;
+
+{ A string value as a basic string. The escapes are the ones the format
+  requires -- the quotation mark, the reverse solidus and every control
+  character -- and no others: a byte above 127 is part of a UTF-8 sequence
+  this module was handed and passes through unread, which is the decision the
+  heading records. }
+procedure RenderText(var t: TomlChars; var out: TomlChars);
+var k, n, c: integer; ch: char;
+
+  function HexCh(d: integer): char;
+  begin
+    if d < 10 then HexCh := chr(ord('0') + d) else HexCh := chr(ord('A') + d - 10)
+  end;
+
+begin
+  out.Add('"');
+  n := t.Len;
+  for k := 1 to n do begin
+    ch := t.At(k);
+    c := ord(ch);
+    if ch = '"' then out.AddText('\"')
+    else if ch = '\' then out.AddText('\\')
+    else if c = 8 then out.AddText('\b')
+    else if c = 9 then out.AddText('\t')
+    else if c = 10 then out.AddText('\n')
+    else if c = 12 then out.AddText('\f')
+    else if c = 13 then out.AddText('\r')
+    else if (c < 32) or (c = 127) then begin
+      out.AddText('\u00');
+      out.Add(HexCh(c div 16));
+      out.Add(HexCh(c mod 16))
+    end
+    else
+      out.Add(ch)
+  end;
+  out.Add('"')
+end;
+
+{ A float. TOML has `inf`, `-inf` and `nan`, so unlike `PasJson` this module
+  has a spelling for every value the type holds and none of them is what
+  `writestr` writes.
+
+  A finite one is the shortest decimal that reads back (`PasText.RealToStr`,
+  ADR-0309) and then, if that has neither a point nor an exponent, a `.0`:
+  TOML's float must show one or the other, so the shortest spelling of 1.0 is
+  `1` for JSON and `1.0` here. }
+procedure RenderFloat(x: real; var out: TomlChars);
+var s: TextLine; k: integer; plain: boolean;
+begin
+  if not (x = x) then
+    out.AddText('nan')
+  else if x > maxreal then
+    out.AddText('inf')
+  else if x < -maxreal then
+    out.AddText('-inf')
+  else begin
+    s := RealToStr(x);
+    plain := true;
+    for k := 1 to length(s) do
+      if (s[k] = '.') or (s[k] = 'E') or (s[k] = 'e') then plain := false;
+    if plain then s := s + '.0';
+    out.AddText(s)
+  end
+end;
+
+procedure RenderStamp(t: TomlStamp; var out: TomlChars);
+var frac: TomlKey; k: integer;
+begin
+  if (t.form = tdDate) or (t.form = tdLocal) or (t.form = tdOffset) then begin
+    out.AddText(Pad(t.clock.year, 4));
+    out.Add('-');
+    out.AddText(Pad(t.clock.month, 2));
+    out.Add('-');
+    out.AddText(Pad(t.clock.day, 2))
+  end;
+  if t.form = tdDate then
+    { nothing further }
+  else begin
+    if t.form <> tdTime then out.Add('T');
+    out.AddText(Pad(t.clock.hour, 2));
+    out.Add(':');
+    out.AddText(Pad(t.clock.minute, 2));
+    out.Add(':');
+    out.AddText(Pad(t.clock.second, 2));
+    if t.nanosecond > 0 then begin
+      { Nine digits with the trailing zeros taken off, so a half second is
+        `.5` and not `.500000000`. }
+      frac := Pad(t.nanosecond, 9);
+      k := length(frac);
+      while (k > 1) and (frac[k] = '0') do k := k - 1;
+      out.Add('.');
+      out.AddText(substr(frac, 1, k))
     end;
-  column := at - last
+    if t.form = tdOffset then
+      if t.offset = 0 then
+        out.Add('Z')
+      else begin
+        if t.offset < 0 then out.Add('-') else out.Add('+');
+        out.AddText(Pad(abs(t.offset) div 60, 2));
+        out.Add(':');
+        out.AddText(Pad(abs(t.offset) mod 60, 2))
+      end
+  end
+end;
+
+{ Whether every element of an array is a table, which is what an array of
+  tables must be for `[[header]]` blocks to be able to spell it. }
+function AllTables(arr: TomlPtr): boolean;
+var c: TomlPtr; all: boolean;
+begin
+  all := arr^.count > 0;
+  c := arr^.first;
+  while c <> nil do begin
+    if c^.kind <> tkTable then all := false;
+    c := c^.next
+  end;
+  AllTables := all
+end;
+
+{ Whether this entry of a table becomes a header of its own rather than a
+  value on the line after its key. }
+function IsHeaderEntry(c: TomlPtr): boolean;
+begin
+  IsHeaderEntry := ((c^.kind = tkTable) and not c^.closed)
+                   or ((c^.kind = tkArray) and c^.tabArray and AllTables(c))
+end;
+
+procedure RenderValue(v: TomlPtr; var out: TomlChars); forward;
+
+{ A table written as a value -- an inline table, in braces, with its pairs
+  separated by commas. Everything under it is a value too, there being no
+  header form inside one.
+
+  What this comment does not do is show one, and that is not fastidiousness:
+  §6.1.8 makes the four comment delimiters two pairs in any combination, so a
+  brace inside a brace comment closes it, and a routine's leading comment
+  holding an example of the syntax it renders would end at the example.
+  `tests/dialect/lib_toml.pas` is where one is written out. }
+procedure RenderInline(v: TomlPtr; var out: TomlChars);
+var c: TomlPtr;
+begin
+  out.AddText('{ ');
+  c := v^.first;
+  while c <> nil do begin
+    RenderKey(c^.key, out);
+    out.AddText(' = ');
+    RenderValue(c, out);
+    c := c^.next;
+    if c <> nil then out.AddText(', ')
+  end;
+  out.AddText(' }')
+end;
+
+procedure RenderValue;
+var c: TomlPtr; s: TextLine;
+begin
+  case v^.kind of
+    tkString:   RenderText(v^.text, out);
+    tkInteger:  begin
+                  s := IntToStr(v^.inum);
+                  out.AddText(s)
+                end;
+    tkFloat:    RenderFloat(v^.fnum, out);
+    tkBoolean:  if v^.bool then out.AddText('true')
+                else out.AddText('false');
+    tkDateTime: RenderStamp(v^.when, out);
+    tkTable:    RenderInline(v, out);
+    tkArray:    begin
+                  out.Add('[');
+                  c := v^.first;
+                  while c <> nil do begin
+                    RenderValue(c, out);
+                    c := c^.next;
+                    if c <> nil then out.AddText(', ')
+                  end;
+                  out.Add(']')
+                end
+  end
+end;
+
+{ A table's own `key = value` lines, and then its sub-tables as headers of
+  their own. The order is the format's requirement and not a preference: after
+  a `[header]` every bare key belongs to that table, so a value written after
+  a sub-table's header would join the sub-table. }
+procedure RenderBody(v: TomlPtr; path: TomlPathText; var out: TomlChars);
+var c, el: TomlPtr; sub: TomlPathText;
+
+  { The path of an entry, as the header line spells it. Assembled through a
+    buffer because `RenderKey` decides whether the segment is bare. }
+  function Extend(base: TomlPathText; entry: TomlPtr): TomlPathText;
+  var kb: TomlChars; t: TextLine; e2: ErrorCode;
+  begin
+    kb.Init;
+    RenderKey(entry^.key, kb);
+    e2 := kb.Into(t);
+    kb.Free;
+    if length(base) = 0 then Extend := t else Extend := base + '.' + t
+  end;
+
+begin
+  c := v^.first;
+  while c <> nil do begin
+    if not IsHeaderEntry(c) then begin
+      RenderKey(c^.key, out);
+      out.AddText(' = ');
+      RenderValue(c, out);
+      out.Add(chr(10))
+    end;
+    c := c^.next
+  end;
+  c := v^.first;
+  while c <> nil do begin
+    if IsHeaderEntry(c) then begin
+      sub := Extend(path, c);
+      if c^.kind = tkTable then begin
+        out.Add(chr(10));
+        out.Add('[');
+        out.AddText(sub);
+        out.AddText(']');
+        out.Add(chr(10));
+        RenderBody(c, sub, out)
+      end
+      else begin
+        el := c^.first;
+        while el <> nil do begin
+          out.Add(chr(10));
+          out.AddText('[[');
+          out.AddText(sub);
+          out.AddText(']]');
+          out.Add(chr(10));
+          RenderBody(el, sub, out);
+          el := el^.next
+        end
+      end
+    end;
+    c := c^.next
+  end
+end;
+
+impl TomlPtr;
+
+  { Dispose a value and everything under it, and leave `v` nil. }
+  procedure Free(var v: TomlPtr);
+  var c, n: TomlPtr;
+  begin
+    if v <> nil then begin
+      case v^.kind of
+        tkString: v^.text.Free;
+        tkInteger, tkFloat, tkBoolean, tkDateTime: ;
+        tkArray, tkTable: begin
+          { Iterative over the siblings and recursive into them, so a table of
+            ten thousand entries costs one frame and a document nested a
+            hundred deep costs a hundred -- which `TomlDepthMax` is what bounds.
+            A tree the parser built cannot be deeper than that; one a program
+            built with `Put` can, and that is the program's own recursion to
+            answer for. }
+          c := v^.first;
+          while c <> nil do begin
+            n := c^.next;
+            c.Free;
+            c := n
+          end
+        end
+      end;
+      dispose(v);
+      v := nil
+    end
+  end;
+
+  { The kind of a value. `tkTable` for nil, so that every reader below is
+    safe to call on a key that was not there -- an absent key reads as an empty
+    table, which is what a configuration reader wants:
+    `doc.Path('server.tls.verify')` answers nil rather than trapping when there
+    is no `server`. }
+  function Kind(v: TomlPtr): TomlKind;
+  begin
+    { An absent key reads as an empty table, which is what makes every reader
+      below safe to call on one -- `doc.Path('server.tls.verify')` answers
+      nil where there is no `server`, and the caller's `BooleanOr` of nil is
+      its default rather than a trap. }
+    if v = nil then Kind := tkTable else Kind := v^.kind
+  end;
+
+  { How many entries a table has, or elements an array; 0 for anything
+    else. }
+  function Count(v: TomlPtr): integer;
+  begin
+    if (v <> nil) and ((v^.kind = tkArray) or (v^.kind = tkTable)) then
+      Count := v^.count
+    else
+      Count := 0
+  end;
+
+  { The i'th entry or element, 1-based, or nil. }
+  function At(v: TomlPtr; i: integer): TomlPtr;
+  var c: TomlPtr; k: integer;
+  begin
+    At := nil;
+    if (v <> nil) and ((v^.kind = tkArray) or (v^.kind = tkTable))
+       and (i >= 1) and (i <= v^.count) then begin
+      c := v^.first;
+      for k := 2 to i do c := c^.next;
+      At := c
+    end
+  end;
+
+  { The key of the i'th entry of a table, or the empty string. }
+  function KeyAt(v: TomlPtr; i: integer): TomlKey;
+  var c: TomlPtr;
+  begin
+    c := v.At(i);
+    if c = nil then KeyAt := '' else KeyAt := c^.key
+  end;
+
+  { The entry of a table with this key, or nil. One segment: a key
+    containing a dot is reached with this and not with `Path`. }
+  function Member(v: TomlPtr; key: TomlKey): TomlPtr;
+  begin
+    if (v <> nil) and (v^.kind = tkTable) then Member := Lookup(v, key)
+    else Member := nil
+  end;
+
+  { The value at a dotted path -- `doc.Path('server.port')` -- or nil.
+
+    The dots are separators here, so a *key* that contains one cannot be reached
+    this way; that key is reached by `Member` a segment at a time. It is worth
+    knowing which of the two a program needs, because a document written by a
+    person almost never has a dot in a key and a document written by a program
+    sometimes does. An empty path answers `v` itself. }
+  function Path(v: TomlPtr; dotted: string): TomlPtr;
+  var cur: TomlPtr; seg: TomlKey; k: integer;
+  begin
+    cur := v;
+    seg := '';
+    k := 1;
+    while (cur <> nil) and (k <= length(dotted) + 1) do begin
+      if (k > length(dotted)) or (dotted[k] = '.') then begin
+        if seg = '' then cur := nil else cur := cur.Member(seg);
+        seg := ''
+      end
+      else
+        seg := seg + dotted[k];
+      k := k + 1
+    end;
+    if length(dotted) = 0 then Path := v else Path := cur
+  end;
+
+  { Whether this array is one the document wrote as `[[header]]` blocks
+    rather than as a value. Both are arrays and both are read the same way; the
+    difference is only what `Render` writes, and a caller building a document
+    chooses it with `TomlNewTableArray`. }
+  function IsTableArray(v: TomlPtr): boolean;
+  begin
+    IsTableArray := (v <> nil) and (v^.kind = tkArray) and v^.tabArray
+  end;
+
+  { The value as an integer, or `whenBad` for anything that is not one --
+    including a float, since 1.5 is not an integer and answering 1 would be a
+    different configuration. }
+  function IntegerOr(v: TomlPtr; whenBad: integer): integer;
+  begin
+    if (v <> nil) and (v^.kind = tkInteger) then IntegerOr := v^.inum
+    else IntegerOr := whenBad
+  end;
+
+  { The value as a real. An *integer* answers as one, because a program
+    asking for a float means a number, and a person who writes `timeout = 30`
+    where the documentation said `30.0` has not made a mistake worth
+    reporting. }
+  function FloatOr(v: TomlPtr; whenBad: real): real;
+  begin
+    if v = nil then FloatOr := whenBad
+    else if v^.kind = tkFloat then FloatOr := v^.fnum
+    { An integer answers as a real: a person who wrote `timeout = 30` where the
+      documentation said `30.0` has not made a mistake worth reporting, and TOML
+      keeps the two types apart for what is *written* rather than for what may
+      be read. `IntegerOr` is the reader that does not do this, and a
+      caller needing the distinction asks `Kind`. }
+    else if v^.kind = tkInteger then FloatOr := v^.inum
+    else FloatOr := whenBad
+  end;
+
+  function BooleanOr(v: TomlPtr; whenBad: boolean): boolean;
+  begin
+    if (v <> nil) and (v^.kind = tkBoolean) then BooleanOr := v^.bool
+    else BooleanOr := whenBad
+  end;
+
+  { The value as a date-time, or `whenBad`. The `form` field of the answer
+    is what says which of the four was written, and a caller that needs an
+    instant must check it -- see `TomlDateKind`. }
+  function StampOr(v: TomlPtr; whenBad: TomlStamp): TomlStamp;
+  begin
+    if (v <> nil) and (v^.kind = tkDateTime) then StampOr := v^.when
+    else StampOr := whenBad
+  end;
+
+  { The length of a string value in bytes; 0 for anything else. }
+  function TextLen(v: TomlPtr): integer;
+  begin
+    if (v <> nil) and (v^.kind = tkString) then TextLen := v^.text.Len
+    else TextLen := 0
+  end;
+
+  { The i'th byte of a string value, 1-based. }
+  function TextAt(v: TomlPtr; i: integer): char;
+  begin
+    TextAt := v^.text.At(i)
+  end;
+
+  { A string value copied into `s`. `errAbsent` when the value is not a
+    string, `errFull` when it does not fit. }
+  function TextInto(v: TomlPtr; var s: string): ErrorCode;
+  begin
+    if (v = nil) or (v^.kind <> tkString) then TextInto := errAbsent
+    else TextInto := v^.text.Into(s)
+  end;
+
+  { Append `item` to an array. The array takes ownership: freeing it frees
+    the item, and a caller must not free the item itself. }
+  procedure Append(arr: TomlPtr; item: TomlPtr);
+  begin
+    if (arr <> nil) and (arr^.kind = tkArray) and (item <> nil) then begin
+      item^.next := nil;
+      if arr^.first = nil then arr^.first := item else arr^.last^.next := item;
+      arr^.last := item;
+      arr^.count := arr^.count + 1
+    end
+  end;
+
+  { Put `item` in a table under `key`, replacing an entry of that key. Takes
+    ownership, as `Append` does.
+
+    One segment, and deliberately: a dotted key is ambiguous about which of the
+    tables on the way is being created, and a program building a document knows
+    which it means. `t.Put('a', TomlNewTable)` and then putting into that is the
+    unambiguous spelling. }
+  procedure Put(tab: TomlPtr; key: TomlKey; item: TomlPtr);
+  var old, prev: TomlPtr;
+  begin
+    if (tab <> nil) and (tab^.kind = tkTable) and (item <> nil) then begin
+      old := Lookup(tab, key);
+      if old = nil then
+        Attach(tab, key, item)
+      else begin
+        { Replaced in place, so that a program building a document keeps the
+          order it wrote the keys in -- which is the order the renderer emits
+          and therefore the order a person reads. }
+        item^.key := key;
+        item^.next := old^.next;
+        if tab^.first = old then tab^.first := item
+        else begin
+          prev := tab^.first;
+          while prev^.next <> old do prev := prev^.next;
+          prev^.next := item
+        end;
+        if tab^.last = old then tab^.last := item;
+        old^.next := nil;
+        old.Free
+      end
+    end
+  end;
+
+  { Append to a string value, which is how a caller builds one longer than
+    any capacity it can declare. }
+  procedure TextAdd(v: TomlPtr; s: string);
+  begin
+    if (v <> nil) and (v^.kind = tkString) then v^.text.AddText(s)
+  end;
+
+  { Append the document's text to `out`, as a TOML document a person can
+    read and this module can read back.
+
+    A table's own values come before its sub-tables, which TOML requires: after
+    a `[header]` every bare key belongs to that table. A sub-table becomes a
+    `[header]` of its own, an array made by `TomlNewTableArray` becomes a run of
+    `[[header]]` blocks, and everything else -- an array of values, a table
+    inside an array -- is written inline, because there is no header form for
+    it.
+
+    What it does not do is preserve the document it was given. Comments are not
+    in the tree, key order inside a table is the order the tree holds, and a
+    string comes back as a basic string however it was written. A program that
+    must edit somebody's file in place is editing bytes and not a tree, and this
+    is the wrong tool for it -- the same sentence `PasJson` writes about
+    whitespace. }
+  procedure Render(v: TomlPtr; var out: TomlChars);
+  begin
+    if v = nil then
+      { Nothing at all, which is a document: an empty TOML file is an empty
+        table. }
+    else if v^.kind = tkTable then
+      RenderBody(v, '', out)
+    else
+      RenderValue(v, out)
+  end;
+
+end;
+
+{ --- building ------------------------------------------------------------- }
+
+function TomlNewText;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkString);
+  p^.text.AddText(s);
+  TomlNewText := p
+end;
+
+function TomlNewInteger;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkInteger);
+  p^.inum := n;
+  TomlNewInteger := p
+end;
+
+function TomlNewFloat;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkFloat);
+  p^.fnum := x;
+  TomlNewFloat := p
+end;
+
+function TomlNewBoolean;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkBoolean);
+  p^.bool := b;
+  TomlNewBoolean := p
+end;
+
+function TomlNewStamp;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkDateTime);
+  p^.when := t;
+  TomlNewStamp := p
+end;
+
+function TomlNewArray;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkArray);
+  p^.closed := true;
+  TomlNewArray := p
+end;
+
+function TomlNewTableArray;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkArray);
+  p^.tabArray := true;
+  TomlNewTableArray := p
+end;
+
+function TomlNewTable;
+var p: TomlPtr;
+begin
+  p := FreshNode(tkTable);
+  p^.explicit := true;
+  TomlNewTable := p
 end;
 
 { --- strings -------------------------------------------------------------- }
@@ -680,21 +1181,21 @@ end;
 procedure PushUtf8(var t: TomlChars; cp: integer);
 begin
   if cp < 128 then
-    TomlCharsAdd(t, chr(cp))
+    t.Add(chr(cp))
   else if cp < 2048 then begin
-    TomlCharsAdd(t, chr(192 + cp div 64));
-    TomlCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(192 + cp div 64));
+    t.Add(chr(128 + cp mod 64))
   end
   else if cp < 65536 then begin
-    TomlCharsAdd(t, chr(224 + cp div 4096));
-    TomlCharsAdd(t, chr(128 + (cp div 64) mod 64));
-    TomlCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(224 + cp div 4096));
+    t.Add(chr(128 + (cp div 64) mod 64));
+    t.Add(chr(128 + cp mod 64))
   end
   else begin
-    TomlCharsAdd(t, chr(240 + cp div 262144));
-    TomlCharsAdd(t, chr(128 + (cp div 4096) mod 64));
-    TomlCharsAdd(t, chr(128 + (cp div 64) mod 64));
-    TomlCharsAdd(t, chr(128 + cp mod 64))
+    t.Add(chr(240 + cp div 262144));
+    t.Add(chr(128 + (cp div 4096) mod 64));
+    t.Add(chr(128 + (cp div 64) mod 64));
+    t.Add(chr(128 + cp mod 64))
   end
 end;
 
@@ -726,13 +1227,13 @@ begin
   i := i + 1;
   c := Peek(b, i);
   i := i + 1;
-  if c = '"' then TomlCharsAdd(t, '"')
-  else if c = '\' then TomlCharsAdd(t, '\')
-  else if c = 'b' then TomlCharsAdd(t, chr(8))
-  else if c = 'f' then TomlCharsAdd(t, chr(12))
-  else if c = 'n' then TomlCharsAdd(t, chr(10))
-  else if c = 'r' then TomlCharsAdd(t, chr(13))
-  else if c = 't' then TomlCharsAdd(t, chr(9))
+  if c = '"' then t.Add('"')
+  else if c = '\' then t.Add('\')
+  else if c = 'b' then t.Add(chr(8))
+  else if c = 'f' then t.Add(chr(12))
+  else if c = 'n' then t.Add(chr(10))
+  else if c = 'r' then t.Add(chr(13))
+  else if c = 't' then t.Add(chr(9))
   else if c = 'e' then ok := false   { TOML 1.1's escape, and this is 1.0 }
   else if (c = 'u') or (c = 'U') then begin
     if c = 'u' then cp := HexRun(b, i, 4, ok) else cp := HexRun(b, i, 8, ok);
@@ -800,7 +1301,7 @@ begin
       else if c = '\' then
         ok := ReadEscape(b, i, t, false, e)
       else begin
-        TomlCharsAdd(t, c);
+        t.Add(c);
         i := i + 1
       end
     end;
@@ -845,7 +1346,7 @@ begin
       if c = q then begin
         run := QuoteRun(b, i, q);
         if run < 3 then begin
-          for k := 1 to run do TomlCharsAdd(t, q);
+          for k := 1 to run do t.Add(q);
           i := i + run
         end
         else if run > QuoteRunMax then begin
@@ -853,13 +1354,13 @@ begin
           ok := false
         end
         else begin
-          for k := 1 to run - 3 do TomlCharsAdd(t, q);
+          for k := 1 to run - 3 do t.Add(q);
           i := i + run;
           going := false
         end
       end
       else if (c = chr(10)) or (c = chr(13)) or (c = chr(9)) then begin
-        TomlCharsAdd(t, c);
+        t.Add(c);
         i := i + 1
       end
       else if Control(c) then begin
@@ -869,7 +1370,7 @@ begin
       else if basic and (c = '\') then
         ok := ReadEscape(b, i, t, true, e)
       else begin
-        TomlCharsAdd(t, c);
+        t.Add(c);
         i := i + 1
       end
     end;
@@ -902,7 +1403,7 @@ begin
         ok := false
       end
       else begin
-        TomlCharsAdd(t, c);
+        t.Add(c);
         i := i + 1
       end
     end;
@@ -935,7 +1436,7 @@ function CharsIntoKey(var t: TomlChars; var k: TomlKey;
                       var e: ErrorCode): boolean;
 var n, j: integer;
 begin
-  n := TomlCharsLen(t);
+  n := t.Len;
   if n > TomlKeyMax then begin
     e := errFull;
     CharsIntoKey := false
@@ -943,7 +1444,7 @@ begin
   else begin
     k := '';
     for j := 1 to n do
-      k := k + TomlCharsAt(t, j);
+      k := k + t.At(j);
     CharsIntoKey := true
   end
 end;
@@ -980,11 +1481,11 @@ begin
       ok := false
     end
     else begin
-      TomlCharsNew(t);
+      t.Init;
       if Peek(b, i) = '"' then ok := ParseBasic(b, i, t, e)
       else ok := ParseLiteral(b, i, t, e);
       if ok then ok := CharsIntoKey(t, k, e);
-      TomlCharsFree(t)
+      t.Free
     end
   end
   else begin
@@ -1486,7 +1987,7 @@ begin
       item := ParseValue(b, i, depth, e);
       if item = nil then ok := false
       else begin
-        TomlAppend(arr, item);
+        arr.Append(item);
         ok := SkipBlankLines(b, i);
         if not ok then e := errSyntax
         else if Peek(b, i) = ',' then i := i + 1
@@ -1499,7 +2000,7 @@ begin
   end;
   if ok then ParseArray := arr
   else begin
-    TomlFree(arr);
+    arr.Free;
     ParseArray := nil
   end
 end;
@@ -1545,7 +2046,7 @@ begin
   end;
   if ok then ParseInline := tab
   else begin
-    TomlFree(tab);
+    tab.Free;
     ParseInline := nil
   end
 end;
@@ -1564,7 +2065,7 @@ begin
       p := FreshNode(tkString);
       if ParseString(b, i, p^.text, e) then ParseValue := p
       else begin
-        TomlFree(p);
+        p.Free;
         ParseValue := nil
       end
     end
@@ -1601,36 +2102,6 @@ begin
 end;
 
 { --- tables --------------------------------------------------------------- }
-
-{ The entry of `tab` with this key, or nil. The lookup a table does for
-  itself: linear, because a table in a configuration file has a handful of
-  keys and a map would be a hash of a string per lookup to save nothing. }
-function Lookup(tab: TomlPtr; key: TomlKey): TomlPtr;
-var c: TomlPtr;
-begin
-  Lookup := nil;
-  c := tab^.first;
-  while c <> nil do begin
-    if c^.key = key then begin
-      Lookup := c;
-      c := nil
-    end
-    else
-      c := c^.next
-  end
-end;
-
-{ Append an entry, which is `TomlPut` without the replacement: everything in
-  this module has already established that the key is not there, because
-  TOML's answer to a key that is there is a refusal and not a replacement. }
-procedure Attach(tab: TomlPtr; key: TomlKey; item: TomlPtr);
-begin
-  item^.key := key;
-  item^.next := nil;
-  if tab^.first = nil then tab^.first := item else tab^.last^.next := item;
-  tab^.last := item;
-  tab^.count := tab^.count + 1
-end;
 
 { Walk the first `n` segments of `path` from `tab`, creating what is not
   there. `forHeader` says which of the two callers this is, and the difference
@@ -1752,13 +2223,13 @@ begin
           Attach(owner, path[n], made);
           cur := FreshNode(tkTable);
           cur^.explicit := true;
-          TomlAppend(made, cur)
+          made.Append(cur)
         end
         else if (got^.kind = tkArray) and got^.tabArray and not got^.closed
           then begin
             cur := FreshNode(tkTable);
             cur^.explicit := true;
-            TomlAppend(got, cur)
+            got.Append(cur)
           end
         else begin
           e := errSyntax;
@@ -1822,7 +2293,7 @@ begin
   end;
   if ok then r := root
   else begin
-    TomlFree(root);
+    root.Free;
     if e = errNone then e := errSyntax;
     r := e
   end
@@ -1831,529 +2302,10 @@ end;
 function TomlParse;
 var b: TomlChars;
 begin
-  TomlCharsNew(b);
-  TomlCharsAddLine(b, s);
+  b.Init;
+  b.AddText(s);
   r := TomlParseChars(b, at);
-  TomlCharsFree(b)
-end;
-
-{ --- reading -------------------------------------------------------------- }
-
-function TomlKindOf;
-begin
-  { An absent key reads as an empty table, which is what makes every reader
-    below safe to call on one -- `TomlPath(doc, 'server.tls.verify')` answers
-    nil where there is no `server`, and the caller's `TomlBooleanOr` of nil is
-    its default rather than a trap. }
-  if v = nil then TomlKindOf := tkTable else TomlKindOf := v^.kind
-end;
-
-function TomlCount;
-begin
-  if (v <> nil) and ((v^.kind = tkArray) or (v^.kind = tkTable)) then
-    TomlCount := v^.count
-  else
-    TomlCount := 0
-end;
-
-function TomlAt;
-var c: TomlPtr; k: integer;
-begin
-  TomlAt := nil;
-  if (v <> nil) and ((v^.kind = tkArray) or (v^.kind = tkTable))
-     and (i >= 1) and (i <= v^.count) then begin
-    c := v^.first;
-    for k := 2 to i do c := c^.next;
-    TomlAt := c
-  end
-end;
-
-function TomlKeyAt;
-var c: TomlPtr;
-begin
-  c := TomlAt(v, i);
-  if c = nil then TomlKeyAt := '' else TomlKeyAt := c^.key
-end;
-
-function TomlMember;
-begin
-  if (v <> nil) and (v^.kind = tkTable) then TomlMember := Lookup(v, key)
-  else TomlMember := nil
-end;
-
-function TomlPath;
-var cur: TomlPtr; seg: TomlKey; k: integer;
-begin
-  cur := v;
-  seg := '';
-  k := 1;
-  while (cur <> nil) and (k <= length(path) + 1) do begin
-    if (k > length(path)) or (path[k] = '.') then begin
-      if seg = '' then cur := nil else cur := TomlMember(cur, seg);
-      seg := ''
-    end
-    else
-      seg := seg + path[k];
-    k := k + 1
-  end;
-  if length(path) = 0 then TomlPath := v else TomlPath := cur
-end;
-
-function TomlIsTableArray;
-begin
-  TomlIsTableArray := (v <> nil) and (v^.kind = tkArray) and v^.tabArray
-end;
-
-function TomlIntegerOr;
-begin
-  if (v <> nil) and (v^.kind = tkInteger) then TomlIntegerOr := v^.inum
-  else TomlIntegerOr := whenBad
-end;
-
-function TomlFloatOr;
-begin
-  if v = nil then TomlFloatOr := whenBad
-  else if v^.kind = tkFloat then TomlFloatOr := v^.fnum
-  { An integer answers as a real: a person who wrote `timeout = 30` where the
-    documentation said `30.0` has not made a mistake worth reporting, and TOML
-    keeps the two types apart for what is *written* rather than for what may
-    be read. `TomlIntegerOr` is the reader that does not do this, and a
-    caller needing the distinction asks `TomlKindOf`. }
-  else if v^.kind = tkInteger then TomlFloatOr := v^.inum
-  else TomlFloatOr := whenBad
-end;
-
-function TomlBooleanOr;
-begin
-  if (v <> nil) and (v^.kind = tkBoolean) then TomlBooleanOr := v^.bool
-  else TomlBooleanOr := whenBad
-end;
-
-function TomlStampOr;
-begin
-  if (v <> nil) and (v^.kind = tkDateTime) then TomlStampOr := v^.when
-  else TomlStampOr := whenBad
-end;
-
-function TomlTextLen;
-begin
-  if (v <> nil) and (v^.kind = tkString) then TomlTextLen := TomlCharsLen(v^.text)
-  else TomlTextLen := 0
-end;
-
-function TomlTextAt;
-begin
-  TomlTextAt := TomlCharsAt(v^.text, i)
-end;
-
-function TomlTextInto;
-begin
-  if (v = nil) or (v^.kind <> tkString) then TomlTextInto := errAbsent
-  else TomlTextInto := TomlCharsInto(v^.text, s)
-end;
-
-{ --- building ------------------------------------------------------------- }
-
-function TomlNewText;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkString);
-  TomlCharsAddLine(p^.text, s);
-  TomlNewText := p
-end;
-
-function TomlNewInteger;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkInteger);
-  p^.inum := n;
-  TomlNewInteger := p
-end;
-
-function TomlNewFloat;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkFloat);
-  p^.fnum := x;
-  TomlNewFloat := p
-end;
-
-function TomlNewBoolean;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkBoolean);
-  p^.bool := b;
-  TomlNewBoolean := p
-end;
-
-function TomlNewStamp;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkDateTime);
-  p^.when := t;
-  TomlNewStamp := p
-end;
-
-function TomlNewArray;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkArray);
-  p^.closed := true;
-  TomlNewArray := p
-end;
-
-function TomlNewTableArray;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkArray);
-  p^.tabArray := true;
-  TomlNewTableArray := p
-end;
-
-function TomlNewTable;
-var p: TomlPtr;
-begin
-  p := FreshNode(tkTable);
-  p^.explicit := true;
-  TomlNewTable := p
-end;
-
-procedure TomlAppend;
-begin
-  if (arr <> nil) and (arr^.kind = tkArray) and (item <> nil) then begin
-    item^.next := nil;
-    if arr^.first = nil then arr^.first := item else arr^.last^.next := item;
-    arr^.last := item;
-    arr^.count := arr^.count + 1
-  end
-end;
-
-procedure TomlPut;
-var old, prev: TomlPtr;
-begin
-  if (tab <> nil) and (tab^.kind = tkTable) and (item <> nil) then begin
-    old := Lookup(tab, key);
-    if old = nil then
-      Attach(tab, key, item)
-    else begin
-      { Replaced in place, so that a program building a document keeps the
-        order it wrote the keys in -- which is the order the renderer emits
-        and therefore the order a person reads. }
-      item^.key := key;
-      item^.next := old^.next;
-      if tab^.first = old then tab^.first := item
-      else begin
-        prev := tab^.first;
-        while prev^.next <> old do prev := prev^.next;
-        prev^.next := item
-      end;
-      if tab^.last = old then tab^.last := item;
-      old^.next := nil;
-      TomlFree(old)
-    end
-  end
-end;
-
-procedure TomlTextAdd;
-begin
-  if (v <> nil) and (v^.kind = tkString) then TomlCharsAddLine(v^.text, s)
-end;
-
-{ --- writing -------------------------------------------------------------- }
-
-type
-  { A header's path, assembled as the walk descends. Sixteen segments of up to
-    255 bytes would need four thousand; what a document actually writes is a
-    handful of short words, and `errFull` has nowhere to be reported from
-    inside a procedure that answers nothing -- so this is generous rather than
-    exact, and a path past it is truncated by the string assignment's own
-    trap. }
-  TomlPathText = string(1024);
-
-{ `n` in decimal, padded with zeros to `w` digits. TOML's date-time spelling
-  is RFC 3339's, so it is written out here rather than taken from `date(t)`
-  and `time(t)`: those are *this processor's* representations (§6.7.6.9 makes
-  them implementation-defined), and a format's spelling must not move with the
-  processor that writes it. }
-function Pad(n, w: integer): TomlKey;
-var s: TomlKey;
-begin
-  writestr(s, n:1);
-  while length(s) < w do s := '0' + s;
-  Pad := s
-end;
-
-{ A key, bare where the format admits one and a basic string otherwise. An
-  empty key is a quoted empty string, which TOML admits and which nothing but
-  a program building a document will produce. }
-procedure RenderKey(key: TomlKey; var out: TomlChars);
-var k: integer; bare: boolean;
-begin
-  bare := length(key) > 0;
-  for k := 1 to length(key) do
-    if not BareChar(key[k]) then bare := false;
-  if bare then
-    TomlCharsAddLine(out, key)
-  else begin
-    TomlCharsAdd(out, '"');
-    for k := 1 to length(key) do
-      if (key[k] = '"') or (key[k] = '\') then begin
-        TomlCharsAdd(out, '\');
-        TomlCharsAdd(out, key[k])
-      end
-      else
-        TomlCharsAdd(out, key[k]);
-    TomlCharsAdd(out, '"')
-  end
-end;
-
-{ A string value as a basic string. The escapes are the ones the format
-  requires -- the quotation mark, the reverse solidus and every control
-  character -- and no others: a byte above 127 is part of a UTF-8 sequence
-  this module was handed and passes through unread, which is the decision the
-  heading records. }
-procedure RenderText(var t: TomlChars; var out: TomlChars);
-var k, n, c: integer; ch: char;
-
-  function HexCh(d: integer): char;
-  begin
-    if d < 10 then HexCh := chr(ord('0') + d) else HexCh := chr(ord('A') + d - 10)
-  end;
-
-begin
-  TomlCharsAdd(out, '"');
-  n := TomlCharsLen(t);
-  for k := 1 to n do begin
-    ch := TomlCharsAt(t, k);
-    c := ord(ch);
-    if ch = '"' then TomlCharsAddLine(out, '\"')
-    else if ch = '\' then TomlCharsAddLine(out, '\\')
-    else if c = 8 then TomlCharsAddLine(out, '\b')
-    else if c = 9 then TomlCharsAddLine(out, '\t')
-    else if c = 10 then TomlCharsAddLine(out, '\n')
-    else if c = 12 then TomlCharsAddLine(out, '\f')
-    else if c = 13 then TomlCharsAddLine(out, '\r')
-    else if (c < 32) or (c = 127) then begin
-      TomlCharsAddLine(out, '\u00');
-      TomlCharsAdd(out, HexCh(c div 16));
-      TomlCharsAdd(out, HexCh(c mod 16))
-    end
-    else
-      TomlCharsAdd(out, ch)
-  end;
-  TomlCharsAdd(out, '"')
-end;
-
-{ A float. TOML has `inf`, `-inf` and `nan`, so unlike `PasJson` this module
-  has a spelling for every value the type holds and none of them is what
-  `writestr` writes.
-
-  A finite one is the shortest decimal that reads back (`PasText.RealToStr`,
-  ADR-0309) and then, if that has neither a point nor an exponent, a `.0`:
-  TOML's float must show one or the other, so the shortest spelling of 1.0 is
-  `1` for JSON and `1.0` here. }
-procedure RenderFloat(x: real; var out: TomlChars);
-var s: TextLine; k: integer; plain: boolean;
-begin
-  if not (x = x) then
-    TomlCharsAddLine(out, 'nan')
-  else if x > maxreal then
-    TomlCharsAddLine(out, 'inf')
-  else if x < -maxreal then
-    TomlCharsAddLine(out, '-inf')
-  else begin
-    s := RealToStr(x);
-    plain := true;
-    for k := 1 to length(s) do
-      if (s[k] = '.') or (s[k] = 'E') or (s[k] = 'e') then plain := false;
-    if plain then s := s + '.0';
-    TomlCharsAddLine(out, s)
-  end
-end;
-
-procedure RenderStamp(t: TomlStamp; var out: TomlChars);
-var frac: TomlKey; k: integer;
-begin
-  if (t.form = tdDate) or (t.form = tdLocal) or (t.form = tdOffset) then begin
-    TomlCharsAddLine(out, Pad(t.clock.year, 4));
-    TomlCharsAdd(out, '-');
-    TomlCharsAddLine(out, Pad(t.clock.month, 2));
-    TomlCharsAdd(out, '-');
-    TomlCharsAddLine(out, Pad(t.clock.day, 2))
-  end;
-  if t.form = tdDate then
-    { nothing further }
-  else begin
-    if t.form <> tdTime then TomlCharsAdd(out, 'T');
-    TomlCharsAddLine(out, Pad(t.clock.hour, 2));
-    TomlCharsAdd(out, ':');
-    TomlCharsAddLine(out, Pad(t.clock.minute, 2));
-    TomlCharsAdd(out, ':');
-    TomlCharsAddLine(out, Pad(t.clock.second, 2));
-    if t.nanosecond > 0 then begin
-      { Nine digits with the trailing zeros taken off, so a half second is
-        `.5` and not `.500000000`. }
-      frac := Pad(t.nanosecond, 9);
-      k := length(frac);
-      while (k > 1) and (frac[k] = '0') do k := k - 1;
-      TomlCharsAdd(out, '.');
-      TomlCharsAddLine(out, substr(frac, 1, k))
-    end;
-    if t.form = tdOffset then
-      if t.offset = 0 then
-        TomlCharsAdd(out, 'Z')
-      else begin
-        if t.offset < 0 then TomlCharsAdd(out, '-') else TomlCharsAdd(out, '+');
-        TomlCharsAddLine(out, Pad(abs(t.offset) div 60, 2));
-        TomlCharsAdd(out, ':');
-        TomlCharsAddLine(out, Pad(abs(t.offset) mod 60, 2))
-      end
-  end
-end;
-
-{ Whether every element of an array is a table, which is what an array of
-  tables must be for `[[header]]` blocks to be able to spell it. }
-function AllTables(arr: TomlPtr): boolean;
-var c: TomlPtr; all: boolean;
-begin
-  all := arr^.count > 0;
-  c := arr^.first;
-  while c <> nil do begin
-    if c^.kind <> tkTable then all := false;
-    c := c^.next
-  end;
-  AllTables := all
-end;
-
-{ Whether this entry of a table becomes a header of its own rather than a
-  value on the line after its key. }
-function IsHeaderEntry(c: TomlPtr): boolean;
-begin
-  IsHeaderEntry := ((c^.kind = tkTable) and not c^.closed)
-                   or ((c^.kind = tkArray) and c^.tabArray and AllTables(c))
-end;
-
-procedure RenderValue(v: TomlPtr; var out: TomlChars); forward;
-
-{ A table written as a value -- an inline table, in braces, with its pairs
-  separated by commas. Everything under it is a value too, there being no
-  header form inside one.
-
-  What this comment does not do is show one, and that is not fastidiousness:
-  §6.1.8 makes the four comment delimiters two pairs in any combination, so a
-  brace inside a brace comment closes it, and a routine's leading comment
-  holding an example of the syntax it renders would end at the example.
-  `tests/dialect/lib_toml.pas` is where one is written out. }
-procedure RenderInline(v: TomlPtr; var out: TomlChars);
-var c: TomlPtr;
-begin
-  TomlCharsAddLine(out, '{ ');
-  c := v^.first;
-  while c <> nil do begin
-    RenderKey(c^.key, out);
-    TomlCharsAddLine(out, ' = ');
-    RenderValue(c, out);
-    c := c^.next;
-    if c <> nil then TomlCharsAddLine(out, ', ')
-  end;
-  TomlCharsAddLine(out, ' }')
-end;
-
-procedure RenderValue;
-var c: TomlPtr; s: TextLine;
-begin
-  case v^.kind of
-    tkString:   RenderText(v^.text, out);
-    tkInteger:  begin
-                  s := IntToStr(v^.inum);
-                  TomlCharsAddLine(out, s)
-                end;
-    tkFloat:    RenderFloat(v^.fnum, out);
-    tkBoolean:  if v^.bool then TomlCharsAddLine(out, 'true')
-                else TomlCharsAddLine(out, 'false');
-    tkDateTime: RenderStamp(v^.when, out);
-    tkTable:    RenderInline(v, out);
-    tkArray:    begin
-                  TomlCharsAdd(out, '[');
-                  c := v^.first;
-                  while c <> nil do begin
-                    RenderValue(c, out);
-                    c := c^.next;
-                    if c <> nil then TomlCharsAddLine(out, ', ')
-                  end;
-                  TomlCharsAdd(out, ']')
-                end
-  end
-end;
-
-{ A table's own `key = value` lines, and then its sub-tables as headers of
-  their own. The order is the format's requirement and not a preference: after
-  a `[header]` every bare key belongs to that table, so a value written after
-  a sub-table's header would join the sub-table. }
-procedure RenderBody(v: TomlPtr; path: TomlPathText; var out: TomlChars);
-var c, el: TomlPtr; sub: TomlPathText;
-
-  { The path of an entry, as the header line spells it. Assembled through a
-    buffer because `RenderKey` decides whether the segment is bare. }
-  function Extend(base: TomlPathText; entry: TomlPtr): TomlPathText;
-  var kb: TomlChars; t: TextLine; e2: ErrorCode;
-  begin
-    TomlCharsNew(kb);
-    RenderKey(entry^.key, kb);
-    e2 := TomlCharsInto(kb, t);
-    TomlCharsFree(kb);
-    if length(base) = 0 then Extend := t else Extend := base + '.' + t
-  end;
-
-begin
-  c := v^.first;
-  while c <> nil do begin
-    if not IsHeaderEntry(c) then begin
-      RenderKey(c^.key, out);
-      TomlCharsAddLine(out, ' = ');
-      RenderValue(c, out);
-      TomlCharsAdd(out, chr(10))
-    end;
-    c := c^.next
-  end;
-  c := v^.first;
-  while c <> nil do begin
-    if IsHeaderEntry(c) then begin
-      sub := Extend(path, c);
-      if c^.kind = tkTable then begin
-        TomlCharsAdd(out, chr(10));
-        TomlCharsAdd(out, '[');
-        TomlCharsAddLine(out, sub);
-        TomlCharsAddLine(out, ']');
-        TomlCharsAdd(out, chr(10));
-        RenderBody(c, sub, out)
-      end
-      else begin
-        el := c^.first;
-        while el <> nil do begin
-          TomlCharsAdd(out, chr(10));
-          TomlCharsAddLine(out, '[[');
-          TomlCharsAddLine(out, sub);
-          TomlCharsAddLine(out, ']]');
-          TomlCharsAdd(out, chr(10));
-          RenderBody(el, sub, out);
-          el := el^.next
-        end
-      end
-    end;
-    c := c^.next
-  end
-end;
-
-procedure TomlRender;
-begin
-  if v = nil then
-    { Nothing at all, which is a document: an empty TOML file is an empty
-      table. }
-  else if v^.kind = tkTable then
-    RenderBody(v, '', out)
-  else
-    RenderValue(v, out)
+  b.Free
 end;
 
 end.

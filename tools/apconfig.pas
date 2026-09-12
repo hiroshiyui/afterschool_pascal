@@ -98,7 +98,7 @@ end;
 procedure FailAt(atByte: integer; what: ErrText);
 var line, col: integer; msg: IOLine;
 begin
-  TomlPositionOf(buf, atByte, line, col);
+  buf.PositionOf(atByte, line, col);
   writestr(msg, path, ':', line:1, ':', col:1, ': ', what);
   Fail(msg)
 end;
@@ -135,9 +135,9 @@ end;
 procedure Emit(key: Dotted; v: TomlPtr);
 var s: ValueText; e: ErrorCode; k: integer;
 begin
-  if TomlKindOf(v) <> tkString then
+  if v.Kind <> tkString then
     Fail(path + ': ' + key + ' is written as a quoted string');
-  e := TomlTextInto(v, s);
+  e := v.TextInto(s);
   if Failed(e) then
     Fail(path + ': ' + key + ' is longer than this reader can carry');
   for k := 1 to length(s) do
@@ -153,24 +153,24 @@ procedure ReadDocument;
 var i, j, k: integer; sect, name: TomlKey; full: Dotted;
     v, w: TomlPtr; list: boolean;
 begin
-  for i := 1 to TomlCount(doc) do begin
-    sect := TomlKeyAt(doc, i);
-    v := TomlAt(doc, i);
-    if TomlKindOf(v) <> tkTable then
+  for i := 1 to doc.Count do begin
+    sect := doc.KeyAt(i);
+    v := doc.At(i);
+    if v.Kind <> tkTable then
       Fail(path + ': ' + sect + ' is a key outside any [section]');
     if (sect <> 'project') and (sect <> 'build') and (sect <> 'test') then
       Fail(path + ': unknown section [' + sect + ']');
-    for j := 1 to TomlCount(v) do begin
-      name := TomlKeyAt(v, j);
-      w := TomlAt(v, j);
+    for j := 1 to v.Count do begin
+      name := v.KeyAt(j);
+      w := v.At(j);
       full := sect + '.' + name;
       if not KnownKey(full, list) then
         Fail(path + ': unknown key ' + full);
       if list then begin
-        if TomlKindOf(w) <> tkArray then
+        if w.Kind <> tkArray then
           Fail(path + ': ' + full + ' is written as a list of quoted strings');
-        for k := 1 to TomlCount(w) do
-          Emit(full, TomlAt(w, k))
+        for k := 1 to w.Count do
+          Emit(full, w.At(k))
       end
       else Emit(full, w)
     end
@@ -196,12 +196,12 @@ begin
   if size > DocMax then
     Fail(path + ': larger than this reader can hold');
 
-  TomlCharsNew(buf);
-  TomlCharsAddLine(buf, text);
+  buf.Init;
+  buf.AddText(text);
   r := TomlParseChars(buf, at);
   if not r.ok then FailAt(at, ErrorText(r.cause));
   doc := r.val;
   ReadDocument;
-  TomlFree(doc);
-  TomlCharsFree(buf)
+  doc.Free;
+  buf.Free
 end.

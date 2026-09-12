@@ -33,12 +33,12 @@ var r: TomlResult; at, line, col, i: integer;
   file does anyway. }
 procedure Feed(t: string);
 begin
-  TomlCharsAddLine(buf, t);
-  TomlCharsAdd(buf, chr(10))
+  buf.AddText(t);
+  buf.Add(chr(10))
 end;
 
 begin
-  TomlCharsNew(buf);
+  buf.Init;
   Feed('# a configuration');
   Feed('title = "TOML \"demo\""');
   Feed('lit = ''C:\path\no-escape''');
@@ -88,118 +88,118 @@ begin
   r := TomlParseChars(buf, at);
   writeln('parse ok=', r.ok);
   if not r.ok then begin
-    TomlPositionOf(buf, at, line, col);
+    buf.PositionOf(at, line, col);
     writeln('  refused ', ErrorText(r.cause), ' at ', line:1, ':', col:1)
   end
   else begin
     doc := r.val;
-    writeln('top-level entries=', TomlCount(doc):1);
+    writeln('top-level entries=', doc.Count:1);
 
     { --- the four string forms ---------------------------------------- }
-    e := TomlTextInto(TomlMember(doc, 'title'), s);
+    e := doc.Member('title').TextInto(s);
     writeln('title=[', s, ']');
-    e := TomlTextInto(TomlMember(doc, 'lit'), s);
+    e := doc.Member('lit').TextInto(s);
     writeln('lit=[', s, ']');
     { The newline after the opening delimiter is not content, and the
       line-ending backslash takes the newline and the next line's blanks with
       it -- so this is `one two` and then the newline before the closing
       delimiter, which is. }
-    e := TomlTextInto(TomlMember(doc, 'multi'), s);
+    e := doc.Member('multi').TextInto(s);
     writeln('multi=[', s, ']');
     { Two apostrophes inside a run of three are content, which is how a
       literal string holds one. }
-    e := TomlTextInto(TomlMember(doc, 'mlit'), s);
+    e := doc.Member('mlit').TextInto(s);
     writeln('mlit=[', s, ']');
 
     { The byte readers, which are what a value too long for any capacity the
       caller can declare is read through -- `TomlTextInto` answers `errFull`
       for one, and these do not. `TomlCharsFull` is the same question asked of
       the buffer a caller is assembling somebody else's document into. }
-    a := TomlMember(doc, 'title');
-    writeln('title bytes=', TomlTextLen(a):1,
-            ' [2]=', TomlTextAt(a, 2), ' [6]=', TomlTextAt(a, 6),
-            ' not-a-string len=', TomlTextLen(TomlMember(doc, 'n1')):1);
-    writeln('document bytes=', TomlCharsLen(buf):1,
-            ' [1]=', TomlCharsAt(buf, 1), ' full=', TomlCharsFull(buf));
+    a := doc.Member('title');
+    writeln('title bytes=', a.TextLen:1,
+            ' [2]=', a.TextAt(2), ' [6]=', a.TextAt(6),
+            ' not-a-string len=', doc.Member('n1').TextLen:1);
+    writeln('document bytes=', buf.Len:1,
+            ' [1]=', buf.At(1), ' full=', buf.Full);
 
     { --- numbers ------------------------------------------------------- }
-    writeln('n1=', TomlIntegerOr(TomlMember(doc, 'n1'), -1):1,
-            ' n2=', TomlIntegerOr(TomlMember(doc, 'n2'), -1):1,
-            ' n3=', TomlIntegerOr(TomlMember(doc, 'n3'), -1):1,
-            ' n4=', TomlIntegerOr(TomlMember(doc, 'n4'), -1):1,
-            ' n5=', TomlIntegerOr(TomlMember(doc, 'n5'), -1):1);
+    writeln('n1=', doc.Member('n1').IntegerOr(-1):1,
+            ' n2=', doc.Member('n2').IntegerOr(-1):1,
+            ' n3=', doc.Member('n3').IntegerOr(-1):1,
+            ' n4=', doc.Member('n4').IntegerOr(-1):1,
+            ' n5=', doc.Member('n5').IntegerOr(-1):1);
     { An integer answers TomlFloatOr and a float does not answer
       TomlIntegerOr: 1.5 is not an integer and answering 1 would be a
       different configuration. }
-    writeln('f1=', TomlFloatOr(TomlMember(doc, 'f1'), 0.0):6:4,
-            ' f1 as integer=', TomlIntegerOr(TomlMember(doc, 'f1'), -1):1,
-            ' n5 as float=', TomlFloatOr(TomlMember(doc, 'n5'), 0.0):6:1);
-    writeln('yes=', TomlBooleanOr(TomlMember(doc, 'yes'), false));
+    writeln('f1=', doc.Member('f1').FloatOr(0.0):6:4,
+            ' f1 as integer=', doc.Member('f1').IntegerOr(-1):1,
+            ' n5 as float=', doc.Member('n5').FloatOr(0.0):6:1);
+    writeln('yes=', doc.Member('yes').BooleanOr(false));
 
     { --- the four date-time forms -------------------------------------- }
-    st := TomlStampOr(TomlMember(doc, 'd1'), st);
+    st := doc.Member('d1').StampOr(st);
     writeln('d1 form=', ord(st.form):1, ' y=', st.clock.year:1,
             ' m=', st.clock.month:1, ' d=', st.clock.day:1,
             ' timevalid=', st.clock.TimeValid);
-    st := TomlStampOr(TomlMember(doc, 'd2'), st);
+    st := doc.Member('d2').StampOr(st);
     writeln('d2 form=', ord(st.form):1, ' h=', st.clock.hour:1,
             ' ns=', st.nanosecond:1, ' datevalid=', st.clock.DateValid);
-    st := TomlStampOr(TomlMember(doc, 'd3'), st);
+    st := doc.Member('d3').StampOr(st);
     writeln('d3 form=', ord(st.form):1, ' offset=', st.offset:1);
-    st := TomlStampOr(TomlMember(doc, 'd5'), st);
+    st := doc.Member('d5').StampOr(st);
     writeln('d5 form=', ord(st.form):1, ' offset=', st.offset:1);
 
     { --- arrays and tables --------------------------------------------- }
-    a := TomlMember(doc, 'list');
+    a := doc.Member('list');
     write('list=');
-    for i := 1 to TomlCount(a) do write(TomlIntegerOr(TomlAt(a, i), 0):1, ' ');
+    for i := 1 to a.Count do write(a.At(i).IntegerOr(0):1, ' ');
     writeln;
     writeln('nest[1][2]=',
-            TomlIntegerOr(TomlAt(TomlAt(TomlMember(doc, 'nest'), 1), 2), -1):1);
-    writeln('point.y=', TomlIntegerOr(TomlPath(doc, 'point.y'), -1):1);
-    writeln('dotted.a.b=', TomlIntegerOr(TomlPath(doc, 'dotted.a.b'), -1):1,
-            ' dotted.a.c=', TomlIntegerOr(TomlPath(doc, 'dotted.a.c'), -1):1);
-    writeln('server.port=', TomlIntegerOr(TomlPath(doc, 'server.port'), -1):1,
+            doc.Member('nest').At(1).At(2).IntegerOr(-1):1);
+    writeln('point.y=', doc.Path('point.y').IntegerOr(-1):1);
+    writeln('dotted.a.b=', doc.Path('dotted.a.b').IntegerOr(-1):1,
+            ' dotted.a.c=', doc.Path('dotted.a.c').IntegerOr(-1):1);
+    writeln('server.port=', doc.Path('server.port').IntegerOr(-1):1,
             ' server.tls.verify=',
-            TomlBooleanOr(TomlPath(doc, 'server.tls.verify'), false));
+            doc.Path('server.tls.verify').BooleanOr(false));
 
-    a := TomlMember(doc, 'fruit');
-    writeln('fruit is a table array=', TomlIsTableArray(a),
-            ' count=', TomlCount(a):1);
-    e := TomlTextInto(TomlPath(TomlAt(a, 2), 'name'), s);
+    a := doc.Member('fruit');
+    writeln('fruit is a table array=', a.IsTableArray,
+            ' count=', a.Count:1);
+    e := a.At(2).Path('name').TextInto(s);
     writeln('fruit[2].name=', s);
     { A header under an array of tables names the last element started, which
       is what makes a variety belong to the banana. }
-    e := TomlTextInto(TomlPath(TomlAt(a, 2), 'variety.kind'), s);
+    e := a.At(2).Path('variety.kind').TextInto(s);
     writeln('fruit[2].variety.kind=', s);
 
     { A key that is not there reads as an empty table, so a reader may ask for
       a whole path without asking whether each step exists. }
-    writeln('absent kind=', ord(TomlKindOf(TomlPath(doc, 'no.such.thing'))):1,
-            ' count=', TomlCount(TomlPath(doc, 'no.such')):1,
-            ' int=', TomlIntegerOr(TomlPath(doc, 'no.such'), -1):1);
+    writeln('absent kind=', ord(doc.Path('no.such.thing').Kind):1,
+            ' count=', doc.Path('no.such').Count:1,
+            ' int=', doc.Path('no.such').IntegerOr(-1):1);
 
     { --- writing it back ------------------------------------------------ }
-    TomlCharsNew(out);
-    TomlRender(doc, out);
-    e := TomlCharsInto(out, s);
+    out.Init;
+    doc.Render(out);
+    e := out.Into(s);
     writeln('--- rendered (code=', ord(e):1, ') ---');
     write(s);
     writeln('--- end ---');
-    TomlFree(doc);
+    doc.Free;
 
     { --- and the claim the file is for ---------------------------------- }
     r := TomlParseChars(out, at);
     writeln('reparse ok=', r.ok);
     if r.ok then begin
-      TomlCharsNew(again);
-      TomlRender(r.val, again);
-      e := TomlCharsInto(again, s2);
+      again.Init;
+      r.val.Render(again);
+      e := again.Into(s2);
       writeln('round trip identical=', s = s2);
-      TomlCharsFree(again);
-      TomlFree(r.val)
+      again.Free;
+      r.val.Free
     end;
-    TomlCharsFree(out)
+    out.Free
   end;
-  TomlCharsFree(buf)
+  buf.Free
 end.

@@ -26,38 +26,38 @@ var at, line, col: integer;
 procedure Refuse(what: string; src: string);
 var r: TomlResult; b: TomlChars; k: integer;
 begin
-  TomlCharsNew(b);
+  b.Init;
   for k := 1 to length(src) do
-    if src[k] = '|' then TomlCharsAdd(b, chr(10)) else TomlCharsAdd(b, src[k]);
+    if src[k] = '|' then b.Add(chr(10)) else b.Add(src[k]);
   r := TomlParseChars(b, at);
-  TomlPositionOf(b, at, line, col);
+  b.PositionOf(at, line, col);
   write(what:26, ': ');
   if r.ok then begin
     writeln('ACCEPTED (should not be)');
-    TomlFree(r.val)
+    r.val.Free
   end
   else
     writeln(ErrorText(r.cause), ' at ', line:1, ':', col:1);
-  TomlCharsFree(b)
+  b.Free
 end;
 
 procedure Accept(what: string; src: string);
 var r: TomlResult; b: TomlChars; k: integer;
 begin
-  TomlCharsNew(b);
+  b.Init;
   for k := 1 to length(src) do
-    if src[k] = '|' then TomlCharsAdd(b, chr(10)) else TomlCharsAdd(b, src[k]);
+    if src[k] = '|' then b.Add(chr(10)) else b.Add(src[k]);
   r := TomlParseChars(b, at);
   write(what:26, ': ');
   if r.ok then begin
     writeln('accepted');
-    TomlFree(r.val)
+    r.val.Free
   end
   else begin
-    TomlPositionOf(b, at, line, col);
+    b.PositionOf(at, line, col);
     writeln('REFUSED ', ErrorText(r.cause), ' at ', line:1, ':', col:1)
   end;
-  TomlCharsFree(b)
+  b.Free
 end;
 
 begin

@@ -31,11 +31,11 @@ var doc, srv, arr, one, two: TomlPtr; out: TomlChars;
 
 begin
   doc := TomlNewTable;
-  TomlPut(doc, 'title', TomlNewText('built by hand'));
-  TomlPut(doc, 'count', TomlNewInteger(3));
-  TomlPut(doc, 'ratio', TomlNewFloat(0.5));
-  TomlPut(doc, 'whole', TomlNewFloat(2.0));
-  TomlPut(doc, 'on', TomlNewBoolean(true));
+  doc.Put('title', TomlNewText('built by hand'));
+  doc.Put('count', TomlNewInteger(3));
+  doc.Put('ratio', TomlNewFloat(0.5));
+  doc.Put('whole', TomlNewFloat(2.0));
+  doc.Put('on', TomlNewBoolean(true));
 
   st.form := tdOffset;
   st.clock.DateValid := true;
@@ -48,63 +48,63 @@ begin
   st.clock.second := 30;
   st.nanosecond := 250000000;
   st.offset := 8 * 60;
-  TomlPut(doc, 'when', TomlNewStamp(st));
+  doc.Put('when', TomlNewStamp(st));
 
   arr := TomlNewArray;
-  TomlAppend(arr, TomlNewInteger(1));
-  TomlAppend(arr, TomlNewText('two'));
-  TomlPut(doc, 'mixed', arr);
+  arr.Append(TomlNewInteger(1));
+  arr.Append(TomlNewText('two'));
+  doc.Put('mixed', arr);
 
   srv := TomlNewTable;
-  TomlPut(srv, 'host', TomlNewText('localhost'));
-  TomlPut(srv, 'port', TomlNewInteger(8080));
-  TomlPut(doc, 'server', srv);
+  srv.Put('host', TomlNewText('localhost'));
+  srv.Put('port', TomlNewInteger(8080));
+  doc.Put('server', srv);
 
   arr := TomlNewTableArray;
   one := TomlNewTable;
-  TomlPut(one, 'name', TomlNewText('apple'));
-  TomlAppend(arr, one);
+  one.Put('name', TomlNewText('apple'));
+  arr.Append(one);
   two := TomlNewTable;
-  TomlPut(two, 'name', TomlNewText('pear'));
-  TomlAppend(arr, two);
-  TomlPut(doc, 'fruit', arr);
+  two.Put('name', TomlNewText('pear'));
+  arr.Append(two);
+  doc.Put('fruit', arr);
 
   { A string value assembled in pieces, which is how a caller builds one
     longer than any capacity it can declare. }
   one := TomlNewText('one');
-  TomlTextAdd(one, ' and two');
-  TomlPut(doc, 'joined', one);
+  one.TextAdd(' and two');
+  doc.Put('joined', one);
 
   { A key that is not a bare key, and the replacement of one already there. }
-  TomlPut(doc, 'odd key.with dots', TomlNewInteger(1));
-  TomlPut(doc, 'count', TomlNewInteger(4));
+  doc.Put('odd key.with dots', TomlNewInteger(1));
+  doc.Put('count', TomlNewInteger(4));
 
-  TomlCharsNew(out);
-  TomlRender(doc, out);
-  e := TomlCharsInto(out, s);
+  out.Init;
+  doc.Render(out);
+  e := out.Into(s);
   writeln('--- built ---');
   writeln(s);
   writeln('--- keys in order ---');
-  for i := 1 to TomlCount(doc) do write('[', TomlKeyAt(doc, i), '] ');
+  for i := 1 to doc.Count do write('[', doc.KeyAt(i), '] ');
   writeln;
 
   r := TomlParseChars(out, at);
   writeln('reads back=', r.ok);
   if r.ok then begin
-    writeln('count=', TomlIntegerOr(TomlMember(r.val, 'count'), -1):1,
-            ' server.port=', TomlIntegerOr(TomlPath(r.val, 'server.port'), -1):1);
+    writeln('count=', r.val.Member('count').IntegerOr(-1):1,
+            ' server.port=', r.val.Path('server.port').IntegerOr(-1):1);
     writeln('odd key=',
-            TomlIntegerOr(TomlMember(r.val, 'odd key.with dots'), -1):1,
-            ' by path=', TomlIntegerOr(TomlPath(r.val, 'odd key.with dots'), -1):1);
-    TomlFree(r.val)
+            r.val.Member('odd key.with dots').IntegerOr(-1):1,
+            ' by path=', r.val.Path('odd key.with dots').IntegerOr(-1):1);
+    r.val.Free
   end;
-  TomlCharsFree(out);
-  TomlFree(doc);
+  out.Free;
+  doc.Free;
 
   { The string form of the parser, and the two bounds. }
   r := TomlParse('a = 1', at);
-  writeln('TomlParse=', r.ok, ' a=', TomlIntegerOr(TomlMember(r.val, 'a'), -1):1);
-  TomlFree(r.val);
+  writeln('TomlParse=', r.ok, ' a=', r.val.Member('a').IntegerOr(-1):1);
+  r.val.Free;
 
   deep := 'a = ';
   for i := 1 to 120 do deep := deep + '[';
