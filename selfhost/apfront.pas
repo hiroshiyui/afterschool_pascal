@@ -5834,6 +5834,7 @@ begin
   s^.isTextSchema := false;
   s^.isBindable := false;
   s^.isModuleSym := false;
+  s^.renamesType := false;
   s^.stdInputOk := false;
   s^.stdOutputOk := false;
   s^.constituents := nil;
@@ -22905,6 +22906,13 @@ begin
           and every variable of it is initialised. }
         s^.initValue := InitialStateOf(d^.tdType);
         s^.isBindable := BindableOf(d^.tdType);
+        { AP 6.7.10 (ADR-0414). A type-definition whose denoter is a
+          type-*identifier* renames the type that identifier already denotes
+          and creates nothing. This is the one place holding the denoter
+          beside the name, and the answer is a property of the **name** and
+          not of the type: `T = integer` and `integer` denote one type, and
+          only the second is a name that type was given rather than borrowed. }
+        s^.renamesType := d^.tdType^.kind = nkNamed;
         if t^.aliasLen = 0 then begin
           t^.aliasAt := d^.tdAt;
           t^.aliasLen := d^.tdLen
@@ -24553,6 +24561,26 @@ begin
       WritePool(t^.schema^.at, t^.schema^.len);
       writeln(''' is the same type wherever it is written, so it cannot ',
               'carry an implementation of its own');
+      ok := false
+    end
+    { AP 6.7.10 (ADR-0414), and the same sentence as the two above: an
+      implementation may only be for a type its own definition **created**.
+      `T = integer` renames a type written everywhere, so routines of its own
+      would be routines of every integer in the program -- probed, and they
+      are: a plain `var n: integer` answered `n.Weekday`. The arm above is
+      this one for a production and the arm above that for a subrange; what
+      they share is that the name does not belong to the component that wrote
+      it. }
+    else if (d^.imLen = 0) and ty^.renamesType then begin
+      ErrorAt(d^.imForLine, d^.imForCol);
+      write('''');
+      WritePool(d^.imForAt, d^.imForLen);
+      write(''' renames ');
+      WriteTypeName(t);
+      write(' rather than defining a type, so an implementation here ',
+            'would be one for every use of ');
+      WriteTypeName(t);
+      writeln('; write it for that name if that is what is meant');
       ok := false
     end
   end

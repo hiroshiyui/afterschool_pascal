@@ -1639,6 +1639,21 @@ type
       it is never called, and it has exactly one activation, which is what lets
       its frame be a global (ADR-0053). }
     isModuleSym: boolean;
+    { AP 6.7.10 (ADR-0414): whether this type-identifier was defined by
+      **renaming** another one -- `T = integer`, where the denoter is a
+      type-identifier and the definition creates nothing. Such a name may not
+      carry an inherent-implementation, because the implementation would be
+      for the type the other name denotes and every use of it in the program:
+      probed, and `impl DayNumber` for `DayNumber = integer` gave a plain
+      `var n: integer` an `n.Weekday`.
+
+      It is false for a name that *is* a type's own -- `integer`, or a `T`
+      whose denoter writes a record, a pointer or a handle out -- so
+      `impl integer` stays the deliberate thing ADR-0315 made it. What the
+      rule refuses is the claim being **invisible**, not the claim.
+      Recorded at the definition because that is the one place holding the
+      denoter beside the name. }
+    renamesType: boolean;
     { 6.11.4.2: whether the required text file is *implicitly accessible* in
       this level-0 block. It is a property of the block and not of the program
       -- a module that neither lists `output` as a module-parameter nor imports

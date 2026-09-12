@@ -3698,7 +3698,8 @@ is affected by either.
 The type-identifier shall denote a type. It shall not denote a schema, and it
 shall not denote a subrange-type. The type-identifier of an
 **inherent**-implementation shall further not denote a type produced from a
-schema (6.4.7).
+schema (6.4.7), and shall not be an identifier whose own type-definition is a
+type-identifier.
 
 NOTE 11a — 6.4.7 interns a production by its schema and its tuple, so
 `string(255)` written in one program-component is the same type as
@@ -3706,6 +3707,17 @@ NOTE 11a — 6.4.7 interns a production by its schema and its tuple, so
 its own* would therefore be routines every one of them has, held by whichever
 component wrote them first and reachable by 6.7.10.4 from any string of that
 capacity — a program-wide claim staked through a type no component declares.
+
+NOTE 11c — The last of those is one requirement with the one before it: an
+inherent-implementation shall be written for a name the type was **given**,
+not one it was lent. `type Day = integer;` makes `Day` denote the type
+`integer` denotes, so `impl Day` would be an implementation for every integer
+in the program, held by a name that does not say so. `impl integer` itself
+stays admissible — 6.7.10's one-implementation-per-program rule is what governs
+it, and a program is entitled to give a required type routines of its own. What
+the requirement removes is the claim being made **invisibly**, and the
+processor's diagnostic names the identifier that would have to be written
+instead.
 
 NOTE 11b — The trait form is not restricted this way, and the difference is
 how a routine is reached rather than what the type is. A trait implementation
@@ -5186,6 +5198,7 @@ is what holds the behaviour in either case.
 | 6.7.10.5, 6.13.2 (amended) | ADR-0411 |
 | 6.7.10.2 (amended), 6.7.10.4 (amended) | ADR-0412 |
 | 6.7.10 (amended) | ADR-0413 |
+| 6.7.10 (amended a second time) | ADR-0414 |
 | 6.7.5.7 | ADR-0084 |
 | 6.1.3 | ADR-0072 |
 | 5.7 | — (this document, 2026-09-12) |

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted. 6.7.10's restriction on what an implementation may be for is
+generalised by ADR-0414, which reaches a renaming as well as a production.
 
 ## Context
 

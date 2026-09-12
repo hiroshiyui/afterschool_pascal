@@ -421,4 +421,5 @@ the alternatives that were rejected and why.
 | [0410](0410-a-method-is-the-call-already-made.md) | A method is the call already made | Accepted |
 | [0411](0411-an-implementation-travels-with-its-type.md) | An implementation travels with its type | Accepted |
 | [0412](0412-the-receiver-decides.md) | The receiver decides | Accepted |
-| [0413](0413-one-implementation-per-program.md) | One implementation per program, and a translation is what enforces it | Accepted |
+| [0413](0413-one-implementation-per-program.md) | One implementation per program, and a translation is what enforces it | Accepted; 6.7.10's restriction generalised by [0414](0414-an-implementation-is-for-a-name-the-type-was-given.md) |
+| [0414](0414-an-implementation-is-for-a-name-the-type-was-given.md) | An implementation is for a name the type was given, not one it was lent | Accepted |

@@ -16,6 +16,8 @@ type
   small = 1..9;
   { a production of 6.4.7's `string` schema, for the refusal below }
   Tag = string(16);
+  { and a name that renames a type rather than defining one }
+  Day = integer;
 
 trait Shows;
   procedure Show(protected var p: Self);
@@ -81,6 +83,16 @@ end;
 impl Tag;
   function Twice(s: Tag): integer;
   begin Twice := 2 * length(s) end;
+end;
+
+{ and neither can a name that renames another (AP 6.7.10, ADR-0414): `Day` and
+  `integer` denote one type, so routines of `Day`'s own would be routines of
+  every integer in the program. `impl integer` itself stays legal and
+  `methods.pas` writes one -- what is refused is the claim being made through
+  a name that hides it, and the message says which name to write instead. }
+impl Day;
+  function Weekday(d: Day): integer;
+  begin Weekday := d mod 7 end;
 end;
 
 var p: Point; n: Named; k: integer; arr: array [1..2] of Point;
