@@ -281,9 +281,27 @@ def case(pascalc, source_file, d, name, stem, expected_out, expected_err,
             r = subprocess.run([pascalc] + imports + ['-c', comp, '-o', obj],
                                stderr=subprocess.PIPE, env=env)
             if r.returncode != 0:
+                # A case may assert that a *component* is refused, and until
+                # ADR-0413 it could not: this bailed with a message of its own
+                # and nothing was compared, so the one refusal that can only
+                # happen while translating a component -- a second module
+                # implementing one type (AP 6.7.10) -- had no golden anywhere.
+                # With an expected-failure sidecar the component's diagnostics
+                # are the thing under test, exactly as the program's are below;
+                # without one this is still a loud failure, because a
+                # component that stops translating is otherwise silent.
+                comp_err = r.stderr.decode('utf-8', 'surrogateescape')
+                if os.path.isfile(expected_err):
+                    if diff_u(expected_err, normalise(comp_err),
+                              '/dev/fd/63', fd_date()):
+                        print('--- %s: compiler diagnostics differ ---' % name,
+                              file=sys.stderr)
+                        return 1
+                    print('%s: ok (component rejected at compile time)' % name)
+                    return 0
                 print('--- %s: component %s did not translate ---'
                       % (name, rel), file=sys.stderr)
-                sys.stderr.write(r.stderr.decode('utf-8', 'surrogateescape'))
+                sys.stderr.write(comp_err)
                 return 1
             imports += ['--import', comp]
             objects.append(obj)

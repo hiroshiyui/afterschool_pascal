@@ -24532,6 +24532,29 @@ begin
               'carry one of its own');
       ok := false
     end
+    { AP 6.7.10 (ADR-0413): 6.4.7 interns a production by its schema and its
+      tuple, so `string(255)` written in a module **is** the `string(255)`
+      written in every other component and in every client. Routines of its
+      *own* would therefore be routines of all of them, claimed by whichever
+      component wrote them first and reachable from `x.M` on any string of
+      that capacity anywhere -- a program-wide claim staked through a type no
+      component declares.
+
+      **The trait form is deliberately not refused**, and the difference is
+      how the routine is reached. A trait implementation is selected only
+      where a trait bound asks for one (6.7.9), so the program that writes
+      `impl Sortable for Name` is the program that named both the trait and
+      the type; `tests/dialect/traits.pas`, `lib_sortx` and `lib_container`
+      all do exactly that for a string production, and a rule that refused it
+      would take away the facility those cases exist for. }
+    else if (d^.imLen = 0) and (t^.schema <> nil) then begin
+      ErrorAt(d^.imForLine, d^.imForCol);
+      write('a type produced from schema ''');
+      WritePool(t^.schema^.at, t^.schema^.len);
+      writeln(''' is the same type wherever it is written, so it cannot ',
+              'carry an implementation of its own');
+      ok := false
+    end
   end
   { AP 6.7.10 (ADR-0410): the inherent form naming a **trait** is a `for` that
     was left out, and that is what the message should say. It is the likeliest

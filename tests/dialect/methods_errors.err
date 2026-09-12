@@ -1,14 +1,15 @@
-<source>:25:12: error: 'len' is already a field of named, so '.len' would name two things
-<source>:33:22: error: 'self' is already used in this block, so declaring it here would give one name two meanings
-<source>:43:13: error: 'bare' needs its parameters here: no trait gave this one a heading, so there is nothing for the name alone to adopt
-<source>:48:1: error: 'point' already has an 'impl' of its own
-<source>:55:6: error: 'shows' is a trait, so this needs 'for' and the type it is implemented for; 'impl <type>;' gives a type routines of its own
-<source>:63:6: error: 'marker' is not a type, so it can have no routines of its own
-<source>:69:6: error: a subrange takes its host's implementation, so it cannot carry one of its own
-<source>:79:9: error: 'missing' is neither a field of point nor a routine implemented for it
-<source>:80:3: error: unknown procedure 'missing'
-<source>:85:15: error: unknown function 'missing'
-<source>:86:3: error: unknown procedure 'missing'
-<source>:88:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
-<source>:90:9: error: 'doubled' is neither a field of named nor a routine implemented for it
-<source>:96:4: error: argument 1 of 'move' is a var parameter and needs a variable
+<source>:27:12: error: 'len' is already a field of named, so '.len' would name two things
+<source>:35:22: error: 'self' is already used in this block, so declaring it here would give one name two meanings
+<source>:45:13: error: 'bare' needs its parameters here: no trait gave this one a heading, so there is nothing for the name alone to adopt
+<source>:50:1: error: 'point' already has an 'impl' of its own
+<source>:57:6: error: 'shows' is a trait, so this needs 'for' and the type it is implemented for; 'impl <type>;' gives a type routines of its own
+<source>:65:6: error: 'marker' is not a type, so it can have no routines of its own
+<source>:71:6: error: a subrange takes its host's implementation, so it cannot carry one of its own
+<source>:81:6: error: a type produced from schema 'string' is the same type wherever it is written, so it cannot carry an implementation of its own
+<source>:91:9: error: 'missing' is neither a field of point nor a routine implemented for it
+<source>:92:3: error: unknown procedure 'missing'
+<source>:97:15: error: unknown function 'missing'
+<source>:98:3: error: unknown procedure 'missing'
+<source>:100:9: error: cannot select a field of a value of type integer, and no routine of that name is implemented for it
+<source>:102:9: error: 'doubled' is neither a field of named nor a routine implemented for it
+<source>:108:4: error: argument 1 of 'move' is a var parameter and needs a variable

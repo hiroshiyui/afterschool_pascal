@@ -3696,7 +3696,25 @@ two-token test. The two forms shall be distinguished by the presence of
 is affected by either.
 
 The type-identifier shall denote a type. It shall not denote a schema, and it
-shall not denote a subrange-type.
+shall not denote a subrange-type. The type-identifier of an
+**inherent**-implementation shall further not denote a type produced from a
+schema (6.4.7).
+
+NOTE 11a — 6.4.7 interns a production by its schema and its tuple, so
+`string(255)` written in one program-component is the same type as
+`string(255)` written in any other and in every client. Routines it has *of
+its own* would therefore be routines every one of them has, held by whichever
+component wrote them first and reachable by 6.7.10.4 from any string of that
+capacity — a program-wide claim staked through a type no component declares.
+
+NOTE 11b — The trait form is not restricted this way, and the difference is
+how a routine is reached rather than what the type is. A trait implementation
+is selected only where a trait bound asks for one (6.7.9), so the component
+that writes `impl Sortable for Name` is the one that named both the trait and
+the type, and making a string-type of one's own sortable or usable as a map
+key is what the facility is for. A schema itself is refused by the sentence
+before for a third reason: there is nothing to select from until a
+discriminant is chosen.
 
 Each implementation-routine shall name a routine the trait declares, and shall
 write that name **alone**: the heading is the trait's, read with `Self` bound
@@ -3706,8 +3724,8 @@ Every routine the trait declares shall be defined exactly once.
 Each inherent-routine shall write its own heading, no trait having given it
 one, and `Self` shall denote the type the implementation is for.
 
-For a given type there shall be at most one inherent-implementation in a
-program-component.
+For a given type there shall be at most one inherent-implementation **in a
+program**.
 
 It shall be an error for an implementation of either form to declare a routine
 whose identifier is a field-identifier of the type the implementation is for,
@@ -3719,7 +3737,18 @@ routine in another, decided by whichever was written first, and the reader
 would have no way to tell which from the text in front of them.
 
 For a given trait and a given type there shall be at most one
-implementation-declaration in a program-component.
+implementation-declaration **in a program**.
+
+NOTE 12b — In a program-component, which is what both requirements said until
+ADR-0413, is too narrow to be a rule about meaning. 6.7.10.5 makes an
+implementation reach the clients of its module, so two modules each
+implementing one type are each conforming and no program may import both:
+6.7.10.2 selects from the receiver's type and would find two candidates with
+nothing in the text to choose between them. Stating it of the *program* is what
+makes `x.M` have one answer wherever it is written. A module must therefore not
+give an implementation to a type it does not declare, unless it is willing to
+be the only module that does — which is why `PasHttps`'s three routines keep
+their prefixed names although each takes a `PasTls` connection first.
 
 **6.7.10.1 Where an implementation may stand.** An implementation-declaration
 shall occur in the declaration-part of a program-block or of a module-block. It
@@ -5096,6 +5125,27 @@ by each implementation, so nothing can describe the call. 6.7.11.2.1 states
 the requirement and the error is reported at the trait-object-type, which is
 where a program asks for the facility.
 
+**E.15 6.7.10's one-implementation rule was stated of a program-component,
+and the processor enforces it of a translation.** ADR-0410 wrote *at most one
+inherent-implementation in a program-component*, which every component
+satisfies separately and which therefore permits a program no processor can
+give a meaning to; 6.7.10 now says *in a program* and NOTE 12b says why. What
+the processor does is neither: it refuses a second implementation that is
+**visible in the translation**, which is every component handed to that
+translation whether or not the unit being translated imports it. A component
+that implements a type, translated beside a sibling that implements the same
+type, is refused although neither imports the other and although a client of
+either alone compiles — probed, and the diagnostic lands on the second
+component with `'<type>' already has an 'impl' of its own`.
+
+That is the safe direction and it is not closed. Refusing on **reachability**
+rather than on visibility would need this compilation to know which components
+each of its imports can reach, which is a summary no module-heading carries
+(ADR-0317's sentence, one clause over); refusing on visibility needs nothing
+and cannot admit the ambiguity. The cost is a translation refused that a
+program could not have distinguished, and `tests/dialect/impl_two_modules.pas`
+is what holds the behaviour in either case.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -5135,6 +5185,7 @@ where a program asks for the facility.
 | 6.7.10, 6.7.10.1 – 6.7.10.4 | ADR-0410 |
 | 6.7.10.5, 6.13.2 (amended) | ADR-0411 |
 | 6.7.10.2 (amended), 6.7.10.4 (amended) | ADR-0412 |
+| 6.7.10 (amended) | ADR-0413 |
 | 6.7.5.7 | ADR-0084 |
 | 6.1.3 | ADR-0072 |
 | 5.7 | — (this document, 2026-09-12) |

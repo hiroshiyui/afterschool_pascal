@@ -14,6 +14,8 @@ type
   { a field whose spelling a method would want }
   Named = record Len: integer end;
   small = 1..9;
+  { a production of 6.4.7's `string` schema, for the refusal below }
+  Tag = string(16);
 
 trait Shows;
   procedure Show(protected var p: Self);
@@ -69,6 +71,16 @@ end;
 impl small;
   procedure Zero(var self: small);
   begin self := 1 end;
+end;
+
+{ and neither can a type produced from a schema (AP 6.7.10, ADR-0413): 6.4.7
+  interns a production by its schema and its tuple, so `Tag` *is* every other
+  `string(16)` in the program and in every component of it. An implementation
+  here would be one for all of them, claimed by whoever wrote it first, and
+  no component owns a production to claim it with. }
+impl Tag;
+  function Twice(s: Tag): integer;
+  begin Twice := 2 * length(s) end;
 end;
 
 var p: Point; n: Named; k: integer; arr: array [1..2] of Point;
