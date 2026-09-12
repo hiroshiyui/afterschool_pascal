@@ -20,8 +20,8 @@
 # Regenerate with:  python3 tests/checks/lib_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 388
-instrumented 3560
+uncovered 363
+instrumented 3510
 
 lib/dialect/pascontainer.pas 0/9
 lib/dialect/pasdir.pas 1/21
@@ -31,12 +31,12 @@ lib/dialect/pasfs.pas 4/48
 lib/dialect/pashttp.pas 14/291
 lib/dialect/pashttps.pas 19/19
 lib/dialect/pasio.pas 1/23
-lib/dialect/pasjson.pas 41/408
+lib/dialect/pasjson.pas 41/397
 lib/dialect/paslist.pas 2/35
-lib/dialect/paslsp.pas 22/149
-lib/dialect/paslspdiag.pas 20/96
+lib/dialect/paslsp.pas 16/143
+lib/dialect/paslspdiag.pas 2/78
 lib/dialect/pasmathx.pas 0/4
-lib/dialect/pasnet.pas 4/55
+lib/dialect/pasnet.pas 3/55
 lib/dialect/pasos.pas 0/5
 lib/dialect/pasparse.pas 0/28
 lib/dialect/pasprocess.pas 3/94
@@ -46,11 +46,11 @@ lib/dialect/passtream.pas 0/29
 lib/dialect/pasterm.pas 5/38
 lib/dialect/pastime.pas 2/147
 lib/dialect/pastls.pas 149/149
-lib/dialect/pastoml.pas 78/924
+lib/dialect/pastoml.pas 78/910
 lib/dialect/pasunicode.pas 6/50
 lib/pasfile.pas 0/99
 lib/pasmap.pas 1/81
-lib/pasmath.pas 7/47
+lib/pasmath.pas 7/46
 lib/passort.pas 0/25
 lib/passtrings.pas 0/63
 lib/passtrvec.pas 3/93

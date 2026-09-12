@@ -75,6 +75,34 @@ RATCHET = "lib_coverage.txt"
 CASE_ROOTS = ("tests", "tests/extended", "tests/dialect", "examples")
 
 
+
+def own_statements(text, source):
+    """The instrumented lines of `source`'s own routines, and the routines dropped.
+
+    The IR is walked in order: a `; name line` marker opens a routine and every
+    `pas_cov_hit` until the next marker belongs to it. A routine whose marker
+    does not point at a line of this source declaring it came from somewhere
+    else -- a generic body emitted here (AP 6.7.3.5) -- and neither its lines
+    nor its name are this module's to answer for.
+    """
+    src = source.read_text(errors="surrogateescape").split("\n")
+    own, dropped, keep = set(), [], False
+    for line in text.split("\n"):
+        mark = re.match(r"^; (\w+) (\d+)$", line)
+        if mark:
+            name, at = mark.group(1), int(mark.group(2))
+            here = src[at - 1] if 0 < at <= len(src) else ""
+            keep = re.match(r"^\s*(function|procedure)\s+" + re.escape(name)
+                            + r"\b", here, re.I) is not None
+            if not keep:
+                dropped.append(name)
+            continue
+        hit = HIT.search(line)
+        if hit and keep:
+            own.add(int(hit.group(1)))
+    return own, dropped
+
+
 def modules(root):
     """Every library module, by path, in a stable order."""
     return sorted(list((root / "lib").glob("*.pas")) +
@@ -181,13 +209,31 @@ def run(root, pascalc, pasrt, work, args):
     # The denominator: one `pas_cov_hit` per instrumented statement, read from
     # the same IR the numerator comes out of, so nothing keeps a second idea of
     # what was executable.
-    denom, procs = {}, {}
+    #
+    # **Only the statements this module wrote.** A generic's body is emitted in
+    # the translation that activates it (AP 6.7.3.5), so a client of
+    # `PasContainer` carries `VecPush` and six more in its own IR -- with
+    # `PasContainer`'s line numbers, which index into *this* module's source
+    # and land on whatever text is there. They inflated the denominator by 18
+    # lines in `pastoml.pas` alone, and, being another file's numbering, they
+    # collided differently whenever this file's length changed: the ratchet
+    # moved three times in one day for edits that touched no statement, twice
+    # for a comment. Each needed a commit message to establish that nothing
+    # had happened.
+    #
+    # A routine is this module's when the `; name line` marker the IR writes
+    # before it (ADR-0103) points at a line of this source that *declares* that
+    # routine. A foreign one points wherever its own file's numbering falls.
+    # Checked over all 33 modules when this was written: 479 own routines, all
+    # matching, and 28 foreign, which are the same seven `Vec` routines in the
+    # four modules that use them.
+    denom, procs, foreign = {}, {}, {}
     for m in mods:
         if instr[m] is None:
             continue
         text = instr[m].read_text()
-        denom[m] = {int(n) for n in HIT.findall(text)}
         procs[m] = sorted((int(l), n) for n, l in NAMED.findall(text))
+        denom[m], foreign[m] = own_statements(text, m)
 
     jobs = []
     for src, deps in cases:
@@ -274,6 +320,40 @@ def run(root, pascalc, pasrt, work, args):
         print(f"lib-coverage: only {total_ins} statements instrumented, "
               f"below the floor of 2000", file=sys.stderr)
         return 1
+
+    # What the attribution above dropped, said out loud, and checked. A routine
+    # excluded from its module's denominator is a statement nothing will ever
+    # be asked about, so the one direction this must not fail in is *quietly*:
+    # a rule that stopped recognising a declaration would improve every ratchet
+    # row at once and look like progress.
+    #
+    # The check is not a ratio -- `paslspdiag` has six routines of its own and
+    # seven instantiations, which is legitimate and would fail any ratio worth
+    # setting. It is that a dropped name is not declared in this source **at
+    # all**: a routine wrongly dropped is one whose declaration is right there,
+    # and a generic's is in the module that wrote it.
+    dropped_total = 0
+    for m in mods:
+        if m not in denom:
+            continue
+        dropped_total += len(foreign[m])
+        src = m.read_text(errors="surrogateescape")
+        for name in sorted(set(foreign[m])):
+            if re.search(r"^\s*(function|procedure)\s+" + re.escape(name)
+                         + r"\b", src, re.I | re.M):
+                print(f"lib-coverage: {m.relative_to(root).as_posix()} "
+                      f"declares '{name}' and its statements were dropped as "
+                      f"another module's -- the marker a routine is recognised "
+                      f"by has stopped matching its declaration",
+                      file=sys.stderr)
+                return 1
+    if dropped_total:
+        names = sorted({n for m in foreign for n in foreign[m]})
+        print(f"lib-coverage: {dropped_total} routine instantiation(s) across "
+              f"{sum(1 for m in foreign if foreign[m])} module(s) belong to "
+              f"another module and are not counted here "
+              f"({', '.join(names)}) -- a generic's body is emitted in the "
+              f"translation that activates it (AP 6.7.3.5)")
 
     if args.report:
         for name, unc, ins in rows:
