@@ -583,7 +583,14 @@ because each was arrived at more than once:
   the *parser* can finish because nothing else may follow one, and `p.M` is a
   field selection and so a husk. Before adding a spelling in this area, work
   out which of the three a receiver reaches — they are three different places
-  in the compiler and the answer is not the one a reading gives.
+  in the compiler and the answer is not the one a reading gives, and **every
+  one of them has to be taught the same fact**: ADR-0412 made a
+  method-designator select from its receiver's type rather than from the
+  scope, and that is four edits — the husk, the qualified form, the parser's
+  with-arguments form, and the statement each is remade into. A change that
+  reaches only the spelling in front of you leaves the other two answering
+  differently, which is how `a.M(x).N(y)` came to parse as an expression and
+  not as a statement.
 - **A parser that has already decided leaves a husk.** Sema moves the real
   operands out of the node the parser built and every later pass reads the field
   first, rather than the tree being rewritten — `checkExpr` takes a raw pointer

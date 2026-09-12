@@ -13,6 +13,49 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **`PasJson`'s routines are methods of its types** (ADR-0412, AP 6.7.10).
+  The module exports 25 names where it exported 50, and a document is read
+  by `doc.Member('id').IntegerOr(-1)` rather than
+  `JsonIntegerOr(JsonMember(doc, 'id'), -1)`. `JsonKindOf` is `Kind`,
+  `JsonCharsAddLine` is `AddText`, `JsonTextInto` is `TextInto`, and so on
+  for 24 routines; what stays exported is what has no receiver to select
+  from — the types, the three bounds, the seven `JsonNew*` constructors and
+  `JsonParse`/`JsonParseChars`.
+
+  **This renames a library's interface and every caller must change.** The
+  old spellings are gone rather than deprecated: `§6.11.2` puts every
+  imported name in one scope, and keeping both would keep the collision the
+  change exists to remove. `JsonChars` and `JsonPtr` now each have a `Free`,
+  a `Len` and an `At`, which two exported names could not have been.
+
+### Fixed
+
+- **A method-designator selects from its receiver and not from the scope**
+  (ADR-0412, AP 6.7.10.2). Inside an implementation that had a routine of
+  the name, `x.M(a)` bound to that routine rather than to `x`'s — so two
+  types in one translation could not both have a `Free`, which is the whole
+  of what an implementation is for.
+
+- **A method chain is a procedure-statement.** `a.M(x).N(y);` consumed
+  `a.M(x)` and reported `expected 'end' at the end of a compound statement`.
+
+- **A parameterless method statement takes any receiver.** `b.Free` was a
+  statement and `v^.text.Free` and `arr[1].Free` were `expected ':=' in an
+  assignment`.
+
+- **A designator's type is found in a variant part.** A field declared in a
+  variant part answered no type when asked quietly, so a method selected on
+  one was reported unknown and the owned-vs-owned-pointer hint was not
+  given.
+
+- **A `var` parameter produced from a schema is threatened by being passed
+  on** (§6.9.4 b)). `protected var s: string` could be handed to another
+  routine's `var s: string` and written through there, with no diagnostic;
+  and the advice to add `protected` was given for parameters that could not
+  take the word. One missing call, both faces.
+
 ### Added
 
 - **A module's implementations reach the components that import it**

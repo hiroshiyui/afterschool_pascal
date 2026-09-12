@@ -576,7 +576,15 @@ was invented for them: `self: T` is a copy, `protected var self: T` is a
 borrow that cannot be written through, and `var self: T` is one that can. The
 choice is visible to callers -- only a by-value receiver may be called on what
 another method returned, §6.6.3.3 wanting a variable-access for a variable
-parameter and a function result not being one.
+parameter and a function result not being one. A pointer type takes no
+`protected`, §6.4.1 refusing one, so a method on a pointer has a by-value or a
+plain `var` receiver and nothing between.
+
+**The receiver is also what decides which routine runs** (AP 6.7.10.2,
+ADR-0412): a name in scope does not shadow a method-designator's
+identification, which is what lets two types in one translation each have a
+`Free`. The bare spelling `Free(x)` is the one the scope settles, and it means
+the routine in scope wherever there is one.
 
 **Trait object (`dyn T`).** A value that implements the trait `T`, where
 *which* implementation is not decided until the value is used (AP 6.7.11,

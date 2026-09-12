@@ -10656,3 +10656,69 @@ was dropped on 2026-09-10** (ADR-0380), which settled that collision by
 removing one side of it rather than by answering it — so the catalogue is still
 one line of shell, and a target that is not POSIX is where the question comes
 back.
+
+### The proof ADR-0315 asked for, on 2026-09-12
+
+ADR-0315 left one thing open: **rewrite a library module with methods and judge
+the rest of the library from the result**. ADR-0410 built the construct,
+ADR-0411 made an implementation cross a program-component, and both were
+designed against probes and a corpus of purpose-written cases.
+`lib/dialect/pasjson.pas` was the first real client, and it did not compile.
+
+**Why it was the right module, and why nothing before it could have found
+this.** PasJson has two types with routines — `JsonChars` and `JsonPtr` — and
+they share three names: `Free`, `Len` and `At`. That is not an accident of
+naming; it is the reason ADR-0315 wanted methods, §6.11.2 putting every
+exported name into one scope so that two exported `Free`s cannot coexist. No
+case in `tests/dialect/methods.pas` had two types with routines of one
+spelling, because the person who wrote the corpus was the person who had just
+designed the feature, and the shape did not occur to them.
+
+Four defects, and each needed something the corpus did not have:
+
+- **A name in scope shadowed the receiver.** AP 6.7.10.2 identified a routine
+  from the first actual's type only where the identifier had *no defining-point
+  in force* — right for `Len(x)` and wrong for `x.Len`. Inside `impl JsonPtr`'s
+  own `Free`, `v^.text.Free` bound to `JsonPtr`'s `Free` and was refused on its
+  argument type, one line after the routine it should have called. This is the
+  one that is a *language* decision rather than a slip, and ADR-0412 takes it:
+  the receiver decides, always.
+- **A parameterless method statement took only a bare-name receiver.**
+  `b.Free` was a statement; `v^.text.Free` and `arr[1].Free` were
+  `expected ':=' in an assignment` — a message about an assignment nobody
+  wrote.
+- **A chain was not a statement.** `a.M(x).N(y);` parsed as an expression and
+  the qualified-name path consumed `a.M(x)`, leaving `.N(y)` belonging to
+  nothing.
+- **A designator's type was not found in a variant part.** `QuietTypeOf`
+  carried its own copy of `FindField` that walked the fixed field list only, so
+  `v^.text` answered no type. A fact stated twice, and it disagreed with itself.
+
+**And a fifth that is not about methods at all.** §6.9.4 b)'s threat never
+reached a formal produced from a schema, so `protected var s: string` could be
+passed to another routine's `var s: string` and written through there — §6.5.1's
+protection defeated with no diagnostic — while ADR-0283's advice, which is
+supposed to name *exactly* the condition under which adding the word still
+compiles, was offered for parameters that could not take it. One missing call
+with two faces. It had survived since ADR-0283 because that advice is never
+given about an **exported** routine and every routine of the shape in this tree
+was exported. A method is exported by nothing (AP 6.7.10.5), so PasJson's
+`TextInto` was the first to be judged, and it was judged wrongly.
+`tests/extended/schema_param.warn` lost two lines and
+`tests/dialect/lib_unicode.warn` was deleted; each was checked by taking the
+advice and watching the compiler refuse it.
+
+**What the rewrite bought, measured.** The module exports 25 names where it
+exported 50, and 540 call sites across eleven sources changed —
+`JsonIntegerOr(JsonMember(p, 'line'), -1)` became
+`p.Member('line').IntegerOr(-1)`, which is the dominant idiom of an LSP server
+and 332 of those sites. Chaining is what made it a readability win rather than
+a rename: a method-designator may be the receiver of another, which had always
+worked and which AP 6.7.10.4 had not admitted, a function-designator being no
+variable-access.
+
+**The lesson is `doc/sop.md` §4a's, for the fourth time and by its largest
+margin**: the library or binding for a feature is part of that feature's work
+and not a tidying-up afterwards, because it is the cheapest enumerator of the
+surface. The register gained the row that says no gate here can notice a thin
+corpus, the corpus being what every gate measures against.
