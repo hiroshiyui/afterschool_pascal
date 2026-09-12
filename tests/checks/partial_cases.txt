@@ -242,6 +242,18 @@ IsCallValue:nodeKind:1 chains 3 of 69
 # only the three spellings reach it at all. The other 66 constants are not
 # missing: they answer `false` above and never arrive.
 CalledSym:nodeKind:1 chains 2 of 69
+# ParseIdentStatement asks what the designator it has just parsed *ended* in,
+# and only two answers are anything other than an assignment target: a call,
+# where AP 6.7.10.4's method took an argument list, and a field selection,
+# where it took none and the husk has to be remade before Sema sees it. The
+# chain is therefore not an incomplete dispatch over nodeKind but a test for
+# the two shapes that are *not* what the `else` handles. ParseSelectors can
+# also return nkSubstr, nkIndex, nkDeref and nkDeclName, and each of those
+# reaches that `else` correctly -- it is a variable-access, so `:=` is what
+# must follow it. A seventh selector kind moves this row only if it is a
+# construct a statement may consist of on its own, which is the question the
+# two constants here are asking.
+ParseIdentStatement:nodeKind:1 chains 2 of 69
 VariantSelector:nodeKind:1 chains 2 of 69
 ThreatSym:nodeKind:1 chains 2 of 69
 EvalConstAccess:nodeKind:1 chains 2 of 69

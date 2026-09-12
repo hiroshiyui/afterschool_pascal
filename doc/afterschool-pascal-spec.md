@@ -3811,9 +3811,24 @@ variable-access followed by `.` and an identifier that is not a
 field-identifier of the variable's type shall denote that call with the
 variable-access as its only actual-parameter.
 
+A method-designator shall itself be permitted where the variable-access is
+required above, so that the receiver of one may be the result of another.
+
 It shall be an error for the identifier to be one no implementation of the
 variable's type supplies, and the error shall be reported as it is for any
 other identifier that denotes nothing.
+
+A method-designator denoting a call of a procedure shall be a
+procedure-statement, whatever the receiver is spelled like.
+
+NOTE 16a — That last requirement says nothing 6.7.10.4's first paragraph does
+not already imply, and it is written because a processor got it wrong in one
+direction only: `b.Free` was a statement and `v^.text.Free` and `arr[1].Free`
+were reported as assignments missing their `:=`, the receiver having to be a
+single identifier for a *parameterless* method statement to be recognised. A
+method with an actual-parameter-list was never affected. The asymmetry is
+invisible in the syntax above, which is why the sentence is here rather than
+left to be inferred.
 
 NOTE 17 — `p.Shift(1)` and `Shift(p, 1)` denote the same call, and neither is
 the definition of the other. 6.7.10.2 selects from the first actual-parameter's

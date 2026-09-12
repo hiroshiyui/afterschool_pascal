@@ -4063,6 +4063,28 @@ begin
         s^.pcLen := ref^.clLen;
         s^.pcArgs := ref^.clArgs
       end
+      else
+      { AP 6.7.10.4's *parameterless* method statement, whose receiver is not
+        a bare name (ADR-0410). `box.p.Show`, `arr[1].Show` and `q^.Show` all
+        end this chain in a field selection with nothing after it, and the
+        clause makes a variable-access followed by a non-field identifier that
+        call whatever the variable-access is spelled like. The husk is built
+        here rather than left to Sema because a *statement* has nowhere to put
+        one: the arm above remakes a chain that ended in a call, and this is
+        the same remaking one token earlier, where the call has no argument
+        list to have been recognised by. `:=` still wins, so a field of the
+        name goes on being an assignment target and reaches Sema unchanged. }
+      if (not aborted) and (s^.asTarget <> nil) and
+         (s^.asTarget^.kind = nkField) and (not Check(tkAssign)) then begin
+        ref := s^.asTarget;
+        s := NewNode(nkProcCall, l, c);
+        s^.pcQualAt := 0;
+        s^.pcQualLen := 0;
+        s^.pcAt := ref^.fdAt;
+        s^.pcLen := ref^.fdLen;
+        s^.pcArgs := ref^.fdBase;
+        ref^.fdBase^.next := nil
+      end
       else begin
         Expect(tkAssign, ctxAssign);
         s^.asValue := ParseExpr

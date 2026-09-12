@@ -193,6 +193,30 @@ begin
   writeln('strlen ', s.Len:1, ' ', Len(s):1)
 end;
 
+{ **A parameterless method statement whose receiver is not a bare name.**
+  AP 6.7.10.4 says a *variable-access* followed by `.` and an identifier that
+  is no field of its type denotes that call, and every spelling of a
+  variable-access has to reach it: the receiver here is a field selection, a
+  subscript and a dereference, none of which is the simple name the other
+  cases in this file use. The parser read the whole designator and then
+  demanded `:=`, so `box.p.Show` was `expected ':=' in an assignment` -- a
+  message about an assignment nobody wrote, for a statement the
+  specification admits. A method *with* arguments was never affected, the
+  chain ending in a call the statement could be remade from; what had no
+  reading was the chain ending in the husk. }
+procedure DeepReceivers;
+type Holder = record p: Point end;
+var box: Holder; arr: array [1..2] of Point; q: ^Point;
+begin
+  box.p.x := 5; box.p.y := 6;
+  arr[1].x := 7; arr[1].y := 8;
+  new(q); q^.x := 9; q^.y := 10;
+  box.p.Show;
+  arr[1].Show;
+  q^.Show;
+  dispose(q)
+end;
+
 procedure TraitsToo;
 var p: Point; l: Line;
 begin
@@ -211,5 +235,6 @@ begin
   Receivers;
   BothSpellings;
   Foreign_;
-  TraitsToo
+  TraitsToo;
+  DeepReceivers
 end.
