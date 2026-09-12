@@ -5,8 +5,8 @@
   function, declares a foreign struct or asks the runtime for anything. It is
   Pascal over `PasNet`'s socket, and the reason that is possible at all is that
   RFC 9112 framed HTTP/1.1 as lines -- a start-line, then fields one to a line,
-  then an empty line -- which is exactly the shape `NetReadLine` answers
-  in. The other half of that row, TLS, is not a module over anything and is not
+  then an empty line -- which is exactly the shape a socket's `ReadLine`
+  answers in. The other half of that row, TLS, is not a module over anything and is not
   here.
 
   **The transport is a line and so is the body, and that is the limit to know
@@ -60,8 +60,8 @@
   thinks it did would desynchronise the next response on it. `Connection:
   close` is what makes that unreachable rather than merely unlikely.
 
-  **It blocks, and the caller is what bounds it.** Every read here is
-  `NetReadLine`, which waits. A caller that must not wait forever keeps its
+  **It blocks, and the caller is what bounds it.** Every read here is the
+  socket's `ReadLine`, which waits. A caller that must not wait forever keeps its
   socket in a `SocketList` -- `NetConnect(list[1], ...)` -- and calls `NetWait`
   before `Receive`; a handle cannot be copied (AP 6.4.12.2), so this module
   cannot build such a list out of the socket it was handed and cannot do it for
@@ -85,17 +85,39 @@
 
 module PasHttp;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Twenty-seven names are exported where thirty-eight
+  were: `Request` and `Response` each have an implementation in the block
+  below, and an implementation is selected from the *type* of the receiver
+  rather than from a name in scope (AP 6.7.10.2), so none of its routines is
+  an exported name and none can collide with another module's.
+
+  **This module is the one that shows why that matters.** `AddHeader`,
+  `SetBody`, `Header` and `HeaderOr` were exported with no prefix at all, in
+  the one scope §6.11.2 puts every imported name into -- four spellings a
+  second library could not have, and which `export-unique` (ADR-0298) would
+  have refused it. They are reached through a receiver now and are in no scope
+  a client can see. `BeginRequest` and `BeginResponse` are `BeginWrite` and
+  `BeginRead`, the receiver having said which is which.
+
+  What stays exported is what has no receiver to be selected from: the bounds,
+  the types, `NewRequest`, which fills a `Request` a caller has only just
+  declared, and the three that carry a message over a **socket**. `Send`,
+  `Receive` and `Exchange` take a `PasNet.Socket` as their first parameter, and
+  a type has one implementation wherever it is written: `PasNet` implements
+  `Socket` already, and a second `impl Socket` here is refused -- *'socket'
+  already has an 'impl' of its own*. So those three stay exported names in
+  §6.11.2's one scope and keep the prefix that makes them safe there.
+  `lib/dialect/pashttps.pas` is the same position one transport over and keeps
+  all three of its own names. }
+
 export PasHttp = (MethodMax, TargetMax, HeaderNameMax, HeaderValueMax,
                   ReasonMax, BodyLineMax, MaxHeaders, MaxBodyLines,
                   RequestBodyMax, PieceMax,
                   MethodName, RequestTarget, HeaderName, HeaderValue,
                   ReasonPhrase, BodyLine, RequestBody, OptHeaderValue,
                   HeaderField, Request, Response, HttpPiece, RequestCursor,
-                  NewRequest, AddHeader, SetBody,
-                  BeginRequest, NextPiece,
-                  BeginResponse, WantsLine, FeedLine, FeedEnd,
-                  Send, Receive, Exchange,
-                  Header, HeaderOr, BodyInto);
+                  NewRequest, Send, Receive, Exchange);
 
 import PasError; PasNet;
 
@@ -176,7 +198,7 @@ type
                rpTrailer, rpDone);
 
   { Where a request has got to on its way out. A caller declares one, hands
-    it to `BeginRequest` and then to `NextPiece` until `done`.
+    it to `BeginWrite` and then to `NextPiece` until `done`.
 
     It is a record of its own rather than state inside the `Request` because
     the request is being **read**: `Send` takes it `protected` and a cursor
@@ -186,7 +208,7 @@ type
     { Which piece, and how far into it. }
     at, off: integer;
     { Whether this module supplies a `Connection` and a `Content-Length`,
-      decided once by `BeginRequest` from what the caller wrote. }
+      decided once by `BeginWrite` from what the caller wrote. }
     addConn, addLength: boolean;
     { Nothing is left. }
     done: boolean
@@ -220,7 +242,7 @@ type
     chunked: boolean;
     byClose: boolean;
     { The reader's own state, and no caller's business. `isHead` is kept from
-      `BeginResponse` because RFC 9112 §6.3 rule 1 needs the method and the
+      `BeginRead` because RFC 9112 §6.3 rule 1 needs the method and the
       status together, and the status is not known until the first line has
       been fed. }
     phase: ReadPhase;
@@ -240,24 +262,6 @@ type
 function NewRequest(var q: Request; method: MethodName;
                     target: RequestTarget): ErrorCode;
 
-{ Add a field. `errSyntax` for a name that is not a token or a value holding a
-  control character -- the second is what stops a caller composing a value out
-  of something it read and thereby sending fields it did not write. `errFull`
-  past `MaxHeaders`.
-
-  A `Host` field is required and is the caller's to add: RFC 9112 §3.2 makes
-  it the authority the request is for, which this module cannot know, having
-  been handed an open socket rather than a name. }
-function AddHeader(var q: Request; name: HeaderName;
-                   val: HeaderValue): ErrorCode;
-
-{ Give the request a body, whose length `Send` states. `errSyntax` for a body
-  holding a null character: what crosses to the runtime is a C string, so a
-  null would end it early and send a shorter body than the length said -- the
-  one place this module's own boundary can lose data, refused rather than
-  risked. }
-function SetBody(var q: Request; body: RequestBody): ErrorCode;
-
 { --- the grammar, without a transport ------------------------------------- }
 
 { **This is the half of this module that touches nothing.** RFC 9112 framed
@@ -272,61 +276,16 @@ function SetBody(var q: Request; body: RequestBody): ErrorCode;
   meant importing `PasTls` here -- and then every program using HTTP would
   link a cryptography library it never asked for (ADR-0265). }
 
-{ Begin writing `q`. `errSyntax` where no `Host` field was added (RFC 9112
-  §3.2) or the request was never begun -- refused before an octet is written,
-  so a refused request puts nothing on a connection the caller may still want.
-
-  `Connection: close` and `Content-Length` are decided here unless the caller
-  wrote one of its own, which is how the framing this module states stays true
-  without taking the choice away from a caller who knows better. }
-function BeginRequest(protected var q: Request; var w: RequestCursor):
-  ErrorCode;
-
-{ The next octets of the request, as many as `piece` holds. `w.done` when
-  there are none left, which is the loop's condition.
-
-  It cannot fail. A piece longer than `piece` spans calls, so a caller with a
-  one-character buffer sends the same request in more writes -- which is why
-  `PieceMax` is a fact about a request and not a demand on a caller. }
-procedure NextPiece(protected var q: Request; var w: RequestCursor;
-                    var piece: string);
-
-{ Begin reading a response into `r`. The method is a parameter because
-  RFC 9112 §6.3 makes the framing a property of the exchange and not of the
-  response alone: a response to HEAD carries the header fields of a body it
-  does not send, and reading one as though it had a body would block until the
-  far end closed. }
-procedure BeginResponse(var r: Response; method: MethodName);
-
-{ Does the reader want another line? False once the message is complete, by
-  whichever of RFC 9112 §6.3's rules framed it. }
-function WantsLine(protected var r: Response): boolean;
-
-{ Give it the next line, without its terminator. The codes are `Receive`'s and
-  mean what they mean there; a line fed after the message is complete is
-  ignored. }
-function FeedLine(var r: Response; line: HttpPiece): ErrorCode;
-
-{ Tell it the far end closed and there are no more lines.
-
-  Which of RFC 9112 §6.3's rules was in force decides what that means, and the
-  three answers are the point of this being a routine of its own: before a
-  status-line it is `errAbsent`, there being no response rather than a bad
-  one; inside the header section or a chunked body it is `errSyntax`, a
-  message that stopped in the middle of itself; and in an uncounted body it is
-  rule 6 working exactly as intended, `errNone` with `byClose` set. }
-function FeedEnd(var r: Response): ErrorCode;
-
 { --- the exchange --------------------------------------------------------- }
 
-{ Write the request over a plain socket: `BeginRequest` and then `NextPiece`
-  until it is done. `errSyntax` for what `BeginRequest` refuses, `errIO` where
-  the socket did. }
+{ Write the request over a plain socket: `q.BeginWrite` and then
+  `q.NextPiece` until it is done. `errSyntax` for what `BeginWrite` refuses,
+  `errIO` where the socket did. }
 function Send(var s: Socket; protected var q: Request): ErrorCode;
 
-{ Read a response from a plain socket into `r`: `BeginResponse`, then a line
-  at a time through `FeedLine` while `WantsLine`, and `FeedEnd` when the far
-  end closes. The method is `BeginResponse`'s and is a parameter for the
+{ Read a response from a plain socket into `r`: `r.BeginRead`, then a line
+  at a time through `r.FeedLine` while `r.WantsLine`, and `r.FeedEnd` when the
+  far end closes. The method is `BeginRead`'s and is a parameter for the
   reason given there. }
 function Receive(var s: Socket; method: MethodName;
                  var r: Response): ErrorCode;
@@ -338,24 +297,6 @@ function Receive(var s: Socket; method: MethodName;
   put the server's answer between them. }
 function Exchange(var s: Socket; protected var q: Request;
                   var r: Response): ErrorCode;
-
-{ --- reading a response --------------------------------------------------- }
-
-{ The value of the first field of this name, matched without regard to case,
-  or nil where there is none. }
-function Header(protected var r: Response;
-                name: HeaderName): OptHeaderValue;
-
-{ The same, with the caller's own answer where the field is absent -- the
-  `XOr` shape lib/dialect/README.md fixes the name of. }
-function HeaderOr(protected var r: Response; name: HeaderName;
-                  whenAbsent: HeaderValue): HeaderValue;
-
-{ The body's lines joined with one line feed between each pair, into `dest`,
-  which may be a string of any capacity. `errFull` where the whole does not
-  fit, and `dest` is then untouched: a caller that got half a body and no word
-  about it is the outcome this module exists to avoid. }
-function BodyInto(protected var r: Response; var dest: string): ErrorCode;
 
 end;
 
@@ -483,7 +424,7 @@ begin
   ParseHex := ok
 end;
 
-{ --- building a request --------------------------------------------------- }
+{ --- building a request: the checks --------------------------------------- }
 
 function NewRequest;
 begin
@@ -501,37 +442,7 @@ begin
   end
 end;
 
-function AddHeader;
-var k: integer;
-begin
-  if not IsToken(name) then AddHeader := errSyntax
-  else if not IsFieldText(val) then AddHeader := errSyntax
-  else if q.count = MaxHeaders then AddHeader := errFull
-  else begin
-    k := q.count + 1;
-    q.field[k].name := name;
-    q.field[k].fold := Fold(name);
-    q.field[k].val := val;
-    q.count := k;
-    AddHeader := errNone
-  end
-end;
-
-function SetBody;
-var i: integer; ok: boolean;
-begin
-  ok := true;
-  for i := 1 to length(body) do
-    if body[i] = chr(0) then ok := false;
-  if not ok then SetBody := errSyntax
-  else begin
-    q.body := body;
-    q.hasBody := true;
-    SetBody := errNone
-  end
-end;
-
-{ --- writing: the grammar ------------------------------------------------- }
+{ --- building and writing a request --------------------------------------- }
 
 { Piece `i` of the request, and false where there is none.
 
@@ -541,7 +452,7 @@ end;
   carries no terminator of its own and is why the last piece is not a line.
 
   `w` is read and not written: which of the two optional pieces are there was
-  decided once, by `BeginRequest`, so this is a pure function of the request
+  decided once, by `BeginWrite`, so this is a pure function of the request
   and the index. }
 function PieceText(protected var q: Request; protected var w: RequestCursor;
                    i: integer; var s: HttpPiece): boolean;
@@ -577,84 +488,121 @@ begin
   end
 end;
 
-function BeginRequest;
-var k: integer; haveHost, haveLength, haveConn: boolean;
-begin
-  haveHost := false;
-  haveLength := false;
-  haveConn := false;
-  for k := 1 to q.count do begin
-    if q.field[k].fold = 'host' then haveHost := true;
-    if q.field[k].fold = 'content-length' then haveLength := true;
-    if q.field[k].fold = 'connection' then haveConn := true
-  end;
-  w.at := 1;
-  w.off := 0;
-  w.addConn := not haveConn;
-  w.addLength := q.hasBody and (not haveLength);
-  w.done := false;
-  { A request nobody began, and a request with no authority (RFC 9112 §3.2).
-    Refused here, which is before an octet has been produced. }
-  if q.method = '' then begin
-    w.done := true;
-    exit(errSyntax)
-  end;
-  if not haveHost then begin
-    w.done := true;
-    exit(errSyntax)
-  end;
-  BeginRequest := errNone
-end;
+impl Request;
 
-procedure NextPiece;
-var cur: HttpPiece; room, n: integer;
-begin
-  piece := '';
-  while (not w.done) and then (length(piece) < piece.capacity) do begin
-    if not PieceText(q, w, w.at, cur) then w.done := true
+  { Add a field. `errSyntax` for a name that is not a token or a value holding a
+    control character -- the second is what stops a caller composing a value out
+    of something it read and thereby sending fields it did not write. `errFull`
+    past `MaxHeaders`.
+
+    A `Host` field is required and is the caller's to add: RFC 9112 §3.2 makes
+    it the authority the request is for, which this module cannot know, having
+    been handed an open socket rather than a name. }
+  function AddHeader(var q: Request; name: HeaderName;
+                     val: HeaderValue): ErrorCode;
+  var k: integer;
+  begin
+    if not IsToken(name) then AddHeader := errSyntax
+    else if not IsFieldText(val) then AddHeader := errSyntax
+    else if q.count = MaxHeaders then AddHeader := errFull
     else begin
-      room := piece.capacity - length(piece);
-      n := length(cur) - w.off;
-      if n > room then n := room;
-      if n > 0 then piece := piece + substr(cur, w.off + 1, n);
-      w.off := w.off + n;
-      { A piece is finished when the cursor has passed its last character,
-        which for an empty body is true at once -- so no piece can hold this
-        loop up. }
-      if w.off >= length(cur) then begin
-        w.at := w.at + 1;
-        w.off := 0
+      k := q.count + 1;
+      q.field[k].name := name;
+      q.field[k].fold := Fold(name);
+      q.field[k].val := val;
+      q.count := k;
+      AddHeader := errNone
+    end
+  end;
+
+  { Give the request a body, whose length `Send` states. `errSyntax` for a body
+    holding a null character: what crosses to the runtime is a C string, so a
+    null would end it early and send a shorter body than the length said -- the
+    one place this module's own boundary can lose data, refused rather than
+    risked. }
+  function SetBody(var q: Request; body: RequestBody): ErrorCode;
+  var i: integer; ok: boolean;
+  begin
+    ok := true;
+    for i := 1 to length(body) do
+      if body[i] = chr(0) then ok := false;
+    if not ok then SetBody := errSyntax
+    else begin
+      q.body := body;
+      q.hasBody := true;
+      SetBody := errNone
+    end
+  end;
+
+  { Begin writing `q`. `errSyntax` where no `Host` field was added (RFC 9112
+    §3.2) or the request was never begun -- refused before an octet is written,
+    so a refused request puts nothing on a connection the caller may still want.
+
+    `Connection: close` and `Content-Length` are decided here unless the caller
+    wrote one of its own, which is how the framing this module states stays true
+    without taking the choice away from a caller who knows better. }
+  function BeginWrite(protected var q: Request; var w: RequestCursor):
+    ErrorCode;
+  var k: integer; haveHost, haveLength, haveConn: boolean;
+  begin
+    haveHost := false;
+    haveLength := false;
+    haveConn := false;
+    for k := 1 to q.count do begin
+      if q.field[k].fold = 'host' then haveHost := true;
+      if q.field[k].fold = 'content-length' then haveLength := true;
+      if q.field[k].fold = 'connection' then haveConn := true
+    end;
+    w.at := 1;
+    w.off := 0;
+    w.addConn := not haveConn;
+    w.addLength := q.hasBody and (not haveLength);
+    w.done := false;
+    { A request nobody began, and a request with no authority (RFC 9112 §3.2).
+      Refused here, which is before an octet has been produced. }
+    if q.method = '' then begin
+      w.done := true;
+      exit(errSyntax)
+    end;
+    if not haveHost then begin
+      w.done := true;
+      exit(errSyntax)
+    end;
+    BeginWrite := errNone
+  end;
+
+  { The next octets of the request, as many as `piece` holds. `w.done` when
+    there are none left, which is the loop's condition.
+
+    It cannot fail. A piece longer than `piece` spans calls, so a caller with a
+    one-character buffer sends the same request in more writes -- which is why
+    `PieceMax` is a fact about a request and not a demand on a caller. }
+  procedure NextPiece(protected var q: Request; var w: RequestCursor;
+                      var piece: string);
+  var cur: HttpPiece; room, n: integer;
+  begin
+    piece := '';
+    while (not w.done) and then (length(piece) < piece.capacity) do begin
+      if not PieceText(q, w, w.at, cur) then w.done := true
+      else begin
+        room := piece.capacity - length(piece);
+        n := length(cur) - w.off;
+        if n > room then n := room;
+        if n > 0 then piece := piece + substr(cur, w.off + 1, n);
+        w.off := w.off + n;
+        { A piece is finished when the cursor has passed its last character,
+          which for an empty body is true at once -- so no piece can hold this
+          loop up. }
+        if w.off >= length(cur) then begin
+          w.at := w.at + 1;
+          w.off := 0
+        end
       end
     end
-  end
-end;
-
-{ --- writing: over a socket ----------------------------------------------- }
-
-function Send;
-var
-  { One write per bufferful rather than one per line: a request head arriving
-    in eight packets is eight packets the far end reassembles for nothing, and
-    `NetWriteLine`'s comment gives the same reason for its own single
-    call. The bufferful is what `NextPiece` fills, so the decision is the
-    capacity of this variable and nothing else. }
-  buf: NetLine;
-  w: RequestCursor;
-  e: ErrorCode;
-begin
-  e := BeginRequest(q, w);
-  if Failed(e) then exit(e);
-  while not w.done do begin
-    NextPiece(q, w, buf);
-    if length(buf) > 0 then begin
-      e := NetWriteText(s, buf);
-      if Failed(e) then exit(e)
-    end
   end;
-  Send := errNone
 end;
 
-{ --- reading -------------------------------------------------------------- }
+{ --- reading a response --------------------------------------------------- }
 
 { RFC 9112 §4's status-line: the version, a space, three digits, and a
   reason-phrase which may be absent and may be empty. }
@@ -720,18 +668,6 @@ begin
   ParseField := ans
 end;
 
-{ One more line of body, against the two bounds this module states. }
-function AddBodyLine(var r: Response; raw: NetLine): ErrorCode;
-begin
-  if length(raw) > BodyLineMax then AddBodyLine := errFull
-  else if r.bodyLines = MaxBodyLines then AddBodyLine := errFull
-  else begin
-    r.bodyLines := r.bodyLines + 1;
-    r.body[r.bodyLines] := raw;
-    AddBodyLine := errNone
-  end
-end;
-
 { Whether the last transfer coding is `chunked`, which is the only one this
   can decode (RFC 9112 §6.1). }
 function LastIsChunked(v: HeaderValue): boolean;
@@ -745,209 +681,310 @@ begin
   LastIsChunked := t = 'chunked'
 end;
 
-{ --- reading: the grammar ------------------------------------------------- }
+impl Response;
 
-procedure BeginResponse;
-begin
-  r.status := 0;
-  r.reason := '';
-  r.count := 0;
-  r.bodyLines := 0;
-  r.stated := -1;
-  r.chunked := false;
-  r.byClose := false;
-  r.phase := rpStatus;
-  r.isHead := Fold(method) = 'head';
-  r.got := 0;
-  r.chunkSize := 0;
-  r.chunkGot := 0
-end;
-
-function WantsLine;
-begin
-  WantsLine := r.phase <> rpDone
-end;
-
-{ The header section has ended: RFC 9112 §6.3 decides which framing is in
-  force, and this is the one place in the reader where more than one clause is
-  in play at once. Everything it can refuse, it refuses here -- before a single
-  octet of body has been counted as anything. }
-function StartBody(var r: Response): ErrorCode;
-var te: OptHeaderValue; i, n: integer; seenLength, hasBody: boolean;
-begin
-  { RFC 9112 §6.1: a response whose final transfer coding is not `chunked` is
-    one this client cannot frame or decode, and guessing is what that clause's
-    note about request smuggling is written against. }
-  te := Header(r, 'transfer-encoding');
-  if te <> nil then
-    if LastIsChunked(te^) then r.chunked := true
-    else exit(errSyntax);
-
-  seenLength := false;
-  for i := 1 to r.count do
-    if r.field[i].fold = 'content-length' then begin
-      if not ParseDigits(r.field[i].val, n) then exit(errSyntax);
-      { RFC 9112 §6.3 rule 4: two values that disagree is a message no
-        recipient may guess at. }
-      if seenLength and (n <> r.stated) then exit(errSyntax);
-      seenLength := true;
-      r.stated := n
-    end;
-  { RFC 9112 §6.1: a sender must not send both, and a recipient that picks one
-    is the half of a request-smuggling pair that reads it the other way. }
-  if r.chunked and seenLength then exit(errSyntax);
-
-  { RFC 9112 §6.3 rule 1: a response to HEAD, and any 1xx, 204 or 304, has no
-    body whatever its fields say -- and the fields do say, which is the point
-    of asking the method at all. }
-  hasBody := not (r.isHead or (r.status < 200)
-                  or (r.status = 204) or (r.status = 304));
-  if not hasBody then r.phase := rpDone
-  else if r.chunked then r.phase := rpChunkSize
-  else if r.stated = 0 then r.phase := rpDone
-  else r.phase := rpCounted;
-  StartBody := errNone
-end;
-
-{ A chunk-size line: RFC 9112 §7.1.1's chunk-ext is read past and not kept, no
-  extension being registered and a recipient being free to ignore them. }
-function TakeChunkSize(var r: Response; line: HttpPiece): ErrorCode;
-var head: NetLine; i, at, size: integer;
-begin
-  { **An empty line before a chunk-size is skipped**, and it is not laxity.
-    Each chunk ends with a CRLF of its own, which the line reading either
-    consumed as the terminator of the chunk's last line or did not, depending
-    on how that line itself ended -- and the two cases are not distinguishable
-    from this side of a line-oriented transport. Skipping absorbs exactly that
-    difference. }
-  if length(line) = 0 then exit(errNone);
-  at := 0;
-  for i := 1 to length(line) do
-    if (at = 0) and (line[i] = ';') then at := i;
-  if at = 0 then head := line else head := substr(line, 1, at - 1);
-  head := TrimOWS(head);
-  if not ParseHex(head, size) then exit(errSyntax);
-  if size = 0 then
-    { RFC 9112 §7.1.2's trailer section, read to its empty line and discarded:
-      a trailer field is one the sender could not know until the body was
-      written, and this module has no place to put one that a caller could
-      tell apart from a header field. }
-    r.phase := rpTrailer
-  else begin
-    r.chunkSize := size;
-    r.chunkGot := 0;
-    r.phase := rpChunkData
+  { The value of the first field of this name, matched without regard to case,
+    or nil where there is none. }
+  function Header(protected var r: Response;
+                  name: HeaderName): OptHeaderValue;
+  var i: integer; want: HeaderName; ans: OptHeaderValue;
+  begin
+    ans := nil;
+    want := Fold(name);
+    for i := 1 to r.count do
+      if (ans = nil) and (r.field[i].fold = want) then ans := r.field[i].val;
+    Header := ans
   end;
-  TakeChunkSize := errNone
-end;
 
-function FeedLine;
-var e: ErrorCode;
-begin
-  FeedLine := errNone;
-  case r.phase of
-    rpStatus: begin
-      e := ParseStatus(line, r);
-      if Failed(e) then begin
-        r.phase := rpDone;
-        exit(e)
-      end;
-      r.phase := rpFields
+  { The same, with the caller's own answer where the field is absent -- the
+    `XOr` shape lib/dialect/README.md fixes the name of. }
+  function HeaderOr(protected var r: Response; name: HeaderName;
+                    whenAbsent: HeaderValue): HeaderValue;
+  var v: OptHeaderValue;
+  begin
+    v := r.Header(name);
+    if v = nil then HeaderOr := whenAbsent else HeaderOr := v^
+  end;
+
+  { The body's lines joined with one line feed between each pair, into `dest`,
+    which may be a string of any capacity. `errFull` where the whole does not
+    fit, and `dest` is then untouched: a caller that got half a body and no word
+    about it is the outcome this module exists to avoid. }
+  function BodyInto(protected var r: Response; var dest: string): ErrorCode;
+  var i, total: integer; ans: ErrorCode;
+  begin
+    total := 0;
+    for i := 1 to r.bodyLines do begin
+      if i > 1 then total := total + 1;
+      total := total + length(r.body[i])
     end;
-    rpFields:
-      { RFC 9112 §2.1: fields, one to a line, until an empty one. }
-      if length(line) = 0 then begin
-        e := StartBody(r);
+    if total > dest.capacity then ans := errFull
+    else begin
+      dest := '';
+      for i := 1 to r.bodyLines do begin
+        if i > 1 then dest := dest + chr(10);
+        dest := dest + r.body[i]
+      end;
+      ans := errNone
+    end;
+    BodyInto := ans
+  end;
+
+  { One more line of body, against the two bounds this module states. }
+  function AddBodyLine(var r: Response; raw: NetLine): ErrorCode;
+  begin
+    if length(raw) > BodyLineMax then AddBodyLine := errFull
+    else if r.bodyLines = MaxBodyLines then AddBodyLine := errFull
+    else begin
+      r.bodyLines := r.bodyLines + 1;
+      r.body[r.bodyLines] := raw;
+      AddBodyLine := errNone
+    end
+  end;
+
+  { The header section has ended: RFC 9112 §6.3 decides which framing is in
+    force, and this is the one place in the reader where more than one clause is
+    in play at once. Everything it can refuse, it refuses here -- before a single
+    octet of body has been counted as anything. }
+  function StartBody(var r: Response): ErrorCode;
+  var te: OptHeaderValue; i, n: integer; seenLength, hasBody: boolean;
+  begin
+    { RFC 9112 §6.1: a response whose final transfer coding is not `chunked` is
+      one this client cannot frame or decode, and guessing is what that clause's
+      note about request smuggling is written against. }
+    te := r.Header('transfer-encoding');
+    if te <> nil then
+      if LastIsChunked(te^) then r.chunked := true
+      else exit(errSyntax);
+
+    seenLength := false;
+    for i := 1 to r.count do
+      if r.field[i].fold = 'content-length' then begin
+        if not ParseDigits(r.field[i].val, n) then exit(errSyntax);
+        { RFC 9112 §6.3 rule 4: two values that disagree is a message no
+          recipient may guess at. }
+        if seenLength and (n <> r.stated) then exit(errSyntax);
+        seenLength := true;
+        r.stated := n
+      end;
+    { RFC 9112 §6.1: a sender must not send both, and a recipient that picks one
+      is the half of a request-smuggling pair that reads it the other way. }
+    if r.chunked and seenLength then exit(errSyntax);
+
+    { RFC 9112 §6.3 rule 1: a response to HEAD, and any 1xx, 204 or 304, has no
+      body whatever its fields say -- and the fields do say, which is the point
+      of asking the method at all. }
+    hasBody := not (r.isHead or (r.status < 200)
+                    or (r.status = 204) or (r.status = 304));
+    if not hasBody then r.phase := rpDone
+    else if r.chunked then r.phase := rpChunkSize
+    else if r.stated = 0 then r.phase := rpDone
+    else r.phase := rpCounted;
+    StartBody := errNone
+  end;
+
+  { A chunk-size line: RFC 9112 §7.1.1's chunk-ext is read past and not kept, no
+    extension being registered and a recipient being free to ignore them. }
+  function TakeChunkSize(var r: Response; line: HttpPiece): ErrorCode;
+  var head: NetLine; i, at, size: integer;
+  begin
+    { **An empty line before a chunk-size is skipped**, and it is not laxity.
+      Each chunk ends with a CRLF of its own, which the line reading either
+      consumed as the terminator of the chunk's last line or did not, depending
+      on how that line itself ended -- and the two cases are not distinguishable
+      from this side of a line-oriented transport. Skipping absorbs exactly that
+      difference. }
+    if length(line) = 0 then exit(errNone);
+    at := 0;
+    for i := 1 to length(line) do
+      if (at = 0) and (line[i] = ';') then at := i;
+    if at = 0 then head := line else head := substr(line, 1, at - 1);
+    head := TrimOWS(head);
+    if not ParseHex(head, size) then exit(errSyntax);
+    if size = 0 then
+      { RFC 9112 §7.1.2's trailer section, read to its empty line and discarded:
+        a trailer field is one the sender could not know until the body was
+        written, and this module has no place to put one that a caller could
+        tell apart from a header field. }
+      r.phase := rpTrailer
+    else begin
+      r.chunkSize := size;
+      r.chunkGot := 0;
+      r.phase := rpChunkData
+    end;
+    TakeChunkSize := errNone
+  end;
+
+  { Begin reading a response into `r`. The method is a parameter because
+    RFC 9112 §6.3 makes the framing a property of the exchange and not of the
+    response alone: a response to HEAD carries the header fields of a body it
+    does not send, and reading one as though it had a body would block until the
+    far end closed. }
+  procedure BeginRead(var r: Response; method: MethodName);
+  begin
+    r.status := 0;
+    r.reason := '';
+    r.count := 0;
+    r.bodyLines := 0;
+    r.stated := -1;
+    r.chunked := false;
+    r.byClose := false;
+    r.phase := rpStatus;
+    r.isHead := Fold(method) = 'head';
+    r.got := 0;
+    r.chunkSize := 0;
+    r.chunkGot := 0
+  end;
+
+  { Does the reader want another line? False once the message is complete, by
+    whichever of RFC 9112 §6.3's rules framed it. }
+  function WantsLine(protected var r: Response): boolean;
+  begin
+    WantsLine := r.phase <> rpDone
+  end;
+
+  { Give it the next line, without its terminator. The codes are `Receive`'s and
+    mean what they mean there; a line fed after the message is complete is
+    ignored. }
+  function FeedLine(var r: Response; line: HttpPiece): ErrorCode;
+  var e: ErrorCode;
+  begin
+    FeedLine := errNone;
+    case r.phase of
+      rpStatus: begin
+        e := ParseStatus(line, r);
+        if Failed(e) then begin
+          r.phase := rpDone;
+          exit(e)
+        end;
+        r.phase := rpFields
+      end;
+      rpFields:
+        { RFC 9112 §2.1: fields, one to a line, until an empty one. }
+        if length(line) = 0 then begin
+          e := r.StartBody;
+          if Failed(e) then begin
+            r.phase := rpDone;
+            exit(e)
+          end
+        end
+        else begin
+          e := ParseField(line, r);
+          if Failed(e) then begin
+            r.phase := rpDone;
+            exit(e)
+          end
+        end;
+      rpCounted: begin
+        { A line is counted as its characters plus one for the terminator, which
+          is the module heading's accounting and its stated limit. }
+        e := r.AddBodyLine(line);
+        if Failed(e) then begin
+          r.phase := rpDone;
+          exit(e)
+        end;
+        r.got := r.got + length(line) + 1;
+        if (r.stated >= 0) and (r.got >= r.stated) then r.phase := rpDone
+      end;
+      rpChunkSize: begin
+        e := r.TakeChunkSize(line);
         if Failed(e) then begin
           r.phase := rpDone;
           exit(e)
         end
-      end
-      else begin
-        e := ParseField(line, r);
+      end;
+      rpChunkData: begin
+        e := r.AddBodyLine(line);
         if Failed(e) then begin
           r.phase := rpDone;
           exit(e)
-        end
+        end;
+        r.chunkGot := r.chunkGot + length(line) + 1;
+        if r.chunkGot >= r.chunkSize then r.phase := rpChunkSize
       end;
-    rpCounted: begin
-      { A line is counted as its characters plus one for the terminator, which
-        is the module heading's accounting and its stated limit. }
-      e := AddBodyLine(r, line);
-      if Failed(e) then begin
-        r.phase := rpDone;
-        exit(e)
+      rpTrailer:
+        if length(line) = 0 then r.phase := rpDone;
+      { A line fed after the message is complete is ignored rather than
+        refused: a caller driving this from a loop it also uses for the next
+        response has nothing wrong with it to report. }
+      rpDone:
+    end
+  end;
+
+  { Tell it the far end closed and there are no more lines.
+
+    Which of RFC 9112 §6.3's rules was in force decides what that means, and the
+    three answers are the point of this being a routine of its own: before a
+    status-line it is `errAbsent`, there being no response rather than a bad
+    one; inside the header section or a chunked body it is `errSyntax`, a
+    message that stopped in the middle of itself; and in an uncounted body it is
+    rule 6 working exactly as intended, `errNone` with `byClose` set. }
+  function FeedEnd(var r: Response): ErrorCode;
+  var was: ReadPhase;
+  begin
+    was := r.phase;
+    r.phase := rpDone;
+    case was of
+      { There is no response. It is not a malformed one. }
+      rpStatus: FeedEnd := errAbsent;
+      { The header section has to end with an empty line; a connection that
+        closed inside it is a message that stopped in the middle of itself. }
+      rpFields: FeedEnd := errSyntax;
+      { RFC 9112 §6.3 rule 6: the body ends where the connection does, which is
+        exact and is what `Connection: close` was sent to make true. }
+      rpCounted: begin
+        r.byClose := true;
+        FeedEnd := errNone
       end;
-      r.got := r.got + length(line) + 1;
-      if (r.stated >= 0) and (r.got >= r.stated) then r.phase := rpDone
-    end;
-    rpChunkSize: begin
-      e := TakeChunkSize(r, line);
-      if Failed(e) then begin
-        r.phase := rpDone;
-        exit(e)
-      end
-    end;
-    rpChunkData: begin
-      e := AddBodyLine(r, line);
-      if Failed(e) then begin
-        r.phase := rpDone;
-        exit(e)
+      { Chunked framing says where the body ends, so a connection closing before
+        it does is a message that was not what it said it was. }
+      rpChunkSize, rpChunkData: begin
+        r.byClose := true;
+        FeedEnd := errSyntax
       end;
-      r.chunkGot := r.chunkGot + length(line) + 1;
-      if r.chunkGot >= r.chunkSize then r.phase := rpChunkSize
-    end;
-    rpTrailer:
-      if length(line) = 0 then r.phase := rpDone;
-    { A line fed after the message is complete is ignored rather than
-      refused: a caller driving this from a loop it also uses for the next
-      response has nothing wrong with it to report. }
-    rpDone:
-  end
+      rpTrailer: begin
+        r.byClose := true;
+        FeedEnd := errNone
+      end;
+      rpDone: FeedEnd := errNone
+    end
+  end;
 end;
 
-function FeedEnd;
-var was: ReadPhase;
+{ --- the exchange over a socket ------------------------------------------- }
+
+function Send;
+var
+  { One write per bufferful rather than one per line: a request head arriving
+    in eight packets is eight packets the far end reassembles for nothing, and
+    `WriteLine`'s comment gives the same reason for its own single
+    call. The bufferful is what `NextPiece` fills, so the decision is the
+    capacity of this variable and nothing else. }
+  buf: NetLine;
+  w: RequestCursor;
+  e: ErrorCode;
 begin
-  was := r.phase;
-  r.phase := rpDone;
-  case was of
-    { There is no response. It is not a malformed one. }
-    rpStatus: FeedEnd := errAbsent;
-    { The header section has to end with an empty line; a connection that
-      closed inside it is a message that stopped in the middle of itself. }
-    rpFields: FeedEnd := errSyntax;
-    { RFC 9112 §6.3 rule 6: the body ends where the connection does, which is
-      exact and is what `Connection: close` was sent to make true. }
-    rpCounted: begin
-      r.byClose := true;
-      FeedEnd := errNone
-    end;
-    { Chunked framing says where the body ends, so a connection closing before
-      it does is a message that was not what it said it was. }
-    rpChunkSize, rpChunkData: begin
-      r.byClose := true;
-      FeedEnd := errSyntax
-    end;
-    rpTrailer: begin
-      r.byClose := true;
-      FeedEnd := errNone
-    end;
-    rpDone: FeedEnd := errNone
-  end
+  e := q.BeginWrite(w);
+  if Failed(e) then exit(e);
+  while not w.done do begin
+    q.NextPiece(w, buf);
+    if length(buf) > 0 then begin
+      e := s.WriteText(buf);
+      if Failed(e) then exit(e)
+    end
+  end;
+  Send := errNone
 end;
-
-{ --- reading: over a socket ----------------------------------------------- }
 
 function Receive;
 var raw: NetLine; e: ErrorCode;
 begin
-  BeginResponse(r, method);
-  while WantsLine(r) do begin
-    e := NetReadLine(s, raw);
-    if e = errAbsent then e := FeedEnd(r)
+  r.BeginRead(method);
+  while r.WantsLine do begin
+    e := s.ReadLine(raw);
+    if e = errAbsent then e := r.FeedEnd
     else if Failed(e) then exit(e)
-    else e := FeedLine(r, raw);
+    else e := r.FeedLine(raw);
     if Failed(e) then exit(e)
   end;
   Receive := errNone
@@ -959,45 +996,6 @@ begin
   e := Send(s, q);
   if Failed(e) then exit(e);
   Exchange := Receive(s, q.method, r)
-end;
-
-{ --- reading a response --------------------------------------------------- }
-
-function Header;
-var i: integer; want: HeaderName; ans: OptHeaderValue;
-begin
-  ans := nil;
-  want := Fold(name);
-  for i := 1 to r.count do
-    if (ans = nil) and (r.field[i].fold = want) then ans := r.field[i].val;
-  Header := ans
-end;
-
-function HeaderOr;
-var v: OptHeaderValue;
-begin
-  v := Header(r, name);
-  if v = nil then HeaderOr := whenAbsent else HeaderOr := v^
-end;
-
-function BodyInto;
-var i, total: integer; ans: ErrorCode;
-begin
-  total := 0;
-  for i := 1 to r.bodyLines do begin
-    if i > 1 then total := total + 1;
-    total := total + length(r.body[i])
-  end;
-  if total > dest.capacity then ans := errFull
-  else begin
-    dest := '';
-    for i := 1 to r.bodyLines do begin
-      if i > 1 then dest := dest + chr(10);
-      dest := dest + r.body[i]
-    end;
-    ans := errNone
-  end;
-  BodyInto := ans
 end;
 
 end.

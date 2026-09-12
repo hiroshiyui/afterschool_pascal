@@ -22,9 +22,10 @@
 
   **Everything else is `PasHttp`'s and is read there.** The bounds, the
   `Request` a caller builds, the `Response` it reads, `Header`, `HeaderOr`,
-  `BodyInto`, and what each ErrorCode means -- none of it changes because the
-  octets went through a TLS session. A program moving from one to the other
-  changes the type of one variable and the qualifier on three calls.
+  `r.Header`, `r.HeaderOr`, `r.BodyInto`, and what each ErrorCode means --
+  none of it changes because the octets went through a TLS session. A program
+  moving from one to the other changes the type of one variable and the prefix
+  on three calls.
 
   **What TLS adds to the failures is nothing new.** A refused handshake, an
   unverified certificate and a connection the far end dropped all arrive as
@@ -42,14 +43,23 @@ module PasHttps;
 export PasHttps = (HttpsSend, HttpsReceive, HttpsExchange);
 
 { `PasHttp` is imported plain: this module's three routines carry the `Https`
-  prefix, so nothing here collides with the grammar it wraps (ADR-0298). }
+  prefix, so nothing here collides with the grammar it wraps (ADR-0298).
+
+  **They carry it because there is nothing for them to be methods of**
+  (AP 6.7.10, ADR-0412). The first parameter of each is a `PasTls.Connection`,
+  and a type has one implementation wherever it is written: `PasTls`
+  implements `Connection` already, and a second `impl Connection` here is
+  refused -- *'connection' already has an 'impl' of its own*. So these three
+  stay exported names in §6.11.2's one scope and keep the prefix that makes
+  them safe there, exactly as `PasHttp.Send`, `Receive` and `Exchange` do one
+  transport over. }
 import PasError; PasTls; PasHttp;
 
-{ Write the request over `c`. The codes are `BeginRequest`'s, with
+{ Write the request over `c`. The codes are `Request.BeginWrite`'s, with
   `errIO` where the TLS connection refused rather than where a socket did. }
 function HttpsSend(var c: Connection; protected var q: Request): ErrorCode;
 
-{ Read a response into `r`. The method is `BeginResponse`'s and is a
+{ Read a response into `r`. The method is `Response.BeginRead`'s and is a
   parameter for the reason given there: RFC 9112 §6.3 makes the framing a
   property of the exchange. }
 function HttpsReceive(var c: Connection; method: MethodName;
@@ -66,18 +76,18 @@ end;
 function HttpsSend;
 var
   { What one write carries, and the only decision this module makes about the
-    shape of what goes out: `NextPiece` fills it and spans a longer piece
+    shape of what goes out: `q.NextPiece` fills it and spans a longer piece
     across calls, so this is a buffer size and never a bound on a request. }
   buf: TlsLine;
   w: RequestCursor;
   e: ErrorCode;
 begin
-  e := BeginRequest(q, w);
+  e := q.BeginWrite(w);
   if Failed(e) then exit(e);
   while not w.done do begin
-    NextPiece(q, w, buf);
+    q.NextPiece(w, buf);
     if length(buf) > 0 then begin
-      e := TlsWriteText(c, buf);
+      e := c.WriteText(buf);
       if Failed(e) then exit(e)
     end
   end;
@@ -87,15 +97,15 @@ end;
 function HttpsReceive;
 var raw: TlsLine; e: ErrorCode;
 begin
-  BeginResponse(r, method);
-  while WantsLine(r) do begin
-    e := TlsReadLine(c, raw);
+  r.BeginRead(method);
+  while r.WantsLine do begin
+    e := c.ReadLine(raw);
     { A closed connection is not a failure here; which of RFC 9112 §6.3's
-      rules was in force decides what it means, and `FeedEnd` is what knows
+      rules was in force decides what it means, and `r.FeedEnd` is what knows
       that. `errFull` and `errIO` are the transport's own and are final. }
-    if e = errAbsent then e := FeedEnd(r)
+    if e = errAbsent then e := r.FeedEnd
     else if Failed(e) then exit(e)
-    else e := FeedLine(r, raw);
+    else e := r.FeedLine(raw);
     if Failed(e) then exit(e)
   end;
   HttpsReceive := errNone

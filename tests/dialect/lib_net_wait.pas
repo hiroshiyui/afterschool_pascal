@@ -3,7 +3,7 @@
 
   **What this pins is the thing a server could not do before.** ADR-0203 left
   `PasNet` able to accept, serve and close one connection at a time, because
-  `NetReadLine` blocks and a server holding two clients cannot know which of them
+  `ReadLine` blocks and a server holding two clients cannot know which of them
   has spoken. Here client two speaks and client one says nothing, so a server
   reading them in turn would stop on client one and never reach the line that
   is waiting -- which makes this a test that **hangs** when `NetWait` is wrong,
@@ -97,7 +97,7 @@ begin
   { Only the second client says anything -- and it says two lines in one
     write, which is what puts the second of them in the runtime's buffer with
     the descriptor left quiet.  Nothing but `NetWait` can find that line. }
-  e := NetWriteText(cli[2], 'from two' + chr(10) + 'and again' + chr(10));
+  e := cli[2].WriteText('from two' + chr(10) + 'and again' + chr(10));
   writeln('two has spoken twice at once, one is silent');
   writeln;
 
@@ -127,7 +127,7 @@ begin
       { And whoever spoke is read.  Nothing here waits on a particular one. }
       for k := 2 to Slots do
         if ready[k] then begin
-          e := NetReadLine(watch[k], line);
+          e := watch[k].ReadLine(line);
           if e = errAbsent then begin
             { Which of the two closes first is the same question as above,
               and the count below is the assertion. }
@@ -144,7 +144,7 @@ begin
               that moved, the reply to client one being what makes the next
               round's readiness a race. }
             if line = 'from two' then
-              e := NetWriteLine(cli[1], 'from one')
+              e := cli[1].WriteLine('from one')
             else if line = 'and again' then
               cli[2] := nil
             else if line = 'from one' then

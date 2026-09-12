@@ -38,7 +38,7 @@
   first is skipped for an address literal, RFC 6066 §3 forbidding one there;
   the check is made either way.
 
-  **A line at a time**, as `PasNet` is, and for the same reason -- but the
+  **A line at a time**, as a socket is, and for the same reason -- but the
   buffer is Pascal here rather than C, because `SSL_read` is the read and this
   module may not add C. A slice of an ordinary `array [1..n] of char` is what
   crosses (6.7.7.7), so the buffering is thirty lines of this language and no
@@ -57,8 +57,9 @@
   belongs to this module and a caller assigns none of them.
 
   **What it is not.** There is no server side, no client certificate, no
-  session resumption, no renegotiation and no `Wait` over several connections
-  -- `NetWait` reads a descriptor and this module does not hand one out.
+  session resumption, no renegotiation and no wait over several connections
+  -- `PasNet.NetWait` reads a descriptor and this module does not hand one
+  out.
   `PasHttp` speaks to a `Socket` and so still speaks plain HTTP only;
   making it speak both means splitting its grammar from its transport, which
   is a change to that module and not to this one.
@@ -71,17 +72,33 @@
 
 module PasTls;
 
+{ **What a client is given is the types, and the types carry their routines**
+  (AP 6.7.10.5, ADR-0411). Sixteen names are exported where twenty were:
+  `Connection` has an implementation in the block below, and an implementation
+  is selected from the *type* of the receiver rather than from a name in scope
+  (AP 6.7.10.2), so none of its routines is an exported name and none can
+  collide with another module's. That is what retired the `Tls` prefix from
+  four of them: `TlsWriteText` is `WriteText`, `TlsWriteLine` is `WriteLine`,
+  `TlsReadLine` is `ReadLine` and `TlsClose` is `Close` -- the same four
+  spellings `PasNet` gives a socket, which is the point rather than a
+  coincidence: the two transports now read alike everywhere but at the call
+  that opens one.
+
+  What stays exported is the bounds, the types, and the two entry points,
+  which have no receiver to be selected from: a connection that has not been
+  made cannot select anything, and `TlsConnect` is what makes one. They keep
+  the prefix for §6.11.2's reason -- these are names in one scope with every
+  other module's. }
+
 export PasTls = (TlsHostMax, TlsServiceMax, TlsLineMax, TlsReasonMax,
                  TlsProtocolMax, TlsTrustMax, TlsBufMax,
                  TlsHost, TlsService, TlsLine, TlsReason, TlsProtocol,
                  TrustPath, Connection,
-                 TlsConnect, TlsConnectTrusting, TlsClose,
-                 TlsWriteText, TlsWriteLine, TlsReadLine);
+                 TlsConnect, TlsConnectTrusting);
 
-{ `PasNet` is imported plain: this module's six routines carry the `Tls`
-  prefix and the socket's carry `Net`, so a program moving from one to the
-  other changes the type of a variable and the prefix on its calls -- the
-  qualifier it used to write, paid once in the library (ADR-0298). }
+{ `PasNet` is imported plain: what this module names of it is `Socket`, which
+  is a field of the `Connection` below, and the socket's own routines are
+  reached through that field (ADR-0412). }
 import PasError; PasNet;
 
 const
@@ -97,7 +114,7 @@ const
     name of `PasNet`'s, the socket underneath being none of its business. }
   TlsHostMax = 255;
   TlsServiceMax = 63;
-  { What a line may be, and it is `NetLine`'s capacity deliberately: a program
+  { What a line may be, and it is `PasNet.NetLine`'s capacity deliberately: a program
     that reads a socket and a program that reads a TLS connection meet the
     same bound, so moving between them is not a rewrite. }
   TlsLineMax = 4096;
@@ -194,38 +211,6 @@ function TlsConnect(var c: Connection; host: TlsHost;
 function TlsConnectTrusting(var c: Connection; host: TlsHost;
                          service: TlsService;
                          trust: TrustPath): ErrorCode;
-
-{ Close now rather than at the block's end, and leave `c` empty.
-
-  A close-notify alert is sent first, which is what tells the far end that the
-  data stream ended where this program meant it to. Letting the block end
-  instead closes the three handles without one: the connection is released
-  either way and no storage is lost, but the far end cannot then distinguish
-  the end of the data from a connection that was cut. Harmless on a
-  `Connection` that is already empty, and the variable may be connected
-  again. }
-procedure TlsClose(var c: Connection);
-
-{ The characters of `text`, nothing appended. `errIO` on a refusal, which
-  includes the far end having closed. }
-function TlsWriteText(var c: Connection; text: TlsLine): ErrorCode;
-
-{ The characters and then CRLF, which is the terminator every line-oriented
-  protocol over TLS uses -- unlike `NetWriteLine`, whose newline is a
-  Pascal one. }
-function TlsWriteLine(var c: Connection; text: TlsLine): ErrorCode;
-
-{ The next line into `line`, without its terminator, and with a carriage
-  return immediately before the newline removed.
-
-  `errNone` and `line` holds it; `errAbsent` when the far end closed and
-  nothing was left, which is the ordinary end of a loop; `errFull` for a line
-  longer than `line` can hold or longer than `TlsBufMax`, whose characters are
-  discarded; `errIO` for a refusal. A final line the far end sent without a
-  terminator **is** a line.
-
-  `line` is the null-string on every answer but `errNone`. }
-function TlsReadLine(var c: Connection; var line: string): ErrorCode;
 
 end;
 
@@ -380,155 +365,6 @@ begin
   IsAddressLiteral := onlyDigits
 end;
 
-procedure TlsClose;
-var k: integer;
-begin
-  if c.ss <> nil then begin
-    { The first call sends close-notify and answers 0 when the far end's has
-      not arrived; a second would wait for it. One is what the protocol
-      requires of this end, and waiting is what a caller did not ask for --
-      so the result is read into a variable and dropped, there being nothing
-      a close can do about a refusal to close. }
-    k := SslShutdown(c.ss);
-    if k < 0 then c.reason := Complaint('the shutdown was refused');
-    c.ss := nil
-  end;
-  c.ctx := nil;
-  NetClose(c.sock);
-  c.head := 1;
-  c.tail := 1;
-  c.protocol := ''
-end;
-
-{ The two entry points differ in one call, so the work is here and `trust` of
-  the null-string means the system's anchors. It is a private routine rather
-  than a parameter of an exported one because a caller that may pass `''`
-  is a caller that may pass it by accident, and the whole of this module's
-  claim is that there is no way to ask for less. }
-function Establish(var c: Connection; host: TlsHost; service: TlsService;
-                   trust: TrustPath): ErrorCode;
-var e: ErrorCode; k: integer; got: OptProtocol;
-begin
-  TlsClose(c);
-  c.reason := '';
-  c.protocol := '';
-  c.head := 1;
-  c.tail := 1;
-
-  e := NetConnect(c.sock, host, service);
-  if Failed(e) then begin
-    c.reason := 'the connection could not be made';
-    exit(e)
-  end;
-
-  c.ctx := CtxNew(ClientMethod);
-  if c.ctx = nil then begin
-    c.reason := Complaint('no TLS context could be made');
-    NetClose(c.sock);
-    exit(errIO)
-  end;
-  CtxSetVerify(c.ctx, VerifyPeer, 0);
-  if CtxCtrl(c.ctx, CtrlSetMinProto, VersionTls12, '') <> 1 then begin
-    c.reason := Complaint('TLS 1.2 could not be set as the floor');
-    TlsClose(c);
-    exit(errIO)
-  end;
-
-  if trust = '' then k := CtxDefaultAnchors(c.ctx)
-  else k := CtxTrustFile(c.ctx, trust);
-  if k <> 1 then begin
-    if trust = '' then begin
-      c.reason := Complaint('this system has no trust anchors configured');
-      TlsClose(c);
-      exit(errIO)
-    end;
-    { A named file that cannot be read is `errAbsent` and not `errIO`: it is
-      this program's own mistake and not the peer's, and the two must not
-      arrive as one code. }
-    c.reason := Complaint('the trust file could not be read');
-    TlsClose(c);
-    exit(errAbsent)
-  end;
-
-  c.ss := SslNew(c.ctx);
-  if c.ss = nil then begin
-    c.reason := Complaint('no TLS session could be made');
-    TlsClose(c);
-    exit(errIO)
-  end;
-  if not IsAddressLiteral(host) then
-    if SslCtrl(c.ss, CtrlSetHostName, NameTypeHost, host) <> 1 then begin
-      c.reason := Complaint('the server name could not be indicated');
-      TlsClose(c);
-      exit(errIO)
-    end;
-  if SslSetHost(c.ss, host) <> 1 then begin
-    c.reason := Complaint('the host could not be checked for');
-    TlsClose(c);
-    exit(errIO)
-  end;
-  if SslSetFd(c.ss, ExtFd(c.sock)) <> 1 then begin
-    c.reason := Complaint('the connection could not carry TLS');
-    TlsClose(c);
-    exit(errIO)
-  end;
-
-  if SslConnect(c.ss) <> 1 then begin
-    c.reason := Complaint('the handshake was refused');
-    TlsClose(c);
-    exit(errIO)
-  end;
-  { SSL_VERIFY_PEER has already failed the handshake on a bad chain, so
-    **nothing reaches this arm** and no case in this repository covers it.
-    That is said here rather than argued away: it costs one call, the property
-    it states is the one this module exists for, and the two together are what
-    keep the guarantee from resting on a single call to a library this
-    processor does not translate (ADR-0264). }
-  if SslVerifyResult(c.ss) <> VerifyOk then begin
-    c.reason := Complaint('the certificate was not accepted');
-    TlsClose(c);
-    exit(errIO)
-  end;
-
-  got := SslVersion(c.ss);
-  if got <> nil then c.protocol := got^;
-  Establish := errNone
-end;
-
-function TlsConnect;
-begin
-  TlsConnect := Establish(c, host, service, '')
-end;
-
-function TlsConnectTrusting;
-begin
-  TlsConnectTrusting := Establish(c, host, service, trust)
-end;
-
-function TlsWriteText;
-var n: integer;
-begin
-  if c.ss = nil then begin
-    c.reason := 'the connection is not open';
-    exit(errIO)
-  end;
-  n := length(text);
-  if n = 0 then exit(errNone);
-  { `SSL_write` writes all of it or fails: OpenSSL's default is
-    SSL_MODE_ENABLE_PARTIAL_WRITE off, so a positive result is the whole
-    length and there is no loop to write here. }
-  if SslWrite(c.ss, text, n) <> n then begin
-    c.reason := Complaint('the write was refused');
-    exit(errIO)
-  end;
-  TlsWriteText := errNone
-end;
-
-function TlsWriteLine;
-begin
-  TlsWriteLine := TlsWriteText(c, text + CR + LF)
-end;
-
 { Move what is held down to the front, so a read can use the whole buffer. }
 procedure Compact(var c: Connection);
 var i, n: integer;
@@ -550,68 +386,246 @@ begin
   Take := true
 end;
 
-function TlsReadLine;
-var p, count, n, k: integer;
-begin
-  line := '';
-  if c.ss = nil then begin
-    c.reason := 'the connection is not open';
-    exit(errIO)
+{ --- the connection ------------------------------------------------------- }
+
+impl Connection;
+
+  { Close now rather than at the block's end, and leave `c` empty.
+
+    A close-notify alert is sent first, which is what tells the far end that
+    the data stream ended where this program meant it to. Letting the block end
+    instead closes the three handles without one: the connection is released
+    either way and no storage is lost, but the far end cannot then distinguish
+    the end of the data from a connection that was cut. Harmless on a
+    `Connection` that is already empty, and the variable may be connected
+    again. }
+  procedure Close(var c: Connection);
+  var k: integer;
+  begin
+    if c.ss <> nil then begin
+      { The first call sends close-notify and answers 0 when the far end's has
+        not arrived; a second would wait for it. One is what the protocol
+        requires of this end, and waiting is what a caller did not ask for --
+        so the result is read into a variable and dropped, there being nothing
+        a close can do about a refusal to close. }
+      k := SslShutdown(c.ss);
+      if k < 0 then c.reason := Complaint('the shutdown was refused');
+      c.ss := nil
+    end;
+    c.ctx := nil;
+    c.sock.Close;
+    c.head := 1;
+    c.tail := 1;
+    c.protocol := ''
   end;
-  repeat
-    { A newline in what is held? }
-    p := c.head;
-    while (p < c.tail) and (c.buf[p] <> LF) do p := p + 1;
-    if p < c.tail then begin
-      count := p - c.head;
-      if (count > 0) and (c.buf[c.head + count - 1] = CR) then
-        count := count - 1;
-      if not Take(c, line, count) then begin
-        c.head := p + 1;
-        c.reason := 'the line did not fit';
-        exit(errFull)
-      end;
-      c.head := p + 1;
-      exit(errNone)
-    end;
 
-    Compact(c);
-    if c.tail > TlsBufMax then begin
-      { Nothing was found in a full buffer, so the line is longer than
-        anything this can hold and its characters are gone. }
-      c.head := 1;
-      c.tail := 1;
-      c.reason := 'the line was longer than the buffer';
-      exit(errFull)
+  { The characters of `text`, nothing appended. `errIO` on a refusal, which
+    includes the far end having closed. }
+  function WriteText(var c: Connection; text: TlsLine): ErrorCode;
+  var n: integer;
+  begin
+    if c.ss = nil then begin
+      c.reason := 'the connection is not open';
+      exit(errIO)
     end;
+    n := length(text);
+    if n = 0 then exit(errNone);
+    { `SSL_write` writes all of it or fails: OpenSSL's default is
+      SSL_MODE_ENABLE_PARTIAL_WRITE off, so a positive result is the whole
+      length and there is no loop to write here. }
+    if SslWrite(c.ss, text, n) <> n then begin
+      c.reason := Complaint('the write was refused');
+      exit(errIO)
+    end;
+    WriteText := errNone
+  end;
 
-    n := SslRead(c.ss, c.buf[c.tail..TlsBufMax], TlsBufMax - c.tail + 1);
-    if n <= 0 then begin
-      count := c.tail - c.head;
-      if count > 0 then begin
-        { A last line with no terminator is a line. }
+  { The characters and then CRLF, which is the terminator every line-oriented
+    protocol over TLS uses -- unlike a socket's `WriteLine`, whose newline is a
+    Pascal one. }
+  function WriteLine(var c: Connection; text: TlsLine): ErrorCode;
+  begin
+    WriteLine := c.WriteText(text + CR + LF)
+  end;
+
+  { The next line into `line`, without its terminator, and with a carriage
+    return immediately before the newline removed.
+
+    `errNone` and `line` holds it; `errAbsent` when the far end closed and
+    nothing was left, which is the ordinary end of a loop; `errFull` for a line
+    longer than `line` can hold or longer than `TlsBufMax`, whose characters
+    are discarded; `errIO` for a refusal. A final line the far end sent without
+    a terminator **is** a line.
+
+    `line` is the null-string on every answer but `errNone`. }
+  function ReadLine(var c: Connection; var line: string): ErrorCode;
+  var p, count, n, k: integer;
+  begin
+    line := '';
+    if c.ss = nil then begin
+      c.reason := 'the connection is not open';
+      exit(errIO)
+    end;
+    repeat
+      { A newline in what is held? }
+      p := c.head;
+      while (p < c.tail) and (c.buf[p] <> LF) do p := p + 1;
+      if p < c.tail then begin
+        count := p - c.head;
+        if (count > 0) and (c.buf[c.head + count - 1] = CR) then
+          count := count - 1;
         if not Take(c, line, count) then begin
-          c.head := c.tail;
+          c.head := p + 1;
           c.reason := 'the line did not fit';
           exit(errFull)
         end;
-        c.head := c.tail;
+        c.head := p + 1;
         exit(errNone)
       end;
-      k := SslError(c.ss, n);
-      if (k = ErrorZeroReturn) or (k = ErrorSyscall) then begin
-        { A close-notify, or a connection the far end simply dropped. Both
-          are the end of the data and neither is a failure a caller acts on;
-          `reason` is what separates them for a caller that cares. }
-        if k = ErrorZeroReturn then c.reason := ''
-        else c.reason := Complaint('the far end closed without a shutdown');
-        exit(errAbsent)
+
+      Compact(c);
+      if c.tail > TlsBufMax then begin
+        { Nothing was found in a full buffer, so the line is longer than
+          anything this can hold and its characters are gone. }
+        c.head := 1;
+        c.tail := 1;
+        c.reason := 'the line was longer than the buffer';
+        exit(errFull)
       end;
-      c.reason := Complaint('the read was refused');
+
+      n := SslRead(c.ss, c.buf[c.tail..TlsBufMax], TlsBufMax - c.tail + 1);
+      if n <= 0 then begin
+        count := c.tail - c.head;
+        if count > 0 then begin
+          { A last line with no terminator is a line. }
+          if not Take(c, line, count) then begin
+            c.head := c.tail;
+            c.reason := 'the line did not fit';
+            exit(errFull)
+          end;
+          c.head := c.tail;
+          exit(errNone)
+        end;
+        k := SslError(c.ss, n);
+        if (k = ErrorZeroReturn) or (k = ErrorSyscall) then begin
+          { A close-notify, or a connection the far end simply dropped. Both
+            are the end of the data and neither is a failure a caller acts on;
+            `reason` is what separates them for a caller that cares. }
+          if k = ErrorZeroReturn then c.reason := ''
+          else c.reason := Complaint('the far end closed without a shutdown');
+          exit(errAbsent)
+        end;
+        c.reason := Complaint('the read was refused');
+        exit(errIO)
+      end;
+      c.tail := c.tail + n
+    until false
+  end;
+end;
+
+{ The two entry points differ in one call, so the work is here and `trust` of
+  the null-string means the system's anchors. It is a private routine rather
+  than a parameter of an exported one because a caller that may pass `''`
+  is a caller that may pass it by accident, and the whole of this module's
+  claim is that there is no way to ask for less. }
+function Establish(var c: Connection; host: TlsHost; service: TlsService;
+                   trust: TrustPath): ErrorCode;
+var e: ErrorCode; k: integer; got: OptProtocol;
+begin
+  c.Close;
+  c.reason := '';
+  c.protocol := '';
+  c.head := 1;
+  c.tail := 1;
+
+  e := NetConnect(c.sock, host, service);
+  if Failed(e) then begin
+    c.reason := 'the connection could not be made';
+    exit(e)
+  end;
+
+  c.ctx := CtxNew(ClientMethod);
+  if c.ctx = nil then begin
+    c.reason := Complaint('no TLS context could be made');
+    c.sock.Close;
+    exit(errIO)
+  end;
+  CtxSetVerify(c.ctx, VerifyPeer, 0);
+  if CtxCtrl(c.ctx, CtrlSetMinProto, VersionTls12, '') <> 1 then begin
+    c.reason := Complaint('TLS 1.2 could not be set as the floor');
+    c.Close;
+    exit(errIO)
+  end;
+
+  if trust = '' then k := CtxDefaultAnchors(c.ctx)
+  else k := CtxTrustFile(c.ctx, trust);
+  if k <> 1 then begin
+    if trust = '' then begin
+      c.reason := Complaint('this system has no trust anchors configured');
+      c.Close;
       exit(errIO)
     end;
-    c.tail := c.tail + n
-  until false
+    { A named file that cannot be read is `errAbsent` and not `errIO`: it is
+      this program's own mistake and not the peer's, and the two must not
+      arrive as one code. }
+    c.reason := Complaint('the trust file could not be read');
+    c.Close;
+    exit(errAbsent)
+  end;
+
+  c.ss := SslNew(c.ctx);
+  if c.ss = nil then begin
+    c.reason := Complaint('no TLS session could be made');
+    c.Close;
+    exit(errIO)
+  end;
+  if not IsAddressLiteral(host) then
+    if SslCtrl(c.ss, CtrlSetHostName, NameTypeHost, host) <> 1 then begin
+      c.reason := Complaint('the server name could not be indicated');
+      c.Close;
+      exit(errIO)
+    end;
+  if SslSetHost(c.ss, host) <> 1 then begin
+    c.reason := Complaint('the host could not be checked for');
+    c.Close;
+    exit(errIO)
+  end;
+  if SslSetFd(c.ss, ExtFd(c.sock)) <> 1 then begin
+    c.reason := Complaint('the connection could not carry TLS');
+    c.Close;
+    exit(errIO)
+  end;
+
+  if SslConnect(c.ss) <> 1 then begin
+    c.reason := Complaint('the handshake was refused');
+    c.Close;
+    exit(errIO)
+  end;
+  { SSL_VERIFY_PEER has already failed the handshake on a bad chain, so
+    **nothing reaches this arm** and no case in this repository covers it.
+    That is said here rather than argued away: it costs one call, the property
+    it states is the one this module exists for, and the two together are what
+    keep the guarantee from resting on a single call to a library this
+    processor does not translate (ADR-0264). }
+  if SslVerifyResult(c.ss) <> VerifyOk then begin
+    c.reason := Complaint('the certificate was not accepted');
+    c.Close;
+    exit(errIO)
+  end;
+
+  got := SslVersion(c.ss);
+  if got <> nil then c.protocol := got^;
+  Establish := errNone
+end;
+
+function TlsConnect;
+begin
+  TlsConnect := Establish(c, host, service, '')
+end;
+
+function TlsConnectTrusting;
+begin
+  TlsConnectTrusting := Establish(c, host, service, trust)
 end;
 
 end.

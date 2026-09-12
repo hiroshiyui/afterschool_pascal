@@ -5,9 +5,10 @@
   shows the grammar has no transport under it, and `lib_http.pas` shows the
   socket transport still works; what neither can show is that a *second*
   transport needs nothing of the parser. Here one does: `HttpsExchange` is
-  twelve lines over `PasHttp.BeginRequest`, `NextPiece`, `BeginResponse`,
-  `WantsLine`, `FeedLine` and `FeedEnd`, and the response below was parsed by
-  the same routines `lib_http.pas` drives over a plain socket (ADR-0265).
+  twelve lines over `PasHttp`'s `Request.BeginWrite` and `NextPiece` and its
+  `Response.BeginRead`, `WantsLine`, `FeedLine` and `FeedEnd`, and the response
+  below was parsed by the same routines `lib_http.pas` drives over a plain
+  socket (ADR-0265).
 
   **Nothing OpenSSL wrote is printed**, as in `tls_probe.pas`: `s_server`'s
   status page lists the ciphers it was built with and its reason-phrase is its
@@ -38,7 +39,7 @@ begin
   if Failed(e) then exit;
 
   e := NewRequest(q, 'GET', '/');
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   e := HttpsExchange(c, q, r);
   writeln('exchanged     : ', ErrorText(e));
   if Failed(e) then exit;
@@ -52,18 +53,18 @@ begin
   writeln('  chunked     : ', r.chunked);
   writeln('  by close    : ', r.byClose);
   writeln('  body arrived: ', r.bodyLines > 0);
-  ct := Header(r, 'CONTENT-TYPE');
+  ct := r.Header('CONTENT-TYPE');
   writeln('  content-type: ', ct <> nil);
 
   { A second exchange on the same connection is refused by the *server*,
     which sent `Connection: close` behaviour by closing -- so what this shows
     is that a spent connection reports rather than hanging. }
   e := NewRequest(q, 'GET', '/again');
-  e := AddHeader(q, 'Host', 'localhost');
+  e := q.AddHeader('Host', 'localhost');
   e := HttpsExchange(c, q, r);
   writeln('second exchange: ', ErrorText(e));
 
-  TlsClose(c);
+  c.Close;
 
   { And a request the grammar refuses costs no connection at all: nothing was
     written, so there is nothing on the wire to take back. }
