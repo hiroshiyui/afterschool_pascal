@@ -11,7 +11,7 @@
   at once needs something this language has not got (ADR-0201).
 
   **No port number appears in the output.** The program asks for service `'0'`,
-  which is "whatever is free", and `NetService` reports back the numeric string
+  which is "whatever is free", and `s.Service` reports back the numeric string
   that `NetConnect` then takes -- so what is printed is that a port was given and
   never which. A test that named one would fail on a machine where something
   else held it.
@@ -39,7 +39,7 @@ begin
   e := NetListen(srv, 'localhost', '0');
   writeln('listen:      ', ErrorText(e));
 
-  e := NetService(srv, port);
+  e := srv.Service(port);
   writeln('service:     ', ErrorText(e), ', and a port was given: ',
           port <> '');
 

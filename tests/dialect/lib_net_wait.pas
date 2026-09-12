@@ -86,7 +86,7 @@ begin
 
   e := NetListen(watch[1], 'localhost', '0');
   writeln('listen:    ', ErrorText(e));
-  e := NetService(watch[1], port);
+  e := watch[1].Service(port);
   writeln('service:   ', ErrorText(e), ', a port was given: ', port <> '');
 
   for k := 1 to 2 do begin

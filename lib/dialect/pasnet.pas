@@ -13,7 +13,7 @@
   where a service is a name (`http`) or a number written out (`8080`). That is
   what keeps `<netinet/in.h>`, `htons` and the choice between IPv4 and IPv6
   out of this module and out of the runtime beneath it -- and it is what makes
-  an ephemeral port expressible: ask for service `'0'`, then ask `NetService`
+  an ephemeral port expressible: ask for service `'0'`, then ask `s.Service`
   which one you were given, and hand that string back to `NetConnect`.
 
   **A line at a time**, because a socket delivers whatever arrived and a
@@ -56,14 +56,19 @@ module PasNet;
   of them: `NetWriteText` is `WriteText`, `NetWriteLine` is `WriteLine`,
   `NetReadLine` is `ReadLine` and `NetClose` is `Close`.
 
-  What stays exported is what a caller has to name before there is a receiver
-  to select from: the types, and the four routines that answer for a socket's
-  *identity in the system* rather than for the stream of bytes through it.
-  `NetConnect` and `NetListen` fill a variable the caller declared, `NetAccept`
-  answers a second socket from a listening one, and `NetService` reports which
-  port the system gave it -- the question a program that asked for `'0'` has to
-  ask before it has a connection at all. They keep the prefix for §6.11.2's
-  reason: these are names in one scope with every other module's.
+  What stays exported is what a caller has to name **before there is a
+  receiver to select from**: the types, and the three routines that make a
+  socket rather than act on one. `NetConnect` and `NetListen` fill a variable
+  the caller declared and `NetAccept` answers a second socket from a listening
+  one; each takes its `Socket` as somewhere to put an answer, so there is
+  nothing yet for AP 6.7.10.2 to select from. They keep the prefix for
+  §6.11.2's reason: these are names in one scope with every other module's.
+
+  `Service` is a method and was the one judgement call here. It takes a
+  `Socket` that already exists and asks it about itself, which is the receiver
+  test exactly, and the fact that its answer is about the socket's identity in
+  the system rather than about the stream of bytes through it is a fact about
+  the *answer* and not about how the routine is reached.
 
   **`NetWait` is a fifth, and it is the construct rather than the rule that
   keeps it there.** Its receiver would be a `SocketList`, which is a schema
@@ -73,7 +78,7 @@ module PasNet;
   caller chooses a different one every time. }
 
 export PasNet = (HostName, ServiceName, NetLine, Socket, SocketList,
-                 NetConnect, NetListen, NetAccept, NetService, NetWait);
+                 NetConnect, NetListen, NetAccept, NetWait);
 
 import PasError;
 
@@ -120,7 +125,7 @@ function NetConnect(var s: Socket; host: HostName; service: ServiceName):
   ErrorCode;
 
 { Listen for connections on `host` at `service`. `'0'` asks for whatever port
-  is free, which `NetService` then reports.
+  is free, which `s.Service` then reports.
 
   The same two failures, and the same release of what `s` held. }
 function NetListen(var s: Socket; host: HostName; service: ServiceName):
@@ -132,13 +137,6 @@ function NetListen(var s: Socket; host: HostName; service: ServiceName):
   `srv` goes on listening and `conn` is the connection: two handles, two
   lifetimes, and closing one does not close the other. }
 function NetAccept(var srv: Socket; var conn: Socket): ErrorCode;
-
-{ The service this socket is bound to, as the numeric string `NetConnect` takes.
-
-  It is how a program that asked for `'0'` learns which port it was given,
-  which is the whole of what a test needs to talk to itself. `errFull` where
-  the caller's string is shorter than the answer. }
-function NetService(var s: Socket; var name: string): ErrorCode;
 
 { Which of `socks` can be read, or accepted from, without blocking: `ready[k]`
   is set for each one that can, and cleared for every other -- including the
@@ -246,26 +244,30 @@ begin
   if conn <> nil then NetAccept := errNone else NetAccept := errIO
 end;
 
-function NetService;
-var got: OptService; status: integer;
-begin
-  status := 0;
-  { the caller's capacity and not ServiceMax: what must not be exceeded is the
-    string the answer is going into, and 6.4.3.3.3 makes that readable }
-  got := ExtService(s, name.capacity, status);
-  name := '';
-  if got = nil then begin
-    if status = 3 then NetService := errFull else NetService := errIO
-  end
-  else begin
-    name := got^;
-    NetService := errNone
-  end
-end;
-
 { --- the connection ------------------------------------------------------- }
 
 impl Socket;
+
+  { The service this socket is bound to, as the numeric string `NetConnect`
+    takes. It is how a program that asked for `'0'` learns which port it was
+    given, which is the whole of what a test needs to talk to itself.
+    `errFull` where the caller's string is shorter than the answer. }
+  function Service(protected var s: Socket; var name: string): ErrorCode;
+  var got: OptService; status: integer;
+  begin
+    status := 0;
+    { the caller's capacity and not ServiceMax: what must not be exceeded is
+      the string the answer is going into, and 6.4.3.3.3 makes that readable }
+    got := ExtService(s, name.capacity, status);
+    name := '';
+    if got = nil then begin
+      if status = 3 then Service := errFull else Service := errIO
+    end
+    else begin
+      name := got^;
+      Service := errNone
+    end
+  end;
 
   { The characters of `text`, nothing appended. `errIO` on a refusal -- which
     includes the far end having closed, that being a refusal a caller can act

@@ -47,7 +47,7 @@ var srv, cli, conn: Socket;
 begin
   e := NetListen(srv, 'localhost', '0');
   writeln('listening     : ', e = errNone);
-  e := NetService(srv, port);
+  e := srv.Service(port);
   e := NetConnect(cli, 'localhost', port);
   writeln('connected     : ', e = errNone);
   e := cli.WriteLine('hello from the program');

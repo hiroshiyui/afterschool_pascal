@@ -143,7 +143,7 @@ begin
 
   e := NetListen(srv, 'localhost', '0');
   writeln('listen:  ', ErrorText(e));
-  e := NetService(srv, port);
+  e := srv.Service(port);
   writeln('service: ', ErrorText(e), ', a port was given: ', port <> '');
   writeln;
 

@@ -27,7 +27,7 @@ var
 
 begin
   e := NetListen(server, 'localhost', '0');
-  e := NetService(server, port);            { which port we were given }
+  e := server.Service(port);            { which port we were given }
   e := NetConnect(client, 'localhost', port);
   e := NetAccept(server, conn);
 
