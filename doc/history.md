@@ -10722,3 +10722,50 @@ margin**: the library or binding for a feature is part of that feature's work
 and not a tidying-up afterwards, because it is the cheapest enumerator of the
 surface. The register gained the row that says no gate here can notice a thin
 corpus, the corpus being what every gate measures against.
+
+**The second library cost what a decided feature should, and that is the
+result.** `PasToml` was rewritten the same way: 31 exported names where there
+were 59, `doc.Path('server.port').IntegerOr(80)` where there was
+`TomlIntegerOr(TomlPath(doc, 'server.port'), 80)`, and four clients —
+`tools/apconfig.pas` among them, so the change reaches a program the build
+installs. It found **no compiler defect and no clause to amend**. What it found
+was two name clashes the compiler named on the first compile: the method `Path`
+and its own parameter `path` are one name under §6.1.2, and a method must be
+declared before it is used (§6.2.2.9), so the scanner moved above the renderer
+that needs its `BareChar`. The three TOML cases answer their goldens unchanged,
+which is the whole claim a refactor of this size can make, and two mutations
+say the two `At`s are separately reached: an off-by-one in `TomlChars.At` moves
+the byte readers and the rendered strings, and one in `TomlPtr.At` moves
+`list=`, `nest[1][2]=` and `fruit[2].name=`, in the one case.
+
+**A number moved for a reason worth writing down.** `lib-coverage` reports
+`pastoml.pas` at 921 instrumented statements where it reported 928, and the
+module's own statements did not change: the denominator is a set of *line
+numbers*, `PasContainer`'s generic bodies are emitted in this translation
+(AP 6.7.3.5) carrying their own file's line numbers, and 7 more of them now
+collide with a line this module has a statement on. 928 − 14 = 921 − 7 = 914
+both ways. It is the first time that artefact has moved a ratchet here, and it
+is a property of the gate rather than of the module.
+
+**What the two rewrites together say about the rest of the library.** The
+method-shaped surface was measured — exported routines whose first parameter is
+a type the module exports — and PasToml had the largest, 29 of 59, of which 28
+became methods and `TomlParseChars` did not, a parse answering a document
+rather than being an operation of a buffer. Next are
+`lib/passtrvec.pas` (14 of 19), `lib/dialect/pasprocess.pas` (13 of 22),
+`lib/dialect/pasregex.pas` (12 of 31), `lib/dialect/pashttp.pas` (12 of 38),
+`lib/pasvector.pas` (12 of 15) and `lib/pasmap.pas` (11 of 16); `PasHttp` is
+the urgent one, its `Header`, `HeaderOr`, `AddHeader` and `SetBody` being
+*already* unprefixed in §6.11.2's one scope. `lib/dialect/pastime.pas` (2 of
+35), `pasterm.pas` (1 of 29) and `pascontainer.pas` (0 of 31) have no receiver
+to select from and are not candidates. Three probes settled what a reading
+could not: a **handle** type carries an implementation, with a `var` or a
+`protected var` receiver — a handle is protectable where a pointer is not — so
+`PasProcess`, `PasNet`, `PasTls` and `PasFile` can have methods; a **required**
+type carries one too, `impl TimeStamp` compiling and `t.Yr` answering; and
+**two modules cannot both implement one type if a translation sees both**,
+which is the reason a module must not give methods to a type it does not own.
+That last one is a divergence not yet recorded: AP 6.7.10 says *at most one
+inherent-implementation in a program-component* and the compiler enforces *at
+most one visible in a translation*, refusing the second component even where it
+does not import the first.

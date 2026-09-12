@@ -30,6 +30,19 @@ appears below in the release where it still existed.
   change exists to remove. `JsonChars` and `JsonPtr` now each have a `Free`,
   a `Len` and an `At`, which two exported names could not have been.
 
+- **`PasToml`'s routines are methods of its types too** (AP 6.7.10). The same
+  change one format over, and the module it was modelled on: 31 names are
+  exported where 59 were, and a configuration is read by
+  `doc.Path('server.port').IntegerOr(80)` rather than
+  `TomlIntegerOr(TomlPath(doc, 'server.port'), 80)`. `TomlKindOf` is `Kind`,
+  `TomlCharsAddLine` is `AddText`, `TomlPositionOf` is `TomlChars.PositionOf`
+  -- a buffer asked about itself -- and `TomlChars` and `TomlPtr` now each
+  have a `Free`, a `Len` and an `At`. `TomlParse`, `TomlParseChars` and the
+  eight `TomlNew*` constructors keep their names, a parse answering a document
+  rather than being an operation of a buffer. **Every caller must change**,
+  for the reason above; the three TOML cases answer their goldens unchanged,
+  which is what says the rewrite moved no behaviour.
+
 ### Fixed
 
 - **A method-designator selects from its receiver and not from the scope**

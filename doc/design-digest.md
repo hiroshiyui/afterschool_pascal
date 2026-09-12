@@ -4215,6 +4215,18 @@ and not against this parser.
   buffer over `Vec(char)`, the `Fallible` result and the *bytes and not `utf8`*
   decision are `PasJson`'s and are taken deliberately; what is different is
   what TOML has and JSON has not.
+- **Its routines are methods of its types** (ADR-0412), which is the same
+  sentence one format over and for the same reason: `TomlChars` and `TomlPtr`
+  share a `Free`, a `Len` and an `At`, and §6.11.2's one scope cannot hold two
+  of any of them. 31 exported names where there were 59, and
+  `doc.Path('server.port').IntegerOr(80)` where there was
+  `TomlIntegerOr(TomlPath(doc, 'server.port'), 80)`. Two things the rewrite
+  had to answer that `PasJson`'s had not: the method `Path` and its own
+  parameter `path` are one name under §6.1.2, so the parameter was renamed;
+  and a method must be declared before it is used (§6.2.2.9), so the scanner
+  moved above the renderer, which needs its `BareChar`. Nothing else moved —
+  the three TOML cases answer their goldens unchanged, and that is the claim
+  a refactor of this size has to make.
 - **A date-time is §6.4.3.4's own `TimeStamp` and two fields beside it**, and
   that is the one place the module asks another for something.
   `PasTime.ParseStamp` already reads exactly three of TOML's four forms and
@@ -4245,7 +4257,8 @@ and not against this parser.
   must be equal byte for byte — `format-check`'s third claim (ADR-0284) one
   format over. A table's values are written before its sub-tables because TOML
   requires it: after a `[header]` a bare key belongs to that header.
-- **A refusal carries a position, and `TomlPositionOf` is why it is a routine.**
+- **A refusal carries a position, and `TomlChars.PositionOf` is why it is a
+  routine.**
   The result carries the byte the parser stopped at; turning that into a line
   and a column is a separate call, so a caller that never fails never pays for
   it and a caller reporting a *warning* about a value it read gets the same
@@ -4279,7 +4292,7 @@ by the three rules ADR-0244 gave it for finding the compiler.
   it does not recognise, which is why no single-point mutation reaches that
   claim.
 - **A syntax error names a line and a column and a schema error names the key.**
-  `TomlPositionOf` converts the byte the parser stopped at; a node carries no
+  `TomlChars.PositionOf` converts the byte the parser stopped at; a node carries no
   position, so the second cannot have one — and the key is the more useful half
   of that answer.
 
@@ -5885,6 +5898,13 @@ through with no diagnostic, and ADR-0283's advice, which is supposed to be
 *exact*, was offered for parameters that could not take the word. It survived
 because that advice is never given about an **exported** routine and every
 routine of the shape in this tree was one.
+
+**And the second library was cheap, which is the other half of the evidence.**
+`PasToml` was rewritten the same way the day after and found nothing: no
+compiler defect, no clause to amend, two name clashes the compiler named at
+once. That is what a decided feature is supposed to cost, and it is why the
+five defects `PasJson` found are attributable to the construct's corpus rather
+than to library rewriting being hard.
 
 The mechanism is two fields on the call node. `clMethod`/`pcMethod` say the
 *parser* saw a receiver -- it knows that before anything knows a type -- and

@@ -126,6 +126,31 @@ successful and no return value is reserved to indicate an error"* — so a
 the specification before taking this route; it is the narrow case, and every
 other call in these modules can fail.
 
+## A method drops the prefix, and only a method may
+
+`export-unique` (ADR-0298) refuses two modules one spelling, because the
+language has no overloading and §6.11.2 puts every imported name into one
+scope; the rule above is why the less general side of a collision takes a
+prefix. **An implementation is outside that scope** (AP 6.7.10.5, ADR-0411),
+so a routine reached as `v.Free` is named by nothing a client imports and
+carries no prefix at all.
+
+Two modules read that way today. `PasJson` exports 25 names where it exported
+50 and `PasToml` 31 where it exported 59, and in each the byte buffer and the
+document node both have a `Free`, a `Len` and an `At` — three collisions
+`export-unique` would have refused to two exported names, which is what the
+construct is for (ADR-0412).
+
+What this does **not** license is dropping a prefix from an exported routine.
+The test is whether the name is reached through a receiver: `TomlParse` and the
+eight `TomlNew*` constructors keep theirs because a client names them, and a
+parse answers a document rather than being an operation of the buffer it reads.
+Two things to expect when converting a module, both met in `PasToml`: a method
+and a parameter spelled alike are one name under §6.1.2 — `Path(v, path)` does
+not compile — and a method must be declared before it is used (§6.2.2.9), so
+the declaration order inside the block is decided by what calls what and not by
+what reads well.
+
 ## Two conveniences, and their names are fixed
 
 - **`ValueOr(r, whenBad)`** takes a result and a default, for a caller who
